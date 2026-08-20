@@ -14,3 +14,5 @@ export * from './account';
 export * from './taxRate';
 export * from './user';
 export * from './role';
+export * from './warehouse';
+export * from './stockMovement';

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Customer } from '@/types';
 import { customerService } from '../services/customerService';
 
@@ -6,22 +6,26 @@ interface UseCustomersResult {
   customers: Customer[];
   loading: boolean;
   error: Error | null;
+  /** Re-runs the fetch — call after a create/edit/inactivate mutation. */
+  refetch: () => void;
 }
 
 /**
- * Reference hook proving the repository pattern end-to-end:
- * component -> useCustomers -> customerService -> MockCustomerRepository.
- * The customers-bee will replace/extend this with real list-page logic.
+ * List-page data hook: component -> useCustomers -> customerService ->
+ * MockCustomerRepository. Search/filter/sort are handled client-side by
+ * the list page (derived state), so this hook only owns fetch/loading/error.
  */
 export function useCustomers(): UseCustomersResult {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     setLoading(true);
+    setError(null);
     customerService
       .getCustomers()
       .then((data) => {
@@ -37,7 +41,9 @@ export function useCustomers(): UseCustomersResult {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadToken]);
 
-  return { customers, loading, error };
+  const refetch = useCallback(() => setReloadToken((t) => t + 1), []);
+
+  return { customers, loading, error, refetch };
 }
