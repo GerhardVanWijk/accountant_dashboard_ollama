@@ -35,6 +35,8 @@ import {
   ShoppingCart,
   Sun,
   Trash2,
+  TrendingDown,
+  TrendingUp,
   Truck,
   UserCog,
   Users,
@@ -106,6 +108,10 @@ export const Icons = {
   sort: ArrowUpDown,
   calendar: Calendar,
   phone: Phone,
+
+  // Trend indicators (dashboard KPI cards — period-over-period % change)
+  trendUp: TrendingUp,
+  trendDown: TrendingDown,
 } as const satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof Icons;

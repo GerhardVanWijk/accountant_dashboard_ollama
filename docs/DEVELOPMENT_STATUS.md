@@ -10,7 +10,7 @@
 | **Accounting (CoA)** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
 | **Sales (AR — Quotes/Orders/Invoices)** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
 | **Purchases (AP — PO/Bills)** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
-| **Dashboard** | ✅ `/` (placeholder) | ⏳ Pending (Wave 2) | n/a | ⏳ Pending | n/a | ⏳ Pending | 🟡 In-Progress |
+| **Dashboard** | ✅ `/` | ✅ | n/a (read-only) | ✅ | n/a (aggregates other modules) | ✅ 90 tests (shared) | 🟢 Done |
 | **Tax** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
 | **Banking** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
 | **Reports** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
@@ -18,7 +18,7 @@
 
 *Status Legend: 🟢 Done (20/20 DoD Points Met) | 🟡 In-Progress | 🔴 Incomplete / Pending*
 
-## Checkpoint — 2026-08-20: Phase 1 Wave 1 complete
+## Checkpoint — 2026-08-20: Phase 1 complete (Wave 1 + Wave 2)
 
 Customers, Suppliers, and Inventory modules built in parallel (3 bees, disjoint feature
 folders), independently QA-verified (type-check/lint/build/test all clean, 67 tests,
@@ -28,5 +28,14 @@ documents (quotes, invoices, POs, bills) — those are Phase 2, not yet started;
 data/ledger side (Customers/Suppliers directories, aging, credit control) is what Wave 1
 delivered and is separate from those rows.
 
-Next: Wave 2 — Dashboard Bee, consuming the now-stable Customers/Suppliers aging utils and
-Inventory's `stockService.getLowStockItems()`/`getOutOfStockItems()`.
+Dashboard Bee (Wave 2, sequential — depends on Wave 1) then built the Executive Dashboard
+consuming real Customers/Suppliers aging aggregation and Inventory's stock/low-stock
+service, with Revenue/Expenses/Cash Flow mocked and clearly flagged pending the Banking/
+Accounting modules. Independently QA-verified including a specific check that the AR/AP
+aggregation calls the real per-entity functions rather than faking numbers. 90 tests total
+across the full Phase 1 surface.
+
+Phase 1 is now fully complete. Next: Phase 2 — Sales, Purchases, Banking, Accounting
+(General Ledger/Journals/CoA), likely dispatched as another parallel wave once dependency
+ordering between them is worked out (e.g. Accounting's CoA underlies journal posting for
+all of Sales/Purchases/Banking).
