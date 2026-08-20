@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { Icon } from '@/components/ui/Icon';
 
 export interface ErrorStateProps {
   title?: string;
@@ -20,7 +20,7 @@ export function ErrorState({
       role="alert"
       className="flex flex-col items-center justify-center gap-sm rounded-md border border-border bg-panel p-lg text-center"
     >
-      <AlertTriangle className="text-danger" size={24} aria-hidden="true" />
+      <Icon name="error" className="text-danger" size={24} />
       <p className="text-sm font-semibold text-text-primary">{title}</p>
       <p className="text-sm text-text-secondary">{message}</p>
       {onRetry && (

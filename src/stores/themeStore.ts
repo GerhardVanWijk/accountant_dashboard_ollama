@@ -15,13 +15,16 @@ interface ThemeState {
  * (ThemeProvider), which resolves "system" against the OS media query
  * and stamps the result onto <html data-theme="...">.
  *
+ * Light is the default preference per docs/DESIGN_SYSTEM.md § Theme
+ * ("Light Mode (Default)").
+ *
  * Per docs/DO_NOT_BREAK.md, Zustand is the only state library — no
  * second store, no React Context holding this state.
  */
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
-      theme: 'dark',
+      theme: 'light',
       setTheme: (theme) => set({ theme }),
     }),
     { name: 'accounting-suite-theme' },

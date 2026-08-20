@@ -1,7 +1,8 @@
 /**
  * Tailwind config wired to the CSS custom properties defined in
- * src/styles/tokens.css. Dark values live on :root (default theme);
- * light values are overridden under [data-theme="light"].
+ * src/styles/tokens.css. Light values live on :root (default theme,
+ * per docs/DESIGN_SYSTEM.md § Theme); dark values are overridden under
+ * [data-theme="dark"].
  *
  * See docs/DESIGN_SYSTEM.md for the source values.
  */
@@ -30,6 +31,7 @@ export default {
         warning: 'var(--color-warning)',
         danger: 'var(--color-danger)',
         info: 'var(--color-info)',
+        'on-accent': 'var(--color-text-on-accent)',
       },
       fontFamily: {
         sans: [
@@ -75,10 +77,10 @@ export default {
         full: '9999px',
       },
       boxShadow: {
-        sm: '0 1px 2px rgba(0, 0, 0, 0.05)',
-        DEFAULT: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)',
-        md: '0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06)',
-        lg: '0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05)',
+        sm: '0 1px 2px rgba(0, 0, 0, 0.04)',
+        DEFAULT: '0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04)',
+        md: '0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.04)',
+        lg: '0 10px 15px rgba(0, 0, 0, 0.06), 0 4px 6px rgba(0, 0, 0, 0.03)',
       },
     },
   },

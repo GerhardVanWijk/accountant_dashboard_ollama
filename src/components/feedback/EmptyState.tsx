@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Inbox } from 'lucide-react';
+import { Icon } from '@/components/ui/Icon';
 
 export interface EmptyStateProps {
   title?: string;
@@ -21,7 +21,7 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center justify-center gap-sm rounded-md border border-dashed border-border p-2xl text-center">
       <span className="text-text-muted" aria-hidden="true">
-        {icon ?? <Inbox size={28} />}
+        {icon ?? <Icon name="empty" size={28} />}
       </span>
       <p className="text-sm font-semibold text-text-primary">{title}</p>
       <p className="text-sm text-text-secondary">{message}</p>

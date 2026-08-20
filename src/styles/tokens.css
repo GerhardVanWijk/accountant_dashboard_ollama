@@ -1,40 +1,53 @@
 /**
  * Design tokens — see docs/DESIGN_SYSTEM.md.
  *
- * Convention: dark values are the default, defined on :root.
- * Light values override them under the [data-theme="light"] attribute,
+ * Convention: light values are the default, defined on :root (Light Mode
+ * is the primary reference surface per docs/DESIGN_SYSTEM.md § Theme).
+ * Dark values override them under the [data-theme="dark"] attribute,
  * which is set on <html> by the ThemeProvider (src/app/providers.tsx).
+ *
+ * All six accent colors (primary/secondary/success/warning/danger/info)
+ * are pastel/light-toned in BOTH themes. Per the Accent Contrast Rule,
+ * any solid-fill surface using an accent color must use --color-text-on-accent
+ * (never white/light text) — see the `text-on-accent` Tailwind color and
+ * `.text-on-accent` semantics used by Button/badges/active-nav-pill.
  */
 
 :root {
-  /* Color - Dark (default) */
-  --color-background: #0f0f0f;
-  --color-panel: #1a1a1a;
-  --color-border: #333333;
-  --color-text-primary: #f0f0f0;
-  --color-text-secondary: #a0a0a0;
-  --color-text-muted: #707070;
+  /* Color - Light (default) */
+  --color-background: #faf9f6;
+  --color-panel: #ffffff;
+  --color-border: #e6e2da;
+  --color-text-primary: #33363f;
+  --color-text-secondary: #6b6f76;
+  --color-text-muted: #9a9da3;
 
-  --color-primary: #00d9ff;
-  --color-secondary: #a855f7;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-info: #3b82f6;
+  --color-primary: #8fb8e8;
+  --color-secondary: #c9b8ef;
+  --color-success: #a8ddb5;
+  --color-warning: #f6d29b;
+  --color-danger: #f3afaf;
+  --color-info: #a9d8f0;
+
+  /* Accent Contrast Rule — dark neutral text for any accent-filled surface,
+     identical in both themes since accents stay pastel/light-toned. */
+  --color-text-on-accent: #20242b;
 }
 
-[data-theme='light'] {
-  --color-background: #ffffff;
-  --color-panel: #f9fafb;
-  --color-border: #e5e7eb;
-  --color-text-primary: #1f2937;
-  --color-text-secondary: #6b7280;
-  --color-text-muted: #9ca3af;
+[data-theme='dark'] {
+  --color-background: #1e2126;
+  --color-panel: #262a31;
+  --color-border: #383d46;
+  --color-text-primary: #e7e5e1;
+  --color-text-secondary: #a8acb3;
+  --color-text-muted: #767b84;
 
-  --color-primary: #0369a1;
-  --color-secondary: #7c3aed;
-  --color-success: #059669;
-  --color-warning: #d97706;
-  --color-danger: #dc2626;
-  --color-info: #2563eb;
+  --color-primary: #7fa8d9;
+  --color-secondary: #b7a3e0;
+  --color-success: #86c79a;
+  --color-warning: #e0b876;
+  --color-danger: #e08f8f;
+  --color-info: #82bee0;
+
+  --color-text-on-accent: #20242b;
 }

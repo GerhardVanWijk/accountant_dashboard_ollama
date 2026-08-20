@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { Icon } from '@/components/ui/Icon';
 
 export interface SpinnerProps {
   label?: string;
@@ -16,7 +16,7 @@ export function Spinner({ label = 'Loading…', size = 20 }: SpinnerProps) {
       role="status"
       className="flex items-center justify-center gap-sm p-lg text-text-secondary"
     >
-      <Loader2 className="animate-spin" size={size} aria-hidden="true" />
+      <Icon name="loading" className="animate-spin" size={size} />
       <span className="text-sm">{label}</span>
     </div>
   );

@@ -3,8 +3,10 @@ import { useThemeStore } from '@/stores/themeStore';
 
 function resolveTheme(preference: 'dark' | 'light' | 'system'): 'dark' | 'light' {
   if (preference !== 'system') return preference;
-  if (typeof window === 'undefined' || !window.matchMedia) return 'dark';
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  // Light is the default surface (docs/DESIGN_SYSTEM.md § Theme); only
+  // fall through to dark when the OS explicitly prefers it.
+  if (typeof window === 'undefined' || !window.matchMedia) return 'light';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 /**

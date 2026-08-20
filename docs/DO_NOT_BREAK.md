@@ -50,6 +50,23 @@ DO NOT:
 - Hardcode colors (use design tokens)
 - Break responsive design (test mobile, tablet, desktop)
 - Introduce new font families (use system fonts)
+- Put white/light text directly on an accent color (Primary/Secondary/Success/
+  Warning/Danger/Info are all pastel/light-toned in both themes — text on an
+  accent-filled surface always uses the Text-on-Accent token, per
+  `docs/DESIGN_SYSTEM.md`)
+- Re-introduce a persistent left sidebar — navigation is the horizontal top
+  bar defined in `docs/DESIGN_SYSTEM.md`
+
+## Icons
+
+DO NOT:
+- Import from `lucide-react` in any feature/page/component file — only
+  `src/config/icons.ts` and `src/components/ui/Icon.tsx` may import it
+  directly
+- Pick a different icon for a concept that already has one in the `Icons`
+  registry — reuse the existing registry key
+- Add a new registry key without checking whether an existing key already
+  covers the concept
 
 ## Tax & Accounting Logic
 
