@@ -1,0 +1,40 @@
+/**
+ * Design tokens — see docs/DESIGN_SYSTEM.md.
+ *
+ * Convention: dark values are the default, defined on :root.
+ * Light values override them under the [data-theme="light"] attribute,
+ * which is set on <html> by the ThemeProvider (src/app/providers.tsx).
+ */
+
+:root {
+  /* Color - Dark (default) */
+  --color-background: #0f0f0f;
+  --color-panel: #1a1a1a;
+  --color-border: #333333;
+  --color-text-primary: #f0f0f0;
+  --color-text-secondary: #a0a0a0;
+  --color-text-muted: #707070;
+
+  --color-primary: #00d9ff;
+  --color-secondary: #a855f7;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
+}
+
+[data-theme='light'] {
+  --color-background: #ffffff;
+  --color-panel: #f9fafb;
+  --color-border: #e5e7eb;
+  --color-text-primary: #1f2937;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+
+  --color-primary: #0369a1;
+  --color-secondary: #7c3aed;
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-info: #2563eb;
+}

@@ -1,0 +1,69 @@
+import { createBrowserRouter, type RouteObject } from 'react-router-dom';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { RouteGuard } from './RouteGuard';
+import { LoginPage } from '@/features/auth/pages/LoginPage';
+import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
+import { ChartOfAccountsPage } from '@/features/accounting/pages/ChartOfAccountsPage';
+import { JournalsPage } from '@/features/accounting/pages/JournalsPage';
+import { LedgerPage } from '@/features/accounting/pages/LedgerPage';
+import { CustomersPage } from '@/features/sales/pages/CustomersPage';
+import { InvoicesPage } from '@/features/sales/pages/InvoicesPage';
+import { VendorsPage } from '@/features/purchases/pages/VendorsPage';
+import { BillsPage } from '@/features/purchases/pages/BillsPage';
+import { ProductsPage } from '@/features/inventory/pages/ProductsPage';
+import { WarehousesPage } from '@/features/inventory/pages/WarehousesPage';
+import { VatReturnPage } from '@/features/tax/pages/VatReturnPage';
+import { ReportsPage } from '@/features/reports/pages/ReportsPage';
+import { UsersPage } from '@/features/admin/pages/UsersPage';
+import { AuditPage } from '@/features/admin/pages/AuditPage';
+import { NotFoundPage } from '@/features/admin/pages/NotFoundPage';
+
+/**
+ * Route tree. Paths mirror docs/ROUTES.md exactly — that file is
+ * authoritative, not the illustrative /app/* example in
+ * docs/ARCHITECTURE.md. Every route here has a matching entry in
+ * src/config/navigation.ts.
+ *
+ * All routes below the root element are wrapped by <RouteGuard />,
+ * which is the protected route tree referred to as "/app/*" in
+ * docs/DO_NOT_BREAK.md.
+ */
+/**
+ * Route config, exported separately from the router instance so tests
+ * can build a createMemoryRouter(routes) instead of the real
+ * createBrowserRouter — see src/app/App.tsx and App.test.tsx.
+ */
+export const routes: RouteObject[] = [
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
+    path: '/',
+    element: <RouteGuard />,
+    children: [
+      {
+        element: <AppLayout />,
+        children: [
+          { index: true, element: <DashboardPage /> },
+          { path: 'accounting/coa', element: <ChartOfAccountsPage /> },
+          { path: 'accounting/journals', element: <JournalsPage /> },
+          { path: 'accounting/ledger', element: <LedgerPage /> },
+          { path: 'sales/customers', element: <CustomersPage /> },
+          { path: 'sales/invoices', element: <InvoicesPage /> },
+          { path: 'purchases/vendors', element: <VendorsPage /> },
+          { path: 'purchases/bills', element: <BillsPage /> },
+          { path: 'inventory/products', element: <ProductsPage /> },
+          { path: 'inventory/warehouses', element: <WarehousesPage /> },
+          { path: 'tax/vat-return', element: <VatReturnPage /> },
+          { path: 'reports', element: <ReportsPage /> },
+          { path: 'admin/users', element: <UsersPage /> },
+          { path: 'admin/audit', element: <AuditPage /> },
+          { path: '*', element: <NotFoundPage /> },
+        ],
+      },
+    ],
+  },
+];
+
+export const router = createBrowserRouter(routes);

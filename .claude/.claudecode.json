@@ -1,0 +1,18 @@
+{
+  "provider": "ollama-local",
+  "ollama": {
+    "baseUrl": "http://localhost:11434",
+    "model": "qwen3:8b",
+    "temperature": 0.7,
+    "topP": 0.9,
+    "topK": 40,
+    "repeatPenalty": 1.1,
+    "contextWindow": 40000
+  },
+  "workspace": {
+    "projectName": "Professional Accounting Suite",
+    "agentDir": ".claude/agents",
+    "docsDir": "docs",
+    "mockDataDir": "src/mock-data"
+  }
+}
