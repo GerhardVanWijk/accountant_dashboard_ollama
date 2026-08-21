@@ -40,6 +40,23 @@ export type ReportingFramework =
 export type AccountingBasis = 'accrual' | 'cash';
 
 /**
+ * How often a VAT-registered vendor files returns. SARS actually assigns
+ * vendors to specific categories (A-E) with somewhat different rules per
+ * category — simplified to the filing cadence here; the exact category
+ * assignment logic is not modeled and would need professional/SARS
+ * verification before being relied on (SA_ACCOUNTING_MASTER_SPEC.md §110).
+ */
+export type VatFilingFrequency = 'monthly' | 'bi_monthly' | 'six_monthly' | 'annual';
+
+/**
+ * §11: VAT is generally accounted for on the invoice/accrual basis;
+ * the payments basis is available only to qualifying vendors, subject to
+ * SARS approval — this field records which basis actually applies to
+ * this company, it does not itself determine eligibility.
+ */
+export type VatAccountingBasis = 'invoice' | 'payments';
+
+/**
  * A company/entity record — the root of Phase 1 "Accounting Core"
  * (docs/SA_ACCOUNTING_MASTER_SPEC.md §2). Deliberately does NOT yet include
  * automatic Public Interest Score calculation (§3) or automatic reporting
@@ -82,6 +99,9 @@ export interface Company extends BaseEntity {
   vatRegistrationNumber?: string;
   vatRegistrationDate?: ISODateString;
   vatDeregistrationDate?: ISODateString;
+  /** §10/§11: only meaningful while isVatRegistered is true. */
+  vatFilingFrequency?: VatFilingFrequency;
+  vatAccountingBasis?: VatAccountingBasis;
   incomeTaxNumber?: string;
   isActive: boolean;
 }

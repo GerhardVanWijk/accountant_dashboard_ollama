@@ -1,5 +1,4 @@
-import type { DocumentLineItem } from '@/types';
-import { seedTaxRates } from '@/mock-data/taxRates';
+import type { DocumentLineItem, TaxRate } from '@/types';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { FinancialNumber } from '@/components/ui/FinancialNumber';
@@ -11,6 +10,8 @@ const inputClass =
 export interface LineItemsEditorProps {
   lineItems: DocumentLineItem[];
   onChange: (lineItems: DocumentLineItem[]) => void;
+  /** Currently-effective tax rates (via useTaxRates()) — never hardcoded, per docs/DO_NOT_BREAK.md. */
+  taxRates: TaxRate[];
   disabled?: boolean;
 }
 
@@ -18,9 +19,10 @@ function computeLine(
   quantity: number,
   unitPrice: number,
   taxRateId: string | undefined,
+  taxRates: TaxRate[],
 ): { lineTotal: number; taxAmount: number } {
   const lineTotal = quantity * unitPrice;
-  const rate = seedTaxRates.find((r) => r.id === taxRateId);
+  const rate = taxRates.find((r) => r.id === taxRateId);
   const taxAmount = rate ? lineTotal * (rate.rate / 100) : 0;
   return { lineTotal, taxAmount };
 }
@@ -29,14 +31,14 @@ function computeLine(
  * Reusable line-item editor shared by the Purchase Order and Bill create
  * forms — quantity/unit price/tax rate drive an auto-calculated tax amount
  * and line total, both rendered via FinancialNumber per
- * docs/FINANCIAL_UI_GUIDE.md. Tax rates come from the local seedTaxRates
- * reference data (src/mock-data/taxRates.ts) — the same "no real Tax module
- * yet" lookup src/features/banking already uses; not invented here.
+ * docs/FINANCIAL_UI_GUIDE.md. Tax rates are the real, currently-effective
+ * `TaxRate` records (src/features/tax/services/taxRateService.ts, via
+ * useTaxRates()) — passed in as a prop, never imported locally.
  */
-export function LineItemsEditor({ lineItems, onChange, disabled = false }: LineItemsEditorProps) {
+export function LineItemsEditor({ lineItems, onChange, taxRates, disabled = false }: LineItemsEditorProps) {
   function updateLine(index: number, patch: Partial<DocumentLineItem>) {
     const merged = { ...lineItems[index], ...patch };
-    const { lineTotal, taxAmount } = computeLine(merged.quantity, merged.unitPrice, merged.taxRateId);
+    const { lineTotal, taxAmount } = computeLine(merged.quantity, merged.unitPrice, merged.taxRateId, taxRates);
     const next = [...lineItems];
     next[index] = { ...merged, lineTotal, taxAmount };
     onChange(next);
@@ -50,7 +52,7 @@ export function LineItemsEditor({ lineItems, onChange, disabled = false }: LineI
         description: '',
         quantity: 1,
         unitPrice: 0,
-        taxRateId: seedTaxRates[0]?.id,
+        taxRateId: taxRates[0]?.id,
         taxAmount: 0,
         lineTotal: 0,
       },
@@ -117,7 +119,7 @@ export function LineItemsEditor({ lineItems, onChange, disabled = false }: LineI
               onChange={(e) => updateLine(index, { taxRateId: e.target.value || undefined })}
             >
               <option value="">No Tax</option>
-              {seedTaxRates.map((rate) => (
+              {taxRates.map((rate) => (
                 <option key={rate.id} value={rate.id}>
                   {rate.name}
                 </option>

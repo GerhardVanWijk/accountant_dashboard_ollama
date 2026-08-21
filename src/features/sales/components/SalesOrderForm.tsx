@@ -5,6 +5,7 @@ import { FinancialNumber } from '@/components/ui/FinancialNumber';
 import { formatCurrency } from '@/utils/formatFinancial';
 import type { CreateSalesOrderDTO } from '../services';
 import { LineItemsEditor } from './LineItemsEditor';
+import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 
 const inputClass =
   'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
@@ -27,6 +28,7 @@ function today(): string {
  * salesOrderService.createSalesOrder() / updateSalesOrder().
  */
 export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSubmit, onCancel }: SalesOrderFormProps) {
+  const { taxRates } = useTaxRates();
   const [orderNumber, setOrderNumber] = useState(salesOrder?.orderNumber ?? defaultOrderNumber);
   const [customerId, setCustomerId] = useState(salesOrder?.customerId ?? customers[0]?.id ?? '');
   const [orderDate, setOrderDate] = useState(salesOrder ? salesOrder.orderDate.slice(0, 10) : today());
@@ -100,7 +102,7 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
         </label>
       </div>
 
-      <LineItemsEditor lineItems={lineItems} onChange={setLineItems} />
+      <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} />
 
       <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
         <div>

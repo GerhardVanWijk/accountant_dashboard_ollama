@@ -133,9 +133,9 @@ or raw Tailwind color classes introduced in `src/features/banking/`.
 - Reused `Icons.download` for "Import Statement" (closest existing concept, per scope
   boundary) rather than adding a new `upload`/`import` key — fine as-is, revisit if a
   dedicated import icon is wanted.
-- No `TaxRate` repository/service exists anywhere yet (Tax module is Wave 3) — Banking
-  reads a local `src/mock-data/taxRates.ts` seed typed against the real `TaxRate`
-  model, same stopgap Inventory used pre-Sales.
+- ~~No `TaxRate` repository/service exists anywhere yet~~ — resolved 2026-08-21, see
+  Tax Module section below: real `ITaxRateRepository`/`TaxRateService` now exist and
+  Banking reads them via `useTaxRates()`, not the raw seed array directly.
 - `docs/DO_NOT_BREAK.md`'s "tick-flash on running balance" wasn't verified in this
   pass — not re-checked against `FinancialNumber`'s `showFlash` usage; low risk, worth
   a follow-up glance.
@@ -203,13 +203,38 @@ without discussion"), it did not add one unilaterally — it surfaced the existi
 
 ### Wave 3 (Sequential — Tax & Reports, depend on Wave 1-2)
 
-#### Tax Module (Tax Bee) — READY TO DISPATCH
-- [ ] Tax Rates (VAT standard/zero-rated/exempt, income tax brackets)
-- [ ] Tax Calculations (auto-calc on sales/purchases documents)
-- [ ] VAT Reporting (input/output VAT analysis, reconciliation)
+#### Tax Module — IN PROGRESS (2026-08-21): engine done (Queen, solo), UI not yet dispatched
+- [x] Tax Rates engine — `TaxRate` redesigned effective-dated/versioned
+  (`code`, `treatment`, `effectiveFrom`/`effectiveTo`, `jurisdiction`,
+  `sourceReference` — SA_ACCOUNTING_MASTER_SPEC.md §9/§12/§82/§113).
+  `TaxRateService` (`src/features/tax/services/taxRateService.ts`):
+  `getEffectiveRate(code, asOf)`/`getCurrentRate(code)` for historically-
+  correct lookups, `supersede()` to version-change a rate (reason-required,
+  audit-logged — never edits an existing rate's `rate` in place, mirrors
+  `CompanyService.setReportingFramework()`'s override pattern). Seeded with
+  real SA VAT codes (STD @ 14%→15% on 2018-04-01, ZERO, EXEMPT, OOS,
+  NODEDUCT) — flagged user-supplied/pending professional verification, not
+  presented as confirmed, per §110/§111.
+- [x] Tax Calculations wired into every consumer that previously imported
+  the static `seedTaxRates` array directly: Sales/Purchases
+  `LineItemsEditor` (now take a `taxRates` prop via `useTaxRates()`),
+  Banking's `BankTransactionsPage`, Inventory's `ProductForm`/
+  `ProductsTable` (also fixed a real bug along the way: `Product`'s
+  placeholder tax-rate ids didn't match any real `TaxRate` record at all
+  — now they do). `Company` extended with `vatFilingFrequency`/
+  `vatAccountingBasis` (§10/§11).
+- [ ] VAT Reporting (input/output VAT analysis, VAT201-shaped return) —
+  `/tax/vat-return` route still a placeholder (`VatReturnPage`). This is
+  the actual UI-layer work still to dispatch to a Tax Bee.
 - [ ] Seasonal tax analysis with charts
 - [ ] Tax tables with percentages and amounts
 - [ ] Use `FinancialNumber` for tax amounts
+
+**Not addressed in this pass, flagged for whoever picks up VAT Reporting:**
+income tax brackets/SBC calculations (§53, a different tax entirely from
+VAT — Phase 9 per §116, not Phase 5), and no VAT Period
+open/closed lifecycle yet (§10's "VAT period" — Accounting Periods exist
+for the GL but there's no VAT-specific filing-period concept).
 
 #### Reports Module (Reports Bee) — READY TO DISPATCH
 - [ ] Profit & Loss (revenue - COGS - opex = net income)

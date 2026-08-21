@@ -6,7 +6,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Spinner } from '@/components/feedback/Spinner';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { seedTaxRates } from '@/mock-data/taxRates';
+import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useBankAccounts } from '../hooks/useBankAccounts';
 import { useBankTransactions } from '../hooks/useBankTransactions';
 import { useBankTransactionMutations } from '../hooks/useBankTransactionMutations';
@@ -37,6 +37,7 @@ const inputClass =
  */
 export function BankTransactionsPage() {
   const { bankAccounts, isLoading: accountsLoading } = useBankAccounts();
+  const { taxRates } = useTaxRates();
   const { accounts: glAccounts } = useGlAccounts();
   const [selectedAccountId, setSelectedAccountId] = useState<string>('all');
 
@@ -186,7 +187,7 @@ export function BankTransactionsPage() {
           <TransactionForm
             bankAccounts={bankAccounts}
             glAccounts={glAccounts}
-            taxRates={seedTaxRates}
+            taxRates={taxRates}
             defaultBankAccountId={filterAccountId}
             onSubmitDirect={async (input) => {
               await createDirectTransaction(input);
@@ -206,7 +207,7 @@ export function BankTransactionsPage() {
           <AllocateTransactionForm
             transaction={dialog.transaction}
             glAccounts={glAccounts}
-            taxRates={seedTaxRates}
+            taxRates={taxRates}
             onSubmit={async (allocations) => {
               await allocateTransaction(dialog.transaction.id, allocations);
               setDialog(null);

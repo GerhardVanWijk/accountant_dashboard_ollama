@@ -25,6 +25,8 @@ export const seedCompanies: Company[] = [
     isVatRegistered: true,
     vatRegistrationNumber: '4123456789',
     vatRegistrationDate: '2020-03-01T00:00:00.000Z',
+    vatFilingFrequency: 'bi_monthly',
+    vatAccountingBasis: 'invoice',
     incomeTaxNumber: '9123456789',
     isActive: true,
     createdAt: '2026-01-01T00:00:00.000Z',

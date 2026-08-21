@@ -5,6 +5,7 @@ import { FinancialNumber } from '@/components/ui/FinancialNumber';
 import { formatCurrency } from '@/utils/formatFinancial';
 import type { CreatePurchaseOrderDTO } from '../services';
 import { LineItemsEditor } from './LineItemsEditor';
+import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 
 const inputClass =
   'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
@@ -26,6 +27,7 @@ function today(): string {
  * CreatePurchaseOrderDTO payload for purchaseOrderService.createPurchaseOrder().
  */
 export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCancel }: PurchaseOrderFormProps) {
+  const { taxRates } = useTaxRates();
   const [poNumber, setPoNumber] = useState(defaultPoNumber);
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? '');
   const [orderDate, setOrderDate] = useState(today());
@@ -109,7 +111,7 @@ export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCanc
         </label>
       </div>
 
-      <LineItemsEditor lineItems={lineItems} onChange={setLineItems} />
+      <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} />
 
       <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
         <div>

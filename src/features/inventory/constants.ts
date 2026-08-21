@@ -1,5 +1,4 @@
-import type { CurrencyCode } from '@/types';
-import { PLACEHOLDER_TAX_RATE_STANDARD, PLACEHOLDER_TAX_RATE_ZERO } from '@/mock-data/products';
+import type { CurrencyCode, TaxRate } from '@/types';
 
 /**
  * Reporting currency for inventory valuation/price display. There is no
@@ -10,19 +9,15 @@ import { PLACEHOLDER_TAX_RATE_STANDARD, PLACEHOLDER_TAX_RATE_ZERO } from '@/mock
 export const INVENTORY_CURRENCY: CurrencyCode = 'ZAR';
 
 /**
- * Placeholder tax rate options for the Product form's tax-rate select.
- * There is no TaxRate mock repository yet (Phase 3, tax-bee) — Product.
- * taxRateId is already a free-form optional ID on the base type, so this
- * is just a local id->label lookup for display until that module exists.
+ * Resolves a Product's taxRateId to a real TaxRate's display name. Takes
+ * the caller's already-loaded tax rates (via useTaxRates(), Phase 5 —
+ * src/features/tax/) rather than a static local list, since Product.
+ * taxRateId now resolves against real TaxRate records
+ * (src/mock-data/taxRates.ts).
  */
-export const TAX_RATE_OPTIONS: ReadonlyArray<{ id: string; label: string }> = [
-  { id: PLACEHOLDER_TAX_RATE_STANDARD, label: 'Standard Rate (15%)' },
-  { id: PLACEHOLDER_TAX_RATE_ZERO, label: 'Zero-Rated (0%)' },
-];
-
-export function getTaxRateLabel(taxRateId: string | undefined): string {
+export function getTaxRateLabel(taxRateId: string | undefined, taxRates: TaxRate[]): string {
   if (!taxRateId) return 'No tax rate';
-  return TAX_RATE_OPTIONS.find((t) => t.id === taxRateId)?.label ?? taxRateId;
+  return taxRates.find((t) => t.id === taxRateId)?.name ?? taxRateId;
 }
 
 /** Units of measure offered in the Product form's UOM select. */

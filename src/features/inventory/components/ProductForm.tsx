@@ -3,7 +3,8 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { Product, ProductType } from '@/types';
 import { Button } from '@/components/ui/Button';
-import { TAX_RATE_OPTIONS, UOM_OPTIONS, INVENTORY_CURRENCY } from '../constants';
+import { UOM_OPTIONS, INVENTORY_CURRENCY } from '../constants';
+import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { fieldError, fieldHint, fieldInput, fieldLabel } from './formStyles';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
 
@@ -65,6 +66,7 @@ function toDefaultValues(product?: Product): ProductFormValues {
  * (docs/DO_NOT_BREAK.md § Inventory & Stock).
  */
 export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
+  const { taxRates } = useTaxRates();
   const {
     register,
     handleSubmit,
@@ -175,9 +177,9 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
           </label>
           <select id="taxRateId" className={fieldInput} {...register('taxRateId')}>
             <option value="">No tax rate</option>
-            {TAX_RATE_OPTIONS.map((rate) => (
+            {taxRates.map((rate) => (
               <option key={rate.id} value={rate.id}>
-                {rate.label}
+                {rate.name}
               </option>
             ))}
           </select>

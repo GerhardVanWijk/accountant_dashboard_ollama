@@ -12,6 +12,7 @@ import type { Product } from '@/types';
 import { Icon } from '@/components/ui/Icon';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getTaxRateLabel, INVENTORY_CURRENCY } from '../constants';
+import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
 
 export interface ProductsTableProps {
   products: Product[];
@@ -51,6 +52,7 @@ const flagLabels: Record<StockFlag, string> = {
  * LowStockAlertWidget.tsx), not from this table.
  */
 export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps) {
+  const { taxRates } = useAllTaxRates();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | Product['type']>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | Product['status']>('all');
@@ -96,7 +98,7 @@ export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps
       {
         accessorKey: 'taxRateId',
         header: 'Tax Rate',
-        cell: ({ getValue }) => getTaxRateLabel(getValue<string | undefined>()),
+        cell: ({ getValue }) => getTaxRateLabel(getValue<string | undefined>(), taxRates),
       },
       {
         accessorKey: 'quantityOnHand',
@@ -138,7 +140,7 @@ export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps
         ),
       },
     ],
-    [onEdit, onDelete],
+    [onEdit, onDelete, taxRates],
   );
 
   const table = useReactTable({

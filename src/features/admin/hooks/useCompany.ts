@@ -14,10 +14,18 @@ export function useCompany() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     companyService
       .getCompanies()
-      .then((companies) => setCompany(companies[0]))
-      .finally(() => setLoading(false));
+      .then((companies) => {
+        if (!cancelled) setCompany(companies[0]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return { company, loading };

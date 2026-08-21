@@ -22,7 +22,7 @@ export const seedBankTransactions: BankTransactionWithAllocations[] = [
     source: 'manual',
     reconciliationId: 'recon_0001',
     allocations: [
-      { id: 'btxa_0001a', glAccountId: 'acc_4000', description: 'Sales - Acme Trading', netAmount: 20000, taxRateId: 'tax_std_15', taxAmount: 3000 },
+      { id: 'btxa_0001a', glAccountId: 'acc_4000', description: 'Sales - Acme Trading', netAmount: 20000, taxRateId: 'tax_std_v2', taxAmount: 3000 },
     ],
     createdAt: '2026-07-03T09:00:00.000Z',
     updatedAt: '2026-07-31T16:00:00.000Z',
@@ -39,7 +39,7 @@ export const seedBankTransactions: BankTransactionWithAllocations[] = [
     source: 'manual',
     reconciliationId: 'recon_0001',
     allocations: [
-      { id: 'btxa_0002a', glAccountId: 'acc_5100', description: 'Office rent', netAmount: 16086.96, taxRateId: 'tax_std_15', taxAmount: 2413.04 },
+      { id: 'btxa_0002a', glAccountId: 'acc_5100', description: 'Office rent', netAmount: 16086.96, taxRateId: 'tax_std_v2', taxAmount: 2413.04 },
     ],
     createdAt: '2026-07-05T14:20:00.000Z',
     updatedAt: '2026-07-31T16:00:00.000Z',
@@ -179,7 +179,7 @@ export const seedBankTransactions: BankTransactionWithAllocations[] = [
     status: 'unreconciled',
     source: 'manual',
     allocations: [
-      { id: 'btxa_0010a', glAccountId: 'acc_5100', description: 'Signage & branding', netAmount: 5391.3, taxRateId: 'tax_std_15', taxAmount: 808.7 },
+      { id: 'btxa_0010a', glAccountId: 'acc_5100', description: 'Signage & branding', netAmount: 5391.3, taxRateId: 'tax_std_v2', taxAmount: 808.7 },
     ],
     createdAt: '2026-08-19T16:30:00.000Z',
     updatedAt: '2026-08-19T16:30:00.000Z',

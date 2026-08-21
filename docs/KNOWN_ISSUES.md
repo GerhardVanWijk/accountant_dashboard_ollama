@@ -7,6 +7,16 @@ each section.
 
 ## Open
 
+### `ProductsPage.test.tsx`'s "low stock" test fails only when run after its sibling tests
+Introduced 2026-08-21 while wiring `ProductsTable`/`ProductForm` to the new
+`useTaxRates()`/`useAllTaxRates()` hooks (Tax module). The test passes in isolation
+(confirmed by running it alone) but fails when run as part of the full file — looks
+like leftover DOM/state from an earlier test in the same file rather than anything
+about the tax-rate logic itself (added the standard `cancelled` guard to the new hooks,
+matching `useDashboardData.ts`'s pattern, and it didn't fix it). Explicitly NOT
+investigated further or patched in this pass per direct instruction — flagging so it
+isn't lost, not because it's low-value to fix.
+
 ### GL posting engine has no storage-layer enforcement of the balance invariant
 `JournalEntryService.postJournalEntry()` (`src/features/accounting/services/`)
 validates sum(debit) === sum(credit) in application code before writing, but the mock

@@ -20,6 +20,7 @@ export type AuditAction =
   | 'bank_reconciled'
   | 'tax_return_prepared'
   | 'tax_return_finalised'
+  | 'tax_rate_superseded'
   | 'permission_changed';
 
 /**

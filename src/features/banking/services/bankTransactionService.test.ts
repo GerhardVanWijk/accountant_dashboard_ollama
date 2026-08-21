@@ -69,7 +69,7 @@ describe('BankTransactionService', () => {
         description: 'Customer payment',
         amount: 1150,
         direction: 'debit',
-        allocations: [{ glAccountId: 'acc_4000', netAmount: 1000, taxRateId: 'tax_std_15' }],
+        allocations: [{ glAccountId: 'acc_4000', netAmount: 1000, taxRateId: 'tax_std_v2' }],
       });
 
       expect(txn.status).toBe('matched');
@@ -296,7 +296,7 @@ describe('BankTransactionService', () => {
       ]);
 
       const allocated = await service.allocateTransaction(imported.id, [
-        { glAccountId: 'acc_4000', netAmount: 200, taxRateId: 'tax_std_15' },
+        { glAccountId: 'acc_4000', netAmount: 200, taxRateId: 'tax_std_v2' },
       ]);
 
       expect(allocated.status).toBe('matched');

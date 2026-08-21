@@ -1,5 +1,6 @@
 import type { Product } from '@/types';
 import { seedStockMovements } from './stockMovements';
+import { STANDARD_RATE_ID, ZERO_RATE_ID } from './taxRates';
 
 function nowISO(): string {
   return new Date().toISOString();
@@ -19,14 +20,13 @@ function sumQuantityOnHand(productId: string): number {
 }
 
 /**
- * Placeholder tax rate identifiers. There is no TaxRate mock repository yet
- * (Phase 3, tax-bee) — these string ids are referenced by Product.taxRateId
- * (already an optional free-form ID on the base type) and given a display
- * label locally in src/features/inventory/constants.ts. Swap for real
- * TaxRate ids once that module exists; no shape change needed here.
+ * Real TaxRate ids (Phase 5, tax-bee — src/mock-data/taxRates.ts), referenced
+ * by Product.taxRateId. Previously these were bespoke placeholder ids that
+ * didn't resolve to any real TaxRate record; now they point at the current
+ * standard/zero-rated versions so `taxRateService.getTaxRate()` resolves them.
  */
-export const PLACEHOLDER_TAX_RATE_STANDARD = 'tax_standard_15';
-export const PLACEHOLDER_TAX_RATE_ZERO = 'tax_zero_rated';
+export const PLACEHOLDER_TAX_RATE_STANDARD = STANDARD_RATE_ID;
+export const PLACEHOLDER_TAX_RATE_ZERO = ZERO_RATE_ID;
 
 /** Seed data for MockProductRepository (src/features/inventory/repositories/). */
 export const seedProducts: Product[] = [
