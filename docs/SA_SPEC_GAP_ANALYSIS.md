@@ -1,15 +1,18 @@
 # SA Accounting Master Spec — Gap Analysis
 
 What exists in this codebase today versus `docs/SA_ACCOUNTING_MASTER_SPEC.md` (117
-sections, 12 build phases per §116). **Updated 2026-08-21** — Phase 5 (VAT) is now
+sections, 12 build phases per §116). **Updated 2026-08-21** — Phase 5 (VAT) is
 complete: `TaxRate` redesigned as an effective-dated engine, VAT calculation wired into
 every Sales/Purchases/Banking/Inventory consumer, a Tax Rates settings page, VAT
 Reporting with real GL reconciliation, and non-deductible input VAT correctly excluded.
-Phases 1-5 (Accounting Core, Customers, Suppliers, Banking, VAT) now have real
-implementations to assess; Phases 6-12 (Inventory valuation, Fixed Assets, Payroll, Tax,
-Financial Reporting, Compliance, Advanced Accounting) are still not started, consistent
-with §116's ordering — not reassessed in detail below beyond noting what's genuinely
-absent.
+Phase 6 (Inventory) is now partially complete: Cost of Sales posts on Invoice, tracked
+inventory capitalizes on Bill instead of expensing — but valuation-policy selection,
+default-warehouse attribution, PO-receipt stock/value timing, and credit-note COGS
+reversal all remain open (see that section below). Phases 1-6 (Accounting Core,
+Customers, Suppliers, Banking, VAT, Inventory) now have real implementations to assess;
+Phases 7-12 (Fixed Assets, Payroll, Tax, Financial Reporting, Compliance, Advanced
+Accounting) are still not started, consistent with §116's ordering — not reassessed in
+detail below beyond noting what's genuinely absent.
 
 ## Phase 1 — Accounting Core
 
@@ -126,16 +129,52 @@ earlier in the known-issues pass, not this one. See `docs/KNOWN_ISSUES.md` for t
 AR/AP-side residual reconciliation gap (payment/receipt entries aren't backfilled,
 only original postings) — that one is Phase 2/3's concern, not Phase 5's.
 
-## Phases 6-12 — not started, per §116's own build order
+## Phase 6 (Inventory) — ⚠️ partially complete, 2026-08-21
+
+Products/Warehouses/stock-movement ledger existed since Phase 1 (with WAC valuation),
+but nothing ever posted Inventory to the GL or moved stock automatically from a sale or
+purchase — `StockMovementType` had carried `'sale'`/`'goods_received'` variants since
+Phase 1 with no code ever using them. Fixed this pass:
+
+- **Cost of Sales on sale (§24)** — `invoiceService.postInvoice()` now adds a Cost of
+  Sales / Inventory line pair to the SAME journal entry as the sale, for every line
+  item with a tracked product, then reduces stock after the entry posts successfully
+  (`InventoryPostingAdapter.calculateCogs()`/`recordSaleMovement()`).
+- **Inventory capitalization on purchase (§22)** — `billService.postBill()` now
+  classifies each line as Inventory (tracked product) or Expense (everything else)
+  instead of always expensing the full subtotal, and records a stock receipt at the
+  real purchase unit cost after posting, recalculating the product's weighted-average
+  cost (`recordReceiptMovement()`).
+- Both directions are constructor-injected via `InventoryPostingAdapter`
+  (`src/features/inventory/services/inventoryPostingAdapter.ts`), independently
+  testable with isolated mock repositories (10 tests) rather than only via the real
+  singleton.
+
+**Still open, real Phase 6 gaps, not fixed this pass:**
+- **No valuation-policy selection (§23)** — WAC is the only method; FIFO would need a
+  unit-cost-per-lot data model `StockMovement` doesn't carry. Not attempted.
+- **No default-warehouse attribution (§22)** — neither `Invoice`/`Bill` line items nor
+  `PurchaseOrder`/`Quote`/`SalesOrder` carry a `warehouseId`, so every stock movement
+  this pass wires up posts against the single `Warehouse.isDefault` warehouse
+  regardless of which warehouse the goods actually came from/went to. A real
+  simplification for a single-default-warehouse business, not correct for genuine
+  multi-warehouse operations. See `docs/KNOWN_ISSUES.md`.
+- **PO Goods Receipt doesn't move stock or value (§22, a real simplification, not
+  silent)** — stock/GL recognition happens at Bill-posting time only, since a Bill can
+  exist standalone with no PO; recording it at both PO-receipt and Bill-posting would
+  double-count. This is real 3-way (PO/GRN/Invoice) matching's absence, documented in
+  `docs/KNOWN_ISSUES.md`, not attempted.
+- **Credit notes don't reverse Cost of Sales/stock** — `creditNoteService.issueCreditNote()`
+  reverses revenue/AR/VAT for a returned item but does not restore stock quantity or
+  reverse the original Cost of Sales entry. Found while building this pass, not fixed —
+  see `docs/KNOWN_ISSUES.md`.
+
+## Phases 7-12 — not started, per §116's own build order
 
 Nothing below has been built yet. Noted here only so a future session can see at a
 glance what's genuinely absent versus partially built, without re-deriving it from
 scratch:
 
-- **Phase 6 (Inventory)** — Products/Warehouses/stock-movement ledger exist (Phase 1),
-  but no automatic Cost-of-Sales journal fires when a sale is recorded (§24), and no
-  valuation-method (FIFO/weighted-average) selection exists at the accounting-policy
-  level (§23).
 - **Phase 7 (Fixed Assets)** — not started. No asset register, no accounting-vs-tax
   depreciation split (§26, §27).
 - **Phase 8 (Payroll)** — not started. No employee master data, PAYE/UIF/SDL control

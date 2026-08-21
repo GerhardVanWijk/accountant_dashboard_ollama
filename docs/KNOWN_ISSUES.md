@@ -7,6 +7,35 @@ each section.
 
 ## Open
 
+### Credit notes don't reverse Cost of Sales or restore stock quantity
+`creditNoteService.issueCreditNote()` reverses revenue/AR/VAT for a returned item
+(§15) but was never wired to `InventoryPostingAdapter` — a returned tracked-inventory
+item's original Cost of Sales entry (posted when the invoice sold it) stays on the
+books, and the item's stock quantity is never restored. Found while wiring Cost of
+Sales onto `invoiceService.postInvoice()` (2026-08-21), not fixed in that pass — the
+fix is structurally the same shape (calculate the reversal amount, post it in the same
+journal entry as the credit note, restore stock only after that entry succeeds), just
+not done yet.
+
+### Stock/GL postings always use the single default warehouse
+Neither `Invoice`/`Bill` line items nor `PurchaseOrder`/`Quote`/`SalesOrder` carry a
+`warehouseId` field, so `InventoryPostingAdapter` (2026-08-21) posts every sale/receipt
+stock movement against the one `Warehouse.isDefault` warehouse regardless of which
+warehouse the goods actually left from or arrived at. Fine for a single-location
+business; wrong for genuine multi-warehouse operations. Fixing this needs a
+`warehouseId` field added to `DocumentLineItem` (or a per-document override) — a real
+type-shape change, not attempted this pass.
+
+### Purchase Order Goods Receipt doesn't move stock quantity or GL value
+`purchaseOrderService.recordReceipt()` is status-only by design (2026-08-21) — stock
+quantity and the Inventory GL value are only recognized when the resulting Bill posts
+(`billService.postBill()`), not when the PO is marked received. This is a deliberate
+simplification versus true 3-way (PO/GRN/Invoice) matching: a Bill can exist standalone
+with no PO, so Bill-posting is the one event common to both paths, and recording stock
+at both PO-receipt AND Bill-posting would double-count for the PO→Bill path. The real
+gap: if goods are physically received well before the bill is posted (a common real
+lag), stock levels understate what's physically on the shelf during that window.
+
 ### AR/AP subledger reconciliation still shows a variance for partially-paid seed documents
 `generateSeedPostings.ts` (2026-08-21) backfilled the ORIGINAL posting entry for every
 non-draft/non-void seed Invoice/Bill (see Resolved below), which is enough for VAT
@@ -79,6 +108,21 @@ checkout, no `.gitattributes` committed). Harmless, but noisy. A `.gitattributes
 pinning `* text=auto eol=lf` (or accepting CRLF explicitly) would silence it.
 
 ## Resolved
+
+### No Cost of Sales posted on a sale, no Inventory capitalization on a purchase
+Phase 1's Inventory module had a real stock-movement ledger and WAC valuation, and
+`StockMovementType` had carried `'sale'`/`'goods_received'` variants since Phase 1 —
+but nothing ever called them. Fixed 2026-08-21: `invoiceService.postInvoice()` now
+posts DR Cost of Sales / CR Inventory (§24) for every tracked-product line item, in the
+same journal entry as the sale, then reduces stock after it posts; `billService.postBill()`
+now capitalizes tracked-product lines to the Inventory asset instead of always
+expensing the subtotal (§22), recalculating the product's weighted-average cost on
+receipt. Both via a new constructor-injectable `InventoryPostingAdapter`
+(`src/features/inventory/services/`), independently tested (10 tests) rather than only
+reachable through the real singleton. A genuinely zero-value bill (no lines, no tax)
+now throws a clear error instead of silently posting a malformed zero-amount GL line —
+caught by a test failure while building this, not something that could have happened
+before (the code path was previously unreachable in practice).
 
 ### Non-deductible input VAT was posted in full to VAT Input instead of the expense line
 `billService.postBill()` used to debit `acc_2110` (VAT Input) for a bill's ENTIRE

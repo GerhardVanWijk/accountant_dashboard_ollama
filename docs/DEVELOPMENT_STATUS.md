@@ -11,7 +11,7 @@
 | **Sales (AR — Quotes/Orders/Invoices/Credit Notes/Receipts)** | ✅ `/sales/*` | ✅ | ✅ | ✅ | ✅ | ✅ 317 tests (shared) | 🟢 Done |
 | **Purchases (AP — PO/Bills/Payments/Vendor Aging)** | ✅ `/purchases/*` | ✅ | ✅ | ✅ | ✅ | ✅ 317 tests (shared) | 🟢 Done |
 | **Dashboard** | ✅ `/` | ✅ | n/a (read-only) | ✅ | n/a (aggregates other modules) | ✅ 90 tests (shared) | 🟢 Done |
-| **Tax** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
+| **Tax** | ✅ `/tax/rates`, `/tax/vat-return` | ✅ | ✅ | ✅ | ✅ | ✅ 22 tests (shared) | 🟢 Done |
 | **Banking** | ✅ `/banking/*` | ✅ | ✅ | ✅ | ✅ | ✅ 281 tests (shared) | 🟢 Done |
 | **Reports** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
 | **Admin & Audit** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
@@ -22,7 +22,9 @@
 (route, nav, CRUD, states, tests, build) — it is NOT a claim of full compliance with
 `docs/SA_ACCOUNTING_MASTER_SPEC.md`. See `docs/SA_SPEC_GAP_ANALYSIS.md` for the deeper
 accounting-integrity/SA-compliance gaps still open in Sales/Purchases/Accounting/
-Banking despite all four being 🟢 on this feature-completeness matrix.*
+Banking/Tax/Inventory despite all six being 🟢 on this feature-completeness matrix —
+Inventory specifically still has no valuation-method choice, no per-warehouse
+attribution, and credit notes don't reverse Cost of Sales (`docs/KNOWN_ISSUES.md`).*
 
 ## Checkpoint — 2026-08-20: Phase 1 complete (Wave 1 + Wave 2)
 

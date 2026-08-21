@@ -275,6 +275,45 @@ Accounting Periods already gate posting); the AR/AP subledger
 reconciliation still shows a variance for partially-paid seed documents
 (`docs/KNOWN_ISSUES.md` — a Phase 2/3 concern, not Phase 5's).
 
+### Phase 6 (Inventory) — ⚠️ PARTIALLY COMPLETE (2026-08-21, Queen, solo)
+
+Products/Warehouses/immutable stock-movement ledger/WAC valuation shipped in Phase 1
+(see above) — this wave is specifically §22-§24's "Cost of Sales" GL integration,
+which nothing had wired up despite `StockMovementType` carrying `'sale'`/
+`'goods_received'` variants since Phase 1.
+
+- [x] Cost of Sales on sale (§24) — `invoiceService.postInvoice()` posts DR Cost of
+  Sales / CR Inventory in the same journal entry as the sale, for every tracked-product
+  line item, then reduces stock after the entry succeeds.
+- [x] Inventory capitalization on purchase (§22) — `billService.postBill()` now
+  classifies each line as Inventory (tracked product, capitalized) or Expense
+  (everything else) instead of always expensing the full subtotal, records a stock
+  receipt at the real purchase unit cost after posting, and recalculates the product's
+  weighted-average cost.
+- [x] `InventoryPostingAdapter` (`src/features/inventory/services/`) — constructor-
+  injectable (not a bare singleton), composes productService/stockService/
+  warehouseService behind a narrow interface, independently tested with isolated mock
+  repositories (10 tests) rather than only reachable via the real singleton.
+- [ ] Valuation-method selection (§23) — WAC is the only method available; FIFO would
+  need a unit-cost-per-lot data model `StockMovement` doesn't carry. Not attempted.
+- [ ] Per-document warehouse attribution (§22) — `Invoice`/`Bill`/`PurchaseOrder`/
+  `Quote`/`SalesOrder` line items carry no `warehouseId`, so every movement this wave
+  wired up posts against the single `Warehouse.isDefault` warehouse regardless of
+  which warehouse the goods actually moved through. Flagged in `docs/KNOWN_ISSUES.md`.
+- [ ] True 3-way (PO/GRN/Invoice) matching — `purchaseOrderService.recordReceipt()`
+  stays status-only by design; stock/GL recognition happens at Bill-posting only, to
+  avoid double-counting the PO→Bill path (a Bill can also exist standalone with no
+  PO). Real gap if goods are physically received well before the bill posts. Flagged
+  in `docs/KNOWN_ISSUES.md`.
+- [ ] Credit notes don't reverse Cost of Sales or restore stock quantity —
+  `creditNoteService.issueCreditNote()` reverses revenue/AR/VAT for a return but was
+  never wired to `InventoryPostingAdapter`. Found while building this wave, not fixed.
+  Flagged in `docs/KNOWN_ISSUES.md`.
+
+370/371 tests passing (up from 361 after Phase 5), type-check/lint/build clean. The
+one failure is the pre-existing, unrelated `ProductsPage` test-order flake (see Wave
+1b's entry above), still untouched.
+
 #### Reports Module (Reports Bee) — READY TO DISPATCH
 - [ ] Profit & Loss (revenue - COGS - opex = net income)
 - [ ] Balance Sheet (assets = liabilities + equity)
