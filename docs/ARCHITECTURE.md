@@ -3,7 +3,7 @@
 ## Overview
 
 React + TypeScript + Vite frontend for a complete accounting system.
-Multi-agent local development with Ollama Qwen3:8b.
+Multi-agent hive development orchestrated by Queen Bee (Claude).
 
 ## Tech Stack
 
@@ -227,7 +227,6 @@ Every feature component should have:
 Create `.env.local`:
 
 VITE_API_BASE_URL=http://localhost:3000/api
-VITE_OLLAMA_BASE_URL=http://localhost:11434
 
 
 ## Current Phase
@@ -237,14 +236,31 @@ Phase numbering below matches `docs/HIVE_TASKS.md` (the authoritative task board
 **Phase 0 (Foundation & Core System Shell) — done, verified by architect-bee:**
 - ✅ Vite + React 18 + TypeScript (strict) scaffold, with ESLint and Vitest configured. `npm install`, `npm run build`, `npm run type-check`, `npm run lint`, and `npm run test` all pass with zero errors.
 - ✅ Full `src/` folder structure (app, components/{ui,layout,charts,tables,forms,feedback}, features/[15 modules], services, repositories(+mock), stores, types, utils, config, hooks, mock-data, styles) — feature subfolders are placeholders per bee assignment, not built-out logic.
-- ✅ Design system tokens (`src/styles/tokens.css`) implementing `docs/DESIGN_SYSTEM.md` exactly — dark values on `:root` (default), light values under `[data-theme="light"]` — wired into `tailwind.config.js` (colors, font sizes/weights, spacing, radius, shadows, breakpoints).
-- ✅ `ThemeProvider` (`src/app/providers.tsx`) supporting Dark/Light/System, backed by a persisted Zustand store (`src/stores/themeStore.ts`); `ThemeToggle` UI in the topbar.
 - ✅ Base domain types in `src/types/`: `Customer`, `Supplier`, `Product`, `Invoice`, `Quote`, `SalesOrder`, `PurchaseOrder`, `Bill`, `BankAccount`, `BankTransaction`, `JournalEntry`, `Account`, `TaxRate`, `User`, `Role` (+ shared `common.ts` primitives).
-- ✅ Repository pattern: generic `IRepository<T>` contract (`src/repositories/IRepository.ts`) and one fully-wired example, `MockCustomerRepository` (`src/repositories/mock/`), consumed only via `CustomerService` → `useCustomers` hook — components never import repositories directly. Per ADR 001 this is an **in-memory** mock, not localStorage-persisted.
-- ✅ Router skeleton (`src/app/router.tsx`) using `createBrowserRouter`, with all 14 routes from `docs/ROUTES.md` (paths are authoritative — not the illustrative `/app/*` example previously shown in this doc), each rendering a minimal placeholder page. `RouteGuard` wraps the protected tree with a stub auth check (`src/stores/authStore.ts`); `/login` is public.
+- ✅ Repository pattern: generic `IRepository<T>` contract (`src/repositories/IRepository.ts`) and one fully-wired example, `MockCustomerRepository` (`src/repositories/mock/`), consumed only via `CustomerService` → `useCustomers` hook — components never import repositories directly. Per ADR 001 this is an **in-memory** mock, not localStorage-persisted. Convention going forward: every OTHER feature's repository lives feature-local at `src/features/[feature]/repositories/`, not top-level — Customer's top-level location is a Phase 0 exception, not the pattern to copy.
+- ✅ Router skeleton (`src/app/router.tsx`) using `createBrowserRouter`, with all 14 routes from `docs/ROUTES.md` (paths are authoritative — not the illustrative `/app/*` example previously shown in this doc). `RouteGuard` wraps the protected tree with a stub auth check (`src/stores/authStore.ts`); `/login` is public.
 - ✅ Loading/Error/Empty state primitives (`src/components/feedback/{Spinner,ErrorState,EmptyState}.tsx`) for other bees to consume.
-- ⏳ Not built yet: Executive Dashboard content, Customers/Suppliers/Products modules, and every other feature's real UI, additional mock repositories, sidebar collapse/mobile drawer polish, real authentication.
 
-**Phase 1**: Core business modules (dashboard, customers, suppliers, products & inventory)
-**Phase 2**: Transactional modules (sales, purchases, banking, general ledger)
+**Design system revised 2026-08-20** (see `docs/DESIGN_SYSTEM.md`): pastel palette (light
+mode now default), horizontal top navigation bar (the left `Sidebar` described above no
+longer exists — replaced by `TopNavTabs`/`MobileNavMenu`), single-source-of-truth icon
+registry (`src/config/icons.ts` + `src/components/ui/Icon.tsx`). Any doc or comment
+elsewhere referencing "dark default" or a left sidebar predates this change.
+
+**Phase 1 (Core Business Modules) — ✅ COMPLETE (2026-08-20), verified by qa-bee:**
+- ✅ Executive Dashboard (`src/features/dashboard/`) — KPI cards, Revenue vs Expenses +
+  Cash Flow charts (mocked pending Banking/Accounting), real AR/AP aging aggregated from
+  Customers/Suppliers, real Stock Status via Inventory's low-stock/valuation service.
+- ✅ Customers Module (`src/features/customers/`, page at `src/features/sales/pages/CustomersPage.tsx`
+  per `docs/ROUTES.md`'s domain grouping) — list/detail/create/edit, aging, credit control,
+  inactivate-not-delete guard.
+- ✅ Suppliers Module (`src/features/suppliers/`, page at `src/features/purchases/pages/VendorsPage.tsx`) —
+  list/detail/create/edit, aging, AP summary, delete-guard on linked history.
+- ✅ Products & Inventory Module (`src/features/inventory/`) — products + warehouses +
+  immutable append-only stock-movement ledger, Weighted Average Cost valuation.
+- Known inconsistency: Customers' and Suppliers' aging-bucket utilities use different key
+  names (`days1to30/days31to60/days61Plus` vs `days30/days60/days90Plus`) since they were
+  built independently — see `docs/KNOWN_ISSUES.md`.
+
+**Phase 2**: Transactional modules (sales, purchases, banking, general ledger) — next up.
 **Phase 3**: Compliance & reporting (tax, expenses, fixed assets, reports, admin)
