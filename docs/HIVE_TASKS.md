@@ -34,15 +34,20 @@ as a follow-up, re-verified clean.
 
 ### Wave 1 (Parallel Dispatch — Sales & Purchases)
 
-#### Sales Module (Sales Bee) — DISPATCHED 2026-08-21
-- [ ] Quotes (draft, preview, convert to SO)
-- [ ] Sales Orders (from quote or standalone, line items with Inventory integration)
-- [ ] Invoices (from SO or standalone, tax calculations, AR aging)
-- [ ] Credit Notes (refunds, account credits, allocation to open invoices)
-- [ ] Customer Receipts (payment allocation to invoices)
-- [ ] Financial tables with proper number alignment (tabular-nums, semantic colors)
-- [ ] Use `FinancialNumber` and `FinancialTableCell` components
-- [ ] Integration: Customers aging, Inventory stock reduction, GL posting
+#### Sales Module (Sales Bee) — ✅ COMPLETE (2026-08-21, Wave 1b), independently QA-verified
+- [x] Quotes (draft, preview, convert to SO)
+- [x] Sales Orders (from quote or standalone; convert to Invoice creates a draft invoice
+  via the shared `invoiceService` singleton — posting to GL happens separately when the
+  invoice is marked Sent, same as a standalone invoice)
+- [x] Invoices (from SO or standalone, tax calculations, AR aging) — GL posting wired:
+  `markInvoiceAsSent()` now delegates to `postInvoice()`, so "sent" always means "posted"
+- [x] Credit Notes (issue posts a reversing GL entry; allocate against open invoices via
+  `InvoiceService.recordPayment()`)
+- [x] Customer Receipts (payment allocation across one or more open invoices)
+- [x] Financial tables with proper number alignment (tabular-nums, semantic colors)
+- [x] Use `FinancialNumber` and `FinancialTableCell` components
+- [x] Integration: Inventory line items reused from Invoice pattern, GL posting real
+  (not mocked) for Invoices/Credit Notes/Customer Receipts
 
 **Key Requirements:**
 - ✅ Read `docs/FINANCIAL_UI_GUIDE.md` for number formatting patterns
@@ -53,14 +58,23 @@ as a follow-up, re-verified clean.
 - ✅ Domain types: Quote, SalesOrder, Invoice, CreditNote, CustomerReceipt in `src/types/sales.types.ts`
 - ✅ Definition of Done checklist in `docs/DO_NOT_BREAK.md` (20 points)
 
-#### Purchases Module (Purchases Bee) — DISPATCHED 2026-08-21
-- [ ] Purchase Orders (to suppliers, line items, quantities)
-- [ ] Supplier Bills (receipt & matching against PO)
-- [ ] Payment Register (cash disbursement, cheque/EFT)
-- [ ] Vendor Aging (AP analysis by age bucket)
-- [ ] Financial tables with proper alignment
-- [ ] Use `FinancialNumber` for all amounts
-- [ ] Integration: Suppliers aging, Inventory receipt, GL posting
+#### Purchases Module (Purchases Bee) — ✅ COMPLETE (2026-08-21, Wave 1b), independently QA-verified
+- [x] Purchase Orders (to suppliers, line items, quantities, Send/Receive/Cancel/
+  Convert-to-Bill lifecycle actions)
+- [x] Supplier Bills (GL posting real — `postBill()` posts a balanced entry, not a TODO)
+- [x] Payment Register (record a payment against one supplier, allocate across their
+  outstanding bills, remainder left on-account)
+- [x] Vendor Aging (Current/1-30/31-60/90+ buckets via `calculateAllVendorAging`, real
+  Bill data, supplier names from the Suppliers module's own hook — no reimplemented
+  supplier lookup)
+- [x] Financial tables with proper alignment
+- [x] Use `FinancialNumber` for all amounts
+- [x] Integration: GL posting real for Bills/Payments; PO→Bill conversion always goes
+  through `billService.createBill()` + `postBill()` so it can't bypass the GL
+
+**Flagged gap (tracked in `docs/KNOWN_ISSUES.md`):** a Purchase Order can currently be
+converted to a Bill more than once — no `billId`/converted-status field exists on
+`PurchaseOrder` yet to prevent it.
 
 **Key Requirements:**
 - ✅ Read `docs/FINANCIAL_UI_GUIDE.md` for financial UI patterns
@@ -71,15 +85,14 @@ as a follow-up, re-verified clean.
 
 **Queen Bee note (2026-08-21):** Wave 1's remaining scope (Quotes, Sales Orders, Credit
 Notes, Customer Receipts, a standalone Purchase Orders page, Payment Register, Vendor
-Aging) is not yet built — `docs/ROUTES.md` doesn't have routes for any of it yet either.
-Deferred to a follow-up wave rather than blocking Wave 2, since Wave 2's own
-prerequisite (a working GL posting engine) is done and independently testable; Wave 1's
-remaining scope doesn't gate it. Tracked here so it isn't lost: **Wave 1b (not yet
-dispatched)** — finish Sales (Quotes/SO/CreditNotes/Receipts) and Purchases (PO page/
-Payment Register/Vendor Aging), including adding their routes to `docs/ROUTES.md` +
-`src/config/navigation.ts` + `src/app/router.tsx` (Queen-owned edit, same pattern as
-Wave 2's scaffolding below) and wiring `billService.postBill()`'s GL-posting TODO to
-`journalEntryService.postJournalEntry()`.
+Aging) was deferred past Wave 2 (Banking/Accounting) since Wave 2's own prerequisite — a
+working GL posting engine — didn't need it. **Wave 1b — ✅ COMPLETE (2026-08-21)**:
+Queen scaffolded routes/nav/icons + the shared `invoiceService` singleton
+(`src/services/index.ts`) ahead of dispatch, fixed 2 stale call sites left over from
+`BillService`/`InvoiceService` picking up a required `journalEntryService` constructor
+arg, then dispatched Sales Bee and Purchases Bee in parallel (disjoint feature folders).
+Both independently QA-verified: type-check/lint/build clean, 317 tests passing (up from
+281), `billService.postBill()`'s GL-posting TODO now real.
 
 ### Wave 2 (Sequential — Banking & Accounting, depend on Wave 1) — 🚀 DISPATCHED 2026-08-21
 
@@ -162,11 +175,11 @@ every posting/reversal/period-transition. 203 tests passing.
 - [x] Debit/Credit columns (right-aligned, tabular-nums), `FinancialNumber`/
   `FinancialTableCell`/`formatCurrency` used throughout, `font-mono` for entry/account
   codes
-- [ ] Integration: GL posting from Sales/Purchases (`postJournalEntry()` exists;
-  Bill/Invoice → account-mapping and the actual call sites are not wired yet — see
-  `billService.postBill()`'s TODO and `docs/LEDGER_ARCHITECTURE.md` § Known gaps).
-  **Banking's side of this integration is done** (`bankTransactionService` posts real
-  balanced entries) — only Sales/Purchases → GL remains, tracked under Wave 1b above.
+- [x] Integration: GL posting from Sales/Purchases — done in Wave 1b (2026-08-21).
+  `billService.postBill()`, `invoiceService.postInvoice()` (via `markInvoiceAsSent()`),
+  `creditNoteService.issueCreditNote()`, and `customerReceiptService` all post real
+  balanced entries through `journalEntryService.postJournalEntry()`, same as Banking's
+  `bankTransactionService`.
 
 **Independently re-verified (Queen Bee, 2026-08-21):** `npm run type-check`/`lint`/
 `build` clean, full suite 41 files / 281 tests passing (226 at Accounting Bee's own

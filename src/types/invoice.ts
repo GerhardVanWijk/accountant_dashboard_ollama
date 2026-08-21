@@ -23,4 +23,6 @@ export interface Invoice extends BaseEntity {
   currency: CurrencyCode;
   status: InvoiceStatus;
   notes?: string;
+  /** Set once `status` moves to 'sent' and the GL posting succeeds (debit AR / credit Sales Revenue + VAT Output). */
+  journalEntryId?: ID;
 }

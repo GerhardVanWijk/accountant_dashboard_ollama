@@ -51,7 +51,11 @@ export const navigation: NavSection[] = [
     icon: 'sales',
     items: [
       { path: '/sales/customers', label: 'Customer Directory', icon: 'customers' },
+      { path: '/sales/quotes', label: 'Quotes', icon: 'quotes' },
+      { path: '/sales/orders', label: 'Sales Orders', icon: 'salesOrders' },
       { path: '/sales/invoices', label: 'Sales Invoices', icon: 'invoices' },
+      { path: '/sales/credit-notes', label: 'Credit Notes', icon: 'creditNotes' },
+      { path: '/sales/receipts', label: 'Customer Receipts', icon: 'customerReceipts' },
     ],
   },
   {
@@ -59,7 +63,10 @@ export const navigation: NavSection[] = [
     icon: 'purchases',
     items: [
       { path: '/purchases/vendors', label: 'Vendor Directory', icon: 'suppliers' },
+      { path: '/purchases/orders', label: 'Purchase Orders', icon: 'purchaseOrders' },
       { path: '/purchases/bills', label: 'Supplier Bills', icon: 'bills' },
+      { path: '/purchases/payments', label: 'Payment Register', icon: 'payments' },
+      { path: '/purchases/aging', label: 'Vendor Aging', icon: 'vendorAging' },
     ],
   },
   {

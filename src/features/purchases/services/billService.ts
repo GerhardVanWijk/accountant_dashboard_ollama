@@ -1,14 +1,41 @@
-import type { Bill } from '@/types';
+import type { Bill, ID, JournalEntry } from '@/types';
 import type { IBillRepository } from '@/repositories/IBillRepository';
+import type { NewJournalLineInput } from '@/features/accounting/services';
 
 export type CreateBillDTO = Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>;
+
+/**
+ * Minimal surface of JournalEntryService that BillService depends on — an
+ * interface, not the concrete class, so this service stays unit-testable
+ * with a stub and never needs to reach into src/features/accounting
+ * internals beyond its published service API
+ * (@/features/accounting/services). Mirrors bankTransactionService.ts's
+ * JournalPoster exactly, per this dispatch's brief.
+ */
+export interface JournalPoster {
+  postJournalEntry(input: {
+    date: string;
+    memo?: string;
+    source: string;
+    lines: NewJournalLineInput[];
+    postedByUserId?: ID;
+  }): Promise<JournalEntry>;
+}
+
+/** Fixed GL account ids (src/mock-data/accounts.ts) this service posts against. */
+const EXPENSE_ACCOUNT_ID = 'acc_5100'; // Operating Expenses
+const VAT_INPUT_ACCOUNT_ID = 'acc_2110'; // VAT Input (Receivable)
+const AP_ACCOUNT_ID = 'acc_2000'; // Accounts Payable
 
 /**
  * Business-logic layer for supplier bills.
  * Handles bill creation, updates, status changes, and GL posting.
  */
 export class BillService {
-  constructor(private readonly repository: IBillRepository) {}
+  constructor(
+    private readonly repository: IBillRepository,
+    private readonly journalEntryService: JournalPoster,
+  ) {}
 
   async getBills(): Promise<Bill[]> {
     return this.repository.getAll();
@@ -37,28 +64,58 @@ export class BillService {
   }
 
   /**
-   * Posts a bill to accounts payable.
-   * Transitions status from 'draft' to 'awaiting_payment'.
-   * In a real system, this would trigger GL posting (debit Expense, credit AP).
+   * Posts a bill to accounts payable: debit Operating Expenses for the
+   * subtotal, debit VAT Input for the tax total (only when it's non-zero —
+   * a zero-rated/exempt bill has no VAT line), credit Accounts Payable for
+   * the bill total. GL posting happens FIRST — if postJournalEntry() throws
+   * (unbalanced lines or a closed accounting period), this method throws
+   * too and the bill is never transitioned, so a failed post never leaves
+   * an orphaned "posted" row (same ordering bankTransactionService.ts
+   * uses). Only a 'draft' bill may be posted, so the same bill can never be
+   * posted to the ledger twice.
    */
   async postBill(id: string): Promise<Bill> {
     const bill = await this.repository.getById(id);
     if (!bill) {
       throw new Error(`Bill "${id}" not found`);
     }
+    if (bill.status !== 'draft') {
+      throw new Error(`Bill "${id}" has already been posted (status: ${bill.status}).`);
+    }
 
-    // TODO: Call GL posting service when available
-    // await accountingService.postJournalEntry({
-    //   date: bill.issueDate,
-    //   description: `Bill ${bill.billNumber} - Supplier`,
-    //   entries: [
-    //     { account: 'Expense', debit: bill.subtotal, credit: 0 },
-    //     { account: 'Input VAT', debit: bill.taxTotal, credit: 0 },
-    //     { account: 'AP', debit: 0, credit: bill.total },
-    //   ]
-    // });
+    const lines: NewJournalLineInput[] = [
+      {
+        accountId: EXPENSE_ACCOUNT_ID,
+        description: `Bill ${bill.billNumber}`,
+        debit: bill.subtotal,
+        credit: 0,
+      },
+    ];
 
-    return this.repository.update(id, { status: 'awaiting_payment' });
+    if (bill.taxTotal > 0) {
+      lines.push({
+        accountId: VAT_INPUT_ACCOUNT_ID,
+        description: `Bill ${bill.billNumber} - VAT Input`,
+        debit: bill.taxTotal,
+        credit: 0,
+      });
+    }
+
+    lines.push({
+      accountId: AP_ACCOUNT_ID,
+      description: `Bill ${bill.billNumber}`,
+      debit: 0,
+      credit: bill.total,
+    });
+
+    const entry = await this.journalEntryService.postJournalEntry({
+      date: bill.issueDate,
+      memo: `Bill ${bill.billNumber}`,
+      source: 'bill',
+      lines,
+    });
+
+    return this.repository.update(id, { status: 'awaiting_payment', journalEntryId: entry.id });
   }
 
   /**

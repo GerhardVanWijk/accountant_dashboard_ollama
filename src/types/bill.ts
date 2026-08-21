@@ -22,5 +22,7 @@ export interface Bill extends BaseEntity {
   amountPaid: number;
   currency: CurrencyCode;
   status: BillStatus;
+  /** Set once postBill() successfully posts the GL entry (debit Expense/VAT Input, credit AP). */
+  journalEntryId?: ID;
   notes?: string;
 }

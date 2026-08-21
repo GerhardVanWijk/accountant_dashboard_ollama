@@ -8,9 +8,16 @@ import { JournalsPage } from '@/features/accounting/pages/JournalsPage';
 import { LedgerPage } from '@/features/accounting/pages/LedgerPage';
 import { TrialBalancePage } from '@/features/accounting/pages/TrialBalancePage';
 import { CustomersPage } from '@/features/sales/pages/CustomersPage';
+import { QuotesPage } from '@/features/sales/pages/QuotesPage';
+import { SalesOrdersPage } from '@/features/sales/pages/SalesOrdersPage';
 import { InvoicesPage } from '@/features/sales/pages/InvoicesPage';
+import { CreditNotesPage } from '@/features/sales/pages/CreditNotesPage';
+import { CustomerReceiptsPage } from '@/features/sales/pages/CustomerReceiptsPage';
 import { VendorsPage } from '@/features/purchases/pages/VendorsPage';
+import { PurchaseOrdersPage } from '@/features/purchases/pages/PurchaseOrdersPage';
 import { BillsPage } from '@/features/purchases/pages/BillsPage';
+import { PaymentsPage } from '@/features/purchases/pages/PaymentsPage';
+import { VendorAgingPage } from '@/features/purchases/pages/VendorAgingPage';
 import { BankAccountsPage } from '@/features/banking/pages/BankAccountsPage';
 import { BankTransactionsPage } from '@/features/banking/pages/BankTransactionsPage';
 import { BankReconciliationPage } from '@/features/banking/pages/BankReconciliationPage';
@@ -55,9 +62,16 @@ export const routes: RouteObject[] = [
           { path: 'accounting/ledger', element: <LedgerPage /> },
           { path: 'accounting/trial-balance', element: <TrialBalancePage /> },
           { path: 'sales/customers', element: <CustomersPage /> },
+          { path: 'sales/quotes', element: <QuotesPage /> },
+          { path: 'sales/orders', element: <SalesOrdersPage /> },
           { path: 'sales/invoices', element: <InvoicesPage /> },
+          { path: 'sales/credit-notes', element: <CreditNotesPage /> },
+          { path: 'sales/receipts', element: <CustomerReceiptsPage /> },
           { path: 'purchases/vendors', element: <VendorsPage /> },
+          { path: 'purchases/orders', element: <PurchaseOrdersPage /> },
           { path: 'purchases/bills', element: <BillsPage /> },
+          { path: 'purchases/payments', element: <PaymentsPage /> },
+          { path: 'purchases/aging', element: <VendorAgingPage /> },
           { path: 'banking/accounts', element: <BankAccountsPage /> },
           { path: 'banking/transactions', element: <BankTransactionsPage /> },
           { path: 'banking/reconciliation', element: <BankReconciliationPage /> },

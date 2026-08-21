@@ -1,14 +1,42 @@
-import type { Invoice } from '@/types';
+import type { ID, Invoice } from '@/types';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
+import type { NewJournalLineInput } from '@/features/accounting/services';
 
 export type CreateInvoiceDTO = Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>;
 
 /**
+ * Minimal surface of JournalEntryService that InvoiceService depends on —
+ * an interface, not the concrete class, so this service stays
+ * unit-testable with a stub and never needs to reach into
+ * src/features/accounting internals beyond its published service API
+ * (@/features/accounting/services). Mirrors
+ * src/features/banking/services/bankTransactionService.ts's JournalPoster.
+ */
+export interface JournalPoster {
+  postJournalEntry(input: {
+    date: string;
+    memo?: string;
+    source: string;
+    lines: NewJournalLineInput[];
+    postedByUserId?: ID;
+  }): Promise<{ id: ID }>;
+}
+
+/** Fixed Chart of Accounts ids this service posts against (src/mock-data/accounts.ts). */
+const AR_ACCOUNT_ID = 'acc_1100'; // Accounts Receivable
+const SALES_REVENUE_ACCOUNT_ID = 'acc_4000'; // Sales Revenue
+const VAT_OUTPUT_ACCOUNT_ID = 'acc_2100'; // VAT Output (Payable)
+
+/**
  * Business-logic layer between hooks/components and the repository.
- * Handles invoice operations including CRUD, status transitions, and payment tracking.
+ * Handles invoice operations including CRUD, status transitions, payment
+ * tracking, and GL posting for the draft -> sent transition.
  */
 export class InvoiceService {
-  constructor(private readonly repository: IInvoiceRepository) {}
+  constructor(
+    private readonly repository: IInvoiceRepository,
+    private readonly journalEntryService: JournalPoster,
+  ) {}
 
   async getInvoices(): Promise<Invoice[]> {
     return this.repository.getAll();
@@ -37,10 +65,68 @@ export class InvoiceService {
   }
 
   /**
-   * Mark an invoice as sent (sent to customer).
+   * Posts an invoice to the ledger and transitions it from 'draft' to
+   * 'sent'. Posts BEFORE updating the domain record — see
+   * docs/LEDGER_ARCHITECTURE.md and bankTransactionService.ts's
+   * postAllocationsToLedger — so a failed post (unbalanced entry, closed
+   * accounting period) never leaves an orphaned "posted" invoice row.
+   *
+   * debit  Accounts Receivable (acc_1100)  for invoice.total
+   * credit Sales Revenue      (acc_4000)  for invoice.subtotal
+   * credit VAT Output         (acc_2100)  for invoice.taxTotal (only if > 0)
    */
-  async markInvoiceAsSent(id: string): Promise<Invoice> {
-    return this.repository.update(id, { status: 'sent' });
+  async postInvoice(id: string, postedByUserId?: ID): Promise<Invoice> {
+    const invoice = await this.repository.getById(id);
+    if (!invoice) {
+      throw new Error(`Invoice "${id}" not found`);
+    }
+    if (invoice.status !== 'draft') {
+      throw new Error(
+        `Cannot post invoice "${id}": only a draft invoice can be posted (current status: ${invoice.status}).`,
+      );
+    }
+
+    const lines: NewJournalLineInput[] = [
+      {
+        accountId: AR_ACCOUNT_ID,
+        description: `Invoice ${invoice.invoiceNumber}`,
+        debit: invoice.total,
+        credit: 0,
+      },
+      {
+        accountId: SALES_REVENUE_ACCOUNT_ID,
+        description: `Invoice ${invoice.invoiceNumber}`,
+        debit: 0,
+        credit: invoice.subtotal,
+      },
+    ];
+    if (invoice.taxTotal > 0) {
+      lines.push({
+        accountId: VAT_OUTPUT_ACCOUNT_ID,
+        description: 'VAT Output',
+        debit: 0,
+        credit: invoice.taxTotal,
+      });
+    }
+
+    const entry = await this.journalEntryService.postJournalEntry({
+      date: invoice.issueDate,
+      memo: `Invoice ${invoice.invoiceNumber}`,
+      source: 'invoice',
+      postedByUserId,
+      lines,
+    });
+
+    return this.repository.update(id, { status: 'sent', journalEntryId: entry.id });
+  }
+
+  /**
+   * Mark an invoice as sent (sent to customer). Delegates to postInvoice()
+   * so "sent" always means "posted to the GL" — there is no
+   * status-only path that skips the ledger.
+   */
+  async markInvoiceAsSent(id: string, postedByUserId?: ID): Promise<Invoice> {
+    return this.postInvoice(id, postedByUserId);
   }
 
   /**

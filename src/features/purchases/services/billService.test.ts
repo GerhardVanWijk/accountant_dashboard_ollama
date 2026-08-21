@@ -2,6 +2,29 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { BillService } from './billService';
 import { MockBillRepository } from '@/repositories/mock/MockBillRepository';
 import { seedBills } from '@/mock-data/bills';
+import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
+import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
+import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
+import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
+import { AuditLogService } from '@/services/auditLogService';
+import { MockAuditLogRepository } from '@/repositories/mock/MockAuditLogRepository';
+import { seedAccounts } from '@/mock-data/accounts';
+import type { AccountingPeriod } from '@/types';
+
+/** A single accounting period wide open enough to cover every date these tests use. */
+function makeOpenPeriod(): AccountingPeriod {
+  return {
+    id: 'period_test_open',
+    companyId: 'comp_test',
+    financialYearId: 'fy_test',
+    name: '2026 (test)',
+    startDate: '2026-01-01T00:00:00.000Z',
+    endDate: '2026-12-31T23:59:59.999Z',
+    status: 'open',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+}
 
 describe('BillService', () => {
   let billService: BillService;
@@ -9,7 +32,17 @@ describe('BillService', () => {
 
   beforeEach(() => {
     repository = new MockBillRepository();
-    billService = new BillService(repository);
+    const journalRepository = new MockJournalEntryRepository([]);
+    const accountRepository = new MockAccountRepository(seedAccounts);
+    const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
+    const auditLog = new AuditLogService(new MockAuditLogRepository());
+    const journalEntryService = new JournalEntryService(
+      journalRepository,
+      accountRepository,
+      periodRepository,
+      auditLog,
+    );
+    billService = new BillService(repository, journalEntryService);
   });
 
   describe('getBills', () => {

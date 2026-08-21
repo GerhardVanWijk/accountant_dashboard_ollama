@@ -1,17 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Invoice } from '@/types';
-import { MockInvoiceRepository } from '@/repositories/mock/MockInvoiceRepository';
-import { InvoiceService, type CreateInvoiceDTO } from '@/services/invoiceService';
+import { invoiceService, type CreateInvoiceDTO } from '@/services';
 
-let invoiceRepository: MockInvoiceRepository;
-let invoiceService: InvoiceService;
-
-// Singleton instances
-function getInvoiceService(): InvoiceService {
-  if (!invoiceService) {
-    invoiceRepository = new MockInvoiceRepository();
-    invoiceService = new InvoiceService(invoiceRepository);
-  }
+function getInvoiceService() {
   return invoiceService;
 }
 

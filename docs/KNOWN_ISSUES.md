@@ -7,6 +7,15 @@ each section.
 
 ## Open
 
+### Purchase Order can be converted to a Bill more than once
+`PurchaseOrder` has no `billId`/converted-status field, and `PurchaseOrderDetail`'s
+`canConvert` guard only checks `status !== 'draft' && status !== 'cancelled'` — it
+doesn't track that a conversion already happened. `PurchaseOrdersPage`'s "Convert to
+Bill" action (Wave 1b) composes `billService.createBill()` + `billService.postBill()`
+so the resulting Bill is always genuinely posted to the GL, but nothing stops clicking
+Convert twice and creating two Bills from the same PO. Needs a real field, not a UI
+workaround, when picked up.
+
 ### GL posting engine has no storage-layer enforcement of the balance invariant
 `JournalEntryService.postJournalEntry()` (`src/features/accounting/services/`)
 validates sum(debit) === sum(credit) in application code before writing, but the mock
