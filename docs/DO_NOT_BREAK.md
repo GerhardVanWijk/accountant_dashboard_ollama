@@ -68,6 +68,40 @@ DO NOT:
 - Add a new registry key without checking whether an existing key already
   covers the concept
 
+## Financial UI Patterns (Phase 2+)
+
+**CRITICAL:** All Phase 2+ modules must follow these patterns. See `docs/DESIGN_SYSTEM.md`
+and `mdskills/financial-ui-patterns/SKILL.md`.
+
+DO NOT:
+- Display any number without `tabular-nums` class (digits will shift on update)
+- Use raw Tailwind color classes for financial data (`text-green-500`, `text-red-500`,
+  `bg-zinc-950`) — ALWAYS use semantic tokens: `text-positive`, `text-negative`,
+  `text-warning-financial`, `text-info-financial`
+- Use dynamic Tailwind classes like `bg-${color}-500/10` — they won't render. Use
+  static class maps instead.
+- Center numbers in tables (eye can't compare magnitudes) — right-align all numbers
+- Omit `+` prefix on positive values (color-only is not accessible to colorblind users)
+- Format prices/balances with `formatCompact()` — use `formatCurrency()` instead
+- Hard-code dark theme — always define colors via CSS variables in tokens.css
+- Display financial data (invoices, transactions, P&L) in light theme only
+- Use regular fonts for tickers/order IDs — use `font-mono`
+- Show P&L without sign (investors compare magnitudes, confused by missing `+`)
+- Create new financial display components without using `FinancialNumber` or
+  `FinancialTableCell`
+
+## Financial Number Display Checklist
+
+Before shipping any table/report/widget with numbers:
+
+- ✅ Every numeric value has `tabular-nums` class
+- ✅ Every number uses semantic token color: `text-positive` or `text-negative`
+- ✅ Positive values show `+` prefix (use `formatCurrency`, `formatPercentage`, etc.)
+- ✅ Numbers are right-aligned, labels left-aligned
+- ✅ Tickers/IDs use `font-mono`
+- ✅ Light theme and dark theme both display correctly
+- ✅ No raw Tailwind colors, no `bg-${var}` dynamic classes
+
 ## Tax & Accounting Logic
 
 DO NOT:

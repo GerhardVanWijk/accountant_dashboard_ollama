@@ -32,6 +32,11 @@ export default {
         danger: 'var(--color-danger)',
         info: 'var(--color-info)',
         'on-accent': 'var(--color-text-on-accent)',
+        /* Financial UI Patterns - Semantic tokens for prices, P&L, signals */
+        positive: 'rgb(var(--color-positive) / <alpha-value>)',
+        negative: 'rgb(var(--color-negative) / <alpha-value>)',
+        'warning-financial': 'rgb(var(--color-warning-financial) / <alpha-value>)',
+        'info-financial': 'rgb(var(--color-info-financial) / <alpha-value>)',
       },
       fontFamily: {
         sans: [

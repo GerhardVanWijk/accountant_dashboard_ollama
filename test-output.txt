@@ -1,0 +1,13 @@
+﻿
+> accounting-suite@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.11 C:/Users/Gerhard/Documents/accountant_dashboard_ollama
+
+
+ Test Files  25 passed (25)
+      Tests  161 passed (161)
+   Start at  14:02:48
+   Duration  15.95s (transform 1.79s, setup 4.48s, import 8.08s, tests 1.44s, environment 23.28s)
+

@@ -30,15 +30,137 @@ discipline, stock-ledger immutability, and delete-guard logic. 9 missing icon ke
 (edit/add/delete/filter/download/view/sort/calendar/phone) added to the registry by UI Bee
 as a follow-up, re-verified clean.
 
-## Phase 2: Transactional Modules
-- [ ] Sales (Quotes, Orders, Invoices, Credit Notes)
-- [ ] Purchases (PO, Supplier Bills, Payments)
-- [ ] Banking & Reconciliation
-- [ ] General Ledger, Journals & Chart of Accounts
+## Phase 2: Transactional Modules — 🚀 IN PROGRESS
+
+### Wave 1 (Parallel Dispatch — Sales & Purchases)
+
+#### Sales Module (Sales Bee) — DISPATCHED 2026-08-21
+- [ ] Quotes (draft, preview, convert to SO)
+- [ ] Sales Orders (from quote or standalone, line items with Inventory integration)
+- [ ] Invoices (from SO or standalone, tax calculations, AR aging)
+- [ ] Credit Notes (refunds, account credits, allocation to open invoices)
+- [ ] Customer Receipts (payment allocation to invoices)
+- [ ] Financial tables with proper number alignment (tabular-nums, semantic colors)
+- [ ] Use `FinancialNumber` and `FinancialTableCell` components
+- [ ] Integration: Customers aging, Inventory stock reduction, GL posting
+
+**Key Requirements:**
+- ✅ Read `docs/FINANCIAL_UI_GUIDE.md` for number formatting patterns
+- ✅ All currency displays use `FinancialNumber` component
+- ✅ Invoice tables: right-aligned prices, tabular-nums
+- ✅ Test light + dark theme
+- ✅ Mock repository: `src/features/sales/repositories/MockSalesRepository.ts`
+- ✅ Domain types: Quote, SalesOrder, Invoice, CreditNote, CustomerReceipt in `src/types/sales.types.ts`
+- ✅ Definition of Done checklist in `docs/DO_NOT_BREAK.md` (20 points)
+
+#### Purchases Module (Purchases Bee) — DISPATCHED 2026-08-21
+- [ ] Purchase Orders (to suppliers, line items, quantities)
+- [ ] Supplier Bills (receipt & matching against PO)
+- [ ] Payment Register (cash disbursement, cheque/EFT)
+- [ ] Vendor Aging (AP analysis by age bucket)
+- [ ] Financial tables with proper alignment
+- [ ] Use `FinancialNumber` for all amounts
+- [ ] Integration: Suppliers aging, Inventory receipt, GL posting
+
+**Key Requirements:**
+- ✅ Read `docs/FINANCIAL_UI_GUIDE.md` for financial UI patterns
+- ✅ All amounts use `FinancialNumber` with `formatCurrency`
+- ✅ Bill matching: highlight matched/unmatched pairs with semantic colors
+- ✅ Mock repository: `src/features/purchases/repositories/MockPurchasesRepository.ts`
+- ✅ Domain types: PurchaseOrder, Bill, Payment in `src/types/purchases.types.ts`
+
+### Wave 2 (Sequential — Banking & Accounting, depend on Wave 1)
+
+#### Banking Module (Banking Bee) — READY TO DISPATCH
+- [ ] Bank Accounts (setup, multi-currency, SA bank metadata)
+- [ ] Bank Transactions (receipts, payments, transfers, reconciliation)
+- [ ] Statement Import (OFX, CSV, MT940 formats)
+- [ ] Bank Reconciliation (matching, outstanding items, audit trail)
+- [ ] Transaction lists with debit/credit columns (right-aligned, tabular-nums)
+- [ ] Running balance with tick-flash on updates
+- [ ] Use `FinancialNumber` with tick-flash animation
+- [ ] Integration: Links to GL accounts, AR/AP matching
+
+**Key Requirements:**
+- ✅ Read `docs/FINANCIAL_UI_GUIDE.md` for Bank Transaction example
+- ✅ Debit/Credit columns: right-aligned numbers
+- ✅ Running balance: `FinancialNumber` with `showFlash={true}`
+- ✅ Reconciliation workspace: semantic colors for matched/unmatched
+- ✅ Mock repository: `src/features/banking/repositories/MockBankingRepository.ts`
+
+#### Accounting Module (Accounting Bee) — READY TO DISPATCH
+- [ ] Chart of Accounts (asset/liability/equity/income/expense structure)
+- [ ] General Ledger (transaction-level detail, GL posting from sales/purchases/banking)
+- [ ] Journal Entries (manual entry, reversals, corrections)
+- [ ] Trial Balance (period-end summary, balance verification)
+- [ ] GL reports with proper number formatting
+- [ ] Debit/Credit columns (right-aligned, tabular-nums)
+- [ ] Use `FinancialNumber` for all amounts
+- [ ] Integration: GL posting from Sales/Purchases/Banking, feeds into Trial Balance
+
+**Key Requirements:**
+- ✅ Read `docs/FINANCIAL_UI_GUIDE.md` for GL table examples
+- ✅ Debit/Credit: right-aligned numbers, semantic colors for positive/negative
+- ✅ Trial Balance: ensure balanced (total debits = total credits)
+- ✅ Mock repository: `src/features/accounting/repositories/MockAccountingRepository.ts`
+
+### Wave 3 (Sequential — Tax & Reports, depend on Wave 1-2)
+
+#### Tax Module (Tax Bee) — READY TO DISPATCH
+- [ ] Tax Rates (VAT standard/zero-rated/exempt, income tax brackets)
+- [ ] Tax Calculations (auto-calc on sales/purchases documents)
+- [ ] VAT Reporting (input/output VAT analysis, reconciliation)
+- [ ] Seasonal tax analysis with charts
+- [ ] Tax tables with percentages and amounts
+- [ ] Use `FinancialNumber` for tax amounts
+
+#### Reports Module (Reports Bee) — READY TO DISPATCH
+- [ ] Profit & Loss (revenue - COGS - opex = net income)
+- [ ] Balance Sheet (assets = liabilities + equity)
+- [ ] Cash Flow (operating, investing, financing activities)
+- [ ] Customer Aging (current/30/60/90+ buckets)
+- [ ] Supplier Aging (current/30/60/90+ buckets)
+- [ ] Key P&L reports with financial number formatting
+- [ ] Use `FinancialNumber` for all currency and percentage displays
+- [ ] Comparative reports (YoY, budget vs actual)
+
+**Key Requirements:**
+- ✅ Read `docs/FINANCIAL_UI_GUIDE.md` for P&L and Report examples
+- ✅ P&L: revenue, COGS, opex, net with +/- signs and percentages
+- ✅ Right-aligned numbers, semantic colors (positive green, negative red)
+- ✅ Dark + light theme tested
+
+#### Admin Module (Admin Bee) — READY TO DISPATCH
+- [ ] Users & Roles (company setup, user management, permissions)
+- [ ] Company Settings (name, currency, tax IDs, fiscal year)
+- [ ] Audit Logs (transaction history, user actions, GL posting audit trail)
+- [ ] Backup & Export
 
 ## Phase 3: Compliance & Reporting
-- [ ] Tax & VAT Module
-- [ ] Expenses & Reimbursements
-- [ ] Fixed Assets Register
-- [ ] Financial Reports & Management Statements
-- [ ] Administration, Roles, Audit Logs & Settings
+- [ ] Advanced Tax Scenarios (Input VAT recovery, withholding tax)
+- [ ] Fixed Assets Register (depreciation, disposal)
+- [ ] Employee Management & Payroll (not Phase 2 scope)
+- [ ] Workflow Rules & Approvals
+
+---
+
+## Phase 2 Kickoff Checklist
+
+**For each worker bee:**
+1. ✅ Read `docs/PHASE_2_READINESS.md` — understand financial UI infrastructure
+2. ✅ Read `docs/FINANCIAL_UI_GUIDE.md` — implement patterns correctly
+3. ✅ Import from `src/utils/formatFinancial.ts` for all number formatting
+4. ✅ Use `FinancialNumber` component for all amounts
+5. ✅ Test light + dark theme
+6. ✅ Right-align all numbers, left-align labels
+7. ✅ Show +/- signs on all P&L values
+8. ✅ Use semantic color tokens (text-positive, text-negative, text-warning-financial)
+9. ✅ Create mock repositories in feature folders
+10. ✅ Implement 20-point Definition of Done before marking module complete
+
+**Queen Bee coordination:**
+- ✅ Dispatch Wave 1 (Sales + Purchases) in parallel
+- ✅ Wave 2 (Banking + Accounting) waits for Wave 1 GL integration (2 days)
+- ✅ Wave 3 (Tax + Reports) waits for Wave 2 GL & AR/AP posting (2 days)
+- ✅ QA Bee validates each module before integration
+- ✅ Integration Bee verifies cross-module data flow before mark done

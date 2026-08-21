@@ -180,3 +180,144 @@ Tablet: 768px (md)
 Desktop: 1024px (lg)
 Wide: 1280px (xl)
 Ultra: 1536px (2xl)
+
+
+## Financial UI Patterns (Phase 2+)
+
+**IMPORTANT:** All Phase 2+ modules (Sales, Purchases, Banking, Accounting, Tax, Reports) must follow
+these patterns. See `mdskills/financial-ui-patterns` SKILL.md for comprehensive reference.
+
+**Why:** Accounting UIs fail in predictable ways (digit shift, raw colors, hard-coded dark theme,
+jittery numbers, no accessibility). Production trading/banking UIs (Kraken, Coinbase, Bloomberg,
+Robinhood, TradingView) solve this; we adopt their patterns.
+
+### Core Principle: Numbers Must Be Legible, Aligned, and Trustworthy
+
+### Semantic Financial Colors
+
+Use these color tokens for financial signals, NOT raw Tailwind colors:
+
+- `text-positive` / `bg-positive` — gains, income, buy, success (green)
+- `text-negative` / `bg-negative` — losses, expenses, sell, danger (red)
+- `text-warning-financial` — partial fills, stale data, alerts (amber)
+- `text-info-financial` — neutral information, working orders (blue)
+
+**Rule:** NEVER use `text-green-500`, `text-red-500`, or `bg-${color}-500/10` dynamic classes.
+Always use semantic tokens from tokens.css.
+
+### Number Formatting
+
+**ALWAYS use `tabular-nums` CSS class on any displaying number:**
+
+```tsx
+// ✅ GOOD: tabular-nums locks width, semantic color, explicit sign
+<span className="tabular-nums font-medium text-positive" style={{ minWidth: 100, textAlign: 'right' }}>
+  +1,234.56
+</span>
+
+// ❌ BAD: no tabular-nums = digits shift on update, color not semantic
+<span className="text-green-500">
+  {value.toFixed(2)}
+</span>
+```
+
+**Import `formatCurrency`, `formatPercentage`, `formatQuantity`, `formatCompact` from `src/utils/formatFinancial.ts`:**
+
+- `formatCurrency(1234.5)` → `"+1,234.50"` (always show +/- sign)
+- `formatPercentage(12.5)` → `"+12.50%"` (always show +/- sign)
+- `formatQuantity(100.25)` → `"100.25"` (2 decimals for accounting)
+- `formatCompact(1234567890)` → `"1.2B"` (for revenue, caps, volume — NOT prices)
+
+**Precision rules:**
+- Currency: 2 decimals
+- Percentages: 2 decimals
+- Quantities: 2 decimals (accounting context)
+- Basis points: 0-1 decimals
+
+### Table Alignment
+
+**Right-align all numbers. Left-align all labels.**
+
+```tsx
+// ✅ GOOD: Fixed-width grid, right-aligned numbers
+<div className="grid grid-cols-[2fr_120px_120px_120px] gap-2 tabular-nums">
+  <div className="text-left">Invoice #INV-001</div>
+  <div className="text-right">$1,234.56</div>
+  <div className="text-right">$100.00</div>
+  <div className="text-right">$1,334.56</div>
+</div>
+
+// ❌ BAD: Centered numbers (eye can't compare magnitudes)
+<table>
+  <tr>
+    <td className="text-center">$1,234.56</td>
+  </tr>
+</table>
+```
+
+### Tick Flash (Live Data Updates)
+
+When a price/balance updates, briefly tint the background. CSS-based, no JS animation:
+
+```tsx
+// Use <FinancialNumber> component from src/components/ui/FinancialNumber.tsx
+<FinancialNumber value={price} format={formatCurrency} showFlash={true} />
+```
+
+The component handles:
+- Detecting value changes
+- 300-500ms tinted background (green for up, red for down)
+- No jank at scale
+- CSS-only animation
+
+### Monofaces for Tickers/IDs
+
+Use `font-mono` for tickers, order IDs, invoice numbers. This is professional, not dated.
+
+```tsx
+<span className="font-mono text-sm">INV-2026-001</span>
+<span className="font-mono text-sm">ORD-SKU-XYZ-123</span>
+```
+
+### Sign Prefix (Accessibility)
+
+Always show `+` for positive values. Color alone is not enough (8% of men are colorblind).
+
+```tsx
+// ✅ GOOD: Color + sign + position
+<span className="text-positive">+15.5%</span>
+
+// ❌ BAD: Color only
+<span className="text-green-500">15.5%</span>
+```
+
+### Stale Data Indicator
+
+If displaying streamed/live data, show staleness when last update > N seconds:
+
+```tsx
+// Dim or grey text if data is old
+<span className={data.isStale ? 'text-text-muted opacity-50' : 'text-text-primary'}>
+  {format(value)}
+</span>
+```
+
+### Accessibility Checklist (Before Shipping)
+
+- [ ] Every number has `tabular-nums` class
+- [ ] Every color is a semantic token, no raw `text-green-*` or `bg-zinc-*`
+- [ ] Light theme renders (toggle and verify)
+- [ ] Positive returns show `+` prefix
+- [ ] Numbers are right-aligned, labels left-aligned
+- [ ] Tickers/IDs use `font-mono`
+- [ ] No `bg-${var}` dynamic Tailwind classes
+- [ ] Color is paired with non-color signal (sign, icon, position)
+- [ ] At least 5 rows visible without scroll (density check)
+
+### Components Available
+
+- `FinancialNumber` — Single number with formatting, color, and tick-flash
+- `FinancialTableCell` — Grid-based table cell (label/number/status alignment)
+- Utilities in `src/utils/formatFinancial.ts` — formatCurrency, formatPercentage, etc.
+
+**See:** `mdskills/financial-ui-patterns/SKILL.md` for full reference (installed via `npx mdskills install`).

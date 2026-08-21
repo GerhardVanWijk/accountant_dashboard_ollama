@@ -32,6 +32,17 @@
   /* Accent Contrast Rule — dark neutral text for any accent-filled surface,
      identical in both themes since accents stay pastel/light-toned. */
   --color-text-on-accent: #20242b;
+
+  /* Financial UI Patterns (from installed mdskills/financial-ui-patterns) */
+  /* Used for P&L, gains/losses, price deltas, and financial signals */
+  --color-positive: 22 163 74;       /* green for gains, buy, income */
+  --color-negative: 220 38 38;       /* red for losses, sell, expense */
+  --color-warning-financial: 251 191 36;  /* amber for partial fills, stale data */
+  --color-info-financial: 0 143 250; /* blue for working orders, neutral signals */
+
+  /* Text colors for financial numbers */
+  --color-text-positive: rgb(22 163 74);
+  --color-text-negative: rgb(220 38 38);
 }
 
 [data-theme='dark'] {
@@ -50,4 +61,14 @@
   --color-info: #82bee0;
 
   --color-text-on-accent: #20242b;
+
+  /* Financial UI Patterns - Dark Mode */
+  --color-positive: 134 239 172;     /* brighter green for dark mode */
+  --color-negative: 252 165 165;     /* lighter red for dark mode */
+  --color-warning-financial: 253 224 71;  /* lighter amber for dark mode */
+  --color-info-financial: 96 165 250;    /* lighter blue for dark mode */
+
+  /* Text colors for financial numbers - dark mode */
+  --color-text-positive: rgb(134 239 172);
+  --color-text-negative: rgb(252 165 165);
 }
