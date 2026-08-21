@@ -203,7 +203,7 @@ without discussion"), it did not add one unilaterally — it surfaced the existi
 
 ### Wave 3 (Sequential — Tax & Reports, depend on Wave 1-2)
 
-#### Tax Module — IN PROGRESS (2026-08-21): engine done (Queen, solo), UI not yet dispatched
+#### Tax Module — VAT engine + VAT Reporting done (2026-08-21, Queen, solo)
 - [x] Tax Rates engine — `TaxRate` redesigned effective-dated/versioned
   (`code`, `treatment`, `effectiveFrom`/`effectiveTo`, `jurisdiction`,
   `sourceReference` — SA_ACCOUNTING_MASTER_SPEC.md §9/§12/§82/§113).
@@ -223,18 +223,39 @@ without discussion"), it did not add one unilaterally — it surfaced the existi
   placeholder tax-rate ids didn't match any real `TaxRate` record at all
   — now they do). `Company` extended with `vatFilingFrequency`/
   `vatAccountingBasis` (§10/§11).
-- [ ] VAT Reporting (input/output VAT analysis, VAT201-shaped return) —
-  `/tax/vat-return` route still a placeholder (`VatReturnPage`). This is
-  the actual UI-layer work still to dispatch to a Tax Bee.
+- [x] VAT Reporting — `/tax/vat-return` (`VatReturnPage`) is real now: a
+  month picker drives `computeVatReport()`
+  (`src/features/tax/services/vatReportService.ts`), which classifies
+  every real posted Invoice/Credit Note/Bill line item by its tax rate's
+  `treatment` (never re-taxes an already-posted amount — sums the real
+  stored `taxAmount`, per §97 "no fake accounting") into Output VAT (net
+  of issued credit notes) and claimable Input VAT (non-deductible amounts
+  reported separately, excluded from the claimable total per §12).
+  Reconciled against what was actually posted to the VAT Output/Input GL
+  control accounts THIS PERIOD (`reconcileVatControlAccounts` — a
+  movement, not the account's all-time balance) via the same
+  `SubledgerReconciliationCard`-style pattern the AR/AP reconciliation
+  uses. Deliberately NOT labelled with official SARS VAT201 box numbers —
+  see the service's doc comment (§110/§111: no unverified official-form
+  claims). 8 tests for the aggregation, all passing. Also backfilled
+  `taxRateId` on 29 seed Invoice/Credit Note line items and fixed 23 seed
+  Bill/PO line items that referenced a non-existent `'tax_rate_15'` id —
+  all verified to already carry exactly-15%-consistent `taxAmount`s
+  before assigning them, not guessed.
 - [ ] Seasonal tax analysis with charts
 - [ ] Tax tables with percentages and amounts
 - [ ] Use `FinancialNumber` for tax amounts
 
-**Not addressed in this pass, flagged for whoever picks up VAT Reporting:**
-income tax brackets/SBC calculations (§53, a different tax entirely from
-VAT — Phase 9 per §116, not Phase 5), and no VAT Period
-open/closed lifecycle yet (§10's "VAT period" — Accounting Periods exist
-for the GL but there's no VAT-specific filing-period concept).
+**Not addressed in this pass:** income tax brackets/SBC calculations
+(§53, a different tax entirely from VAT — Phase 9 per §116, not Phase
+5); no VAT Period open/closed lifecycle yet (§10's "VAT period" —
+Accounting Periods exist for the GL but there's no VAT-specific
+filing-period concept); a Tax Rates settings/CRUD page (the engine and
+`supersede()` exist, but there's no UI yet for a user to actually create
+or version a rate — every rate today only exists via seed data or
+directly calling the service); `billService.postBill()` doesn't split
+non-deductible VAT out of the VAT Input line (flagged in
+`docs/KNOWN_ISSUES.md`, not fixed this pass).
 
 #### Reports Module (Reports Bee) — READY TO DISPATCH
 - [ ] Profit & Loss (revenue - COGS - opex = net income)

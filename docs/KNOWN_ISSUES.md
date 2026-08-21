@@ -7,6 +7,35 @@ each section.
 
 ## Open
 
+### Non-deductible input VAT isn't split out of the VAT Input control account when a bill posts
+`billService.postBill()` debits `acc_2110` (VAT Input) for the ENTIRE `bill.taxTotal`,
+without checking whether any of the bill's line items used a `non_deductible`-treatment
+tax rate (e.g. `NODEDUCT`). Per SA_ACCOUNTING_MASTER_SPEC.md §12, non-deductible VAT
+must never be claimed back — it should fold into the expense line instead, the same way
+`src/features/banking/utils/taxCalculations.ts`'s `isTaxSeparatelyPosted()` already
+correctly handles it for bank transaction allocations. `postBill()` doesn't have access
+to a tax-rate lookup at all today, so fixing this means injecting `TaxRateService` (or
+an equivalent minimal interface) the same way `journalEntryService` is injected, and
+splitting the debit between Expense and VAT Input per line. Not exploitable with the
+current seed data (no seed Bill has a non-deductible line), and the new
+`vatReportService.ts`'s reconciliation would correctly flag the resulting variance if
+one ever did — this is what a reconciliation is *for* — but it's a real gap, found
+while building the VAT engine, not fixed in that pass.
+
+### VAT reconciliation shows a variance against pre-existing seed documents (expected, not a bug)
+`src/mock-data/journalEntries.ts` only seeds ONE journal entry (the opening balance) —
+none of the seeded Invoices/Bills/Credit Notes were ever run through
+`postInvoice()`/`postBill()`/`issueCreditNote()`, so no real GL postings exist for them
+despite their `status` fields implying they're "sent"/"awaiting_payment"/etc. The new
+VAT reconciliation (`vatReportService.ts`'s `reconcileVatControlAccounts`, surfaced on
+`/tax/vat-return`) will therefore show "Variance detected" out of the box for any period
+containing only seed data — this accurately reflects that those specific historical
+documents bypassed the real posting pipeline, it is not a bug in the reconciliation
+logic. Any NEW invoice/bill/credit note created and posted through the running app
+reconciles correctly (verified by `vatReportService.test.ts`). Same underlying gap
+applies to the AR/AP reconciliation added in the previous pass — not newly introduced
+here, just newly visible via a second reconciliation.
+
 ### `ProductsPage.test.tsx`'s "low stock" test fails only when run after its sibling tests
 Introduced 2026-08-21 while wiring `ProductsTable`/`ProductForm` to the new
 `useTaxRates()`/`useAllTaxRates()` hooks (Tax module). The test passes in isolation

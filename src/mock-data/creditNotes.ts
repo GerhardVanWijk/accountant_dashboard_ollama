@@ -1,4 +1,5 @@
 import type { CreditNote } from '@/types';
+import { STANDARD_RATE_ID } from './taxRates';
 
 function nowISO(): string {
   return new Date().toISOString();
@@ -27,6 +28,7 @@ export const seedCreditNotes: CreditNote[] = [
         description: 'Price correction - IT Support overcharge',
         quantity: 1,
         unitPrice: 300,
+        taxRateId: STANDARD_RATE_ID,
         taxAmount: 45,
         lineTotal: 300,
       },
@@ -55,6 +57,7 @@ export const seedCreditNotes: CreditNote[] = [
         description: 'Returned goods - damaged in transit',
         quantity: 2,
         unitPrice: 750,
+        taxRateId: STANDARD_RATE_ID,
         taxAmount: 225,
         lineTotal: 1500,
       },
@@ -81,6 +84,7 @@ export const seedCreditNotes: CreditNote[] = [
         description: 'Loyalty discount - Q3 volume rebate',
         quantity: 1,
         unitPrice: 500,
+        taxRateId: STANDARD_RATE_ID,
         taxAmount: 75,
         lineTotal: 500,
       },
