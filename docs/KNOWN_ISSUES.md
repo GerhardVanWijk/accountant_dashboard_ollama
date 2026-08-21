@@ -7,6 +7,35 @@ each section.
 
 ## Open
 
+### Delete has no posted-record guard across 7 services (SA spec §14/§36/§72/§79)
+`deleteInvoice`/`deleteBill`/`deleteCreditNote`/`deleteQuote`/`deleteSalesOrder`/
+`deletePurchaseOrder`/`deleteCustomer` all call `repository.delete(id)` unconditionally —
+no status check stops deleting a posted invoice, an issued credit note, or a confirmed
+sales order, violating the master spec's immutability rules. Not currently exploitable
+(no UI wires any of these `delete*` methods to a button), so it's a dormant service-layer
+gap, not an active bug. Needs a consistent policy across all 7 services (delete only
+while `status === 'draft'`; everything else goes through void/cancel/reversal) rather
+than 7 one-off patches. Full detail in `docs/SA_SPEC_GAP_ANALYSIS.md`.
+
+### Tax invoices don't render real company/VAT registration data (SA spec §13)
+`InvoiceDetail.tsx`'s `companyName` prop defaults to the literal string `'Your Company'`
+and is never wired to the real `Company` entity (`src/features/admin/`), which already
+stores legal name, VAT registration number, and address. No supplier VAT number appears
+on any rendered invoice/bill. `Company` data exists; it's just not plumbed through to
+document rendering yet.
+
+### No AR/AP subledger reconciles to its GL control account (SA spec §17/§18/§70/§71)
+Nothing compares sum(customer balances) or sum(supplier balances) against the GL's
+`acc_1100`/`acc_2000` balance. Banking has its own reconciliation module (bank statement
+vs. cashbook); Sales/Purchases have no equivalent. A posting bug in either would
+currently go undetected until it showed up elsewhere.
+
+### Customers/Suppliers aging still not wired to real Invoice/Bill records
+Flagged 2026-08-20 as blocked on Sales/Purchases not existing yet. Wave 1b (2026-08-21)
+shipped both, so this is now genuinely actionable — `src/features/customers/mock-data/
+openItems.ts` and `src/features/suppliers/utils/calculateAging.ts`'s `mockOpenBills`
+just haven't been re-pointed at real `Invoice`/`Bill` data yet.
+
 ### Purchase Order can be converted to a Bill more than once
 `PurchaseOrder` has no `billId`/converted-status field, and `PurchaseOrderDetail`'s
 `canConvert` guard only checks `status !== 'draft' && status !== 'cancelled'` — it
@@ -43,15 +72,6 @@ rather than assuming they matched — so nothing is currently broken. But the
 inconsistency itself is still there in the two source files and will confuse anyone
 extending either module directly. Worth a small cleanup pass to converge on one
 bucket-naming convention across both.
-
-### Customers/Suppliers aging is built on temporary internal mock data
-Neither module has real transactional documents to age yet (Sales/Purchases modules
-are Phase 2). Both bees built a small internal "open items"/"open bills" mock dataset
-scoped to their own feature (`src/features/customers/mock-data/openItems.ts`,
-`src/features/suppliers/utils/calculateAging.ts`'s `mockOpenBills`), clearly commented
-`TEMPORARY`. These need to be deleted and re-pointed at real `Invoice`/`Bill` records
-once Sales/Purchases ship — not urgent, but it's a real dependency Phase 2 needs to
-close out, not just "nice to have."
 
 ### Dashboard financials are fully mocked
 Revenue/Expenses/Profit and the Cash Flow chart have no real General Ledger or Banking

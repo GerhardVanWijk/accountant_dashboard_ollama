@@ -18,6 +18,12 @@
 
 *Status Legend: 🟢 Done (20/20 DoD Points Met) | 🟡 In-Progress | 🔴 Incomplete / Pending*
 
+*"Done" here means `docs/DO_NOT_BREAK.md`'s 20-point feature-completeness checklist
+(route, nav, CRUD, states, tests, build) — it is NOT a claim of full compliance with
+`docs/SA_ACCOUNTING_MASTER_SPEC.md`. See `docs/SA_SPEC_GAP_ANALYSIS.md` for the deeper
+accounting-integrity/SA-compliance gaps still open in Sales/Purchases/Accounting/
+Banking despite all four being 🟢 on this feature-completeness matrix.*
+
 ## Checkpoint — 2026-08-20: Phase 1 complete (Wave 1 + Wave 2)
 
 Customers, Suppliers, and Inventory modules built in parallel (3 bees, disjoint feature

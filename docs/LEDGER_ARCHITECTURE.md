@@ -24,9 +24,10 @@ Two tables, matching the header + lines shape every production ledger schema use
 accounting/services/journalEntryService.ts`) is the *only* place in the codebase allowed
 to decide this — `validateLines()` checks it before anything is written, and
 `postJournalEntry()` throws rather than posting an unbalanced entry. Sales, Purchases,
-and Banking services must call `journalEntryService.postJournalEntry()` when their GL
-integration is wired up (see `billService.ts`'s `postBill()` TODO) rather than
-re-implementing the check.
+and Banking services all call `journalEntryService.postJournalEntry()` (real, wired —
+see `billService.postBill()`, `invoiceService.postInvoice()`,
+`creditNoteService.issueCreditNote()`, `customerReceiptService`,
+`bankTransactionService`) rather than re-implementing the check.
 
 **This is application-level enforcement only.** The mock repository is an in-memory
 array — there's no database to also enforce the invariant with a `CHECK` constraint or
@@ -133,16 +134,15 @@ browser-only SPA yet.
   common.ts`) but `JournalLine` doesn't carry a currency or an exchange rate yet. Every
   seeded account and posting here is implicitly single-currency. Needed before real
   multi-currency invoices/bills can post to the GL — flagged, not solved, in this pass.
-- **No UI yet.** `ChartOfAccountsPage`, `JournalsPage`, and `LedgerPage` are still
-  five-line placeholders (`src/features/accounting/pages/`). This document and the
-  service/repository layer are the foundation the Accounting Bee wave builds the actual
-  pages on top of — per `docs/DO_NOT_BREAK.md`'s Definition of Done, the module isn't
-  "done" until those pages, routes, and QA sign-off exist.
-- **Sales/Purchases don't post yet.** `billService.postBill()` still has a commented-out
-  GL-posting TODO; wiring it to `journalEntryService.postJournalEntry()` (with a real
-  account-mapping — which ledger account a "Bill subtotal" or "VAT" line resolves to) is
-  integration work for whichever wave takes on GL posting from Sales/Purchases, not done
-  in this pass.
+- **No UI yet** — resolved in Wave 2 (Accounting Bee): `ChartOfAccountsPage`,
+  `JournalsPage`, `LedgerPage`, `TrialBalancePage` are real pages now, not placeholders.
+- **Sales/Purchases don't post yet** — resolved in Wave 1b (2026-08-21):
+  `billService.postBill()`, `invoiceService.postInvoice()` (via `markInvoiceAsSent()`),
+  `creditNoteService.issueCreditNote()`, and `customerReceiptService` all post real,
+  balanced entries through `journalEntryService.postJournalEntry()` with fixed
+  account-mapping constants (e.g. `acc_1100` AR, `acc_4000` Sales Revenue, `acc_2100`
+  VAT Output — see each service file). Account mapping is still hard-coded per service,
+  not a configurable mapping table — see `docs/SA_SPEC_GAP_ANALYSIS.md`.
 - **AI-generated financial logic still needs human/QA review before it's trusted**,
   same as every other module in this codebase — the existing qa-bee re-verification
   step (`docs/HIVE_TASKS.md`, `[[accounting-hive-workflow]]`-style independent
