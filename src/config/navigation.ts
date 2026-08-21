@@ -89,7 +89,10 @@ export const navigation: NavSection[] = [
   {
     section: 'Tax',
     icon: 'tax',
-    items: [{ path: '/tax/vat-return', label: 'VAT201 Reporting', icon: 'tax' }],
+    items: [
+      { path: '/tax/rates', label: 'Tax Rates', icon: 'settings' },
+      { path: '/tax/vat-return', label: 'VAT201 Reporting', icon: 'tax' },
+    ],
   },
   {
     section: 'Reports',

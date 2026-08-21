@@ -1,5 +1,6 @@
 import type { Invoice } from '@/types';
 import { STANDARD_RATE_ID } from './taxRates';
+import { seedJournalEntryId } from './seedJournalEntryId';
 
 function nowISO(): string {
   return new Date().toISOString();
@@ -9,7 +10,7 @@ function nowISO(): string {
  * Seed data for invoice list. Realistic South African invoices across statuses,
  * customers, and dates so the invoice table's search/filter/sort UI has real data.
  */
-export const seedInvoices: Invoice[] = [
+const rawSeedInvoices: Invoice[] = [
   {
     id: 'inv_00000001',
     invoiceNumber: 'INV-2026-0001',
@@ -434,3 +435,17 @@ export const seedInvoices: Invoice[] = [
     updatedAt: nowISO(),
   },
 ];
+
+/**
+ * Every non-draft/non-void invoice here gets a matching `journalEntryId`
+ * pointing at the JournalEntry `generateSeedPostings.ts` produces for it
+ * (src/mock-data/journalEntries.ts) — so the seed data's AR/VAT postings
+ * actually reconcile against the seed documents themselves, instead of
+ * every reconciliation showing a variance purely because these fixtures
+ * were never run through the real postInvoice() pipeline.
+ */
+export const seedInvoices: Invoice[] = rawSeedInvoices.map((invoice) =>
+  invoice.status === 'draft' || invoice.status === 'void'
+    ? invoice
+    : { ...invoice, journalEntryId: seedJournalEntryId(invoice.id) },
+);

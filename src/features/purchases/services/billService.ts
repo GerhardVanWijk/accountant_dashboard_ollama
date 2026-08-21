@@ -2,6 +2,15 @@ import type { Bill, ID, JournalEntry } from '@/types';
 import type { IBillRepository } from '@/repositories/IBillRepository';
 import type { NewJournalLineInput } from '@/features/accounting/services';
 
+/**
+ * Minimal surface of TaxRateService this service depends on — resolving a
+ * line's `taxRateId` to its VAT `treatment` is all `postBill()` needs, so
+ * it depends on this narrow interface rather than the whole service.
+ */
+export interface TaxRateResolver {
+  getTaxRate(id: ID): Promise<{ treatment: string } | undefined>;
+}
+
 export type CreateBillDTO = Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>;
 
 /**
@@ -35,6 +44,7 @@ export class BillService {
   constructor(
     private readonly repository: IBillRepository,
     private readonly journalEntryService: JournalPoster,
+    private readonly taxRateResolver: TaxRateResolver,
   ) {}
 
   async getBills(): Promise<Bill[]> {
@@ -76,13 +86,38 @@ export class BillService {
   }
 
   /**
+   * Sums a bill's line-item VAT into deductible vs non-deductible
+   * (SA_ACCOUNTING_MASTER_SPEC.md §12: non-deductible input VAT must
+   * never be claimed back). The non-deductible portion is capped at
+   * `bill.taxTotal` and any shortfall (a line with no resolvable
+   * `taxRateId`, or no line items at all) is conservatively treated as
+   * non-deductible too — "don't claim it" is the safe default when the
+   * treatment can't be confirmed, not "claim it anyway". This keeps the
+   * split's total always exactly equal to `bill.taxTotal`, so the
+   * Expense+VAT-Input debit total can never drift from the AP credit
+   * (`bill.total`) regardless of any per-line data inconsistency.
+   */
+  private async splitDeductibleVat(bill: Bill): Promise<{ deductibleVat: number; nonDeductibleVat: number }> {
+    let resolvedDeductible = 0;
+    for (const line of bill.lineItems) {
+      if (!line.taxRateId) continue;
+      const rate = await this.taxRateResolver.getTaxRate(line.taxRateId);
+      if (rate && rate.treatment !== 'non_deductible') {
+        resolvedDeductible += line.taxAmount;
+      }
+    }
+    const deductibleVat = Math.min(resolvedDeductible, bill.taxTotal);
+    return { deductibleVat, nonDeductibleVat: bill.taxTotal - deductibleVat };
+  }
+
+  /**
    * Posts a bill to accounts payable: debit Operating Expenses for the
-   * subtotal, debit VAT Input for the tax total (only when it's non-zero —
-   * a zero-rated/exempt bill has no VAT line), credit Accounts Payable for
-   * the bill total. GL posting happens FIRST — if postJournalEntry() throws
-   * (unbalanced lines or a closed accounting period), this method throws
-   * too and the bill is never transitioned, so a failed post never leaves
-   * an orphaned "posted" row (same ordering bankTransactionService.ts
+   * subtotal (plus any non-deductible VAT — see splitDeductibleVat()),
+   * debit VAT Input for the DEDUCTIBLE tax only, credit Accounts Payable
+   * for the bill total. GL posting happens FIRST — if postJournalEntry()
+   * throws (unbalanced lines or a closed accounting period), this method
+   * throws too and the bill is never transitioned, so a failed post never
+   * leaves an orphaned "posted" row (same ordering bankTransactionService.ts
    * uses). Only a 'draft' bill may be posted, so the same bill can never be
    * posted to the ledger twice.
    */
@@ -95,20 +130,22 @@ export class BillService {
       throw new Error(`Bill "${id}" has already been posted (status: ${bill.status}).`);
     }
 
+    const { deductibleVat, nonDeductibleVat } = await this.splitDeductibleVat(bill);
+
     const lines: NewJournalLineInput[] = [
       {
         accountId: EXPENSE_ACCOUNT_ID,
         description: `Bill ${bill.billNumber}`,
-        debit: bill.subtotal,
+        debit: bill.subtotal + nonDeductibleVat,
         credit: 0,
       },
     ];
 
-    if (bill.taxTotal > 0) {
+    if (deductibleVat > 0) {
       lines.push({
         accountId: VAT_INPUT_ACCOUNT_ID,
         description: `Bill ${bill.billNumber} - VAT Input`,
-        debit: bill.taxTotal,
+        debit: deductibleVat,
         credit: 0,
       });
     }

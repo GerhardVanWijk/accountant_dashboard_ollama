@@ -7,34 +7,21 @@ each section.
 
 ## Open
 
-### Non-deductible input VAT isn't split out of the VAT Input control account when a bill posts
-`billService.postBill()` debits `acc_2110` (VAT Input) for the ENTIRE `bill.taxTotal`,
-without checking whether any of the bill's line items used a `non_deductible`-treatment
-tax rate (e.g. `NODEDUCT`). Per SA_ACCOUNTING_MASTER_SPEC.md §12, non-deductible VAT
-must never be claimed back — it should fold into the expense line instead, the same way
-`src/features/banking/utils/taxCalculations.ts`'s `isTaxSeparatelyPosted()` already
-correctly handles it for bank transaction allocations. `postBill()` doesn't have access
-to a tax-rate lookup at all today, so fixing this means injecting `TaxRateService` (or
-an equivalent minimal interface) the same way `journalEntryService` is injected, and
-splitting the debit between Expense and VAT Input per line. Not exploitable with the
-current seed data (no seed Bill has a non-deductible line), and the new
-`vatReportService.ts`'s reconciliation would correctly flag the resulting variance if
-one ever did — this is what a reconciliation is *for* — but it's a real gap, found
-while building the VAT engine, not fixed in that pass.
-
-### VAT reconciliation shows a variance against pre-existing seed documents (expected, not a bug)
-`src/mock-data/journalEntries.ts` only seeds ONE journal entry (the opening balance) —
-none of the seeded Invoices/Bills/Credit Notes were ever run through
-`postInvoice()`/`postBill()`/`issueCreditNote()`, so no real GL postings exist for them
-despite their `status` fields implying they're "sent"/"awaiting_payment"/etc. The new
-VAT reconciliation (`vatReportService.ts`'s `reconcileVatControlAccounts`, surfaced on
-`/tax/vat-return`) will therefore show "Variance detected" out of the box for any period
-containing only seed data — this accurately reflects that those specific historical
-documents bypassed the real posting pipeline, it is not a bug in the reconciliation
-logic. Any NEW invoice/bill/credit note created and posted through the running app
-reconciles correctly (verified by `vatReportService.test.ts`). Same underlying gap
-applies to the AR/AP reconciliation added in the previous pass — not newly introduced
-here, just newly visible via a second reconciliation.
+### AR/AP subledger reconciliation still shows a variance for partially-paid seed documents
+`generateSeedPostings.ts` (2026-08-21) backfilled the ORIGINAL posting entry for every
+non-draft/non-void seed Invoice/Bill (see Resolved below), which is enough for VAT
+reconciliation to hold — VAT is fully recognized at posting time, unaffected by later
+payment status. It is NOT enough for the AR/AP subledger reconciliation
+(`reconcileAccountsReceivable`/`reconcileAccountsPayable`) to show zero variance for any
+seed document with `amountPaid > 0` (several seed invoices/bills are `paid`/
+`partially_paid`): the GL's AR/AP control account balance reflects the FULL original
+posting, while the subledger total (`total - amountPaid`) is net of payments that have
+no matching GL credit. Fixing this means also backfilling matching receipt/payment
+journal entries (crediting AR/debiting AP for each `amountPaid`), which is a
+meaningfully larger undertaking than the VAT-focused posting backfill done here — not
+attempted in this pass. Confirmed via `vatReportService.test.ts`'s integration test that
+VAT reconciliation itself is clean; this is specifically the AR/AP side, deliberately
+scoped out.
 
 ### `ProductsPage.test.tsx`'s "low stock" test fails only when run after its sibling tests
 Introduced 2026-08-21 while wiring `ProductsTable`/`ProductForm` to the new
@@ -92,6 +79,33 @@ checkout, no `.gitattributes` committed). Harmless, but noisy. A `.gitattributes
 pinning `* text=auto eol=lf` (or accepting CRLF explicitly) would silence it.
 
 ## Resolved
+
+### Non-deductible input VAT was posted in full to VAT Input instead of the expense line
+`billService.postBill()` used to debit `acc_2110` (VAT Input) for a bill's ENTIRE
+`taxTotal`, with no check for `non_deductible`-treatment lines (e.g. `NODEDUCT`). Fixed
+2026-08-21: `BillService` now takes a `TaxRateResolver` dependency (wired to the real
+`taxRateService`); `splitDeductibleVat()` sums each line's VAT by resolved treatment,
+capped at `bill.taxTotal` so the debit total can never drift from the AP credit
+regardless of per-line data issues. Non-deductible VAT (and VAT on any line whose
+`taxRateId` doesn't resolve at all — the conservative default is "don't claim it", not
+"claim it anyway") folds into the Expense debit instead. 4 new tests covering
+all-deductible, all-non-deductible, mixed, and unresolved-rate cases.
+
+### VAT (and AR/AP) reconciliation showed a variance against every pre-existing seed document
+`src/mock-data/journalEntries.ts` only ever seeded the opening-balance entry — none of
+the seeded Invoices/Bills/Credit Notes had a matching real GL posting, so every
+reconciliation report showed "Variance detected" out of the box regardless of whether
+the underlying logic was correct. Fixed 2026-08-21: `generateSeedPostings.ts` generates
+the exact JournalEntry a real `postInvoice()`/`postBill()`/`issueCreditNote()` call
+would produce (mirroring the same account ids and math, including the non-deductible
+VAT split above) for every non-draft/non-void seed document, and `seedInvoices`/
+`seedBills`/`seedCreditNotes` now set a matching `journalEntryId`. Proven, not just
+claimed: an integration test (`vatReportService.test.ts`) wires the real
+`JournalEntryService` against the real seed data across all of 2026 and asserts
+`isReconciled === true` for both VAT Output and VAT Input. The AR/AP subledger
+reconciliation still shows a variance for partially-paid documents specifically — see
+Open above, a narrower, separate remaining gap (payment/receipt entries, not the
+original posting).
 
 ### Delete had no posted-record guard across 7 services (SA spec §14/§36/§72/§79)
 `deleteInvoice`/`deleteBill`/`deleteCreditNote`/`deleteQuote`/`deleteSalesOrder`/

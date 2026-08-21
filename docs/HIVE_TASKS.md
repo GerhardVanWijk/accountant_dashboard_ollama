@@ -203,7 +203,7 @@ without discussion"), it did not add one unilaterally — it surfaced the existi
 
 ### Wave 3 (Sequential — Tax & Reports, depend on Wave 1-2)
 
-#### Tax Module — VAT engine + VAT Reporting done (2026-08-21, Queen, solo)
+#### Tax Module (Phase 5, VAT) — ✅ COMPLETE (2026-08-21, Queen, solo)
 - [x] Tax Rates engine — `TaxRate` redesigned effective-dated/versioned
   (`code`, `treatment`, `effectiveFrom`/`effectiveTo`, `jurisdiction`,
   `sourceReference` — SA_ACCOUNTING_MASTER_SPEC.md §9/§12/§82/§113).
@@ -242,20 +242,38 @@ without discussion"), it did not add one unilaterally — it surfaced the existi
   Bill/PO line items that referenced a non-existent `'tax_rate_15'` id —
   all verified to already carry exactly-15%-consistent `taxAmount`s
   before assigning them, not guessed.
+- [x] Tax Rates settings page — `/tax/rates` (`TaxRatesPage`): every tax
+  code grouped with its full effective-dated history, a "New Tax Code"
+  form (`createTaxRate`), and "Supersede"/"Deactivate" actions on the
+  currently-open version of each code (past versions are read-only, per
+  §82/§83 — only the current version can act as the starting point for a
+  new one). Supersede requires a reason, audit-logged, matching every
+  other reason-required override in this codebase. 5 tests.
+- [x] Non-deductible input VAT correctly excluded from what a Bill claims
+  — `billService.postBill()` now resolves each line's tax-rate treatment
+  and folds non-deductible VAT into the Expense line instead of VAT
+  Input, capped so the split can never desync from the AP credit. 4
+  tests. (Previously flagged in `docs/KNOWN_ISSUES.md`, now resolved.)
+- [x] VAT reconciliation genuinely reconciles against real seed data —
+  `generateSeedPostings.ts` backfills the real GL posting every non-draft
+  seed Invoice/Bill/Credit Note was missing, so `reconcileVatControlAccounts`
+  shows "Reconciled" rather than a variance purely from fixture
+  incompleteness. Proven by an integration test wiring the real
+  `JournalEntryService` against real seed data across all of 2026.
+  (Previously flagged in `docs/KNOWN_ISSUES.md`, now resolved for VAT —
+  the AR/AP side of the same underlying gap remains open, see there.)
 - [ ] Seasonal tax analysis with charts
 - [ ] Tax tables with percentages and amounts
 - [ ] Use `FinancialNumber` for tax amounts
 
-**Not addressed in this pass:** income tax brackets/SBC calculations
-(§53, a different tax entirely from VAT — Phase 9 per §116, not Phase
-5); no VAT Period open/closed lifecycle yet (§10's "VAT period" —
-Accounting Periods exist for the GL but there's no VAT-specific
-filing-period concept); a Tax Rates settings/CRUD page (the engine and
-`supersede()` exist, but there's no UI yet for a user to actually create
-or version a rate — every rate today only exists via seed data or
-directly calling the service); `billService.postBill()` doesn't split
-non-deductible VAT out of the VAT Input line (flagged in
-`docs/KNOWN_ISSUES.md`, not fixed this pass).
+**Deliberately still out of Phase 5's scope, not a gap in it:** income tax
+brackets/SBC calculations (§53, a different tax entirely from VAT —
+Phase 9 per §116); no VAT Period open/closed lifecycle yet (§10's "VAT
+period" — Accounting Periods exist for the GL but there's no VAT-specific
+filing-period concept — a real Phase 5 gap, just not blocking, since
+Accounting Periods already gate posting); the AR/AP subledger
+reconciliation still shows a variance for partially-paid seed documents
+(`docs/KNOWN_ISSUES.md` — a Phase 2/3 concern, not Phase 5's).
 
 #### Reports Module (Reports Bee) — READY TO DISPATCH
 - [ ] Profit & Loss (revenue - COGS - opex = net income)

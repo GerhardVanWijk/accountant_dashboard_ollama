@@ -1,5 +1,6 @@
 import type { CreditNote } from '@/types';
 import { STANDARD_RATE_ID } from './taxRates';
+import { seedJournalEntryId } from './seedJournalEntryId';
 
 function nowISO(): string {
   return new Date().toISOString();
@@ -9,12 +10,14 @@ function nowISO(): string {
  * Seed data for the Credit Notes list. Issuing a credit note posts a
  * balanced journal entry (reverse of an Invoice posting) — see
  * `src/features/sales/services/creditNoteService.ts` and
- * docs/LEDGER_ARCHITECTURE.md. Seed rows do NOT carry a real
- * `journalEntryId` (no journal entries are seeded for these), so they
- * start 'draft' — issuing one for real happens through the UI, which posts
- * a genuine journal entry via journalEntryService.
+ * docs/LEDGER_ARCHITECTURE.md. All three seed rows are 'draft' —
+ * issuing one for real happens through the UI, which posts a genuine
+ * journal entry via journalEntryService. If a future seed row is added
+ * non-draft, it automatically gets a matching `journalEntryId` below
+ * (generateSeedPostings.ts generates the corresponding JournalEntry) —
+ * same pattern as seedInvoices/seedBills.
  */
-export const seedCreditNotes: CreditNote[] = [
+const rawSeedCreditNotes: CreditNote[] = [
   {
     id: 'cn_00000001',
     creditNoteNumber: 'CN-2026-0001',
@@ -101,3 +104,9 @@ export const seedCreditNotes: CreditNote[] = [
     updatedAt: nowISO(),
   },
 ];
+
+export const seedCreditNotes: CreditNote[] = rawSeedCreditNotes.map((creditNote) =>
+  creditNote.status === 'draft' || creditNote.status === 'void'
+    ? creditNote
+    : { ...creditNote, journalEntryId: seedJournalEntryId(creditNote.id) },
+);

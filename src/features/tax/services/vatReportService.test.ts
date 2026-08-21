@@ -1,6 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { computeVatReport } from './vatReportService';
+import { computeVatReport, reconcileVatControlAccounts } from './vatReportService';
 import type { Bill, CreditNote, Invoice, TaxRate } from '@/types';
+import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
+import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
+import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
+import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
+import { AuditLogService } from '@/services/auditLogService';
+import { MockAuditLogRepository } from '@/repositories/mock/MockAuditLogRepository';
+import { seedAccounts } from '@/mock-data/accounts';
+import { seedJournalEntries } from '@/mock-data/journalEntries';
+import { seedInvoices } from '@/mock-data/invoices';
+import { seedBills } from '@/mock-data/bills';
+import { seedCreditNotes } from '@/mock-data/creditNotes';
+import { seedTaxRates } from '@/mock-data/taxRates';
+import type { AccountingPeriod } from '@/types';
 
 const STD_RATE: TaxRate = {
   id: 'tax_std',
@@ -212,5 +225,34 @@ describe('computeVatReport', () => {
       ALL_RATES,
     );
     expect(report.unresolvedLineCount).toBe(1);
+  });
+});
+
+describe('reconcileVatControlAccounts against real seed data', () => {
+  it('reconciles cleanly across all of 2026 — proves generateSeedPostings.ts actually matches computeVatReport()', async () => {
+    const journalRepository = new MockJournalEntryRepository(seedJournalEntries);
+    const accountRepository = new MockAccountRepository(seedAccounts);
+    const wideOpenPeriod: AccountingPeriod = {
+      id: 'period_test_open',
+      companyId: 'comp_test',
+      financialYearId: 'fy_test',
+      name: '2026 (test)',
+      startDate: '2026-01-01T00:00:00.000Z',
+      endDate: '2026-12-31T23:59:59.999Z',
+      status: 'open',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const periodRepository = new MockAccountingPeriodRepository([wideOpenPeriod]);
+    const auditLog = new AuditLogService(new MockAuditLogRepository());
+    const journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
+
+    const periodStart = new Date('2026-01-01');
+    const periodEnd = new Date('2026-12-31');
+    const report = computeVatReport(periodStart, periodEnd, seedInvoices, seedCreditNotes, seedBills, seedTaxRates);
+    const reconciliation = await reconcileVatControlAccounts(journalEntryService, periodStart, periodEnd, report);
+
+    expect(reconciliation.outputVat.isReconciled).toBe(true);
+    expect(reconciliation.inputVat.isReconciled).toBe(true);
   });
 });

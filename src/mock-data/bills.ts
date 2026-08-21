@@ -1,6 +1,7 @@
 import type { Bill } from '@/types';
 import { seedSuppliers } from './suppliers';
 import { STANDARD_RATE_ID } from './taxRates';
+import { seedJournalEntryId } from './seedJournalEntryId';
 
 function nowISO(): string {
   return new Date().toISOString();
@@ -11,7 +12,7 @@ function nowISO(): string {
  * A spread of realistic bills across statuses, dates, and suppliers so the bill list's
  * search/filter/sort/aging UI all have something real to show.
  */
-export const seedBills: Bill[] = [
+const rawSeedBills: Bill[] = [
   {
     id: 'bill_00000001',
     billNumber: 'BILL-2026-0001',
@@ -359,3 +360,13 @@ export const seedBills: Bill[] = [
     updatedAt: nowISO(),
   },
 ];
+
+/**
+ * Every non-draft/non-void bill here gets a matching `journalEntryId`
+ * pointing at the JournalEntry `generateSeedPostings.ts` produces for it
+ * (src/mock-data/journalEntries.ts) — see seedInvoices' identical comment
+ * in invoices.ts for why.
+ */
+export const seedBills: Bill[] = rawSeedBills.map((bill) =>
+  bill.status === 'draft' || bill.status === 'void' ? bill : { ...bill, journalEntryId: seedJournalEntryId(bill.id) },
+);

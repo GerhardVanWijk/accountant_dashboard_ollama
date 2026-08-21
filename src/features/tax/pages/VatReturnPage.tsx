@@ -8,18 +8,7 @@ import { formatCurrency } from '@/utils/formatFinancial';
 import { cn } from '@/utils/cn';
 import { useVatReport } from '../hooks/useVatReport';
 import type { VatControlAccountCheck, VatTreatmentBreakdown } from '../services/vatReportService';
-import type { VatTreatment } from '@/types';
-
-const treatmentLabels: Record<VatTreatment, string> = {
-  standard_rated: 'Standard Rated',
-  zero_rated: 'Zero-Rated',
-  exempt: 'Exempt',
-  out_of_scope: 'Out of Scope',
-  capital_goods: 'Capital Goods',
-  import_vat: 'Import VAT',
-  reverse_charge: 'Reverse Charge',
-  non_deductible: 'Non-Deductible',
-};
+import { treatmentLabels } from '../utils/treatmentLabels';
 
 function monthInputValue(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;

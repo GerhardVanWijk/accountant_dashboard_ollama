@@ -1,13 +1,15 @@
 # SA Accounting Master Spec — Gap Analysis
 
 What exists in this codebase today versus `docs/SA_ACCOUNTING_MASTER_SPEC.md` (117
-sections, 12 build phases per §116). **Updated 2026-08-21** after Phase 2 Wave 1b
-(Sales/Purchases module UIs + real GL posting) landed, re-reading the full spec against
-the current codebase rather than just Phase 1. Phases 1-4 of the spec's own build order
-(Accounting Core, Customers, Suppliers, Banking) now have real implementations to
-assess; Phases 5-12 (VAT, Inventory valuation, Fixed Assets, Payroll, Tax, Financial
-Reporting, Compliance, Advanced Accounting) are still not started, consistent with
-§116's ordering — not reassessed in detail below beyond noting what's genuinely absent.
+sections, 12 build phases per §116). **Updated 2026-08-21** — Phase 5 (VAT) is now
+complete: `TaxRate` redesigned as an effective-dated engine, VAT calculation wired into
+every Sales/Purchases/Banking/Inventory consumer, a Tax Rates settings page, VAT
+Reporting with real GL reconciliation, and non-deductible input VAT correctly excluded.
+Phases 1-5 (Accounting Core, Customers, Suppliers, Banking, VAT) now have real
+implementations to assess; Phases 6-12 (Inventory valuation, Fixed Assets, Payroll, Tax,
+Financial Reporting, Compliance, Advanced Accounting) are still not started, consistent
+with §116's ordering — not reassessed in detail below beyond noting what's genuinely
+absent.
 
 ## Phase 1 — Accounting Core
 
@@ -97,20 +99,39 @@ posting, split allocation with per-line VAT, statement import, hard zero-varianc
 reconciliation. One relevant gap already flagged there: all seeded bank accounts share
 one GL control account (`acc_1000`) — no real per-account GL mapping yet.
 
-## Phases 5-12 — not started, per §116's own build order
+## Phase 5 (VAT) — ✅ complete, 2026-08-21
+
+`src/types/taxRate.ts`'s flat `{ rate: number, appliesTo, isActive }` shape (flagged
+before this spec existed) is now a real effective-dated engine: `treatment`
+(standard_rated/zero_rated/exempt/out_of_scope/capital_goods/import_vat/
+reverse_charge/non_deductible — §9, §12), `effectiveFrom`/`effectiveTo`,
+`jurisdiction`, `sourceReference`. `TaxRateService` (`src/features/tax/services/`)
+resolves the historically-correct version for a past transaction (§83) and versions a
+rate forward via `supersede()` rather than editing history. A settings page
+(`/tax/rates`) lets a user actually create/version/deactivate codes — not just the
+service API. `computeVatReport()`/`VatReturnPage` (`/tax/vat-return`) classify every
+real posted Invoice/Credit Note/Bill line by treatment into Output/Input VAT (§64),
+reconciled against the real GL VAT control accounts for the period
+(`reconcileVatControlAccounts`, §17/§70/§71 applied to VAT) — proven by an integration
+test against real seed data, not just unit-tested in isolation. Non-deductible input
+VAT is correctly excluded from what a Bill claims (`billService.postBill()`'s
+`splitDeductibleVat()`), never posted to VAT Input.
+
+Deliberately still open, consistent with §116's own scope for Phase 5 specifically (not
+a Phase 5 gap — these are OTHER phases/concerns): §53's SBC/income-tax brackets are
+Phase 9, not VAT; there is no VAT Period open/closed lifecycle (§10) separate from the
+existing Accounting Periods — a real, if non-blocking, Phase 5 gap; the tax invoice
+required-fields work (company name/VAT number on rendered documents, §13) shipped
+earlier in the known-issues pass, not this one. See `docs/KNOWN_ISSUES.md` for the
+AR/AP-side residual reconciliation gap (payment/receipt entries aren't backfilled,
+only original postings) — that one is Phase 2/3's concern, not Phase 5's.
+
+## Phases 6-12 — not started, per §116's own build order
 
 Nothing below has been built yet. Noted here only so a future session can see at a
 glance what's genuinely absent versus partially built, without re-deriving it from
 scratch:
 
-- **Phase 5 (VAT)** — no dedicated VAT engine exists. `src/types/taxRate.ts` is still
-  the flat `{ rate: number, appliesTo, isActive }` shape flagged before this spec
-  existed: no effective-dating, no distinction between standard/zero-rated/exempt/
-  capital-goods/imported/reverse-charge treatments (§9, §12), no VAT period/return/
-  reconciliation model (§40-§41 as applied to VAT, §60). Invoices/Bills carry a single
-  `taxTotal` number, not itemized tax-code-level detail. This is the single largest
-  gap versus the spec's own priorities (§9-§16), and is explicitly Phase 5 in §116 —
-  i.e. next per the spec's own ordering, now that Phases 1-4 are real.
 - **Phase 6 (Inventory)** — Products/Warehouses/stock-movement ledger exist (Phase 1),
   but no automatic Cost-of-Sales journal fires when a sale is recorded (§24), and no
   valuation-method (FIFO/weighted-average) selection exists at the accounting-policy

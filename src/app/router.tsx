@@ -24,6 +24,7 @@ import { BankReconciliationPage } from '@/features/banking/pages/BankReconciliat
 import { ProductsPage } from '@/features/inventory/pages/ProductsPage';
 import { WarehousesPage } from '@/features/inventory/pages/WarehousesPage';
 import { VatReturnPage } from '@/features/tax/pages/VatReturnPage';
+import { TaxRatesPage } from '@/features/tax/pages/TaxRatesPage';
 import { ReportsPage } from '@/features/reports/pages/ReportsPage';
 import { UsersPage } from '@/features/admin/pages/UsersPage';
 import { AuditPage } from '@/features/admin/pages/AuditPage';
@@ -77,6 +78,7 @@ export const routes: RouteObject[] = [
           { path: 'banking/reconciliation', element: <BankReconciliationPage /> },
           { path: 'inventory/products', element: <ProductsPage /> },
           { path: 'inventory/warehouses', element: <WarehousesPage /> },
+          { path: 'tax/rates', element: <TaxRatesPage /> },
           { path: 'tax/vat-return', element: <VatReturnPage /> },
           { path: 'reports', element: <ReportsPage /> },
           { path: 'admin/users', element: <UsersPage /> },

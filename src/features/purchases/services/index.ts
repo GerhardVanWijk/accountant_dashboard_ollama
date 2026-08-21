@@ -5,6 +5,7 @@ import { MockBillRepository } from '@/repositories/mock/MockBillRepository';
 import { MockPurchaseOrderRepository } from '@/repositories/mock/MockPurchaseOrderRepository';
 import { MockPaymentRepository } from '@/repositories/mock/MockPaymentRepository';
 import { journalEntryService } from '@/features/accounting/services';
+import { taxRateService } from '@/features/tax/services';
 
 export type { CreateBillDTO } from './billService';
 export type { CreatePurchaseOrderDTO } from './purchaseOrderService';
@@ -21,6 +22,6 @@ export { PaymentService } from './paymentService';
  * subject to accountingPeriodService's period-open rule.
  * Hooks depend on these singletons instead of importing repositories directly.
  */
-export const billService = new BillService(new MockBillRepository(), journalEntryService);
+export const billService = new BillService(new MockBillRepository(), journalEntryService, taxRateService);
 export const purchaseOrderService = new PurchaseOrderService(new MockPurchaseOrderRepository());
 export const paymentService = new PaymentService(new MockPaymentRepository(), journalEntryService, billService);

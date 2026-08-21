@@ -9,6 +9,7 @@ import { MockAccountingPeriodRepository } from '@/features/accounting/repositori
 import { AuditLogService } from '@/services/auditLogService';
 import { MockAuditLogRepository } from '@/repositories/mock/MockAuditLogRepository';
 import { seedAccounts } from '@/mock-data/accounts';
+import { taxRateService } from '@/features/tax/services';
 import type { AccountingPeriod } from '@/types';
 
 /** A single accounting period wide open enough to cover every date these tests use. */
@@ -29,6 +30,7 @@ function makeOpenPeriod(): AccountingPeriod {
 describe('BillService', () => {
   let billService: BillService;
   let repository: MockBillRepository;
+  let journalEntryService: JournalEntryService;
 
   beforeEach(() => {
     repository = new MockBillRepository();
@@ -36,13 +38,13 @@ describe('BillService', () => {
     const accountRepository = new MockAccountRepository(seedAccounts);
     const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
     const auditLog = new AuditLogService(new MockAuditLogRepository());
-    const journalEntryService = new JournalEntryService(
+    journalEntryService = new JournalEntryService(
       journalRepository,
       accountRepository,
       periodRepository,
       auditLog,
     );
-    billService = new BillService(repository, journalEntryService);
+    billService = new BillService(repository, journalEntryService, taxRateService);
   });
 
   describe('getBills', () => {
@@ -183,6 +185,120 @@ describe('BillService', () => {
         const posted = await billService.postBill(newBill.id);
         expect(posted.status).toBe('awaiting_payment');
       }
+    });
+
+    it('posts the full VAT to VAT Input when every line is deductible', async () => {
+      const bill = await billService.createBill({
+        billNumber: 'BILL-VAT-STD',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [
+          { id: 'li_1', description: 'Standard-rated supplies', quantity: 1, unitPrice: 1000, taxRateId: 'tax_std_v2', taxAmount: 150, lineTotal: 1000 },
+        ],
+        subtotal: 1000,
+        taxTotal: 150,
+        total: 1150,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const posted = await billService.postBill(bill.id);
+      const entry = await journalEntryService.getAccountLedger('acc_2110');
+      const vatInputLine = entry.find((row) => row.entryId === posted.journalEntryId);
+      expect(vatInputLine?.debit).toBe(150);
+
+      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
+      const expenseLine = expenseLedger.find((row) => row.entryId === posted.journalEntryId);
+      expect(expenseLine?.debit).toBe(1000);
+    });
+
+    it('folds non-deductible VAT into the expense line instead of posting it to VAT Input', async () => {
+      const bill = await billService.createBill({
+        billNumber: 'BILL-VAT-NODEDUCT',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [
+          { id: 'li_1', description: 'Client entertainment', quantity: 1, unitPrice: 400, taxRateId: 'tax_nondeductible', taxAmount: 60, lineTotal: 400 },
+        ],
+        subtotal: 400,
+        taxTotal: 60,
+        total: 460,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const posted = await billService.postBill(bill.id);
+
+      const vatInputLedger = await journalEntryService.getAccountLedger('acc_2110');
+      expect(vatInputLedger.some((row) => row.entryId === posted.journalEntryId)).toBe(false);
+
+      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
+      const expenseLine = expenseLedger.find((row) => row.entryId === posted.journalEntryId);
+      expect(expenseLine?.debit).toBe(460); // subtotal (400) + non-deductible VAT (60), never claimed
+    });
+
+    it('splits a mixed bill correctly between deductible and non-deductible VAT', async () => {
+      const bill = await billService.createBill({
+        billNumber: 'BILL-VAT-MIXED',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [
+          { id: 'li_1', description: 'Supplies', quantity: 1, unitPrice: 1000, taxRateId: 'tax_std_v2', taxAmount: 150, lineTotal: 1000 },
+          { id: 'li_2', description: 'Client entertainment', quantity: 1, unitPrice: 400, taxRateId: 'tax_nondeductible', taxAmount: 60, lineTotal: 400 },
+        ],
+        subtotal: 1400,
+        taxTotal: 210,
+        total: 1610,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const posted = await billService.postBill(bill.id);
+
+      const vatInputLedger = await journalEntryService.getAccountLedger('acc_2110');
+      const vatInputLine = vatInputLedger.find((row) => row.entryId === posted.journalEntryId);
+      expect(vatInputLine?.debit).toBe(150); // only the deductible portion
+
+      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
+      const expenseLine = expenseLedger.find((row) => row.entryId === posted.journalEntryId);
+      expect(expenseLine?.debit).toBe(1460); // subtotal (1400) + non-deductible VAT (60)
+
+      const apLedger = await journalEntryService.getAccountLedger('acc_2000');
+      const apLine = apLedger.find((row) => row.entryId === posted.journalEntryId);
+      expect(apLine?.credit).toBe(1610); // still the full bill total, unaffected by the split
+    });
+
+    it('conservatively treats VAT with no resolvable tax rate as non-deductible rather than claiming it', async () => {
+      const bill = await billService.createBill({
+        billNumber: 'BILL-VAT-UNRESOLVED',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [
+          { id: 'li_1', description: 'Mystery supplies', quantity: 1, unitPrice: 500, taxRateId: 'tax_does_not_exist', taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const posted = await billService.postBill(bill.id);
+
+      const vatInputLedger = await journalEntryService.getAccountLedger('acc_2110');
+      expect(vatInputLedger.some((row) => row.entryId === posted.journalEntryId)).toBe(false);
+
+      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
+      const expenseLine = expenseLedger.find((row) => row.entryId === posted.journalEntryId);
+      expect(expenseLine?.debit).toBe(575);
     });
   });
 
