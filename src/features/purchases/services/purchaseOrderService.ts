@@ -32,7 +32,17 @@ export class PurchaseOrderService {
     return this.repository.update(id, patch);
   }
 
+  /** Permanently removes a draft purchase order. Once sent/received/converted it's a real commitment and must be cancelled instead of deleted. */
   async deletePurchaseOrder(id: string): Promise<void> {
+    const po = await this.repository.getById(id);
+    if (!po) {
+      throw new Error(`Purchase order "${id}" not found`);
+    }
+    if (po.status !== 'draft') {
+      throw new Error(
+        `Cannot delete purchase order "${id}": only a draft PO can be deleted (current status: ${po.status}). Cancel it instead.`,
+      );
+    }
     return this.repository.delete(id);
   }
 
@@ -66,11 +76,17 @@ export class PurchaseOrderService {
    * Converts a purchase order to a bill.
    * Creates a new Bill record with the same line items and totals.
    * In a real system, this would call billService.createBill().
+   * Rejects a PO that's already been converted (`billId` set) — enforced
+   * here, not just in the UI, so it can't be bypassed by calling this
+   * twice in quick succession.
    */
   async convertToBill(poId: string): Promise<Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>> {
     const po = await this.repository.getById(poId);
     if (!po) {
       throw new Error(`Purchase order "${poId}" not found`);
+    }
+    if (po.billId) {
+      throw new Error(`Purchase order "${poId}" has already been converted to a bill (${po.billId}).`);
     }
 
     // Generate bill number from PO number

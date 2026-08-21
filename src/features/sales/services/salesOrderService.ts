@@ -40,7 +40,14 @@ export class SalesOrderService {
     return this.repository.update(id, patch);
   }
 
+  /** Permanently removes a pending sales order (there is no earlier 'draft' state — see class doc). Once confirmed/fulfilled it's a real business commitment and must be cancelled instead of deleted. */
   async deleteSalesOrder(id: string): Promise<void> {
+    const order = await this.requireOrder(id);
+    if (order.status !== 'pending') {
+      throw new Error(
+        `Cannot delete sales order "${id}": only a pending order can be deleted (current status: ${order.status}). Cancel it instead.`,
+      );
+    }
     return this.repository.delete(id);
   }
 

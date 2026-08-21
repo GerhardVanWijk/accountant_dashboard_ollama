@@ -14,7 +14,8 @@ import { useCustomer } from '../hooks/useCustomer';
 import { useCustomerMutations } from '../hooks/useCustomerMutations';
 import { calculateAgingForCustomer } from '../utils/calculateAging';
 import { calculateFinancialSummary } from '../utils/customerFinancials';
-import { getOpenItemsForCustomer } from '../mock-data/openItems';
+import { invoicesToOpenItems } from '../mock-data/openItems';
+import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { CustomerStatusBadge, CreditHoldBadge } from '../components/CustomerStatusBadge';
 import { CustomerSummaryCards } from '../components/CustomerSummaryCards';
 import { CustomerAgingBreakdown } from '../components/CustomerAgingBreakdown';
@@ -57,7 +58,11 @@ export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetai
   const [statementTo, setStatementTo] = useState('');
   const navigate = useNavigate();
 
-  const openItems = useMemo(() => (customer ? getOpenItemsForCustomer(customer.id) : []), [customer]);
+  const { invoices } = useInvoices();
+  const openItems = useMemo(
+    () => (customer ? invoicesToOpenItems(invoices.filter((inv) => inv.customerId === customer.id)) : []),
+    [customer, invoices],
+  );
   const aging = useMemo(() => calculateAgingForCustomer(customerId, new Date(), openItems), [customerId, openItems]);
   const summary = useMemo(
     () => (customer ? calculateFinancialSummary(customer, new Date(), openItems) : null),

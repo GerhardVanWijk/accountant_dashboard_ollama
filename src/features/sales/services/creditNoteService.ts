@@ -73,7 +73,18 @@ export class CreditNoteService {
     return this.repository.update(id, patch);
   }
 
+  /**
+   * Permanently removes a draft credit note. An issued/allocated credit
+   * note has already posted to the GL — per SA_ACCOUNTING_MASTER_SPEC.md
+   * §14/§36/§72/§79 it must never be deleted.
+   */
   async deleteCreditNote(id: string): Promise<void> {
+    const creditNote = await this.requireCreditNote(id);
+    if (creditNote.status !== 'draft') {
+      throw new Error(
+        `Cannot delete credit note "${id}": only a draft credit note can be deleted (current status: ${creditNote.status}).`,
+      );
+    }
     return this.repository.delete(id);
   }
 

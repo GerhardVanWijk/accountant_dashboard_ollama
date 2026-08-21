@@ -57,11 +57,14 @@ describe('MockSupplierRepository + SupplierService (repository pattern)', () => 
   });
 
   it('refuses to hard-delete a supplier with linked open bills (accounts-payable guard)', async () => {
-    // sup_00000001 (Highveld Steel) has mock open bills in calculateAging.ts.
+    // sup_00000004 (City of Johannesburg Municipal Services) has a real,
+    // unpaid 'awaiting_payment' bill in src/mock-data/bills.ts
+    // (bill_00000004) — the guard now checks real Bill data via
+    // billService, not the old temporary mock dataset.
     const service = new SupplierService(new MockSupplierRepository());
-    await expect(service.deleteSupplier('sup_00000001')).rejects.toThrow(/linked financial history/i);
+    await expect(service.deleteSupplier('sup_00000004')).rejects.toThrow(/linked financial history/i);
 
-    const stillThere = await service.getSupplier('sup_00000001');
+    const stillThere = await service.getSupplier('sup_00000004');
     expect(stillThere).toBeDefined();
   });
 

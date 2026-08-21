@@ -7,44 +7,6 @@ each section.
 
 ## Open
 
-### Delete has no posted-record guard across 7 services (SA spec §14/§36/§72/§79)
-`deleteInvoice`/`deleteBill`/`deleteCreditNote`/`deleteQuote`/`deleteSalesOrder`/
-`deletePurchaseOrder`/`deleteCustomer` all call `repository.delete(id)` unconditionally —
-no status check stops deleting a posted invoice, an issued credit note, or a confirmed
-sales order, violating the master spec's immutability rules. Not currently exploitable
-(no UI wires any of these `delete*` methods to a button), so it's a dormant service-layer
-gap, not an active bug. Needs a consistent policy across all 7 services (delete only
-while `status === 'draft'`; everything else goes through void/cancel/reversal) rather
-than 7 one-off patches. Full detail in `docs/SA_SPEC_GAP_ANALYSIS.md`.
-
-### Tax invoices don't render real company/VAT registration data (SA spec §13)
-`InvoiceDetail.tsx`'s `companyName` prop defaults to the literal string `'Your Company'`
-and is never wired to the real `Company` entity (`src/features/admin/`), which already
-stores legal name, VAT registration number, and address. No supplier VAT number appears
-on any rendered invoice/bill. `Company` data exists; it's just not plumbed through to
-document rendering yet.
-
-### No AR/AP subledger reconciles to its GL control account (SA spec §17/§18/§70/§71)
-Nothing compares sum(customer balances) or sum(supplier balances) against the GL's
-`acc_1100`/`acc_2000` balance. Banking has its own reconciliation module (bank statement
-vs. cashbook); Sales/Purchases have no equivalent. A posting bug in either would
-currently go undetected until it showed up elsewhere.
-
-### Customers/Suppliers aging still not wired to real Invoice/Bill records
-Flagged 2026-08-20 as blocked on Sales/Purchases not existing yet. Wave 1b (2026-08-21)
-shipped both, so this is now genuinely actionable — `src/features/customers/mock-data/
-openItems.ts` and `src/features/suppliers/utils/calculateAging.ts`'s `mockOpenBills`
-just haven't been re-pointed at real `Invoice`/`Bill` data yet.
-
-### Purchase Order can be converted to a Bill more than once
-`PurchaseOrder` has no `billId`/converted-status field, and `PurchaseOrderDetail`'s
-`canConvert` guard only checks `status !== 'draft' && status !== 'cancelled'` — it
-doesn't track that a conversion already happened. `PurchaseOrdersPage`'s "Convert to
-Bill" action (Wave 1b) composes `billService.createBill()` + `billService.postBill()`
-so the resulting Bill is always genuinely posted to the GL, but nothing stops clicking
-Convert twice and creating two Bills from the same PO. Needs a real field, not a UI
-workaround, when picked up.
-
 ### GL posting engine has no storage-layer enforcement of the balance invariant
 `JournalEntryService.postJournalEntry()` (`src/features/accounting/services/`)
 validates sum(debit) === sum(credit) in application code before writing, but the mock
@@ -91,6 +53,69 @@ checkout, no `.gitattributes` committed). Harmless, but noisy. A `.gitattributes
 pinning `* text=auto eol=lf` (or accepting CRLF explicitly) would silence it.
 
 ## Resolved
+
+### Delete had no posted-record guard across 7 services (SA spec §14/§36/§72/§79)
+`deleteInvoice`/`deleteBill`/`deleteCreditNote`/`deleteQuote`/`deleteSalesOrder`/
+`deletePurchaseOrder`/`deleteCustomer`/`deleteSupplier` all called
+`repository.delete(id)` unconditionally. Fixed 2026-08-21: each now guards on status —
+`deleteInvoice`/`deleteBill`/`deleteCreditNote`/`deleteQuote` require `'draft'`,
+`deleteSalesOrder` requires `'pending'` (no true draft state), `deletePurchaseOrder`
+requires `'draft'`, and `deleteCustomer`/`deleteSupplier` check for linked open
+Invoices/Bills (see next item) rather than a status, matching
+`docs/DO_NOT_BREAK.md`'s existing pattern of never-hard-delete-with-history. 2 new tests
+added (draft deletes succeed, posted deletes are rejected); 2 pre-existing tests that
+deleted a seeded non-draft bill/PO were updated to use a draft fixture instead (a test
+data problem, not a false failure — the guard's new behavior is correct).
+
+### Customers/Suppliers aging (and their delete-guards) were still on temporary mock data
+Flagged 2026-08-20 as blocked on Sales/Purchases not existing; Wave 1b (2026-08-21)
+shipped both. Fixed 2026-08-21: added `invoicesToOpenItems()`/`billsToOpenBills()`
+adapters converting real, non-draft/non-void Invoice/Bill records (aged on the
+*outstanding* balance, `total - amountPaid`, not the original total) into the existing
+`OpenItem`/`MockOpenBill` shapes the aging math already consumed — no signature changes
+needed to `calculateAging`/`calculateFinancialSummary` themselves. Rewired: Customer/
+Supplier Detail pages, the Dashboard's fleet-wide AR/AP aggregation
+(`calculateArAgingForCustomers`/`calculateApAgingForSuppliers` now take real
+invoices/bills as parameters), and `customerService.deleteCustomer()`/
+`supplierService.deleteSupplier()`'s linked-history guards (previously Supplier's guard
+checked mock data; Customer had no guard at all despite a doc comment claiming
+customers are "NEVER hard-deleted"). One existing test asserted the guard against a
+seeded supplier (`sup_00000001`) whose only real Bill is fully paid — updated to use
+`sup_00000004`, which has a real unpaid bill, since the guard's *behavior* is unchanged,
+only which fixture demonstrates it.
+
+**Found along the way, also fixed**: `src/features/sales/hooks/useCustomerMap.ts`
+constructed its own separate `CustomerService`/`MockCustomerRepository` instance instead
+of importing the canonical singleton from `src/features/customers/services/
+customerService.ts` — the same "two disconnected in-memory stores" bug already fixed
+once this session for `InvoiceService` (see the Wave 1b commit). Now imports the shared
+singleton.
+
+### Tax invoices didn't render real company/VAT registration data (SA spec §13)
+`InvoiceDetail.tsx`'s `companyName` prop defaulted to the literal string `'Your
+Company'`, never wired to the real `Company` entity. Fixed 2026-08-21: added
+`useCompany()` (`src/features/admin/hooks/`), and both `InvoiceDetail` and
+`CreditNoteDetail` now accept a `company` prop rendering the real name, VAT
+registration number, and CIPC registration number when available. `Company` has no
+address field yet, so that's still not renderable — not fabricated, left absent.
+
+### No AR/AP subledger reconciled to its GL control account (SA spec §17/§18/§70/§71)
+Nothing compared sum(open invoices)/sum(open bills) against the GL's `acc_1100`/
+`acc_2000` balance. Fixed 2026-08-21: added `reconcileAccountsReceivable()`/
+`reconcileAccountsPayable()` (`src/features/accounting/services/
+subledgerReconciliation.ts`), each comparing the control account's real posted GL
+balance (via `journalEntryService.getAccountLedger()`) against the real subledger
+total, with 5 tests covering an exact match, a fully-unposted invoice, a
+partially-posted bill, and draft/void exclusion. Surfaced on the Trial Balance page as
+a "Subledger Reconciliation" section (`SubledgerReconciliationCard`) — a variance is
+shown, never silently corrected, matching §40's suspense-account principle.
+
+### Purchase Order could be converted to a Bill more than once
+`PurchaseOrder` had no `billId`/converted-status field, and `PurchaseOrderDetail`'s
+`canConvert` guard didn't track that a conversion already happened. Fixed 2026-08-21:
+added `PurchaseOrder.billId?: ID`, set once `PurchaseOrdersPage`'s "Convert to Bill"
+action succeeds; `purchaseOrderService.convertToBill()` now rejects a PO that already
+has one (enforced at the service layer, not just hidden in the UI).
 
 ### `ARCHITECTURE.md` claimed Phase 0 work was done when the repo was empty
 At hive startup (2026-08-20), `docs/ARCHITECTURE.md`'s "Current Phase" section had

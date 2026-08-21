@@ -3,11 +3,14 @@ import { Spinner } from '@/components/feedback/Spinner';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { useTrialBalance } from '../hooks/useTrialBalance';
+import { useSubledgerReconciliation } from '../hooks/useSubledgerReconciliation';
 import { TrialBalanceTable } from '../components/TrialBalanceTable';
+import { SubledgerReconciliationCard } from '../components/SubledgerReconciliationCard';
 
 /** Trial Balance — route `/accounting/trial-balance` (docs/ROUTES.md). */
 export function TrialBalancePage() {
   const { trialBalance, loading, error, refetch } = useTrialBalance();
+  const { ar, ap, loading: reconciliationLoading } = useSubledgerReconciliation();
 
   return (
     <div className="flex flex-col gap-lg">
@@ -34,6 +37,21 @@ export function TrialBalancePage() {
       {!loading && !error && trialBalance && trialBalance.rows.length > 0 && (
         <TrialBalanceTable trialBalance={trialBalance} />
       )}
+
+      <div>
+        <h2 className="mb-sm text-lg font-semibold text-text-primary">Subledger Reconciliation</h2>
+        <p className="mb-md text-sm text-text-secondary">
+          Confirms the Accounts Receivable and Accounts Payable control accounts agree with the sum of open
+          invoices/bills — SA_ACCOUNTING_MASTER_SPEC.md §17/§18/§70/§71.
+        </p>
+        {reconciliationLoading && <Spinner label="Reconciling subledgers…" />}
+        {!reconciliationLoading && ar && ap && (
+          <div className="grid grid-cols-1 gap-md md:grid-cols-2">
+            <SubledgerReconciliationCard label="Accounts Receivable" reconciliation={ar} />
+            <SubledgerReconciliationCard label="Accounts Payable" reconciliation={ap} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

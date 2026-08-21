@@ -90,14 +90,34 @@ describe('PurchaseOrderService', () => {
   });
 
   describe('deletePurchaseOrder', () => {
-    it('should delete a purchase order', async () => {
-      const pos = await poService.getPurchaseOrders();
-      const poToDelete = pos[0];
+    it('should delete a draft purchase order', async () => {
+      const draft = await poService.createPurchaseOrder({
+        poNumber: 'PO-2026-DRAFT-DELETE',
+        supplierId: 'sup_test',
+        orderDate: '2026-08-21',
+        lineItems: [],
+        subtotal: 0,
+        taxTotal: 0,
+        total: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
 
-      await poService.deletePurchaseOrder(poToDelete.id);
+      await poService.deletePurchaseOrder(draft.id);
 
-      const deleted = await poService.getPurchaseOrder(poToDelete.id);
+      const deleted = await poService.getPurchaseOrder(draft.id);
       expect(deleted).toBeUndefined();
+    });
+
+    it('should refuse to delete a non-draft purchase order', async () => {
+      const pos = await poService.getPurchaseOrders();
+      const nonDraftPo = pos.find((po) => po.status !== 'draft');
+      expect(nonDraftPo).toBeDefined();
+
+      await expect(poService.deletePurchaseOrder(nonDraftPo!.id)).rejects.toThrow(/only a draft PO/i);
+
+      const stillThere = await poService.getPurchaseOrder(nonDraftPo!.id);
+      expect(stillThere).toBeDefined();
     });
   });
 

@@ -3,6 +3,8 @@ import { customerService } from '@/features/customers/services/customerService';
 import { supplierService } from '@/features/suppliers/services/supplierService';
 import { productService } from '@/features/inventory/services/productService';
 import { stockService } from '@/features/inventory/services/stockService';
+import { invoiceService } from '@/services';
+import { billService } from '@/features/purchases/services';
 import { calculateArAgingForCustomers } from '../utils/calculateArAging';
 import { calculateApAgingForSuppliers } from '../utils/calculateApAging';
 import { calculateDashboardKpis, type DashboardKpis } from '../utils/calculateKpis';
@@ -55,12 +57,14 @@ export function useDashboardData(): UseDashboardDataResult {
       supplierService.getSuppliers(),
       productService.getProducts(),
       stockService.calculateTotalValuation(),
+      invoiceService.getInvoices(),
+      billService.getBills(),
     ])
-      .then(([customers, suppliers, products, inventoryValuation]) => {
+      .then(([customers, suppliers, products, inventoryValuation, invoices, bills]) => {
         if (cancelled) return;
 
-        const arAging = calculateArAgingForCustomers(customers);
-        const apAging = calculateApAgingForSuppliers(suppliers);
+        const arAging = calculateArAgingForCustomers(customers, invoices);
+        const apAging = calculateApAgingForSuppliers(suppliers, bills);
         const activity = buildRecentActivity(customers, suppliers, products);
 
         setData({

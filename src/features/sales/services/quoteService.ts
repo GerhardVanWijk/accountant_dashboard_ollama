@@ -37,7 +37,12 @@ export class QuoteService {
     return this.repository.update(id, patch);
   }
 
+  /** Permanently removes a draft quote. Once sent, a quote is a customer-facing document and must be declined/expired instead of deleted. */
   async deleteQuote(id: string): Promise<void> {
+    const quote = await this.requireQuote(id);
+    if (quote.status !== 'draft') {
+      throw new Error(`Cannot delete quote "${id}": only a draft quote can be deleted (current status: ${quote.status}).`);
+    }
     return this.repository.delete(id);
   }
 

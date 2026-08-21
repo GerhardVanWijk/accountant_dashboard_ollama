@@ -1,5 +1,8 @@
 import type { Customer } from '@/types';
 import type { ICustomerRepository } from '@/repositories/ICustomerRepository';
+import { hasOpenItems } from '@/features/customers/utils/calculateAging';
+import { invoicesToOpenItems } from '@/features/customers/mock-data/openItems';
+import { invoiceService } from './index';
 
 export type CreateCustomerDTO = Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -35,7 +38,21 @@ export class CustomerService {
     return this.repository.update(id, patch);
   }
 
+  /**
+   * Permanently removes a customer with no linked financial history.
+   * Mirrors SupplierService.deleteSupplier()'s accounts-receivable guard —
+   * checks real Invoice records (`invoiceService`, Sales module) via
+   * `invoicesToOpenItems`. A customer with any outstanding invoice must be
+   * inactivated instead (see `inactivateCustomer` below), never
+   * hard-deleted, per SA_ACCOUNTING_MASTER_SPEC.md §36/§72/§79.
+   */
   async deleteCustomer(id: string): Promise<void> {
+    const openItems = invoicesToOpenItems(await invoiceService.getInvoicesByCustomer(id));
+    if (hasOpenItems(id, openItems)) {
+      throw new Error(
+        'Cannot permanently delete a customer with linked financial history. Inactivate the customer instead.',
+      );
+    }
     return this.repository.delete(id);
   }
 

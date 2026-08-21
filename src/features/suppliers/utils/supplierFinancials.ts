@@ -1,5 +1,5 @@
-import type { Supplier } from '@/types';
-import { calculateAging, mockOpenBills } from './calculateAging';
+import type { Bill, Supplier } from '@/types';
+import { calculateAging, mockOpenBills, billsToOpenBills, type MockOpenBill } from './calculateAging';
 
 export interface SupplierFinancialSummary {
   /** Sum of every open bill owed to this supplier (== aging total). */
@@ -17,17 +17,25 @@ export interface SupplierFinancialSummary {
  * Payable, Overdue Balance, YTD Purchases, Credit Balance). Pure
  * service/util-layer function — per docs/DO_NOT_BREAK.md this
  * calculation must never live inside a component/JSX.
+ *
+ * `bills` should be this supplier's real Bill records (via
+ * `billService.getBillsBySupplier`), converted by the caller is NOT
+ * required — pass raw `Bill[]` and this function adapts them internally.
+ * Falls back to the (temporary) mock open-bills dataset only when no real
+ * bills are supplied, for backward compatibility with existing callers.
  */
 export function calculateFinancialSummary(
   supplier: Supplier,
   asOf: Date = new Date(),
+  bills?: Bill[],
 ): SupplierFinancialSummary {
-  const aging = calculateAging(supplier.id, asOf);
+  const openBills: MockOpenBill[] = bills ? billsToOpenBills(bills) : mockOpenBills;
+  const aging = calculateAging(supplier.id, asOf, openBills);
   const totalPayable = aging.total;
   const overdueBalance = aging.days30 + aging.days60 + aging.days90Plus;
 
   const yearStart = new Date(asOf.getFullYear(), 0, 1);
-  const ytdPurchases = mockOpenBills
+  const ytdPurchases = openBills
     .filter((bill) => bill.supplierId === supplier.id && new Date(bill.issueDate) >= yearStart)
     .reduce((sum, bill) => sum + bill.amount, 0);
 

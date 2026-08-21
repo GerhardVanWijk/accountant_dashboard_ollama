@@ -126,14 +126,36 @@ describe('BillService', () => {
   });
 
   describe('deleteBill', () => {
-    it('should delete a bill', async () => {
-      const bills = await billService.getBills();
-      const billToDelete = bills[0];
+    it('should delete a draft bill', async () => {
+      const draft = await billService.createBill({
+        billNumber: 'BILL-2026-DRAFT-DELETE',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [],
+        subtotal: 0,
+        taxTotal: 0,
+        total: 0,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
 
-      await billService.deleteBill(billToDelete.id);
+      await billService.deleteBill(draft.id);
 
-      const deleted = await billService.getBill(billToDelete.id);
+      const deleted = await billService.getBill(draft.id);
       expect(deleted).toBeUndefined();
+    });
+
+    it('should refuse to delete a posted (non-draft) bill', async () => {
+      const bills = await billService.getBills();
+      const postedBill = bills.find((b) => b.status !== 'draft');
+      expect(postedBill).toBeDefined();
+
+      await expect(billService.deleteBill(postedBill!.id)).rejects.toThrow(/only a draft bill/i);
+
+      const stillThere = await billService.getBill(postedBill!.id);
+      expect(stillThere).toBeDefined();
     });
   });
 

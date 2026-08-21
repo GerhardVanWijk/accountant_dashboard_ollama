@@ -4,12 +4,14 @@ import { formatCurrency } from '@/utils/formatFinancial';
 import { FinancialNumber } from '@/components/ui/FinancialNumber';
 import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
 import { Button } from '@/components/ui/Button';
-import type { CreditNote } from '@/types';
+import type { Company, CreditNote } from '@/types';
 
 interface CreditNoteDetailProps {
   creditNote: CreditNote;
   customerName: string;
   linkedInvoiceNumber?: string;
+  /** The issuing company — same SARS tax-document fields as InvoiceDetail (SA_ACCOUNTING_MASTER_SPEC.md §13/§15). */
+  company?: Pick<Company, 'name' | 'vatRegistrationNumber' | 'registrationNumber'>;
   onClose?: () => void;
   onIssue?: (id: string) => void;
   onVoid?: (id: string) => void;
@@ -21,6 +23,7 @@ export const CreditNoteDetail: React.FC<CreditNoteDetailProps> = ({
   creditNote,
   customerName,
   linkedInvoiceNumber,
+  company,
   onClose,
   onIssue,
   onVoid,
@@ -36,6 +39,10 @@ export const CreditNoteDetail: React.FC<CreditNoteDetailProps> = ({
     <div className="max-w-4xl mx-auto bg-panel p-8 rounded-lg border border-border">
       <div className="flex justify-between items-start mb-8 pb-8 border-b border-border">
         <div>
+          <div className="text-lg font-semibold mb-1">{company?.name ?? 'Your Company'}</div>
+          {company?.vatRegistrationNumber && (
+            <div className="text-xs text-text-muted mb-1">VAT Reg. No: {company.vatRegistrationNumber}</div>
+          )}
           <div className="text-3xl font-bold mb-2">Credit Note</div>
           <div className="text-text-secondary">{customerName}</div>
           {linkedInvoiceNumber && (

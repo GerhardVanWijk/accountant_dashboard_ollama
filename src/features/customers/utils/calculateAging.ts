@@ -68,3 +68,15 @@ export function calculateAgingForCustomer(
 export function getOverdueTotal(buckets: AgingBuckets): number {
   return buckets.days1to30 + buckets.days31to60 + buckets.days61Plus;
 }
+
+/**
+ * True when a customer has any open (outstanding) item in `items` — used
+ * by customerService as the accounts-receivable guard against
+ * hard-deleting a customer with linked financial history. Callers should
+ * pass real open items derived from `invoiceService` via
+ * `invoicesToOpenItems` (mock-data/openItems.ts), not the temporary mock
+ * dataset.
+ */
+export function hasOpenItems(customerId: ID, items: OpenItem[]): boolean {
+  return items.some((item) => item.customerId === customerId && item.amountOutstanding > 0);
+}

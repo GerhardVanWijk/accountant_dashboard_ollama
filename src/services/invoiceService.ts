@@ -60,8 +60,27 @@ export class InvoiceService {
     return this.repository.update(id, patch);
   }
 
+  /**
+   * Permanently removes a draft invoice. A posted invoice (anything past
+   * 'draft') is accounting history — per SA_ACCOUNTING_MASTER_SPEC.md §14/
+   * §36/§72/§79 it must never be deleted, only reversed via a credit note.
+   */
   async deleteInvoice(id: string): Promise<void> {
+    const invoice = await this.requireInvoice(id);
+    if (invoice.status !== 'draft') {
+      throw new Error(
+        `Cannot delete invoice "${id}": only a draft invoice can be deleted (current status: ${invoice.status}). Issue a credit note instead.`,
+      );
+    }
     return this.repository.delete(id);
+  }
+
+  private async requireInvoice(id: string): Promise<Invoice> {
+    const invoice = await this.repository.getById(id);
+    if (!invoice) {
+      throw new Error(`Invoice "${id}" not found`);
+    }
+    return invoice;
   }
 
   /**

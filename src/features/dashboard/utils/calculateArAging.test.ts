@@ -25,7 +25,7 @@ function customer(id: string): Customer {
 
 describe('calculateArAgingForCustomers', () => {
   it('returns all-zero buckets for an empty customer list', () => {
-    expect(calculateArAgingForCustomers([])).toEqual({
+    expect(calculateArAgingForCustomers([], [])).toEqual({
       current: 0,
       bucket30: 0,
       bucket60: 0,
@@ -41,7 +41,7 @@ describe('calculateArAgingForCustomers', () => {
       return { current: 200, days1to30: 0, days31to60: 5, days61Plus: 15, total: 220 };
     });
 
-    const result = calculateArAgingForCustomers([customer('c1'), customer('c2')]);
+    const result = calculateArAgingForCustomers([customer('c1'), customer('c2')], []);
 
     expect(result).toEqual({ current: 300, bucket30: 50, bucket60: 25, bucket90Plus: 25, total: 400 });
     expect(mockedCalculateAgingForCustomer).toHaveBeenCalledTimes(2);

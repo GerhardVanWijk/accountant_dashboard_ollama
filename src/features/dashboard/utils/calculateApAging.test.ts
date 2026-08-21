@@ -3,6 +3,10 @@ import type { Supplier } from '@/types';
 
 vi.mock('@/features/suppliers/utils/calculateAging', () => ({
   calculateAging: vi.fn(),
+  // Real bill-conversion logic isn't under test here (these tests only
+  // ever pass an empty `bills` array) — a passthrough keeps the mock
+  // factory from shadowing the real export with `undefined`.
+  billsToOpenBills: (bills: unknown[]) => bills,
 }));
 
 import { calculateAging } from '@/features/suppliers/utils/calculateAging';
@@ -25,7 +29,7 @@ function supplier(id: string): Supplier {
 
 describe('calculateApAgingForSuppliers', () => {
   it('returns all-zero buckets for an empty supplier list', () => {
-    expect(calculateApAgingForSuppliers([])).toEqual({
+    expect(calculateApAgingForSuppliers([], [])).toEqual({
       current: 0,
       bucket30: 0,
       bucket60: 0,
@@ -41,7 +45,7 @@ describe('calculateApAgingForSuppliers', () => {
       return { current: 100, days30: 0, days60: 25, days90Plus: 5, total: 130 };
     });
 
-    const result = calculateApAgingForSuppliers([supplier('s1'), supplier('s2')]);
+    const result = calculateApAgingForSuppliers([supplier('s1'), supplier('s2')], []);
 
     expect(result).toEqual({ current: 400, bucket30: 40, bucket60: 25, bucket90Plus: 15, total: 480 });
     expect(mockedCalculateAging).toHaveBeenCalledTimes(2);

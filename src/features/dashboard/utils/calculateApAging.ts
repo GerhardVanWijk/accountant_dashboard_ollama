@@ -1,5 +1,8 @@
-import type { Supplier } from '@/types';
-import { calculateAging as calculateSupplierAging } from '@/features/suppliers/utils/calculateAging';
+import type { Bill, Supplier } from '@/types';
+import {
+  calculateAging as calculateSupplierAging,
+  billsToOpenBills,
+} from '@/features/suppliers/utils/calculateAging';
 import { emptyFleetAgingBuckets, type FleetAgingBuckets } from '../types/aging.types';
 
 /**
@@ -13,14 +16,21 @@ import { emptyFleetAgingBuckets, type FleetAgingBuckets } from '../types/aging.t
  * (calculateSupplierAging) to avoid colliding with the customers
  * feature's identically-named calculateAging export.
  *
- * Pure aggregation only — no I/O; callers fetch `suppliers` themselves
- * (e.g. via supplierService.getSuppliers() in ../hooks/useDashboardData.ts).
+ * Pure aggregation only — no I/O; callers fetch `suppliers`/`bills`
+ * themselves (e.g. via supplierService.getSuppliers()/billService.getBills()
+ * in ../hooks/useDashboardData.ts). `bills` are real Bill records (Wave 1b) —
+ * converted per-supplier via `billsToOpenBills` before bucketing.
  */
-export function calculateApAgingForSuppliers(suppliers: Supplier[], asOf: Date = new Date()): FleetAgingBuckets {
+export function calculateApAgingForSuppliers(
+  suppliers: Supplier[],
+  bills: Bill[],
+  asOf: Date = new Date(),
+): FleetAgingBuckets {
   const totals = emptyFleetAgingBuckets();
+  const openBills = billsToOpenBills(bills);
 
   for (const supplier of suppliers) {
-    const buckets = calculateSupplierAging(supplier.id, asOf);
+    const buckets = calculateSupplierAging(supplier.id, asOf, openBills);
     totals.current += buckets.current;
     totals.bucket30 += buckets.days30;
     totals.bucket60 += buckets.days60;

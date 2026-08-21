@@ -1,7 +1,8 @@
 import type { Supplier } from '@/types';
 import type { ISupplierRepository } from '../repositories/ISupplierRepository';
 import { MockSupplierRepository } from '../repositories/MockSupplierRepository';
-import { hasOpenBills } from '../utils/calculateAging';
+import { hasOpenBills, billsToOpenBills } from '../utils/calculateAging';
+import { billService } from '@/features/purchases/services';
 
 export type CreateSupplierDTO = Omit<Supplier, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -39,14 +40,13 @@ export class SupplierService {
   /**
    * Enforces the accounts-payable guardrail from suppliers-bee.md
    * ("Never allow hard deletion of a supplier with associated bills,
-   * payments, or ledger transactions"). There is no real Bill/PO data
-   * yet, so this checks the TEMPORARY mock open-bills dataset owned by
-   * calculateAging.ts as a stand-in — once the Purchases module ships
-   * real bill/payment/ledger records this guard should be re-pointed at
-   * that data instead of being removed.
+   * payments, or ledger transactions"). Checks real Bill records
+   * (`billService`, Purchases module) via `billsToOpenBills` — no longer
+   * the temporary mock dataset now that Wave 1b shipped real bills.
    */
   async deleteSupplier(id: string): Promise<void> {
-    if (hasOpenBills(id)) {
+    const realOpenBills = billsToOpenBills(await billService.getBillsBySupplier(id));
+    if (hasOpenBills(id, realOpenBills)) {
       throw new Error(
         'Cannot permanently delete a supplier with linked financial history. Inactivate the supplier or place it on hold instead.',
       );

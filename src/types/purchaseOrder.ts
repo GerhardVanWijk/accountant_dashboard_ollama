@@ -19,4 +19,6 @@ export interface PurchaseOrder extends BaseEntity {
   currency: CurrencyCode;
   status: PurchaseOrderStatus;
   notes?: string;
+  /** Set once this PO has been converted to a Bill — guards against converting it twice. */
+  billId?: ID;
 }

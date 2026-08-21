@@ -1,4 +1,4 @@
-import type { ID } from '@/types';
+import type { Bill, ID } from '@/types';
 
 /**
  * TEMPORARY: superseded once Purchases module provides real bill data.
@@ -123,4 +123,27 @@ export function calculateAging(
  */
 export function hasOpenBills(supplierId: ID, bills: MockOpenBill[] = mockOpenBills): boolean {
   return bills.some((bill) => bill.supplierId === supplierId);
+}
+
+/**
+ * Maps real Bills (Purchases module, shipped Wave 1b) into the
+ * `MockOpenBill` shape `calculateAging`/`hasOpenBills` already consume —
+ * lets real Bill data flow through this feature's existing aging math
+ * without changing its signature. Only bills that represent real,
+ * outstanding Accounts Payable are included: drafts never posted to the
+ * GL, and voided bills carry no liability. Ages on the OUTSTANDING
+ * balance (`total - amountPaid`), not the original bill total, so a
+ * partially-paid bill only contributes what's still actually owed.
+ */
+export function billsToOpenBills(bills: Bill[]): MockOpenBill[] {
+  return bills
+    .filter((bill) => bill.status !== 'draft' && bill.status !== 'void')
+    .map((bill) => ({
+      id: bill.id,
+      supplierId: bill.supplierId,
+      amount: Math.max(0, bill.total - bill.amountPaid),
+      issueDate: bill.issueDate,
+      dueDate: bill.dueDate,
+    }))
+    .filter((bill) => bill.amount > 0);
 }

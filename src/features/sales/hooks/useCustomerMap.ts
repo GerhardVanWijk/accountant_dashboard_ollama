@@ -1,16 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Customer } from '@/types';
-import { MockCustomerRepository } from '@/repositories/mock/MockCustomerRepository';
-import { CustomerService } from '@/services/customerService';
+import { customerService } from '@/features/customers/services/customerService';
 
-let customerRepository: MockCustomerRepository;
-let customerService: CustomerService;
-
-function getCustomerService(): CustomerService {
-  if (!customerService) {
-    customerRepository = new MockCustomerRepository();
-    customerService = new CustomerService(customerRepository);
-  }
+function getCustomerService() {
   return customerService;
 }
 

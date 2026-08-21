@@ -59,7 +59,19 @@ export class BillService {
     return this.repository.update(id, patch);
   }
 
+  /**
+   * Permanently removes a draft bill. A posted bill (anything past 'draft')
+   * is accounting history — per SA_ACCOUNTING_MASTER_SPEC.md §14/§36/§72/
+   * §79 it must never be deleted.
+   */
   async deleteBill(id: string): Promise<void> {
+    const bill = await this.repository.getById(id);
+    if (!bill) {
+      throw new Error(`Bill "${id}" not found`);
+    }
+    if (bill.status !== 'draft') {
+      throw new Error(`Cannot delete bill "${id}": only a draft bill can be deleted (current status: ${bill.status}).`);
+    }
     return this.repository.delete(id);
   }
 

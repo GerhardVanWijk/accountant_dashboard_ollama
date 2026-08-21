@@ -10,6 +10,7 @@ import { useCreditNotes } from '@/features/sales/hooks/useCreditNotes';
 import { useCreditNoteMutations } from '@/features/sales/hooks/useCreditNoteMutations';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
+import { useCompany } from '@/features/admin/hooks/useCompany';
 
 type View = { type: 'list' } | { type: 'detail'; id: string };
 
@@ -31,6 +32,7 @@ export function CreditNotesPage() {
   const { customers: customerMap } = useCustomerMap();
   const { customers: customerList } = useCustomerList();
   const { invoices, refetch: refetchInvoices } = useInvoices();
+  const { company } = useCompany();
   const {
     createCreditNote,
     issueCreditNote,
@@ -116,6 +118,7 @@ export function CreditNotesPage() {
           creditNote={detailCreditNote}
           customerName={customerMap.get(detailCreditNote.customerId) || 'Unknown Customer'}
           linkedInvoiceNumber={linkedInvoiceNumber}
+          company={company}
           onClose={() => setView({ type: 'list' })}
           isBusy={isMutating}
           onIssue={(id) => void handleIssue(id)}

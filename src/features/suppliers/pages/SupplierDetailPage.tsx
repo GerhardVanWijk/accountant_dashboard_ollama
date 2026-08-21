@@ -11,8 +11,9 @@ import { formatCurrency } from '@/utils/formatCurrency';
 import { cn } from '@/utils/cn';
 import type { UseSuppliersResult } from '../hooks/useSuppliers';
 import { StatusBadge } from '../components/StatusBadge';
-import { calculateAging } from '../utils/calculateAging';
+import { calculateAging, billsToOpenBills } from '../utils/calculateAging';
 import { calculateFinancialSummary } from '../utils/supplierFinancials';
+import { useBills } from '@/features/purchases/hooks';
 
 export interface SupplierDetailPageProps {
   supplierId: string;
@@ -35,9 +36,17 @@ export function SupplierDetailPage({ supplierId, suppliersState, onBack, onEdit 
   const [actionError, setActionError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  const { bills } = useBills();
   const supplier = suppliers.find((s) => s.id === supplierId);
-  const summary = useMemo(() => (supplier ? calculateFinancialSummary(supplier) : undefined), [supplier]);
-  const aging = useMemo(() => calculateAging(supplierId), [supplierId]);
+  const supplierBills = useMemo(() => bills.filter((b) => b.supplierId === supplierId), [bills, supplierId]);
+  const summary = useMemo(
+    () => (supplier ? calculateFinancialSummary(supplier, new Date(), supplierBills) : undefined),
+    [supplier, supplierBills],
+  );
+  const aging = useMemo(
+    () => calculateAging(supplierId, new Date(), billsToOpenBills(supplierBills)),
+    [supplierId, supplierBills],
+  );
 
   if (loading) return <Spinner label="Loading supplier…" />;
   if (error) return <ErrorState message={error.message} onRetry={refetch} />;

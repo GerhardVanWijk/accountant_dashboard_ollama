@@ -5,6 +5,7 @@ import { InvoiceDetail } from '@/features/sales/components/InvoiceDetail';
 import { InvoiceForm } from '@/features/sales/components/InvoiceForm';
 import { useInvoices, useInvoice, useInvoiceMutations } from '@/features/sales/hooks/useInvoices';
 import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
+import { useCompany } from '@/features/admin/hooks/useCompany';
 import type { CreateInvoiceDTO } from '@/services/invoiceService';
 
 type View = { type: 'list' } | { type: 'detail'; invoiceId: string };
@@ -26,6 +27,7 @@ export function InvoicesPage() {
   const { customers } = useCustomerMap();
   const { customers: customerList } = useCustomerList();
   const { createInvoice, updateInvoice, saving, error: saveError } = useInvoiceMutations();
+  const { company } = useCompany();
 
   async function handleFormSubmit(values: Partial<Invoice>): Promise<void> {
     if (formState?.mode === 'edit') {
@@ -101,6 +103,7 @@ export function InvoicesPage() {
           <InvoiceDetail
             invoice={detailInvoice}
             customerName={getCustomerName(detailInvoice.customerId)}
+            company={company}
             onEdit={() => setFormState({ mode: 'edit', invoice: detailInvoice })}
           />
         </div>

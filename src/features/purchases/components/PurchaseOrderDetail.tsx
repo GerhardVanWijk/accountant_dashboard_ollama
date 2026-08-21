@@ -31,7 +31,8 @@ export const PurchaseOrderDetail: React.FC<PurchaseOrderDetailProps> = ({
   const canSend = purchaseOrder.status === 'draft';
   const canReceive = purchaseOrder.status === 'sent' || purchaseOrder.status === 'partially_received';
   const canCancel = purchaseOrder.status !== 'received' && purchaseOrder.status !== 'cancelled';
-  const canConvert = purchaseOrder.status !== 'draft' && purchaseOrder.status !== 'cancelled';
+  const canConvert =
+    purchaseOrder.status !== 'draft' && purchaseOrder.status !== 'cancelled' && !purchaseOrder.billId;
 
   return (
     <div className="max-w-4xl mx-auto bg-panel p-8 rounded-lg border border-border">

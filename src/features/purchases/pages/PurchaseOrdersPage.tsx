@@ -52,6 +52,7 @@ export function PurchaseOrdersPage() {
       const draft = await poMutations.convertToBill(poId);
       const bill = await billMutations.createBill({ ...draft, status: 'draft' });
       await billMutations.postBill(bill.id);
+      await poMutations.updatePurchaseOrder(poId, { billId: bill.id });
       navigate('/purchases/bills');
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not convert purchase order to a bill.');

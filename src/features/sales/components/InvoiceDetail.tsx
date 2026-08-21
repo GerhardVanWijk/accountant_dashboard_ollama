@@ -3,12 +3,17 @@ import { formatCurrency } from '@/utils/formatFinancial';
 import { FinancialNumber } from '@/components/ui/FinancialNumber';
 import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
 import { format } from 'date-fns';
-import type { Invoice } from '@/types';
+import type { Company, Invoice } from '@/types';
 
 interface InvoiceDetailProps {
   invoice: Invoice;
   customerName: string;
-  companyName?: string;
+  /**
+   * The issuing company, for SARS-required tax invoice fields (name, VAT
+   * registration number — SA_ACCOUNTING_MASTER_SPEC.md §13). Falls back to
+   * a placeholder only when no Company record is available yet.
+   */
+  company?: Pick<Company, 'name' | 'vatRegistrationNumber' | 'registrationNumber'>;
   onEdit?: () => void;
   onMarkAsSent?: () => void;
   onRecordPayment?: () => void;
@@ -17,7 +22,7 @@ interface InvoiceDetailProps {
 export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({
   invoice,
   customerName,
-  companyName = 'Your Company',
+  company,
   onEdit,
   onMarkAsSent,
   onRecordPayment,
@@ -59,8 +64,14 @@ export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({
         {/* Header */}
         <div className="flex justify-between items-start mb-8 pb-8 border-b border-border">
           <div>
-            <div className="text-3xl font-bold mb-2">{companyName}</div>
+            <div className="text-3xl font-bold mb-2">{company?.name ?? 'Your Company'}</div>
             <div className="text-text-secondary">Tax Invoice</div>
+            {company?.vatRegistrationNumber && (
+              <div className="text-xs text-text-muted mt-1">VAT Reg. No: {company.vatRegistrationNumber}</div>
+            )}
+            {company?.registrationNumber && (
+              <div className="text-xs text-text-muted">Reg. No: {company.registrationNumber}</div>
+            )}
           </div>
           <div className="text-right">
             <div className="font-mono text-xl font-semibold">{invoice.invoiceNumber}</div>

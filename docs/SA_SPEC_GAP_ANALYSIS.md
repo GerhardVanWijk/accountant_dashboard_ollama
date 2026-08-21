@@ -60,7 +60,7 @@ etc.). This predates the master spec (Phase 0 scaffold) and needs to be redesign
 as part of Phase 5 (VAT), not patched in place — a real config/versioning model per
 §82/§113, not an extra column bolted onto the existing type.
 
-## Phase 2/3 (Customers/Sales, Suppliers/Purchases) — GL posting now real (Wave 1b, 2026-08-21)
+## Phase 2/3 (Customers/Sales, Suppliers/Purchases) — GL posting real, gaps fixed (Wave 1b + 2026-08-21 follow-up)
 
 | Spec requirement | Status | Where |
 |---|---|---|
@@ -70,52 +70,13 @@ as part of Phase 5 (VAT), not patched in place — a real config/versioning mode
 | Credit note allocation against open invoices (§15) | ✅ | `creditNoteService.allocateToInvoice()` → `InvoiceService.recordPayment()` |
 | Customer receipts, multi-invoice allocation (§17) | ✅ | `customerReceiptService` |
 | Vendor payments, multi-bill allocation (§18) | ✅ | `paymentService` (Purchases) |
-| Quote → Sales Order → Invoice conversion chain (§63, §99 traceability) | ✅ (partial) | `quoteService.convertToSalesOrder()`, `salesOrderService.convertToInvoice()` — see gap below on posting timing |
-| PO → Bill conversion (§63) | ✅ (with a real gap — see below) | `PurchaseOrdersPage`'s convert action composes `createBill()`+`postBill()` |
-| Debtors/Creditors ageing (§17, §18, §64) | ⚠️ built, but on the wrong data source | See "Aging still not wired to real documents" below |
-| Customer/Supplier subledger reconciles to AR/AP control account (§17, §18, §70) | ❌ missing | No code anywhere compares sum(customer balances) or sum(supplier balances) against the GL's `acc_1100`/`acc_2000` balance. Banking has its own reconciliation module; Sales/Purchases have none. A posting bug here would currently go undetected. |
-| Tax invoice required fields (§13) | ⚠️ partial | `InvoiceDetail.tsx` renders "Tax Invoice" wording and an invoice number, but `companyName` defaults to the literal string `'Your Company'` and is never wired to the real `Company` entity (`src/features/admin/`) — no supplier VAT registration number, address, or company registration number is rendered anywhere on the document. `Company` already stores this data; it's just not plumbed through to invoice/bill rendering. |
-| Invoice numbering is sequential/unique/immutable (§14) | ⚠️ partial | Seed data and UI-suggested next-numbers (`nextDocumentNumber.ts`) follow a `PREFIX-YEAR-NNNN` pattern, but no service enforces uniqueness or sequentiality at creation time — `createInvoice()`/`createBill()`/etc. accept whatever `invoiceNumber`/`billNumber` string the caller passes. Two drafts could theoretically be saved with the same number. Not exploitable via the current UI (forms pre-fill the suggested next number and there's no way to duplicate-submit), but not enforced at the layer the spec requires. |
-| No deletion of posted documents (§14, §36, §72, §79) | ❌ **real gap, systemic** | See "Delete has no posted-record guard" below. |
-
-### Delete has no posted-record guard — the most significant finding of this review
-
-`deleteInvoice`/`deleteBill`/`deleteCreditNote`/`deleteQuote`/`deleteSalesOrder`/
-`deletePurchaseOrder`/`deleteCustomer` (7 services: `src/services/invoiceService.ts`,
-`src/features/purchases/services/billService.ts`, `src/features/sales/services/
-{creditNoteService,quoteService,salesOrderService}.ts`,
-`src/features/purchases/services/purchaseOrderService.ts`,
-`src/services/customerService.ts`) all call `this.repository.delete(id)`
-**unconditionally** — no status check prevents deleting a posted invoice, an issued
-credit note, an awaiting-payment bill, or a confirmed sales order. This directly
-contradicts §14 ("prevent deletion of posted invoices"), §36 ("a posted accounting
-transaction must NOT simply be deleted... support reversal/cancellation/credit
-note/voiding with audit trail instead"), §72 ("prevent... deleting posted
-transactions"), and §79 (immutability).
-
-**Mitigating factor**: none of these `delete*` methods are currently wired to any
-button or action in the UI (confirmed by grepping every Sales/Purchases page and
-component) — so this is a dormant service-layer gap, not an exploitable one today. It
-exists because each service was built with a generic CRUD shape (`getAll`/`getById`/
-`create`/`update`/`delete`) before the immutability rule was enforced at the *service*
-layer the way `JournalEntryService`'s repository enforces it at the *repository* layer
-(no `update()`/`delete()` method exists on `IJournalEntryRepository` at all — the
-correct pattern, already used for the ledger itself).
-
-**Not fixed in this pass** — flagged for a follow-up, since a correct fix needs a
-consistent policy applied across all 7 services (e.g. "delete allowed only while
-status is `draft`; anything else must go through void/cancel/reversal"), not 7
-one-off patches. `docs/KNOWN_ISSUES.md` tracks this as Open.
-
-### Aging still not wired to real documents
-
-`docs/KNOWN_ISSUES.md` already flagged (2026-08-20) that Customers/Suppliers aging runs
-on temporary internal mock data (`src/features/customers/mock-data/openItems.ts`,
-`src/features/suppliers/utils/calculateAging.ts`'s `mockOpenBills`) because Sales/
-Purchases didn't exist yet. **That dependency is now unblocked** — real `Invoice`/`Bill`
-records with real statuses exist — but the aging calculators haven't been re-pointed at
-them yet. This is real, not-yet-started work, now genuinely actionable rather than
-blocked.
+| Quote → Sales Order → Invoice conversion chain (§63, §99 traceability) | ✅ (partial) | `quoteService.convertToSalesOrder()`, `salesOrderService.convertToInvoice()` — the resulting invoice is a draft, posted separately when the user marks it Sent (deliberate: matches "sending" an invoice being a distinct action, not silently posting on conversion) |
+| PO → Bill conversion (§63) | ✅, and no longer double-clickable | `PurchaseOrdersPage`'s convert action composes `createBill()`+`postBill()`; `PurchaseOrder.billId` (added 2026-08-21) blocks converting the same PO twice, enforced in `purchaseOrderService.convertToBill()` itself, not just the UI |
+| Debtors/Creditors ageing (§17, §18, §64) | ✅ fixed 2026-08-21 | `invoicesToOpenItems()`/`billsToOpenBills()` adapters feed real, non-draft/non-void Invoice/Bill data (aged on outstanding balance) into the existing aging math — Customer/Supplier Detail pages and the Dashboard's fleet-wide aggregation all consume real data now |
+| Customer/Supplier subledger reconciles to AR/AP control account (§17, §18, §70) | ✅ fixed 2026-08-21 | `src/features/accounting/services/subledgerReconciliation.ts`'s `reconcileAccountsReceivable()`/`reconcileAccountsPayable()`, compared against `journalEntryService.getAccountLedger()`'s real posted balance; surfaced on the Trial Balance page, 5 tests |
+| Tax invoice required fields (§13) | ✅ fixed 2026-08-21, still partial | `InvoiceDetail`/`CreditNoteDetail` now render the real `Company` name + VAT registration number + CIPC registration number via `useCompany()`. Still missing: `Company` has no address field to render (not fabricated — genuinely absent from the type) |
+| Invoice numbering is sequential/unique/immutable (§14) | ⚠️ partial, not addressed in this pass | Seed data and UI-suggested next-numbers (`nextDocumentNumber.ts`) follow a `PREFIX-YEAR-NNNN` pattern, but no service enforces uniqueness or sequentiality at creation time — `createInvoice()`/`createBill()`/etc. accept whatever `invoiceNumber`/`billNumber` string the caller passes. Not exploitable via the current UI (forms pre-fill the suggested next number), but not enforced at the layer the spec requires. |
+| No deletion of posted documents (§14, §36, §72, §79) | ✅ fixed 2026-08-21 | All 8 services (Invoice/Bill/CreditNote/Quote/SalesOrder/PurchaseOrder/Customer/Supplier) now guard `delete*` — see `docs/KNOWN_ISSUES.md`'s Resolved section for the exact rule per service |
 
 ### Account-mapping is hard-coded per service, not a configurable mapping table (§113)
 
@@ -173,9 +134,11 @@ scratch:
 
 Also cross-cutting and still absent regardless of phase: role-based approval workflows
 (§38-§39; only a stub `Role`/`User` type exists), suspense account (§40), a central
-Reconciliation Centre (§71 — Banking has its own reconciliation, but nothing ties
-Debtors/Creditors/Inventory/Payroll/Tax reconciliation together), document/attachment
-management (§62), multi-company tenant scoping (§75 — noted in Phase 1 section above).
+Reconciliation Centre (§71 — Banking's own reconciliation and the new AR/AP subledger
+reconciliation, both 2026-08-21, are two independent checks, not the single tied-together
+view §71 describes — Inventory/Payroll/Tax reconciliation don't exist to tie in yet
+anyway), document/attachment management (§62), multi-company tenant scoping (§75 —
+noted in Phase 1 section above).
 
 ## What this document is not
 

@@ -1,4 +1,4 @@
-import type { ID } from '@/types';
+import type { ID, Invoice } from '@/types';
 
 /**
  * TEMPORARY: superseded once the Sales module (Phase 2) provides real
@@ -79,4 +79,28 @@ export const mockOpenItems: OpenItem[] = [
 /** Convenience accessor — all open items belonging to one customer. */
 export function getOpenItemsForCustomer(customerId: ID, source: OpenItem[] = mockOpenItems): OpenItem[] {
   return source.filter((item) => item.customerId === customerId);
+}
+
+/**
+ * Maps real Invoices (Sales module, shipped Wave 1b) into the `OpenItem`
+ * shape `calculateAging`/`calculateFinancialSummary` already consume —
+ * lets real Invoice data flow through this feature's existing aging math
+ * without changing its signature. Only invoices that represent real,
+ * outstanding Accounts Receivable are included: drafts never posted to
+ * the GL, and voided invoices carry no balance. `amountOutstanding` is
+ * `total - amountPaid`, so a partially-paid invoice only contributes what
+ * a customer still actually owes.
+ */
+export function invoicesToOpenItems(invoices: Invoice[]): OpenItem[] {
+  return invoices
+    .filter((invoice) => invoice.status !== 'draft' && invoice.status !== 'void')
+    .map((invoice) => ({
+      id: invoice.id,
+      customerId: invoice.customerId,
+      reference: invoice.invoiceNumber,
+      issueDate: invoice.issueDate,
+      dueDate: invoice.dueDate,
+      amount: invoice.total,
+      amountOutstanding: Math.max(0, invoice.total - invoice.amountPaid),
+    }));
 }
