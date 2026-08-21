@@ -26,12 +26,31 @@ function makeOpenPeriod(): AccountingPeriod {
 }
 
 /**
+ * Configurable stub InventoryMover — `costPerUnit` controls what
+ * calculateCogs() returns per product (0 = not tracked/no COGS), and
+ * `recordedSales` lets tests assert recordSaleMovement() was only called
+ * AFTER a successful post, matching real InventoryPostingAdapter's
+ * contract without pulling in real Product/Warehouse/StockMovement
+ * repositories here (see inventoryPostingAdapter.test.ts for that).
+ */
+function makeInventoryMoverStub(costPerUnit: Record<string, number> = {}) {
+  const recordedSales: { productId: string; quantity: number; reference: string }[] = [];
+  return {
+    calculateCogs: async (productId: string, quantity: number) => (costPerUnit[productId] ?? 0) * quantity,
+    recordSaleMovement: async (productId: string, quantity: number, reference: string) => {
+      recordedSales.push({ productId, quantity, reference });
+    },
+    recordedSales,
+  };
+}
+
+/**
  * Wires a REAL JournalEntryService (the actual ledger posting engine, not a
  * stub) so postInvoice() tests prove a genuinely balanced journal entry is
  * produced, not a mocked assertion — mirrors
  * src/features/banking/services/bankTransactionService.test.ts.
  */
-function setup(initialInvoices?: Invoice[]) {
+function setup(initialInvoices?: Invoice[], costPerUnit: Record<string, number> = {}) {
   const journalRepository = new MockJournalEntryRepository([]);
   const accountRepository = new MockAccountRepository(seedAccounts);
   const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
@@ -39,9 +58,10 @@ function setup(initialInvoices?: Invoice[]) {
   const journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
 
   const repo = initialInvoices ? new MockInvoiceRepository(initialInvoices) : new MockInvoiceRepository();
-  const service = new InvoiceService(repo, journalEntryService);
+  const inventoryMover = makeInventoryMoverStub(costPerUnit);
+  const service = new InvoiceService(repo, journalEntryService, inventoryMover);
 
-  return { service, journalEntryService, repo };
+  return { service, journalEntryService, repo, inventoryMover };
 }
 
 describe('InvoiceService', () => {
@@ -175,6 +195,87 @@ describe('InvoiceService', () => {
       const unchanged = await repo.getById(draft.id);
       expect(unchanged?.status).toBe('draft');
       expect(unchanged?.journalEntryId).toBeUndefined();
+    });
+
+    it('posts Cost of Sales and reduces stock for a line item with a tracked product', async () => {
+      const { service, journalEntryService, inventoryMover } = setup([], { prod_1: 40 }); // costPrice 40/unit
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-2026-TEST-COGS',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_1', description: 'Widget', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const updated = await service.postInvoice(draft.id);
+      const entry = await journalEntryService.getEntry(updated.journalEntryId!);
+
+      const cogsLine = entry!.lines.find((l) => l.accountId === 'acc_5000');
+      const inventoryLine = entry!.lines.find((l) => l.accountId === 'acc_1200');
+      expect(cogsLine?.debit).toBe(200); // 5 units * 40
+      expect(inventoryLine?.credit).toBe(200);
+
+      const totalDebit = entry!.lines.reduce((s, l) => s + l.debit, 0);
+      const totalCredit = entry!.lines.reduce((s, l) => s + l.credit, 0);
+      expect(totalDebit).toBeCloseTo(totalCredit);
+
+      expect(inventoryMover.recordedSales).toEqual([{ productId: 'prod_1', quantity: 5, reference: 'Invoice INV-2026-TEST-COGS' }]);
+    });
+
+    it('omits the Cost of Sales lines and does not touch stock for a line item with no tracked product', async () => {
+      const { service, journalEntryService, inventoryMover } = setup([]);
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-2026-TEST-NOCOGS',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [
+          { id: 'li_1', description: 'Consulting (service, no product)', quantity: 1, unitPrice: 500, taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const updated = await service.postInvoice(draft.id);
+      const entry = await journalEntryService.getEntry(updated.journalEntryId!);
+
+      expect(entry!.lines.find((l) => l.accountId === 'acc_5000')).toBeUndefined();
+      expect(entry!.lines.find((l) => l.accountId === 'acc_1200')).toBeUndefined();
+      expect(inventoryMover.recordedSales).toEqual([]);
+    });
+
+    it('does not reduce stock if GL posting fails', async () => {
+      const { service, inventoryMover } = setup([], { prod_1: 40 });
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-2026-TEST-COGS-FAIL',
+        customerId: 'cust_test',
+        issueDate: '2027-06-01T00:00:00.000Z', // outside the test period
+        dueDate: '2027-07-01T00:00:00.000Z',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_1', description: 'Widget', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      await expect(service.postInvoice(draft.id)).rejects.toThrow(/accounting period/i);
+      expect(inventoryMover.recordedSales).toEqual([]);
     });
   });
 

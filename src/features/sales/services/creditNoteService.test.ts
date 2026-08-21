@@ -41,7 +41,8 @@ async function setup() {
   const journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
 
   const invoiceRepository = new MockInvoiceRepository([]);
-  const invoiceService = new InvoiceService(invoiceRepository, journalEntryService);
+  const noOpInventoryMover = { calculateCogs: async () => 0, recordSaleMovement: async () => {} };
+  const invoiceService = new InvoiceService(invoiceRepository, journalEntryService, noOpInventoryMover);
   const invoice = await invoiceService.createInvoice({
     invoiceNumber: 'INV-2026-CN-TEST',
     customerId: 'cust_test',

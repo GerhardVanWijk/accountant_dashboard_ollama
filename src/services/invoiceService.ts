@@ -22,10 +22,23 @@ export interface JournalPoster {
   }): Promise<{ id: ID }>;
 }
 
+/**
+ * Minimal surface of InventoryPoster this service depends on
+ * (src/features/inventory/services/inventoryPostingAdapter.ts) — resolving
+ * Cost of Sales and reducing stock for a sale, per
+ * SA_ACCOUNTING_MASTER_SPEC.md §24.
+ */
+export interface InventoryMover {
+  calculateCogs(productId: ID, quantity: number): Promise<number>;
+  recordSaleMovement(productId: ID, quantity: number, reference: string): Promise<void>;
+}
+
 /** Fixed Chart of Accounts ids this service posts against (src/mock-data/accounts.ts). */
 const AR_ACCOUNT_ID = 'acc_1100'; // Accounts Receivable
 const SALES_REVENUE_ACCOUNT_ID = 'acc_4000'; // Sales Revenue
 const VAT_OUTPUT_ACCOUNT_ID = 'acc_2100'; // VAT Output (Payable)
+const COGS_ACCOUNT_ID = 'acc_5000'; // Cost of Goods Sold
+const INVENTORY_ACCOUNT_ID = 'acc_1200'; // Inventory
 
 /**
  * Business-logic layer between hooks/components and the repository.
@@ -36,6 +49,7 @@ export class InvoiceService {
   constructor(
     private readonly repository: IInvoiceRepository,
     private readonly journalEntryService: JournalPoster,
+    private readonly inventoryMover: InventoryMover,
   ) {}
 
   async getInvoices(): Promise<Invoice[]> {
@@ -85,14 +99,22 @@ export class InvoiceService {
 
   /**
    * Posts an invoice to the ledger and transitions it from 'draft' to
-   * 'sent'. Posts BEFORE updating the domain record — see
-   * docs/LEDGER_ARCHITECTURE.md and bankTransactionService.ts's
-   * postAllocationsToLedger — so a failed post (unbalanced entry, closed
-   * accounting period) never leaves an orphaned "posted" invoice row.
+   * 'sent'. Posts BEFORE updating the domain record and BEFORE reducing
+   * stock — see docs/LEDGER_ARCHITECTURE.md and
+   * bankTransactionService.ts's postAllocationsToLedger — so a failed
+   * post (unbalanced entry, closed accounting period) never leaves an
+   * orphaned "posted" invoice row or stock reduced with no matching
+   * journal entry.
    *
    * debit  Accounts Receivable (acc_1100)  for invoice.total
    * credit Sales Revenue      (acc_4000)  for invoice.subtotal
    * credit VAT Output         (acc_2100)  for invoice.taxTotal (only if > 0)
+   * debit  Cost of Goods Sold (acc_5000)  credit Inventory (acc_1200), for
+   *        the total Cost of Sales across every tracked-inventory line
+   *        item (only if > 0) — SA_ACCOUNTING_MASTER_SPEC.md §24: revenue
+   *        must never post without the corresponding inventory/cost
+   *        treatment where inventory is involved. Stock itself is only
+   *        reduced AFTER this entry posts successfully.
    */
   async postInvoice(id: string, postedByUserId?: ID): Promise<Invoice> {
     const invoice = await this.repository.getById(id);
@@ -128,6 +150,18 @@ export class InvoiceService {
       });
     }
 
+    const inventoryLines = invoice.lineItems.filter((line) => line.productId);
+    const cogsByLine = await Promise.all(
+      inventoryLines.map((line) => this.inventoryMover.calculateCogs(line.productId!, line.quantity)),
+    );
+    const totalCogs = cogsByLine.reduce((sum, c) => sum + c, 0);
+    if (totalCogs > 0) {
+      lines.push(
+        { accountId: COGS_ACCOUNT_ID, description: `Invoice ${invoice.invoiceNumber} - Cost of Sales`, debit: totalCogs, credit: 0 },
+        { accountId: INVENTORY_ACCOUNT_ID, description: `Invoice ${invoice.invoiceNumber} - Inventory`, debit: 0, credit: totalCogs },
+      );
+    }
+
     const entry = await this.journalEntryService.postJournalEntry({
       date: invoice.issueDate,
       memo: `Invoice ${invoice.invoiceNumber}`,
@@ -135,6 +169,12 @@ export class InvoiceService {
       postedByUserId,
       lines,
     });
+
+    await Promise.all(
+      inventoryLines.map((line) =>
+        this.inventoryMover.recordSaleMovement(line.productId!, line.quantity, `Invoice ${invoice.invoiceNumber}`),
+      ),
+    );
 
     return this.repository.update(id, { status: 'sent', journalEntryId: entry.id });
   }

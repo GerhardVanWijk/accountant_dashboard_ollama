@@ -55,14 +55,19 @@ export class PurchaseOrderService {
   }
 
   /**
-   * Records receipt of goods for a purchase order.
-   * Transitions to 'received' when all items have been received.
-   * In a real system, this would update inventory.
+   * Records receipt of goods for a purchase order — status only.
+   * Deliberately does NOT touch stock quantity or the GL here: this
+   * codebase increases stock and posts the Inventory asset value at BILL
+   * posting time (`billService.postBill()`'s `recordReceiptMovement()`
+   * call), not at PO receipt time. A PO can be received before or without
+   * ever becoming a bill, and a Bill can also be created standalone with
+   * no PO at all — recognizing stock/value at Bill-posting is the one
+   * event common to both paths, avoiding a double-count that recording it
+   * here too would risk. This is a real simplification versus true 3-way
+   * (PO/GRN/Invoice) matching — see docs/KNOWN_ISSUES.md.
    */
   async recordReceipt(id: string): Promise<PurchaseOrder> {
     return this.repository.update(id, { status: 'received' });
-    // TODO: Call inventory service to increase stock
-    // await inventoryService.recordReceipt(po.lineItems)
   }
 
   /**

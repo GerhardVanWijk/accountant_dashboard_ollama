@@ -20,6 +20,18 @@ export class WarehouseService {
     return this.repository.getById(id);
   }
 
+  /**
+   * The warehouse stock movements default to when a source document
+   * (Invoice/Bill line item) doesn't specify one — neither carries a
+   * `warehouseId` field today, so sale/receipt postings need a fallback.
+   * Exactly one warehouse should carry `isDefault: true`
+   * (src/types/warehouse.ts).
+   */
+  async getDefaultWarehouse(): Promise<Warehouse | undefined> {
+    const warehouses = await this.getWarehouses();
+    return warehouses.find((w) => w.isDefault);
+  }
+
   async createWarehouse(data: CreateWarehouseDTO): Promise<Warehouse> {
     const now = new Date().toISOString();
     return this.repository.create({

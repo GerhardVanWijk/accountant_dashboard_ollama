@@ -1,6 +1,7 @@
 import { InvoiceService } from './invoiceService';
 import { MockInvoiceRepository } from '@/repositories/mock/MockInvoiceRepository';
 import { journalEntryService } from '@/features/accounting/services';
+import { inventoryPoster } from '@/features/inventory/services/inventoryPostingAdapter';
 
 export type { CreateInvoiceDTO } from './invoiceService';
 export { InvoiceService } from './invoiceService';
@@ -16,4 +17,4 @@ export { InvoiceService } from './invoiceService';
  * receipt allocation and the Invoices page always see the same in-memory
  * invoice data.
  */
-export const invoiceService = new InvoiceService(new MockInvoiceRepository(), journalEntryService);
+export const invoiceService = new InvoiceService(new MockInvoiceRepository(), journalEntryService, inventoryPoster);

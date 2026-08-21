@@ -11,6 +11,18 @@ export interface TaxRateResolver {
   getTaxRate(id: ID): Promise<{ treatment: string } | undefined>;
 }
 
+/**
+ * Minimal surface of InventoryPoster this service depends on
+ * (src/features/inventory/services/inventoryPostingAdapter.ts) — a bill
+ * for tracked inventory must capitalize to the Inventory asset rather than
+ * being expensed, and stock must increase once the bill posts, per
+ * SA_ACCOUNTING_MASTER_SPEC.md §22-§24.
+ */
+export interface InventoryReceiver {
+  isTrackedInventory(productId: ID): Promise<boolean>;
+  recordReceiptMovement(productId: ID, quantity: number, unitCost: number, reference: string): Promise<void>;
+}
+
 export type CreateBillDTO = Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>;
 
 /**
@@ -35,6 +47,7 @@ export interface JournalPoster {
 const EXPENSE_ACCOUNT_ID = 'acc_5100'; // Operating Expenses
 const VAT_INPUT_ACCOUNT_ID = 'acc_2110'; // VAT Input (Receivable)
 const AP_ACCOUNT_ID = 'acc_2000'; // Accounts Payable
+const INVENTORY_ACCOUNT_ID = 'acc_1200'; // Inventory
 
 /**
  * Business-logic layer for supplier bills.
@@ -45,6 +58,7 @@ export class BillService {
     private readonly repository: IBillRepository,
     private readonly journalEntryService: JournalPoster,
     private readonly taxRateResolver: TaxRateResolver,
+    private readonly inventoryReceiver: InventoryReceiver,
   ) {}
 
   async getBills(): Promise<Bill[]> {
@@ -111,15 +125,42 @@ export class BillService {
   }
 
   /**
-   * Posts a bill to accounts payable: debit Operating Expenses for the
-   * subtotal (plus any non-deductible VAT — see splitDeductibleVat()),
-   * debit VAT Input for the DEDUCTIBLE tax only, credit Accounts Payable
-   * for the bill total. GL posting happens FIRST — if postJournalEntry()
-   * throws (unbalanced lines or a closed accounting period), this method
-   * throws too and the bill is never transitioned, so a failed post never
-   * leaves an orphaned "posted" row (same ordering bankTransactionService.ts
-   * uses). Only a 'draft' bill may be posted, so the same bill can never be
-   * posted to the ledger twice.
+   * Splits a bill's line items into tracked-inventory lines (capitalize
+   * to the Inventory asset — SA_ACCOUNTING_MASTER_SPEC.md §22) vs
+   * everything else (expensed immediately, as before). A line with no
+   * `productId` can never be inventory. The two totals are computed from
+   * the same `lineTotal`s that sum to `bill.subtotal`, so
+   * `inventoryValue + expenseValue === bill.subtotal` always holds —
+   * nothing here can desync the posting from the AP credit.
+   */
+  private async splitExpenseAndInventory(
+    bill: Bill,
+  ): Promise<{ expenseValue: number; inventoryValue: number; inventoryLines: Bill['lineItems'] }> {
+    let inventoryValue = 0;
+    let expenseValue = 0;
+    const inventoryLines: Bill['lineItems'] = [];
+    for (const line of bill.lineItems) {
+      if (line.productId && (await this.inventoryReceiver.isTrackedInventory(line.productId))) {
+        inventoryValue += line.lineTotal;
+        inventoryLines.push(line);
+      } else {
+        expenseValue += line.lineTotal;
+      }
+    }
+    return { expenseValue, inventoryValue, inventoryLines };
+  }
+
+  /**
+   * Posts a bill to accounts payable: debit Operating Expenses for
+   * non-inventory lines (plus any non-deductible VAT — see
+   * splitDeductibleVat()), debit Inventory for tracked-inventory lines
+   * (§22), debit VAT Input for the DEDUCTIBLE tax only, credit Accounts
+   * Payable for the bill total. GL posting happens FIRST, and stock is
+   * only increased AFTER it succeeds — if postJournalEntry() throws
+   * (unbalanced lines or a closed accounting period), this method throws
+   * too and neither the bill nor stock ever changes (same ordering
+   * bankTransactionService.ts uses). Only a 'draft' bill may be posted,
+   * so the same bill can never be posted to the ledger twice.
    */
   async postBill(id: string): Promise<Bill> {
     const bill = await this.repository.getById(id);
@@ -131,15 +172,32 @@ export class BillService {
     }
 
     const { deductibleVat, nonDeductibleVat } = await this.splitDeductibleVat(bill);
+    const { expenseValue, inventoryValue, inventoryLines } = await this.splitExpenseAndInventory(bill);
 
-    const lines: NewJournalLineInput[] = [
-      {
+    const lines: NewJournalLineInput[] = [];
+    const expenseDebit = expenseValue + nonDeductibleVat;
+    if (expenseDebit > 0) {
+      lines.push({
         accountId: EXPENSE_ACCOUNT_ID,
         description: `Bill ${bill.billNumber}`,
-        debit: bill.subtotal + nonDeductibleVat,
+        debit: expenseDebit,
         credit: 0,
-      },
-    ];
+      });
+    }
+    if (inventoryValue > 0) {
+      lines.push({
+        accountId: INVENTORY_ACCOUNT_ID,
+        description: `Bill ${bill.billNumber} - Inventory`,
+        debit: inventoryValue,
+        credit: 0,
+      });
+    }
+    if (lines.length === 0 && deductibleVat === 0 && bill.total === 0) {
+      // A genuinely zero-value bill (no line items, no tax) has nothing
+      // real to post — a fake zero-amount line would itself violate
+      // validateLines(), and there is no meaningful journal entry here.
+      throw new Error(`Cannot post bill "${id}": it has no value to record (subtotal, tax, and total are all zero).`);
+    }
 
     if (deductibleVat > 0) {
       lines.push({
@@ -163,6 +221,12 @@ export class BillService {
       source: 'bill',
       lines,
     });
+
+    await Promise.all(
+      inventoryLines.map((line) =>
+        this.inventoryReceiver.recordReceiptMovement(line.productId!, line.quantity, line.unitPrice, `Bill ${bill.billNumber}`),
+      ),
+    );
 
     return this.repository.update(id, { status: 'awaiting_payment', journalEntryId: entry.id });
   }
