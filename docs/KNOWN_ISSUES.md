@@ -7,6 +7,20 @@ each section.
 
 ## Open
 
+### GL posting engine has no storage-layer enforcement of the balance invariant
+`JournalEntryService.postJournalEntry()` (`src/features/accounting/services/`)
+validates sum(debit) === sum(credit) in application code before writing, but the mock
+repository is an in-memory array with no `CHECK` constraint or transaction backing it.
+Fine for a single-writer mock; a real backend must also enforce this at the storage
+layer (DB constraint or serializable transaction), since application code alone can't
+stop a second writer from bypassing the service. See `docs/LEDGER_ARCHITECTURE.md`.
+
+### GL posting engine has no currency dimension yet
+`JournalLine` (`src/types/journalEntry.ts`) has no currency/exchange-rate field, so
+every seeded account and posting is implicitly single-currency even though
+`CurrencyCode` exists as a shared primitive. Needs solving before multi-currency
+invoices/bills can post to the GL. See `docs/LEDGER_ARCHITECTURE.md` § Known gaps.
+
 ### Aging-bucket key-name inconsistency between Customers and Suppliers
 `src/features/customers/utils/calculateAging.ts` and
 `src/features/suppliers/utils/calculateAging.ts` were built independently (parallel

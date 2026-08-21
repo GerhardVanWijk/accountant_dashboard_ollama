@@ -6,10 +6,14 @@ import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { ChartOfAccountsPage } from '@/features/accounting/pages/ChartOfAccountsPage';
 import { JournalsPage } from '@/features/accounting/pages/JournalsPage';
 import { LedgerPage } from '@/features/accounting/pages/LedgerPage';
+import { TrialBalancePage } from '@/features/accounting/pages/TrialBalancePage';
 import { CustomersPage } from '@/features/sales/pages/CustomersPage';
 import { InvoicesPage } from '@/features/sales/pages/InvoicesPage';
 import { VendorsPage } from '@/features/purchases/pages/VendorsPage';
 import { BillsPage } from '@/features/purchases/pages/BillsPage';
+import { BankAccountsPage } from '@/features/banking/pages/BankAccountsPage';
+import { BankTransactionsPage } from '@/features/banking/pages/BankTransactionsPage';
+import { BankReconciliationPage } from '@/features/banking/pages/BankReconciliationPage';
 import { ProductsPage } from '@/features/inventory/pages/ProductsPage';
 import { WarehousesPage } from '@/features/inventory/pages/WarehousesPage';
 import { VatReturnPage } from '@/features/tax/pages/VatReturnPage';
@@ -49,10 +53,14 @@ export const routes: RouteObject[] = [
           { path: 'accounting/coa', element: <ChartOfAccountsPage /> },
           { path: 'accounting/journals', element: <JournalsPage /> },
           { path: 'accounting/ledger', element: <LedgerPage /> },
+          { path: 'accounting/trial-balance', element: <TrialBalancePage /> },
           { path: 'sales/customers', element: <CustomersPage /> },
           { path: 'sales/invoices', element: <InvoicesPage /> },
           { path: 'purchases/vendors', element: <VendorsPage /> },
           { path: 'purchases/bills', element: <BillsPage /> },
+          { path: 'banking/accounts', element: <BankAccountsPage /> },
+          { path: 'banking/transactions', element: <BankTransactionsPage /> },
+          { path: 'banking/reconciliation', element: <BankReconciliationPage /> },
           { path: 'inventory/products', element: <ProductsPage /> },
           { path: 'inventory/warehouses', element: <WarehousesPage /> },
           { path: 'tax/vat-return', element: <VatReturnPage /> },

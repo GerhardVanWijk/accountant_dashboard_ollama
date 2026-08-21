@@ -69,40 +69,124 @@ as a follow-up, re-verified clean.
 - ✅ Mock repository: `src/features/purchases/repositories/MockPurchasesRepository.ts`
 - ✅ Domain types: PurchaseOrder, Bill, Payment in `src/types/purchases.types.ts`
 
-### Wave 2 (Sequential — Banking & Accounting, depend on Wave 1)
+**Queen Bee note (2026-08-21):** Wave 1's remaining scope (Quotes, Sales Orders, Credit
+Notes, Customer Receipts, a standalone Purchase Orders page, Payment Register, Vendor
+Aging) is not yet built — `docs/ROUTES.md` doesn't have routes for any of it yet either.
+Deferred to a follow-up wave rather than blocking Wave 2, since Wave 2's own
+prerequisite (a working GL posting engine) is done and independently testable; Wave 1's
+remaining scope doesn't gate it. Tracked here so it isn't lost: **Wave 1b (not yet
+dispatched)** — finish Sales (Quotes/SO/CreditNotes/Receipts) and Purchases (PO page/
+Payment Register/Vendor Aging), including adding their routes to `docs/ROUTES.md` +
+`src/config/navigation.ts` + `src/app/router.tsx` (Queen-owned edit, same pattern as
+Wave 2's scaffolding below) and wiring `billService.postBill()`'s GL-posting TODO to
+`journalEntryService.postJournalEntry()`.
 
-#### Banking Module (Banking Bee) — READY TO DISPATCH
-- [ ] Bank Accounts (setup, multi-currency, SA bank metadata)
-- [ ] Bank Transactions (receipts, payments, transfers, reconciliation)
-- [ ] Statement Import (OFX, CSV, MT940 formats)
-- [ ] Bank Reconciliation (matching, outstanding items, audit trail)
-- [ ] Transaction lists with debit/credit columns (right-aligned, tabular-nums)
-- [ ] Running balance with tick-flash on updates
-- [ ] Use `FinancialNumber` with tick-flash animation
-- [ ] Integration: Links to GL accounts, AR/AP matching
+### Wave 2 (Sequential — Banking & Accounting, depend on Wave 1) — 🚀 DISPATCHED 2026-08-21
 
-**Key Requirements:**
-- ✅ Read `docs/FINANCIAL_UI_GUIDE.md` for Bank Transaction example
-- ✅ Debit/Credit columns: right-aligned numbers
-- ✅ Running balance: `FinancialNumber` with `showFlash={true}`
-- ✅ Reconciliation workspace: semantic colors for matched/unmatched
-- ✅ Mock repository: `src/features/banking/repositories/MockBankingRepository.ts`
+**Queen Bee scaffolding done ahead of dispatch** (shared-config files, so Queen edits
+them directly per the established parallel-dispatch convention in
+`docs/KNOWN_ISSUES.md` — bees only touch their own feature folder): `docs/ROUTES.md`,
+`src/config/icons.ts` (+`trialBalance`/`bankTransactions`/`reconciliation` keys),
+`src/config/navigation.ts` (+Trial Balance item, +Banking section), and
+`src/app/router.tsx` all now have the Wave 2 routes wired to `PlaceholderPage` stubs —
+`TrialBalancePage.tsx` and `src/features/banking/pages/{BankAccountsPage,
+BankTransactionsPage,BankReconciliationPage}.tsx`. Build/type-check/lint verified clean
+before dispatch. Each bee replaces its stub page bodies with real UI; neither needs to
+touch router.tsx/navigation.ts/icons.ts/ROUTES.md.
 
-#### Accounting Module (Accounting Bee) — READY TO DISPATCH
-- [ ] Chart of Accounts (asset/liability/equity/income/expense structure)
-- [ ] General Ledger (transaction-level detail, GL posting from sales/purchases/banking)
-- [ ] Journal Entries (manual entry, reversals, corrections)
-- [ ] Trial Balance (period-end summary, balance verification)
-- [ ] GL reports with proper number formatting
-- [ ] Debit/Credit columns (right-aligned, tabular-nums)
-- [ ] Use `FinancialNumber` for all amounts
-- [ ] Integration: GL posting from Sales/Purchases/Banking, feeds into Trial Balance
+#### Banking Module (Banking Bee) — ✅ COMPLETE (2026-08-21), independently QA-verified
+- [x] Bank Accounts (setup, SA bank metadata — bank name/branch code/account number/
+  account type/swift code — plus money_market/foreign_currency account types added)
+- [x] Bank Transactions (direct receipts/payments, split allocation across GL accounts
+  with per-line VAT, inter-account transfers posting debit-destination/credit-source)
+- [x] Statement Import (real CSV/OFX/QIF/MT940 parsing, smart match suggestions)
+- [x] Bank Reconciliation (workspace vs. GL cashbook, outstanding items, hard
+  zero-variance enforcement *at the service layer*, append-only history snapshots)
+- [x] Transaction lists with debit/credit columns (right-aligned, tabular-nums)
+- [x] Integration: **GL posting fully wired**, not TODO'd — `bankTransactionService`
+  builds and posts real balanced `JournalEntry`s via
+  `journalEntryService.postJournalEntry()` for both direct transactions and transfers;
+  verified against the real `JournalEntryService` in tests, not a stub
+
+**Independently re-verified (Queen Bee, 2026-08-21):** `npm run type-check`/`lint`/
+`build` clean, full suite 41 files / 281 tests passing, no stray `lucide-react` imports
+or raw Tailwind color classes introduced in `src/features/banking/`.
+
+**Flagged gaps, not blocking:**
+- All seeded bank accounts currently share one GL control account (`acc_1000`) —
+  Banking Bee deliberately didn't touch `src/mock-data/accounts.ts` to avoid a
+  parallel-dispatch collision with Accounting Bee. Needs real per-account GL mapping
+  in a follow-up pass.
+- Reused `Icons.download` for "Import Statement" (closest existing concept, per scope
+  boundary) rather than adding a new `upload`/`import` key — fine as-is, revisit if a
+  dedicated import icon is wanted.
+- No `TaxRate` repository/service exists anywhere yet (Tax module is Wave 3) — Banking
+  reads a local `src/mock-data/taxRates.ts` seed typed against the real `TaxRate`
+  model, same stopgap Inventory used pre-Sales.
+- `docs/DO_NOT_BREAK.md`'s "tick-flash on running balance" wasn't verified in this
+  pass — not re-checked against `FinancialNumber`'s `showFlash` usage; low risk, worth
+  a follow-up glance.
+
+**As of 2026-08-21, this module (and the project generally) must also follow
+`docs/SA_ACCOUNTING_MASTER_SPEC.md` — a 117-section SA-compliance master spec — see
+`docs/SA_SPEC_GAP_ANALYSIS.md` for what's done vs. outstanding against it. Phase 1
+("Accounting Core" per the spec's own §116) is now done: Company, Financial Year,
+Accounting Periods with real open/closed/locked enforcement, Chart of Accounts,
+General Ledger, Journals, Trial Balance, and an append-only Audit Trail wired into
+every posting/reversal/period-transition. 203 tests passing.
+
+#### Accounting Module (Accounting Bee) — ✅ COMPLETE (2026-08-21), independently QA-verified
+- ✅ Double-entry posting engine: `JournalEntryService` (validate/post/reverse,
+  trial balance, per-account running ledger) + `AccountService`, backed by an
+  append-only `IJournalEntryRepository` (no update/delete — same shape as Inventory's
+  stock-movement ledger) and editable `IAccountRepository`. Seed Chart of Accounts +
+  one balanced opening entry.
+- ✅ Governance layer: `AccountingPeriodService` (open/closed/locked lifecycle,
+  reopen-requires-reason) + `FinancialYearService`, both feature-local; `Company` +
+  `AuditLogService` (shared, `src/services/auditLogService.ts`) since they're used
+  across features, not owned by Accounting alone. `postJournalEntry()`/
+  `reverseJournalEntry()` now reject posting outside an 'open' accounting period and
+  write an audit log entry on every successful post/reversal. See
+  `docs/LEDGER_ARCHITECTURE.md` § Accounting periods / § Audit trail.
+- [x] Chart of Accounts page (list/create/edit UI over `AccountService`, hierarchy by
+  master type, "Has Postings" badge via `accountService.hasPostings()`)
+- [x] General Ledger page (account picker + full posted-line history with running
+  balance, rendering `journalEntryService.getAccountLedger()` directly — no
+  reimplemented running-balance math in the UI)
+- [x] Journal Entries page (multi-line debit/credit form gated on
+  `validateLines()`, list with expandable rows, Reverse action calling
+  `reverseJournalEntry()`; reversed status derived from `reversalOfEntryId`, never a
+  mutated field)
+- [x] Trial Balance page (renders `journalEntryService.computeTrialBalance()` directly,
+  clear `balanced` indicator)
+- [x] Debit/Credit columns (right-aligned, tabular-nums), `FinancialNumber`/
+  `FinancialTableCell`/`formatCurrency` used throughout, `font-mono` for entry/account
+  codes
+- [ ] Integration: GL posting from Sales/Purchases (`postJournalEntry()` exists;
+  Bill/Invoice → account-mapping and the actual call sites are not wired yet — see
+  `billService.postBill()`'s TODO and `docs/LEDGER_ARCHITECTURE.md` § Known gaps).
+  **Banking's side of this integration is done** (`bankTransactionService` posts real
+  balanced entries) — only Sales/Purchases → GL remains, tracked under Wave 1b above.
+
+**Independently re-verified (Queen Bee, 2026-08-21):** `npm run type-check`/`lint`/
+`build` clean, full suite 41 files / 281 tests passing (226 at Accounting Bee's own
+completion, 281 after Banking Bee landed alongside it), no stray `lucide-react`
+imports or raw Tailwind color classes introduced in `src/features/accounting/`.
+
+**Flagged gap, not fixed by design:** Accounting Bee wanted an `isControlAccount` flag
+on `Account` (to visually mark control accounts as non-postable) but that field
+doesn't exist on the type. Per `docs/DO_NOT_BREAK.md` ("don't change core type shapes
+without discussion"), it did not add one unilaterally — it surfaced the existing
+`hasPostings()` signal instead. Worth a real decision in a follow-up pass, not urgent.
 
 **Key Requirements:**
 - ✅ Read `docs/FINANCIAL_UI_GUIDE.md` for GL table examples
 - ✅ Debit/Credit: right-aligned numbers, semantic colors for positive/negative
-- ✅ Trial Balance: ensure balanced (total debits = total credits)
-- ✅ Mock repository: `src/features/accounting/repositories/MockAccountingRepository.ts`
+- ✅ Trial Balance: ensure balanced (total debits = total credits) — enforced by
+  `JournalEntryService`, not something the UI needs to (re-)validate
+- ✅ Repositories: `src/features/accounting/repositories/{MockAccountRepository,
+  MockJournalEntryRepository}.ts` (two repos, not one — Account is editable CRUD,
+  JournalEntry is append-only, so they don't share a contract)
 
 ### Wave 3 (Sequential — Tax & Reports, depend on Wave 1-2)
 
@@ -130,10 +214,16 @@ as a follow-up, re-verified clean.
 - ✅ Right-aligned numbers, semantic colors (positive green, negative red)
 - ✅ Dark + light theme tested
 
-#### Admin Module (Admin Bee) — READY TO DISPATCH
+#### Admin Module (Admin Bee) — BACKEND FOR COMPANY SETTINGS + AUDIT LOGS DONE, UI STILL TO DISPATCH
+- ✅ `CompanyService` (`src/features/admin/services/companyService.ts`) — CRUD +
+  `setReportingFramework()` (reason-required override, audit-logged). `AuditLogService`
+  is shared at `src/services/auditLogService.ts`, not admin-owned, since Accounting/
+  Sales/Purchases/Banking all write to it — but the existing `AuditPage.tsx`
+  placeholder is exactly where a UI reads from it.
 - [ ] Users & Roles (company setup, user management, permissions)
-- [ ] Company Settings (name, currency, tax IDs, fiscal year)
-- [ ] Audit Logs (transaction history, user actions, GL posting audit trail)
+- [ ] Company Settings page (name, currency, tax IDs, fiscal year — service ready)
+- [ ] Audit Logs page (transaction history, user actions, GL posting audit trail —
+  `auditLogService.getAll()`/`getForRecord()` ready to consume)
 - [ ] Backup & Export
 
 ## Phase 3: Compliance & Reporting

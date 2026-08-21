@@ -6,10 +6,14 @@
 | `/accounting/coa` | `accounting` | Chart of Accounts | Accounting |
 | `/accounting/journals` | `accounting` | General Journals | Accounting |
 | `/accounting/ledger` | `accounting` | General Ledger Detail | Accounting |
+| `/accounting/trial-balance` | `accounting` | Trial Balance | Accounting |
 | `/sales/customers` | `sales` | Customer Directory | Sales |
 | `/sales/invoices` | `sales` | Sales Invoices | Sales |
 | `/purchases/vendors` | `purchases` | Vendor Directory | Purchases |
 | `/purchases/bills` | `purchases` | Supplier Bills | Purchases |
+| `/banking/accounts` | `banking` | Bank Accounts | Banking |
+| `/banking/transactions` | `banking` | Bank Transactions | Banking |
+| `/banking/reconciliation` | `banking` | Bank Reconciliation | Banking |
 | `/inventory/products` | `inventory` | Products & Services | Inventory |
 | `/inventory/warehouses`| `inventory` | Multi-Warehouse Stock | Inventory |
 | `/tax/vat-return` | `tax` | VAT201 Reporting | Tax |

@@ -16,3 +16,7 @@ export * from './user';
 export * from './role';
 export * from './warehouse';
 export * from './stockMovement';
+export * from './company';
+export * from './financialYear';
+export * from './accountingPeriod';
+export * from './auditLog';

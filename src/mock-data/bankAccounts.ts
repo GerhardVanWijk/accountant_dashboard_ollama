@@ -1,0 +1,108 @@
+import type { BankAccount } from '@/types';
+
+/**
+ * Demo cash & bank accounts covering every BankAccountType the Banking
+ * module supports, across common SA banks. All post to the single seeded
+ * "Cash and Bank" control account (acc_1000, src/mock-data/accounts.ts) —
+ * this codebase's Chart of Accounts does not yet have one GL account per
+ * bank account, so every BankAccount here deliberately shares one GL
+ * control account rather than this module inventing new Chart-of-Accounts
+ * rows itself (that's Accounting's file to own; see this dispatch's report
+ * for the flagged limitation).
+ */
+export const seedBankAccounts: BankAccount[] = [
+  {
+    id: 'bank_fnb_current',
+    name: 'FNB Business Current Account',
+    bankName: 'FNB',
+    accountNumber: '62012345678',
+    accountType: 'checking',
+    branchCode: '250655',
+    swiftCode: 'FIRNZAJJ',
+    currency: 'ZAR',
+    openingBalance: 150000,
+    currentBalance: 184250.55,
+    glAccountId: 'acc_1000',
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-08-18T00:00:00.000Z',
+  },
+  {
+    id: 'bank_standardbank_savings',
+    name: 'Standard Bank Business Savings',
+    bankName: 'Standard Bank',
+    accountNumber: '011223344',
+    accountType: 'savings',
+    branchCode: '051001',
+    swiftCode: 'SBZAZAJJ',
+    currency: 'ZAR',
+    openingBalance: 50000,
+    currentBalance: 62480.0,
+    glAccountId: 'acc_1000',
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-08-10T00:00:00.000Z',
+  },
+  {
+    id: 'bank_absa_creditcard',
+    name: 'Absa Business Credit Card',
+    bankName: 'Absa',
+    accountNumber: '4000111122223333',
+    accountType: 'credit_card',
+    branchCode: '632005',
+    currency: 'ZAR',
+    openingBalance: 0,
+    currentBalance: -8420.15,
+    glAccountId: 'acc_1000',
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-08-15T00:00:00.000Z',
+  },
+  {
+    id: 'bank_nedbank_pettycash',
+    name: 'Petty Cash',
+    bankName: 'Nedbank',
+    accountNumber: 'PETTY-001',
+    accountType: 'cash',
+    branchCode: '198765',
+    currency: 'ZAR',
+    openingBalance: 2000,
+    currentBalance: 1340.5,
+    glAccountId: 'acc_1000',
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-08-12T00:00:00.000Z',
+  },
+  {
+    id: 'bank_capitec_moneymarket',
+    name: 'Capitec Money Market Account',
+    bankName: 'Capitec',
+    accountNumber: '1445667788',
+    accountType: 'money_market',
+    branchCode: '470010',
+    swiftCode: 'CABLZAJJ',
+    currency: 'ZAR',
+    openingBalance: 200000,
+    currentBalance: 214600.75,
+    glAccountId: 'acc_1000',
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-08-05T00:00:00.000Z',
+  },
+  {
+    id: 'bank_fnb_usd',
+    name: 'FNB USD Foreign Currency Account',
+    bankName: 'FNB',
+    accountNumber: '62099887766',
+    accountType: 'foreign_currency',
+    branchCode: '250655',
+    swiftCode: 'FIRNZAJJ',
+    currency: 'USD',
+    openingBalance: 10000,
+    currentBalance: 9540.2,
+    glAccountId: 'acc_1000',
+    status: 'inactive',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-06-01T00:00:00.000Z',
+  },
+];

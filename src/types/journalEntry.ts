@@ -20,4 +20,13 @@ export interface JournalEntry extends BaseEntity {
   postedAt?: ISODateString;
   /** Originating source, e.g. "manual", "invoice", "bill", "payment". */
   source: string;
+  /**
+   * Set only on a reversal entry: the id of the JournalEntry it reverses.
+   * A posted entry is never edited to flip its own status to 'reversed' —
+   * ledger rows are append-only (docs/LEDGER_ARCHITECTURE.md). Whether an
+   * entry has been reversed is answered by asking whether any other entry
+   * has reversalOfEntryId === that entry's id, not by mutating a field on
+   * the original.
+   */
+  reversalOfEntryId?: ID;
 }

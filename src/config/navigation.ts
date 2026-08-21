@@ -43,6 +43,7 @@ export const navigation: NavSection[] = [
       { path: '/accounting/coa', label: 'Chart of Accounts', icon: 'accounting' },
       { path: '/accounting/journals', label: 'General Journals', icon: 'journals' },
       { path: '/accounting/ledger', label: 'General Ledger Detail', icon: 'ledger' },
+      { path: '/accounting/trial-balance', label: 'Trial Balance', icon: 'trialBalance' },
     ],
   },
   {
@@ -59,6 +60,15 @@ export const navigation: NavSection[] = [
     items: [
       { path: '/purchases/vendors', label: 'Vendor Directory', icon: 'suppliers' },
       { path: '/purchases/bills', label: 'Supplier Bills', icon: 'bills' },
+    ],
+  },
+  {
+    section: 'Banking',
+    icon: 'banking',
+    items: [
+      { path: '/banking/accounts', label: 'Bank Accounts', icon: 'banking' },
+      { path: '/banking/transactions', label: 'Bank Transactions', icon: 'bankTransactions' },
+      { path: '/banking/reconciliation', label: 'Bank Reconciliation', icon: 'reconciliation' },
     ],
   },
   {
