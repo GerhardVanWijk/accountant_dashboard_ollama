@@ -37,8 +37,8 @@ describe('calculateArAgingForCustomers', () => {
 
   it('sums each customer bucket into the fleet-wide total, normalizing bucket key names', () => {
     mockedCalculateAgingForCustomer.mockImplementation((id) => {
-      if (id === 'c1') return { current: 100, days1to30: 50, days31to60: 20, days61Plus: 10, total: 180 };
-      return { current: 200, days1to30: 0, days31to60: 5, days61Plus: 15, total: 220 };
+      if (id === 'c1') return { current: 100, days30: 50, days60: 20, days90Plus: 10, total: 180 };
+      return { current: 200, days30: 0, days60: 5, days90Plus: 15, total: 220 };
     });
 
     const result = calculateArAgingForCustomers([customer('c1'), customer('c2')], []);

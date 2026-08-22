@@ -21,27 +21,27 @@ describe('calculateAging', () => {
   it('buckets a not-yet-due item as current', () => {
     const buckets = calculateAging([item({ dueDate: '2026-09-01', amountOutstanding: 500 })], asOf);
     expect(buckets.current).toBe(500);
-    expect(buckets.days1to30).toBe(0);
+    expect(buckets.days30).toBe(0);
     expect(buckets.total).toBe(500);
   });
 
   it('buckets a 1-30 day overdue item correctly', () => {
     // 2026-08-01 is 19 days before asOf (2026-08-20)
     const buckets = calculateAging([item({ dueDate: '2026-08-01', amountOutstanding: 200 })], asOf);
-    expect(buckets.days1to30).toBe(200);
+    expect(buckets.days30).toBe(200);
     expect(buckets.total).toBe(200);
   });
 
   it('buckets a 31-60 day overdue item correctly', () => {
     // 2026-07-01 is 50 days before asOf
     const buckets = calculateAging([item({ dueDate: '2026-07-01', amountOutstanding: 300 })], asOf);
-    expect(buckets.days31to60).toBe(300);
+    expect(buckets.days60).toBe(300);
   });
 
   it('buckets a 61+ day overdue item correctly', () => {
     // 2026-05-01 is 111 days before asOf
     const buckets = calculateAging([item({ dueDate: '2026-05-01', amountOutstanding: 400 })], asOf);
-    expect(buckets.days61Plus).toBe(400);
+    expect(buckets.days90Plus).toBe(400);
   });
 
   it('excludes fully paid items (amountOutstanding <= 0)', () => {
@@ -59,7 +59,7 @@ describe('calculateAging', () => {
       ],
       asOf,
     );
-    expect(buckets).toEqual({ current: 100, days1to30: 200, days31to60: 300, days61Plus: 400, total: 1000 });
+    expect(buckets).toEqual({ current: 100, days30: 200, days60: 300, days90Plus: 400, total: 1000 });
   });
 
   it('getOverdueTotal sums every bucket except current', () => {

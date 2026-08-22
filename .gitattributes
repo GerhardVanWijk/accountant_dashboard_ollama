@@ -1,0 +1,10 @@
+# Normalize line endings to LF in the repository regardless of the
+# checkout platform's default — silences the "LF will be replaced by CRLF"
+# warning every commit printed on Windows checkouts (docs/KNOWN_ISSUES.md).
+# Git still checks files out using the platform's native line endings
+# locally (core.autocrlf), this only fixes what's actually stored.
+* text=auto eol=lf
+
+# Binary-ish or intentionally-CRLF file types some tools still expect CRLF for.
+*.bat text eol=crlf
+*.cmd text eol=crlf

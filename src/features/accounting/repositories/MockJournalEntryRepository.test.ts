@@ -67,5 +67,46 @@ describe('MockJournalEntryRepository', () => {
       expect((repository as unknown as { update?: unknown }).update).toBeUndefined();
       expect((repository as unknown as { delete?: unknown }).delete).toBeUndefined();
     });
+
+    // Storage-layer enforcement (docs/KNOWN_ISSUES.md): this must reject an
+    // unbalanced entry even if JournalEntryService.validateLines() were
+    // somehow bypassed — the repository re-checks independently.
+    it('refuses to persist an unbalanced entry', async () => {
+      const unbalanced: JournalEntry = {
+        id: '',
+        entryNumber: 'JE-9998',
+        date: '2026-02-01T00:00:00.000Z',
+        source: 'manual',
+        status: 'posted',
+        lines: [
+          { id: 'l1', accountId: 'acc_1000', debit: 100, credit: 0 },
+          { id: 'l2', accountId: 'acc_3000', debit: 0, credit: 90 },
+        ],
+        createdAt: '',
+        updatedAt: '',
+      };
+
+      await expect(repository.create(unbalanced)).rejects.toThrow(/unbalanced/i);
+      const all = await repository.getAll();
+      expect(all.length).toBe(seedJournalEntries.length);
+    });
+  });
+
+  describe('constructor', () => {
+    it('refuses to construct with unbalanced seed data', () => {
+      const badSeed: JournalEntry[] = [
+        {
+          id: 'je_bad',
+          entryNumber: 'JE-0000',
+          date: '2026-01-01T00:00:00.000Z',
+          source: 'manual',
+          status: 'posted',
+          lines: [{ id: 'l1', accountId: 'acc_1000', debit: 50, credit: 0 }],
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ];
+      expect(() => new MockJournalEntryRepository(badSeed)).toThrow(/unbalanced/i);
+    });
   });
 });

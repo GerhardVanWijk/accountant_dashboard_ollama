@@ -153,6 +153,33 @@ describe('JournalEntryService', () => {
       const logs = await auditLog.getForRecord('JournalEntry', entry.id);
       expect(logs[0].userId).toBe('system');
     });
+
+    it('defaults currency to ZAR when the caller does not specify one', async () => {
+      const { service } = setup();
+      const entry = await service.postJournalEntry({
+        date: '2026-02-01T00:00:00.000Z',
+        source: 'manual',
+        lines: [
+          { accountId: 'acc_1000', debit: 100, credit: 0 },
+          { accountId: 'acc_4000', debit: 0, credit: 100 },
+        ],
+      });
+      expect(entry.currency).toBe('ZAR');
+    });
+
+    it('honors an explicit currency override', async () => {
+      const { service } = setup();
+      const entry = await service.postJournalEntry({
+        date: '2026-02-01T00:00:00.000Z',
+        source: 'manual',
+        currency: 'USD',
+        lines: [
+          { accountId: 'acc_1000', debit: 100, credit: 0 },
+          { accountId: 'acc_4000', debit: 0, credit: 100 },
+        ],
+      });
+      expect(entry.currency).toBe('USD');
+    });
   });
 
   describe('accounting period enforcement', () => {
@@ -234,6 +261,21 @@ describe('JournalEntryService', () => {
       const originalAfter = await service.getEntry(original.id);
       expect(originalAfter?.status).toBe('posted');
       expect(await service.isReversed(original.id)).toBe(true);
+    });
+
+    it('carries the original entry\'s currency forward onto the reversal', async () => {
+      const { service } = setup();
+      const original = await service.postJournalEntry({
+        date: '2026-02-01T00:00:00.000Z',
+        source: 'manual',
+        currency: 'USD',
+        lines: [
+          { accountId: 'acc_1000', debit: 500, credit: 0 },
+          { accountId: 'acc_4000', debit: 0, credit: 500 },
+        ],
+      });
+      const reversal = await service.reverseJournalEntry(original.id);
+      expect(reversal.currency).toBe('USD');
     });
 
     it('refuses to reverse the same entry twice', async () => {

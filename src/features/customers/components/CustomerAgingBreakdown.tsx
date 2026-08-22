@@ -10,9 +10,9 @@ export interface CustomerAgingBreakdownProps {
 
 const bucketLabels: { key: keyof Omit<AgingBuckets, 'total'>; label: string }[] = [
   { key: 'current', label: 'Current' },
-  { key: 'days1to30', label: '1-30 Days' },
-  { key: 'days31to60', label: '31-60 Days' },
-  { key: 'days61Plus', label: '90+ Days' },
+  { key: 'days30', label: '1-30 Days' },
+  { key: 'days60', label: '31-60 Days' },
+  { key: 'days90Plus', label: '90+ Days' },
 ];
 
 /**

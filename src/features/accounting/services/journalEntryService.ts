@@ -1,4 +1,4 @@
-import type { ID, JournalEntry, JournalLine } from '@/types';
+import type { CurrencyCode, ID, JournalEntry, JournalLine } from '@/types';
 import type { IJournalEntryRepository } from '../repositories/IJournalEntryRepository';
 import type { IAccountRepository } from '../repositories/IAccountRepository';
 import type { IAccountingPeriodRepository } from '../repositories/IAccountingPeriodRepository';
@@ -27,6 +27,8 @@ export interface NewJournalEntryInput {
   lines: NewJournalLineInput[];
   /** Falls back to SYSTEM_USER_ID — see its doc comment. */
   postedByUserId?: ID;
+  /** Falls back to the service's configured defaultCurrency — see JournalEntry.currency's doc comment. */
+  currency?: CurrencyCode;
 }
 
 export interface JournalValidationResult {
@@ -90,6 +92,14 @@ export class JournalEntryService {
     private readonly accountRepository: IAccountRepository,
     private readonly periodRepository: IAccountingPeriodRepository,
     private readonly auditLog: AuditLogService,
+    /**
+     * The currency a new entry is posted in when the caller doesn't
+     * specify one — 'ZAR' since every Company/TaxRate in this codebase is
+     * modeled for South Africa (see JournalEntry.currency's doc comment).
+     * Optional constructor param, backward-compatible with every existing
+     * `new JournalEntryService(...)` call site/test.
+     */
+    private readonly defaultCurrency: CurrencyCode = 'ZAR',
   ) {}
 
   async getEntries(): Promise<JournalEntry[]> {
@@ -191,6 +201,7 @@ export class JournalEntryService {
       source: input.source,
       status: 'posted',
       postedAt: now,
+      currency: input.currency ?? this.defaultCurrency,
       lines: input.lines.map((line, index) => ({
         id: line.id || `${entryNumber}_${index}`,
         accountId: line.accountId,
@@ -255,6 +266,7 @@ export class JournalEntryService {
       source: 'reversal',
       status: 'posted',
       postedAt: now,
+      currency: original.currency ?? this.defaultCurrency,
       reversalOfEntryId: original.id,
       lines: original.lines.map((line, index) => ({
         id: `${entryNumber}_${index}`,

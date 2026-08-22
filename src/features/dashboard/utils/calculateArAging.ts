@@ -8,9 +8,12 @@ import { emptyFleetAgingBuckets, type FleetAgingBuckets } from '../types/aging.t
  * customer. There is no aggregate-across-all-customers function in the
  * customers feature — only calculateAgingForCustomer, which buckets one
  * customer at a time — so this dashboard-owned util sums that per-customer
- * result across the whole customer list, normalizing customers' bucket
- * key names (current/days1to30/days31to60/days61Plus) into the shared
- * FleetAgingBuckets shape (see ../types/aging.types.ts).
+ * result across the whole customer list into the shared FleetAgingBuckets
+ * shape (see ../types/aging.types.ts). Customers' and Suppliers' per-entity
+ * AgingBuckets share the same current/days30/days60/days90Plus key names
+ * as of 2026-08-22 (docs/KNOWN_ISSUES.md) — this mapping just renames into
+ * FleetAgingBuckets' bucket30/bucket60/bucket90Plus, it no longer needs to
+ * paper over two different naming conventions.
  *
  * Pure aggregation only — no I/O; callers fetch `customers`/`invoices`
  * themselves (e.g. via customerService.getCustomers()/invoiceService.
@@ -30,9 +33,9 @@ export function calculateArAgingForCustomers(
     const customerItems = openItems.filter((item) => item.customerId === customer.id);
     const buckets = calculateAgingForCustomer(customer.id, asOf, customerItems);
     totals.current += buckets.current;
-    totals.bucket30 += buckets.days1to30;
-    totals.bucket60 += buckets.days31to60;
-    totals.bucket90Plus += buckets.days61Plus;
+    totals.bucket30 += buckets.days30;
+    totals.bucket60 += buckets.days60;
+    totals.bucket90Plus += buckets.days90Plus;
     totals.total += buckets.total;
   }
 

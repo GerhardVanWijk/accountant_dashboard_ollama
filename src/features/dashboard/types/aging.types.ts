@@ -1,14 +1,17 @@
 /**
  * Normalized aging shape shared by the dashboard's AR/AP widgets.
  *
- * Customers' AgingBuckets (src/features/customers/utils/calculateAging.ts)
- * uses current/days1to30/days31to60/days61Plus, while Suppliers'
- * AgingBuckets (src/features/suppliers/utils/calculateAging.ts) uses
- * current/days30/days60/days90Plus — two independently-built shapes with
- * different bucket key names. Rather than fixing that underlying
- * inconsistency (out of scope for dashboard-bee), both are normalized
- * into this one shape by ../utils/calculateArAging.ts and
- * ../utils/calculateApAging.ts before reaching any dashboard component.
+ * Customers' and Suppliers' AgingBuckets
+ * (src/features/customers/utils/calculateAging.ts,
+ * src/features/suppliers/utils/calculateAging.ts) were originally built
+ * independently (parallel Wave 1 dispatch) with different bucket key
+ * names for the same concept — converged onto one shared
+ * current/days30/days60/days90Plus convention 2026-08-22
+ * (docs/KNOWN_ISSUES.md). Still normalized into this dashboard-local
+ * `bucket30`/`bucket60`/`bucket90Plus` shape by ../utils/calculateArAging.ts
+ * and ../utils/calculateApAging.ts, since a fleet-wide aggregate is its own
+ * concept distinct from either entity's per-record aging, not because the
+ * two source shapes disagree anymore.
  */
 export interface FleetAgingBuckets {
   current: number;
