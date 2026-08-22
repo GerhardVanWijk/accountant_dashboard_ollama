@@ -10,6 +10,7 @@ import { MockCreditNoteRepository } from '@/repositories/mock/MockCreditNoteRepo
 import { MockCustomerReceiptRepository } from '@/repositories/mock/MockCustomerReceiptRepository';
 import { journalEntryService } from '@/features/accounting/services';
 import { invoiceService } from '@/services';
+import { inventoryPoster } from '@/features/inventory/services/inventoryPostingAdapter';
 
 export type { CreateQuoteDTO } from './quoteService';
 export type { CreateSalesOrderDTO } from './salesOrderService';
@@ -73,7 +74,7 @@ const sharedInvoiceRepository = new SharedInvoiceRepositoryAdapter();
  */
 export const quoteService = new QuoteService(quoteRepository, salesOrderRepository);
 export const salesOrderService = new SalesOrderService(salesOrderRepository, sharedInvoiceRepository);
-export const creditNoteService = new CreditNoteService(creditNoteRepository, journalEntryService, invoiceService);
+export const creditNoteService = new CreditNoteService(creditNoteRepository, journalEntryService, invoiceService, inventoryPoster);
 export const customerReceiptService = new CustomerReceiptService(
   customerReceiptRepository,
   journalEntryService,

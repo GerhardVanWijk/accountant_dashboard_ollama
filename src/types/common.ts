@@ -44,6 +44,15 @@ export type DebitCredit = 'debit' | 'credit';
 export interface DocumentLineItem {
   id: ID;
   productId?: ID;
+  /**
+   * Which warehouse this line's stock actually moved through. Optional —
+   * when omitted, `InventoryPostingAdapter`
+   * (src/features/inventory/services/inventoryPostingAdapter.ts) falls
+   * back to `Warehouse.isDefault`, so every existing document (and every
+   * single-warehouse business) keeps working unchanged. Only meaningful
+   * alongside `productId`.
+   */
+  warehouseId?: ID;
   description: string;
   quantity: number;
   unitPrice: number;

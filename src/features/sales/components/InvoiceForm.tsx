@@ -1,5 +1,16 @@
-import React, { useState } from 'react';
-import type { Invoice, DocumentLineItem } from '@/types';
+import { useState } from 'react';
+import type { Invoice } from '@/types';
+import { Button } from '@/components/ui/Button';
+import { FinancialNumber } from '@/components/ui/FinancialNumber';
+import { formatCurrency } from '@/utils/formatFinancial';
+import type { CreateInvoiceDTO } from '@/services/invoiceService';
+import { LineItemsEditor } from './LineItemsEditor';
+import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
+import { useProducts } from '@/features/inventory/hooks/useProducts';
+import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
+
+const inputClass =
+  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
 interface InvoiceFormProps {
   invoice?: Invoice;
@@ -9,308 +20,178 @@ interface InvoiceFormProps {
   isLoading?: boolean;
 }
 
-export const InvoiceForm: React.FC<InvoiceFormProps> = ({
-  invoice,
-  customers,
-  onSubmit,
-  onCancel,
-  isLoading = false,
-}) => {
-  const [formData, setFormData] = useState<Partial<Invoice>>(
-    invoice || {
-      invoiceNumber: '',
-      customerId: '',
-      issueDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      lineItems: [{ id: 'li_1', description: '', quantity: 0, unitPrice: 0, taxAmount: 0, lineTotal: 0 }],
-      subtotal: 0,
-      taxTotal: 0,
-      total: 0,
-      amountPaid: 0,
-      currency: 'ZAR',
-      status: 'draft',
-      notes: '',
-    },
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function plusDays(days: number): string {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/**
+ * Invoice create/edit form. Rebuilt to match every other Sales/Purchases
+ * form's pattern (QuoteForm/SalesOrderForm/CreditNoteForm/
+ * PurchaseOrderForm) — previously this had its own separate inline
+ * line-item editor that hardcoded 15% VAT and never picked up the real
+ * TaxRate engine, and had no way to tie a line to a real Product at all
+ * (see docs/KNOWN_ISSUES.md: without a productId, Cost of Sales/inventory
+ * posting can never fire for an invoice created through the UI). Now
+ * shares `LineItemsEditor` with real `useTaxRates()`/`useProducts()`, same
+ * as every sibling form.
+ *
+ * Status is deliberately NOT editable here — it used to be a raw dropdown
+ * that let a caller jump an invoice straight to 'sent'/'paid' without ever
+ * calling `invoiceService.postInvoice()`, bypassing GL posting/Cost of
+ * Sales/stock reduction entirely. Status transitions belong to the
+ * dedicated actions on `InvoiceDetail` (Mark as Sent, Record Payment) that
+ * go through the real service methods.
+ */
+export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading = false }: InvoiceFormProps) => {
+  const { taxRates } = useTaxRates();
+  const { products } = useProducts();
+  const { warehouses } = useWarehouses();
+  const customerEntries = Array.from(customers.entries());
+
+  const [invoiceNumber, setInvoiceNumber] = useState(invoice?.invoiceNumber ?? '');
+  const [customerId, setCustomerId] = useState(invoice?.customerId ?? customerEntries[0]?.[0] ?? '');
+  const [issueDate, setIssueDate] = useState(invoice ? invoice.issueDate.slice(0, 10) : today());
+  const [dueDate, setDueDate] = useState(invoice ? invoice.dueDate.slice(0, 10) : plusDays(30));
+  const [notes, setNotes] = useState(invoice?.notes ?? '');
+  const [lineItems, setLineItems] = useState<CreateInvoiceDTO['lineItems']>(
+    invoice?.lineItems ?? [{ id: `li_${Date.now()}`, description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 }],
   );
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const subtotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const taxTotal = lineItems.reduce((sum, item) => sum + item.taxAmount, 0);
+  const total = subtotal + taxTotal;
 
-  const updateLineItem = (index: number, field: keyof DocumentLineItem, value: string | number) => {
-    const lineItems = [...(formData.lineItems || [])];
-    lineItems[index] = { ...lineItems[index], [field]: value };
-
-    // Auto-calculate line total and tax
-    if (field === 'quantity' || field === 'unitPrice') {
-      const lineTotal = lineItems[index].quantity * lineItems[index].unitPrice;
-      lineItems[index].lineTotal = lineTotal;
-      // Assuming default 15% tax (VAT)
-      lineItems[index].taxAmount = lineTotal * 0.15;
-    }
-
-    // Recalculate invoice totals
-    const subtotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
-    const taxTotal = lineItems.reduce((sum, item) => sum + item.taxAmount, 0);
-    const total = subtotal + taxTotal;
-
-    setFormData({
-      ...formData,
-      lineItems,
-      subtotal,
-      taxTotal,
-      total,
-    });
-  };
-
-  const addLineItem = () => {
-    const lineItems = [...(formData.lineItems || [])];
-    lineItems.push({
-      id: `li_${Date.now()}`,
-      description: '',
-      quantity: 0,
-      unitPrice: 0,
-      taxAmount: 0,
-      lineTotal: 0,
-    });
-    setFormData({ ...formData, lineItems });
-  };
-
-  const removeLineItem = (index: number) => {
-    const lineItems = (formData.lineItems || []).filter((_, i) => i !== index);
-    const subtotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
-    const taxTotal = lineItems.reduce((sum, item) => sum + item.taxAmount, 0);
-    const total = subtotal + taxTotal;
-    setFormData({
-      ...formData,
-      lineItems,
-      subtotal,
-      taxTotal,
-      total,
-    });
-  };
-
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.invoiceNumber?.trim()) {
-      newErrors.invoiceNumber = 'Invoice number is required';
-    }
-    if (!formData.customerId) {
-      newErrors.customerId = 'Customer is required';
-    }
-    if (!formData.issueDate) {
-      newErrors.issueDate = 'Issue date is required';
-    }
-    if (!formData.dueDate) {
-      newErrors.dueDate = 'Due date is required';
-    }
-    if (!formData.lineItems || formData.lineItems.length === 0) {
-      newErrors.lineItems = 'At least one line item is required';
-    } else {
-      formData.lineItems.forEach((item, idx) => {
-        if (!item.description?.trim()) {
-          newErrors[`lineItem_${idx}_description`] = 'Description is required';
-        }
-        if (item.quantity <= 0) {
-          newErrors[`lineItem_${idx}_quantity`] = 'Quantity must be greater than 0';
-        }
-        if (item.unitPrice <= 0) {
-          newErrors[`lineItem_${idx}_unitPrice`] = 'Unit price must be greater than 0';
-        }
-      });
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (validateForm()) {
-      onSubmit(formData);
+    setFormError(null);
+    if (!invoiceNumber.trim()) return setFormError('Invoice number is required.');
+    if (!customerId) return setFormError('Select a customer.');
+    if (!issueDate) return setFormError('Issue date is required.');
+    if (!dueDate) return setFormError('Due date is required.');
+    if (lineItems.length === 0 || lineItems.some((li) => !li.description.trim() || li.quantity <= 0)) {
+      return setFormError('Every line item needs a description and a quantity greater than zero.');
     }
-  };
+
+    onSubmit({
+      invoiceNumber: invoiceNumber.trim(),
+      customerId,
+      issueDate: `${issueDate}T00:00:00.000Z`,
+      dueDate: `${dueDate}T00:00:00.000Z`,
+      lineItems,
+      subtotal,
+      taxTotal,
+      total,
+      currency: invoice?.currency ?? 'ZAR',
+      status: invoice?.status ?? 'draft',
+      notes: notes || undefined,
+    });
+  }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
-      {/* Basic Details */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Invoice Number</label>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-lg">
+      {formError && (
+        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+          {formError}
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
+        <label className="flex flex-col gap-xs text-sm">
+          <span className="font-medium text-text-primary">Invoice Number</span>
           <input
-            type="text"
-            value={formData.invoiceNumber || ''}
-            onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })}
-            className="w-full px-3 py-2 border border-border rounded bg-panel text-text"
+            className={`${inputClass} font-mono`}
+            value={invoiceNumber}
+            onChange={(e) => setInvoiceNumber(e.target.value)}
             disabled={isLoading}
           />
-          {errors.invoiceNumber && <div className="text-danger text-xs mt-1">{errors.invoiceNumber}</div>}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Customer</label>
+        </label>
+        <label className="flex flex-col gap-xs text-sm">
+          <span className="font-medium text-text-primary">Customer</span>
           <select
-            value={formData.customerId || ''}
-            onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
-            className="w-full px-3 py-2 border border-border rounded bg-panel text-text"
+            className={inputClass}
+            value={customerId}
+            onChange={(e) => setCustomerId(e.target.value)}
             disabled={isLoading}
           >
             <option value="">Select Customer</option>
-            {Array.from(customers.entries()).map(([id, name]) => (
+            {customerEntries.map(([id, name]) => (
               <option key={id} value={id}>
                 {name}
               </option>
             ))}
           </select>
-          {errors.customerId && <div className="text-danger text-xs mt-1">{errors.customerId}</div>}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Issue Date</label>
+        </label>
+        <label className="flex flex-col gap-xs text-sm">
+          <span className="font-medium text-text-primary">Issue Date</span>
           <input
             type="date"
-            value={formData.issueDate?.split('T')[0] || ''}
-            onChange={(e) => setFormData({ ...formData, issueDate: e.target.value + 'T00:00:00.000Z' })}
-            className="w-full px-3 py-2 border border-border rounded bg-panel text-text"
+            className={inputClass}
+            value={issueDate}
+            onChange={(e) => setIssueDate(e.target.value)}
             disabled={isLoading}
           />
-          {errors.issueDate && <div className="text-danger text-xs mt-1">{errors.issueDate}</div>}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Due Date</label>
+        </label>
+        <label className="flex flex-col gap-xs text-sm">
+          <span className="font-medium text-text-primary">Due Date</span>
           <input
             type="date"
-            value={formData.dueDate?.split('T')[0] || ''}
-            onChange={(e) => setFormData({ ...formData, dueDate: e.target.value + 'T00:00:00.000Z' })}
-            className="w-full px-3 py-2 border border-border rounded bg-panel text-text"
+            className={inputClass}
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
             disabled={isLoading}
           />
-          {errors.dueDate && <div className="text-danger text-xs mt-1">{errors.dueDate}</div>}
+        </label>
+      </div>
+
+      <LineItemsEditor
+        lineItems={lineItems}
+        onChange={setLineItems}
+        taxRates={taxRates}
+        products={products}
+        warehouses={warehouses}
+        disabled={isLoading}
+      />
+
+      <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
+        <div>
+          <div className="text-xs text-text-muted">Subtotal</div>
+          <FinancialNumber value={subtotal} format={formatCurrency} className="text-base font-semibold" />
+        </div>
+        <div>
+          <div className="text-xs text-text-muted">Tax</div>
+          <FinancialNumber value={taxTotal} format={formatCurrency} className="text-base font-semibold" />
+        </div>
+        <div>
+          <div className="text-xs text-text-muted">Total</div>
+          <FinancialNumber value={total} format={formatCurrency} className="text-base font-semibold" />
         </div>
       </div>
 
-      {/* Line Items */}
-      <div>
-        <div className="flex justify-between items-center mb-2">
-          <label className="block text-sm font-medium">Line Items</label>
-          <button
-            type="button"
-            onClick={addLineItem}
-            disabled={isLoading}
-            className="text-sm px-3 py-1 bg-primary text-white rounded hover:bg-primary/90 disabled:opacity-50"
-          >
-            Add Item
-          </button>
-        </div>
-
-        {errors.lineItems && <div className="text-danger text-xs mb-2">{errors.lineItems}</div>}
-
-        <div className="space-y-2 border border-border rounded p-4 bg-panel">
-          {(formData.lineItems || []).map((item, idx) => (
-            <div key={item.id} className="grid grid-cols-[2fr_80px_100px_80px_100px_40px] gap-2">
-              <input
-                type="text"
-                placeholder="Description"
-                value={item.description}
-                onChange={(e) => updateLineItem(idx, 'description', e.target.value)}
-                className="px-2 py-1 border border-border rounded bg-background text-text text-sm"
-                disabled={isLoading}
-              />
-              <input
-                type="number"
-                placeholder="Qty"
-                value={item.quantity || ''}
-                onChange={(e) => updateLineItem(idx, 'quantity', parseFloat(e.target.value))}
-                className="px-2 py-1 border border-border rounded bg-background text-text text-sm"
-                disabled={isLoading}
-              />
-              <input
-                type="number"
-                placeholder="Unit Price"
-                value={item.unitPrice || ''}
-                onChange={(e) => updateLineItem(idx, 'unitPrice', parseFloat(e.target.value))}
-                className="px-2 py-1 border border-border rounded bg-background text-text text-sm"
-                disabled={isLoading}
-              />
-              <div className="px-2 py-1 text-sm text-text-secondary">{(item.lineTotal || 0).toFixed(2)}</div>
-              <div className="px-2 py-1 text-sm text-text-secondary">{(item.taxAmount || 0).toFixed(2)}</div>
-              <button
-                type="button"
-                onClick={() => removeLineItem(idx)}
-                disabled={isLoading}
-                className="text-danger hover:text-danger/80 disabled:opacity-50"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Totals Summary */}
-      <div className="grid grid-cols-4 gap-4 p-4 bg-panel border border-border rounded">
-        <div>
-          <div className="text-xs text-text-muted mb-1">Subtotal</div>
-          <div className="text-lg font-semibold tabular-nums">{(formData.subtotal || 0).toFixed(2)}</div>
-        </div>
-        <div>
-          <div className="text-xs text-text-muted mb-1">Tax</div>
-          <div className="text-lg font-semibold tabular-nums">{(formData.taxTotal || 0).toFixed(2)}</div>
-        </div>
-        <div>
-          <div className="text-xs text-text-muted mb-1">Total</div>
-          <div className="text-lg font-semibold text-positive tabular-nums">{(formData.total || 0).toFixed(2)}</div>
-        </div>
-        <div>
-          <div className="text-xs text-text-muted mb-1">Status</div>
-          <select
-            value={formData.status || 'draft'}
-            onChange={(e) => setFormData({ ...formData, status: e.target.value as Invoice['status'] })}
-            className="px-2 py-1 border border-border rounded bg-background text-text text-sm"
-            disabled={isLoading}
-          >
-            <option value="draft">Draft</option>
-            <option value="sent">Sent</option>
-            <option value="partially_paid">Partially Paid</option>
-            <option value="paid">Paid</option>
-            <option value="overdue">Overdue</option>
-            <option value="void">Void</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Notes */}
-      <div>
-        <label className="block text-sm font-medium mb-1">Notes</label>
+      <label className="flex flex-col gap-xs text-sm">
+        <span className="font-medium text-text-primary">Notes (optional)</span>
         <textarea
-          value={formData.notes || ''}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-          className="w-full px-3 py-2 border border-border rounded bg-panel text-text text-sm"
+          className={inputClass}
           rows={3}
-          placeholder="Optional notes for this invoice"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
           disabled={isLoading}
         />
-      </div>
+      </label>
 
-      {/* Actions */}
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90 disabled:opacity-50"
-        >
-          {isLoading ? 'Saving...' : 'Save Invoice'}
-        </button>
+      <div className="flex justify-end gap-sm border-t border-border pt-md">
         {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isLoading}
-            className="px-4 py-2 border border-border rounded hover:bg-panel disabled:opacity-50"
-          >
+          <Button variant="ghost" type="button" onClick={onCancel} disabled={isLoading}>
             Cancel
-          </button>
+          </Button>
         )}
+        <Button variant="primary" type="submit" disabled={isLoading}>
+          {isLoading ? 'Saving…' : invoice ? 'Save Invoice' : 'Create Invoice'}
+        </Button>
       </div>
     </form>
   );

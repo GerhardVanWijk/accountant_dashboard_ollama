@@ -22,9 +22,11 @@
 (route, nav, CRUD, states, tests, build) — it is NOT a claim of full compliance with
 `docs/SA_ACCOUNTING_MASTER_SPEC.md`. See `docs/SA_SPEC_GAP_ANALYSIS.md` for the deeper
 accounting-integrity/SA-compliance gaps still open in Sales/Purchases/Accounting/
-Banking/Tax/Inventory despite all six being 🟢 on this feature-completeness matrix —
-Inventory specifically still has no valuation-method choice, no per-warehouse
-attribution, and credit notes don't reverse Cost of Sales (`docs/KNOWN_ISSUES.md`).*
+Banking/Tax despite all six being 🟢 on this feature-completeness matrix. Inventory
+(Phase 6) is now genuinely complete per `docs/SA_SPEC_GAP_ANALYSIS.md`, including
+valuation-method choice (WAC/FIFO), per-warehouse attribution, real 3-way PO/GRN/
+Invoice matching, and credit notes reversing Cost of Sales/restoring stock for returns
+(all fixed 2026-08-21/22, see `docs/KNOWN_ISSUES.md`).*
 
 ## Checkpoint — 2026-08-20: Phase 1 complete (Wave 1 + Wave 2)
 

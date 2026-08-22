@@ -11,6 +11,8 @@ interface BillDetailProps {
   suppliersMap?: Record<string, string>;
   onClose?: () => void;
   onEdit?: (bill: Bill) => void;
+  /** Posts the bill to the GL via billService.postBill() — draft only. */
+  onPost?: (billId: string) => void;
   onRecordPayment?: (billId: string) => void;
 }
 
@@ -19,6 +21,7 @@ export const BillDetail: React.FC<BillDetailProps> = ({
   suppliersMap = {},
   onClose,
   onEdit,
+  onPost,
   onRecordPayment,
 }) => {
   const outstandingAmount = bill.total - bill.amountPaid;
@@ -174,12 +177,17 @@ export const BillDetail: React.FC<BillDetailProps> = ({
             Close
           </Button>
         )}
-        {onEdit && (
+        {onEdit && bill.status === 'draft' && (
           <Button variant="secondary" onClick={() => onEdit(bill)}>
             Edit
           </Button>
         )}
-        {onRecordPayment && outstandingAmount > 0 && (
+        {onPost && bill.status === 'draft' && (
+          <Button variant="primary" onClick={() => onPost(bill.id)}>
+            Post Bill
+          </Button>
+        )}
+        {onRecordPayment && bill.status !== 'draft' && outstandingAmount > 0 && (
           <Button variant="primary" onClick={() => onRecordPayment(bill.id)}>
             Record Payment
           </Button>

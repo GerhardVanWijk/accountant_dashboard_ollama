@@ -7,34 +7,16 @@ each section.
 
 ## Open
 
-### Credit notes don't reverse Cost of Sales or restore stock quantity
-`creditNoteService.issueCreditNote()` reverses revenue/AR/VAT for a returned item
-(§15) but was never wired to `InventoryPostingAdapter` — a returned tracked-inventory
-item's original Cost of Sales entry (posted when the invoice sold it) stays on the
-books, and the item's stock quantity is never restored. Found while wiring Cost of
-Sales onto `invoiceService.postInvoice()` (2026-08-21), not fixed in that pass — the
-fix is structurally the same shape (calculate the reversal amount, post it in the same
-journal entry as the credit note, restore stock only after that entry succeeds), just
-not done yet.
-
-### Stock/GL postings always use the single default warehouse
-Neither `Invoice`/`Bill` line items nor `PurchaseOrder`/`Quote`/`SalesOrder` carry a
-`warehouseId` field, so `InventoryPostingAdapter` (2026-08-21) posts every sale/receipt
-stock movement against the one `Warehouse.isDefault` warehouse regardless of which
-warehouse the goods actually left from or arrived at. Fine for a single-location
-business; wrong for genuine multi-warehouse operations. Fixing this needs a
-`warehouseId` field added to `DocumentLineItem` (or a per-document override) — a real
-type-shape change, not attempted this pass.
-
-### Purchase Order Goods Receipt doesn't move stock quantity or GL value
-`purchaseOrderService.recordReceipt()` is status-only by design (2026-08-21) — stock
-quantity and the Inventory GL value are only recognized when the resulting Bill posts
-(`billService.postBill()`), not when the PO is marked received. This is a deliberate
-simplification versus true 3-way (PO/GRN/Invoice) matching: a Bill can exist standalone
-with no PO, so Bill-posting is the one event common to both paths, and recording stock
-at both PO-receipt AND Bill-posting would double-count for the PO→Bill path. The real
-gap: if goods are physically received well before the bill is posted (a common real
-lag), stock levels understate what's physically on the shelf during that window.
+### Invoice/Bill "Record Payment" actions exist as component props but are never wired up
+`InvoiceDetail`'s `onRecordPayment` and `BillDetail`'s `onRecordPayment` (both take an
+id and expect the parent page to collect an amount and call
+`invoiceService`/`billService`'s real `recordPayment()`) are never passed from
+`InvoicesPage`/`BillsPage` — found 2026-08-22 while fixing the adjacent "no way to
+post from the UI" gap (see Resolved below) in the same two files. Neither page has an
+amount-entry UI to drive them yet (no existing pattern to reuse — `CustomerReceiptForm`
+handles the Sales-side receipt-allocation flow but takes a different shape). Distinct
+from the posting gap: an invoice/bill can now be created and posted through the UI,
+just not paid down, through this UI, yet.
 
 ### AR/AP subledger reconciliation still shows a variance for partially-paid seed documents
 `generateSeedPostings.ts` (2026-08-21) backfilled the ORIGINAL posting entry for every
@@ -51,16 +33,6 @@ meaningfully larger undertaking than the VAT-focused posting backfill done here 
 attempted in this pass. Confirmed via `vatReportService.test.ts`'s integration test that
 VAT reconciliation itself is clean; this is specifically the AR/AP side, deliberately
 scoped out.
-
-### `ProductsPage.test.tsx`'s "low stock" test fails only when run after its sibling tests
-Introduced 2026-08-21 while wiring `ProductsTable`/`ProductForm` to the new
-`useTaxRates()`/`useAllTaxRates()` hooks (Tax module). The test passes in isolation
-(confirmed by running it alone) but fails when run as part of the full file — looks
-like leftover DOM/state from an earlier test in the same file rather than anything
-about the tax-rate logic itself (added the standard `cancelled` guard to the new hooks,
-matching `useDashboardData.ts`'s pattern, and it didn't fix it). Explicitly NOT
-investigated further or patched in this pass per direct instruction — flagging so it
-isn't lost, not because it's low-value to fix.
 
 ### GL posting engine has no storage-layer enforcement of the balance invariant
 `JournalEntryService.postJournalEntry()` (`src/features/accounting/services/`)
@@ -108,6 +80,215 @@ checkout, no `.gitattributes` committed). Harmless, but noisy. A `.gitattributes
 pinning `* text=auto eol=lf` (or accepting CRLF explicitly) would silence it.
 
 ## Resolved
+
+### FIFO was not an available valuation method — WAC was the only option
+`StockService.calculateValuation()`'s own doc comment had flagged this since Phase 1:
+FIFO needs a unit-cost tracked per individual goods-received lot, which
+`StockMovement` (a single append-only ledger of quantity deltas, no per-lot cost) never
+carried — deferred until Purchase Orders/GRNs existed to source real per-receipt costs.
+Fixed 2026-08-22, once PO/GRN 3-way matching (below) gave FIFO a real cost source:
+- `Product.valuationMethod?: 'weighted_average' | 'fifo'` — optional, defaults to
+  `weighted_average` when absent, so every existing product keeps behaving exactly as
+  before. Selectable in `ProductForm` (only shown for tracked-inventory goods).
+- New `StockLot` (`src/types/stockLot.ts`) — one row per goods-IN event for a
+  FIFO-valued product, holding `unitCost`/`quantityReceived`/`quantityRemaining`.
+  Deliberately NOT append-only like `StockMovement`: `quantityRemaining` is a
+  narrow, documented exception, decremented as FIFO consumption draws from a lot
+  oldest-first. `StockMovement` remains the sole, complete, immutable audit trail of
+  every quantity change for every product regardless of valuation method — `StockLot`
+  is a secondary costing structure layered on top, not a replacement.
+- New `StockLotService` (`src/features/inventory/services/stockLotService.ts`):
+  `previewFifoCost()` (read-only dry run) and `consumeFifoLots()` (the real mutation,
+  called only after the GL entry posts) share one lot-walking algorithm, so a preview
+  and its matching consume always agree — proven, not assumed, by 10 tests including
+  multi-lot consumption spanning different unit costs, cross-warehouse/cross-product
+  isolation, and a lot fully draining before the next one is touched. Throws a clear
+  error (never a silently wrong or partial number) when open lots can't cover the
+  requested quantity — "don't guess" over "post something plausible," same principle
+  `splitDeductibleVat()` already applies to VAT.
+- `InventoryPostingAdapter` branches on `product.valuationMethod` in all four
+  operations: `calculateCogs()` previews FIFO cost instead of `quantity * costPrice`;
+  `recordSaleMovement()` actually consumes lots after the stock movement posts;
+  `recordReceiptMovement()` creates a new lot instead of recalculating the
+  weighted-average (and still updates `costPrice` — informational only under FIFO,
+  the "most recently received cost" for display, never consulted by FIFO's own
+  costing math); `recordReturnMovement()` creates a new lot at a caller-supplied
+  `unitCost`, falling back to the product's current `costPrice` if none is given.
+- `creditNoteService.issueCreditNote()` now passes the EXACT per-unit cost it just
+  reversed to the GL (`cogsByLine[i] / line.quantity`) into `recordReturnMovement()`'s
+  new `unitCost` param — a FIFO return lot's cost can never disagree with the GL
+  amount that was posted for it.
+- `calculateCogs()` gained an optional `warehouseId` param (FIFO lots are tracked per
+  warehouse; ignored for WAC) — threaded through from `invoiceService.postInvoice()`/
+  `creditNoteService.issueCreditNote()`'s `line.warehouseId`, same pattern as the
+  warehouse-attribution fix.
+- 11 new tests directly on `InventoryPostingAdapter` covering all four FIFO branches
+  (including proving a WAC product never touches the lot ledger at all).
+
+**Deliberately still open**: no partial-lot-history migration — switching an existing
+product to FIFO has no historical lots to draw on until its next real receipt, so a
+sale before then will throw (see `StockLotService`'s "don't guess" behavior above,
+not a bug). No FIFO valuation-report UI yet (open lots aren't surfaced anywhere in the
+Inventory pages) — the engine is real and tested, the reporting view isn't built.
+
+### Purchase Order Goods Receipt didn't move stock quantity or GL value (no real 3-way matching)
+`purchaseOrderService.recordReceipt()` was status-only by design (2026-08-21) — stock
+quantity and the Inventory GL value were only recognized when the resulting Bill
+posted (`billService.postBill()`), not when the PO was marked received, so goods
+physically received well before the bill posted (a common real lag) were invisible on
+the books during that window. Fixed 2026-08-22 — real 3-way (PO/GRN/Invoice) matching:
+- New GL account `acc_2050` "Goods Received Not Invoiced (GRNI)" — a liability/clearing
+  account for goods physically received but not yet formally invoiced by the supplier.
+- `recordReceipt()` now posts DR Inventory / CR GRNI for every tracked-inventory line
+  item (ex-VAT — input VAT is only claimable against a real supplier tax invoice, the
+  Bill, never at goods-receipt time), then records the real stock receipt via
+  `InventoryPostingAdapter.recordReceiptMovement()` — GL posts first, stock mutates
+  only after it succeeds, same ordering used everywhere else. Rejects receiving an
+  already-received or cancelled PO (idempotency — this now posts a real GL entry, so
+  running it twice would double-post). `PurchaseOrder` gained `receivedDate`/
+  `journalEntryId` fields to track this.
+- `billService.postBill()` checks whether the bill's linked PO already has a
+  `journalEntryId` (i.e. was GRNI-received): if so, it debits GRNI instead of
+  Inventory (clearing the liability) and does NOT call `recordReceiptMovement()` again
+  — stock/value were already recognized at receipt time; recording it twice would
+  double-count both quantity and any WAC/FIFO cost recalculation. A bill with no
+  linked PO, or one linked to a PO that was never GRNI-received, behaves exactly as
+  before (debit Inventory, record the receipt now).
+- `purchaseOrderService`/`billService` are wired to the SAME `purchaseOrderService`
+  singleton in `src/features/purchases/services/index.ts` (declared before
+  `billService`, passed directly) — the same "two-disconnected-singletons" bug class
+  already fixed once elsewhere in this codebase, avoided here by construction.
+- 9 new tests (5 on `PurchaseOrderService.recordReceipt()`, including a genuinely
+  balanced GRNI entry and the double-receipt guard; 1 dedicated GRNI-clearing test on
+  `BillService.postBill()` proving Inventory is NOT debited again and the stock
+  movement is NOT re-recorded).
+
+**Deliberately still open**: no true partial receipt (a PO's `partially_received`
+status exists on the type but `recordReceipt()` is still all-or-nothing per PO — only
+some of a line's ordered quantity arriving isn't modeled). No price-variance handling
+— relies on `purchaseOrderService.convertToBill()` copying a PO's line items verbatim
+into the Bill (true today, and the only way a Bill gets linked to a PO through the
+UI), so the Bill's own inventory-line value always exactly matches what GRNI
+recognized; if that assumption were ever violated (a hand-edited Bill with different
+amounts), GRNI would carry a genuine residual balance rather than silently
+reconciling it away — a real variance surfacing honestly, not a masked one.
+
+### `ProductsPage.test.tsx`'s "low stock" test failed only when run after its sibling tests
+Introduced 2026-08-21 while wiring `ProductsTable`/`ProductForm` to the new
+`useTaxRates()`/`useAllTaxRates()` hooks (Tax module) — flagged and explicitly left
+unfixed that session per direct instruction ("not part of current phase"). Fixed
+2026-08-21 (later session): the real cause wasn't hook-cancellation or DOM/state
+leakage between tests — `findByText`'s own internal polling wasn't reliably catching
+the render (confirmed by direct DOM inspection: the row was demonstrably present
+moments after `findByText` reported a timeout), because `ProductsTable`'s
+`useAllTaxRates()` fetch is a second async hop after products load, so the render
+genuinely lands a tick later than a single-hop async render. Switched both async
+assertions in the file to `waitFor(() => expect(screen.getByText(...)))` (explicit
+poll loop) instead of `findByText`, and added an `afterEach(cleanup)` for good
+measure. Passes reliably as part of the full suite now, not just in isolation.
+
+### Stock/GL postings always used the single default warehouse
+Neither `Invoice`/`Bill` line items nor `PurchaseOrder`/`Quote`/`SalesOrder` carried a
+`warehouseId` field, so `InventoryPostingAdapter` (2026-08-21) posted every sale/
+receipt/return stock movement against the one `Warehouse.isDefault` warehouse
+regardless of which warehouse the goods actually left from or arrived at. Fixed
+2026-08-22, right after the product-picker fix above (which is what made this worth
+doing — the feature it refines can now actually be exercised from the UI):
+- `DocumentLineItem.warehouseId?: ID` added — optional, so every existing document
+  keeps working unchanged.
+- `InventoryPostingAdapter.recordSaleMovement()`/`recordReceiptMovement()`/
+  `recordReturnMovement()` all take an optional `warehouseId` now, resolved via a new
+  private `resolveWarehouseId()`: use the given id if it resolves to a real warehouse,
+  else fall back to the default — never a hard failure, since a stale/missing id
+  shouldn't block a sale or receipt from posting. `DefaultWarehouseLookup` gained
+  `getWarehouse(id)` to support this (already existed on the real `WarehouseService`,
+  so only the interface needed extending).
+- `invoiceService.postInvoice()`/`billService.postBill()`/
+  `creditNoteService.issueCreditNote()` all now pass `line.warehouseId` through to
+  their respective `InventoryMover`/`InventoryReceiver`/`InventoryReturnMover` calls.
+- Both `LineItemsEditor`s gained a Warehouse column — but ONLY rendered when
+  `warehouses.length > 1`, so a single-warehouse business (the common case, per the
+  original "fine for a single-location business" framing) sees no extra UI at all.
+  Disabled until a product is picked, since a custom/service line has no warehouse
+  concept. Every form using the editors now calls `useWarehouses()` and passes the
+  list down, same pattern as `products`/`taxRates`.
+- New tests: 2 in `inventoryPostingAdapter.test.ts` (explicit id used when valid,
+  falls back to default when it doesn't resolve), 1 each in `invoiceService.test.ts`/
+  `billService.test.ts`/`creditNoteService.test.ts` proving `warehouseId` actually
+  reaches the adapter call from a real `postInvoice()`/`postBill()`/
+  `issueCreditNote()` run, not just at the adapter layer in isolation.
+
+386/386 tests passing (up from 383), type-check/lint/build clean.
+
+### No document line item created through the UI could ever carry a productId, and Invoices/Bills had no real way to post from the UI
+Discovered 2026-08-22 while starting on "close remaining Phase 6 gaps" (per-warehouse
+attribution, FIFO): every Cost of Sales/Inventory-capitalization/credit-note-reversal
+feature built in Phase 6 was only reachable via seed data or direct service/test calls,
+never from a real user clicking through the app, because:
+- `src/features/sales/components/LineItemsEditor.tsx` (Quote/Sales Order/Credit Note)
+  and `src/features/purchases/components/LineItemsEditor.tsx` (Purchase Order) had no
+  product picker at all — free-text description only, `productId` never set.
+- `InvoiceForm.tsx` didn't even use the shared editor — a separate, older
+  implementation that hardcoded 15% VAT (`taxAmount = lineTotal * 0.15`) and was never
+  rewired to the real `TaxRateService` despite Phase 5's docs claiming "every consumer"
+  was.
+- `BillsPage.tsx`'s "+ New Bill" button had no `onClick` handler — the only real path
+  to a posted Bill was PO→Bill conversion (through the same product-less editor).
+- `InvoicesPage.tsx` never passed `onMarkAsSent`/`onRecordPayment` to `InvoiceDetail`,
+  so the one legitimate posting action (`invoiceService.postInvoice()` via
+  `markInvoiceAsSent()`) never rendered — the only way to move an invoice off `draft`
+  was a raw status `<select>` in the old `InvoiceForm`'s edit mode, which called
+  `updateInvoice()` directly and could silently jump status to `'sent'`/`'paid'`
+  without ever posting to the GL. `BillDetail` had no posting action at all.
+
+Fixed the same day:
+- Both `LineItemsEditor`s take an optional `products` prop (via `useProducts()`,
+  passed from `QuoteForm`/`SalesOrderForm`/`CreditNoteForm`/`PurchaseOrderForm`/the
+  rebuilt `InvoiceForm`/the new `BillForm`) and render a Product `<select>` per line.
+  Picking a product sets `productId` and pre-fills description/tax rate and — a
+  deliberate difference between the two editors — unit price from `product.unitPrice`
+  on the Sales side (what we charge) versus `product.costPrice` on the Purchases side
+  (what we pay). "Custom line" (empty selection) clears `productId` without touching
+  anything the user typed. 6 new tests across both editors.
+- `InvoiceForm.tsx` rebuilt to match every sibling form's pattern: real
+  `useTaxRates()`/`useProducts()`, the shared `LineItemsEditor`. The raw status
+  dropdown is gone — status is no longer directly editable from this form at all;
+  posting only happens through the dedicated action below.
+- `InvoicesPage.tsx` now wires `onMarkAsSent` to a new `markInvoiceAsSent()` mutation
+  (`useInvoiceMutations`, delegating to the real `invoiceService.markInvoiceAsSent()`)
+  so "Mark as Sent" actually renders and actually posts.
+- New `BillForm.tsx` (mirrors `PurchaseOrderForm.tsx`'s pattern) plus a real "+ New
+  Bill" flow in `BillsPage.tsx`, and a new `onPost` action on `BillDetail` wired to
+  `billService.postBill()` — a standalone Bill can now be created AND posted through
+  the UI, not just via PO conversion. `BillDetail`'s `onEdit`/`onRecordPayment` are
+  now gated to `status === 'draft'`/`status !== 'draft'` respectively (editing or
+  paying a bill that hasn't posted yet doesn't make sense) — `onRecordPayment` itself
+  is still unwired, see Open above.
+
+381/381 tests passing (up from 375), type-check/lint/build clean.
+
+### Credit notes didn't reverse Cost of Sales or restore stock quantity
+`creditNoteService.issueCreditNote()` reversed revenue/AR/VAT for a returned item
+(§15) but was never wired to `InventoryPostingAdapter` — a returned tracked-inventory
+item's original Cost of Sales entry (posted when the invoice sold it) stayed on the
+books, and the item's stock quantity was never restored. Flagged 2026-08-21 while
+wiring Cost of Sales onto `invoiceService.postInvoice()`, fixed the same day in a
+later pass: `CreditNoteService` now takes an `InventoryReturnMover` dependency (wired
+to the same `inventoryPoster` singleton `invoiceService`/`billService` already use)
+and `issueCreditNote()` posts DR Inventory / CR Cost of Sales for every
+tracked-inventory line item — but only when `reason === 'return'`, since a
+pricing_error/discount/other credit note is a value adjustment with nothing physically
+coming back. Added `StockMovementType: 'sales_return'` (distinct from `'adjustment'`
+— a return is conceptually its own thing) and
+`InventoryPostingAdapter.recordReturnMovement()`, which deliberately does NOT
+recalculate weighted-average cost (unlike a purchase receipt, returned goods aren't a
+new purchase at a new price). Cost is calculated at the product's CURRENT
+weighted-average cost, same simplification `invoiceService.postInvoice()` already
+makes — not necessarily the exact cost the goods left at if the WAC has since moved.
+Stock is restored only after the reversal entry posts successfully, mirroring the
+GL-then-mutate ordering used everywhere else. 4 new tests (reversal posts and
+balances, stock restored, non-return reason does neither, non-tracked product does
+neither).
 
 ### No Cost of Sales posted on a sale, no Inventory capitalization on a purchase
 Phase 1's Inventory module had a real stock-movement ledger and WAC valuation, and

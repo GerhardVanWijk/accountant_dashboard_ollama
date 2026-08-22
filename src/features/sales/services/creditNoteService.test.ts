@@ -33,7 +33,7 @@ function makeOpenPeriod(): AccountingPeriod {
  * target invoice via InvoiceService.recordPayment() — mirrors
  * src/features/banking/services/bankTransactionService.test.ts.
  */
-async function setup() {
+async function setup(inventoryMover = fakeInventoryMover()) {
   const journalRepository = new MockJournalEntryRepository([]);
   const accountRepository = new MockAccountRepository(seedAccounts);
   const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
@@ -58,9 +58,25 @@ async function setup() {
   });
 
   const creditNoteRepository = new MockCreditNoteRepository([]);
-  const service = new CreditNoteService(creditNoteRepository, journalEntryService, invoiceService);
+  const service = new CreditNoteService(creditNoteRepository, journalEntryService, invoiceService, inventoryMover);
 
-  return { service, journalEntryService, invoiceService, invoiceRepository, creditNoteRepository, invoice };
+  return { service, journalEntryService, invoiceService, invoiceRepository, creditNoteRepository, invoice, inventoryMover };
+}
+
+/**
+ * Fake InventoryReturnMover — records calls so tests can assert
+ * recordReturnMovement is invoked with the right args, without depending on
+ * the real InventoryPostingAdapter/productService.
+ */
+function fakeInventoryMover(costPerUnit = 40) {
+  const returnMovements: Array<{ productId: string; quantity: number; reference: string; warehouseId?: string }> = [];
+  return {
+    returnMovements,
+    calculateCogs: async (_productId: string, quantity: number) => quantity * costPerUnit,
+    recordReturnMovement: async (productId: string, quantity: number, reference: string, warehouseId?: string) => {
+      returnMovements.push({ productId, quantity, reference, warehouseId });
+    },
+  };
 }
 
 describe('CreditNoteService', () => {
@@ -122,6 +138,123 @@ describe('CreditNoteService', () => {
       const issued = await service.issueCreditNote(draft.id);
       const entry = await journalEntryService.getEntry(issued.journalEntryId!);
       expect(entry!.lines.find((l) => l.accountId === 'acc_2100')).toBeUndefined();
+    });
+
+    it('reverses Cost of Sales and restores stock for a return with a tracked-inventory line item', async () => {
+      const { service, journalEntryService, inventoryMover } = await setup();
+
+      const draft = await service.createCreditNote({
+        creditNoteNumber: 'CN-2026-TEST-RETURN',
+        customerId: 'cust_test',
+        issueDate: '2026-08-05T00:00:00.000Z',
+        reason: 'return',
+        lineItems: [
+          {
+            id: 'li_1',
+            productId: 'prod_1',
+            description: 'Widget',
+            quantity: 3,
+            unitPrice: 100,
+            taxAmount: 45,
+            lineTotal: 300,
+          },
+        ],
+        subtotal: 300,
+        taxTotal: 45,
+        total: 345,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+
+      const issued = await service.issueCreditNote(draft.id);
+      const entry = await journalEntryService.getEntry(issued.journalEntryId!);
+
+      const totalDebit = entry!.lines.reduce((s, l) => s + l.debit, 0);
+      const totalCredit = entry!.lines.reduce((s, l) => s + l.credit, 0);
+      expect(totalDebit).toBeCloseTo(totalCredit); // still balanced with the reversal lines added
+
+      const inventoryLine = entry!.lines.find((l) => l.accountId === 'acc_1200');
+      const cogsLine = entry!.lines.find((l) => l.accountId === 'acc_5000');
+      expect(inventoryLine?.debit).toBeCloseTo(120); // 3 units * 40 cost
+      expect(cogsLine?.credit).toBeCloseTo(120);
+
+      expect(inventoryMover.returnMovements).toEqual([
+        { productId: 'prod_1', quantity: 3, reference: 'Credit Note CN-2026-TEST-RETURN' },
+      ]);
+    });
+
+    it("passes a line item's warehouseId through to recordReturnMovement", async () => {
+      const { service, inventoryMover } = await setup();
+
+      const draft = await service.createCreditNote({
+        creditNoteNumber: 'CN-2026-TEST-WH',
+        customerId: 'cust_test',
+        issueDate: '2026-08-05T00:00:00.000Z',
+        reason: 'return',
+        lineItems: [
+          {
+            id: 'li_1',
+            productId: 'prod_1',
+            warehouseId: 'wh_branch',
+            description: 'Widget',
+            quantity: 3,
+            unitPrice: 100,
+            taxAmount: 45,
+            lineTotal: 300,
+          },
+        ],
+        subtotal: 300,
+        taxTotal: 45,
+        total: 345,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+
+      await service.issueCreditNote(draft.id);
+
+      expect(inventoryMover.returnMovements).toEqual([
+        { productId: 'prod_1', quantity: 3, reference: 'Credit Note CN-2026-TEST-WH', warehouseId: 'wh_branch' },
+      ]);
+    });
+
+    it('does not reverse Cost of Sales or restore stock for a non-return reason, even with a product line item', async () => {
+      const { service, journalEntryService, inventoryMover } = await setup();
+
+      const draft = await service.createCreditNote({
+        creditNoteNumber: 'CN-2026-TEST-PRICING',
+        customerId: 'cust_test',
+        issueDate: '2026-08-05T00:00:00.000Z',
+        reason: 'pricing_error',
+        lineItems: [
+          {
+            id: 'li_1',
+            productId: 'prod_1',
+            description: 'Widget',
+            quantity: 3,
+            unitPrice: 100,
+            taxAmount: 45,
+            lineTotal: 300,
+          },
+        ],
+        subtotal: 300,
+        taxTotal: 45,
+        total: 345,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+
+      const issued = await service.issueCreditNote(draft.id);
+      const entry = await journalEntryService.getEntry(issued.journalEntryId!);
+
+      expect(entry!.lines.find((l) => l.accountId === 'acc_1200')).toBeUndefined();
+      expect(entry!.lines.find((l) => l.accountId === 'acc_5000')).toBeUndefined();
+      expect(inventoryMover.returnMovements).toEqual([]);
     });
 
     it('rejects issuing a credit note that is not draft', async () => {

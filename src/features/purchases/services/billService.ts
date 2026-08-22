@@ -20,7 +20,20 @@ export interface TaxRateResolver {
  */
 export interface InventoryReceiver {
   isTrackedInventory(productId: ID): Promise<boolean>;
-  recordReceiptMovement(productId: ID, quantity: number, unitCost: number, reference: string): Promise<void>;
+  recordReceiptMovement(productId: ID, quantity: number, unitCost: number, reference: string, warehouseId?: ID): Promise<void>;
+}
+
+/**
+ * Minimal surface of PurchaseOrderService this service depends on — checks
+ * whether a Bill's linked PO already had its goods receipt posted (3-way
+ * matching, `purchaseOrderService.recordReceipt()`), so `postBill()` knows
+ * to clear GRNI instead of debiting Inventory again and NOT re-record the
+ * stock movement. A PO with no `journalEntryId` was never GRNI-received
+ * (or has no tracked-inventory lines), so a linked Bill behaves exactly as
+ * it always has — debit Inventory, record the receipt now.
+ */
+export interface PurchaseOrderLookup {
+  getPurchaseOrder(id: ID): Promise<{ journalEntryId?: ID } | undefined>;
 }
 
 export type CreateBillDTO = Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>;
@@ -48,6 +61,7 @@ const EXPENSE_ACCOUNT_ID = 'acc_5100'; // Operating Expenses
 const VAT_INPUT_ACCOUNT_ID = 'acc_2110'; // VAT Input (Receivable)
 const AP_ACCOUNT_ID = 'acc_2000'; // Accounts Payable
 const INVENTORY_ACCOUNT_ID = 'acc_1200'; // Inventory
+const GRNI_ACCOUNT_ID = 'acc_2050'; // Goods Received Not Invoiced
 
 /**
  * Business-logic layer for supplier bills.
@@ -59,6 +73,7 @@ export class BillService {
     private readonly journalEntryService: JournalPoster,
     private readonly taxRateResolver: TaxRateResolver,
     private readonly inventoryReceiver: InventoryReceiver,
+    private readonly purchaseOrders: PurchaseOrderLookup,
   ) {}
 
   async getBills(): Promise<Bill[]> {
@@ -153,14 +168,26 @@ export class BillService {
   /**
    * Posts a bill to accounts payable: debit Operating Expenses for
    * non-inventory lines (plus any non-deductible VAT — see
-   * splitDeductibleVat()), debit Inventory for tracked-inventory lines
-   * (§22), debit VAT Input for the DEDUCTIBLE tax only, credit Accounts
-   * Payable for the bill total. GL posting happens FIRST, and stock is
-   * only increased AFTER it succeeds — if postJournalEntry() throws
-   * (unbalanced lines or a closed accounting period), this method throws
-   * too and neither the bill nor stock ever changes (same ordering
-   * bankTransactionService.ts uses). Only a 'draft' bill may be posted,
-   * so the same bill can never be posted to the ledger twice.
+   * splitDeductibleVat()), debit VAT Input for the DEDUCTIBLE tax only,
+   * credit Accounts Payable for the bill total. GL posting happens FIRST,
+   * and stock is only increased AFTER it succeeds — if postJournalEntry()
+   * throws (unbalanced lines or a closed accounting period), this method
+   * throws too and neither the bill nor stock ever changes (same ordering
+   * bankTransactionService.ts uses). Only a 'draft' bill may be posted, so
+   * the same bill can never be posted to the ledger twice.
+   *
+   * Tracked-inventory lines (§22) split on whether this bill's PO already
+   * had its goods receipt posted (`purchaseOrderService.recordReceipt()`,
+   * 3-way PO/GRN/Invoice matching):
+   *   - PO not GRNI-received (no `purchaseOrderId`, or its receipt was
+   *     never recorded): debit Inventory (as before), then record the
+   *     stock receipt now via `recordReceiptMovement()`.
+   *   - PO already GRNI-received: debit GRNI instead (clearing the
+   *     liability recorded at receipt time), and do NOT call
+   *     `recordReceiptMovement()` again — stock and its GL value were
+   *     already recognized then; recording it again here would
+   *     double-count both the quantity and the weighted-average cost
+   *     recalculation.
    */
   async postBill(id: string): Promise<Bill> {
     const bill = await this.repository.getById(id);
@@ -173,6 +200,8 @@ export class BillService {
 
     const { deductibleVat, nonDeductibleVat } = await this.splitDeductibleVat(bill);
     const { expenseValue, inventoryValue, inventoryLines } = await this.splitExpenseAndInventory(bill);
+    const linkedPO = bill.purchaseOrderId ? await this.purchaseOrders.getPurchaseOrder(bill.purchaseOrderId) : undefined;
+    const grniAlreadyRecognized = Boolean(linkedPO?.journalEntryId);
 
     const lines: NewJournalLineInput[] = [];
     const expenseDebit = expenseValue + nonDeductibleVat;
@@ -186,8 +215,10 @@ export class BillService {
     }
     if (inventoryValue > 0) {
       lines.push({
-        accountId: INVENTORY_ACCOUNT_ID,
-        description: `Bill ${bill.billNumber} - Inventory`,
+        accountId: grniAlreadyRecognized ? GRNI_ACCOUNT_ID : INVENTORY_ACCOUNT_ID,
+        description: grniAlreadyRecognized
+          ? `Bill ${bill.billNumber} - GRNI clearing`
+          : `Bill ${bill.billNumber} - Inventory`,
         debit: inventoryValue,
         credit: 0,
       });
@@ -222,11 +253,19 @@ export class BillService {
       lines,
     });
 
-    await Promise.all(
-      inventoryLines.map((line) =>
-        this.inventoryReceiver.recordReceiptMovement(line.productId!, line.quantity, line.unitPrice, `Bill ${bill.billNumber}`),
-      ),
-    );
+    if (!grniAlreadyRecognized) {
+      await Promise.all(
+        inventoryLines.map((line) =>
+          this.inventoryReceiver.recordReceiptMovement(
+            line.productId!,
+            line.quantity,
+            line.unitPrice,
+            `Bill ${bill.billNumber}`,
+            line.warehouseId,
+          ),
+        ),
+      );
+    }
 
     return this.repository.update(id, { status: 'awaiting_payment', journalEntryId: entry.id });
   }

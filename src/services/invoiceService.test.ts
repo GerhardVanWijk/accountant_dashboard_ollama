@@ -34,11 +34,11 @@ function makeOpenPeriod(): AccountingPeriod {
  * repositories here (see inventoryPostingAdapter.test.ts for that).
  */
 function makeInventoryMoverStub(costPerUnit: Record<string, number> = {}) {
-  const recordedSales: { productId: string; quantity: number; reference: string }[] = [];
+  const recordedSales: { productId: string; quantity: number; reference: string; warehouseId?: string }[] = [];
   return {
     calculateCogs: async (productId: string, quantity: number) => (costPerUnit[productId] ?? 0) * quantity,
-    recordSaleMovement: async (productId: string, quantity: number, reference: string) => {
-      recordedSales.push({ productId, quantity, reference });
+    recordSaleMovement: async (productId: string, quantity: number, reference: string, warehouseId?: string) => {
+      recordedSales.push({ productId, quantity, reference, warehouseId });
     },
     recordedSales,
   };
@@ -228,6 +228,39 @@ describe('InvoiceService', () => {
       expect(totalDebit).toBeCloseTo(totalCredit);
 
       expect(inventoryMover.recordedSales).toEqual([{ productId: 'prod_1', quantity: 5, reference: 'Invoice INV-2026-TEST-COGS' }]);
+    });
+
+    it("passes a line item's warehouseId through to recordSaleMovement", async () => {
+      const { service, inventoryMover } = setup([], { prod_1: 40 });
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-2026-TEST-WH',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [
+          {
+            id: 'li_1',
+            productId: 'prod_1',
+            warehouseId: 'wh_branch',
+            description: 'Widget',
+            quantity: 5,
+            unitPrice: 100,
+            taxAmount: 75,
+            lineTotal: 500,
+          },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      await service.postInvoice(draft.id);
+      expect(inventoryMover.recordedSales).toEqual([
+        { productId: 'prod_1', quantity: 5, reference: 'Invoice INV-2026-TEST-WH', warehouseId: 'wh_branch' },
+      ]);
     });
 
     it('omits the Cost of Sales lines and does not touch stock for a line item with no tracked product', async () => {

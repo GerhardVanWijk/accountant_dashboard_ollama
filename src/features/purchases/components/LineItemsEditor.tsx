@@ -1,4 +1,4 @@
-import type { DocumentLineItem, TaxRate } from '@/types';
+import type { DocumentLineItem, Product, TaxRate, Warehouse } from '@/types';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { FinancialNumber } from '@/components/ui/FinancialNumber';
@@ -12,6 +12,27 @@ export interface LineItemsEditorProps {
   onChange: (lineItems: DocumentLineItem[]) => void;
   /** Currently-effective tax rates (via useTaxRates()) — never hardcoded, per docs/DO_NOT_BREAK.md. */
   taxRates: TaxRate[];
+  /**
+   * Real Products (via useProducts()) a line can be tied to — this is the
+   * ONLY place in the Purchases module a document line item's `productId`
+   * gets set. Without it, `InventoryPostingAdapter`'s Inventory
+   * capitalization / stock-receipt logic
+   * (src/features/inventory/services/inventoryPostingAdapter.ts) can never
+   * fire from real user input, only from seed data or direct service
+   * calls — see docs/KNOWN_ISSUES.md. Optional so this component still
+   * renders for a caller mid-migration; pass `[]` explicitly rather than
+   * omitting it once a product picker is wanted.
+   */
+  products?: Product[];
+  /**
+   * Real Warehouses (via useWarehouses()) a tracked-inventory line can be
+   * attributed to — only rendered as a column when there's more than one
+   * to choose from, since a single-warehouse business has nothing to
+   * pick. Leaving a line's warehouse unset falls back to
+   * `Warehouse.isDefault` in `InventoryPostingAdapter`, so this is purely
+   * additive — every existing document keeps working unchanged.
+   */
+  warehouses?: Warehouse[];
   disabled?: boolean;
 }
 
@@ -33,15 +54,53 @@ function computeLine(
  * and line total, both rendered via FinancialNumber per
  * docs/FINANCIAL_UI_GUIDE.md. Tax rates are the real, currently-effective
  * `TaxRate` records (src/features/tax/services/taxRateService.ts, via
- * useTaxRates()) — passed in as a prop, never imported locally.
+ * useTaxRates()) — passed in as a prop, never imported locally. Same for
+ * `products` (via useProducts()).
  */
-export function LineItemsEditor({ lineItems, onChange, taxRates, disabled = false }: LineItemsEditorProps) {
+export function LineItemsEditor({
+  lineItems,
+  onChange,
+  taxRates,
+  products = [],
+  warehouses = [],
+  disabled = false,
+}: LineItemsEditorProps) {
+  const showWarehouseColumn = warehouses.length > 1;
+  const gridColsClass = showWarehouseColumn
+    ? 'grid-cols-[160px_140px_2fr_80px_100px_140px_100px_100px_36px]'
+    : 'grid-cols-[160px_2fr_80px_100px_140px_100px_100px_36px]';
+  const minWidthClass = showWarehouseColumn ? 'min-w-[940px]' : 'min-w-[800px]';
+
   function updateLine(index: number, patch: Partial<DocumentLineItem>) {
     const merged = { ...lineItems[index], ...patch };
     const { lineTotal, taxAmount } = computeLine(merged.quantity, merged.unitPrice, merged.taxRateId, taxRates);
     const next = [...lineItems];
     next[index] = { ...merged, lineTotal, taxAmount };
     onChange(next);
+  }
+
+  /**
+   * Selecting a product pre-fills description/unit price/tax rate from the
+   * real Product record — deliberately using `costPrice` (what we pay a
+   * supplier), not `unitPrice` (what we charge a customer, the Sales-side
+   * editor's field). A deliberate overwrite, not a merge — picking a
+   * different product replaces what was there. "Custom line" (empty
+   * value) clears productId but leaves manually-typed fields alone.
+   */
+  function selectProduct(index: number, productId: string) {
+    if (!productId) {
+      updateLine(index, { productId: undefined });
+      return;
+    }
+    const product = products.find((p) => p.id === productId);
+    if (!product) return;
+    const taxRateId = product.taxRateId && taxRates.some((r) => r.id === product.taxRateId) ? product.taxRateId : undefined;
+    updateLine(index, {
+      productId: product.id,
+      description: product.name,
+      unitPrice: product.costPrice,
+      taxRateId,
+    });
   }
 
   function addLine() {
@@ -73,7 +132,9 @@ export function LineItemsEditor({ lineItems, onChange, taxRates, disabled = fals
         </Button>
       </div>
       <div className="overflow-x-auto rounded-md border border-border">
-        <div className="grid min-w-[640px] grid-cols-[2fr_80px_100px_140px_100px_100px_36px] gap-2 bg-primary/10 px-sm py-xs text-xs font-semibold tabular-nums">
+        <div className={`grid ${minWidthClass} ${gridColsClass} gap-2 bg-primary/10 px-sm py-xs text-xs font-semibold tabular-nums`}>
+          <div>Product</div>
+          {showWarehouseColumn && <div>Warehouse</div>}
           <div>Description</div>
           <div className="text-right">Qty</div>
           <div className="text-right">Unit Price</div>
@@ -85,8 +146,38 @@ export function LineItemsEditor({ lineItems, onChange, taxRates, disabled = fals
         {lineItems.map((item, index) => (
           <div
             key={item.id}
-            className="grid min-w-[640px] grid-cols-[2fr_80px_100px_140px_100px_100px_36px] items-center gap-2 border-t border-border/50 px-sm py-xs tabular-nums"
+            className={`grid ${minWidthClass} ${gridColsClass} items-center gap-2 border-t border-border/50 px-sm py-xs tabular-nums`}
           >
+            <select
+              className={inputClass}
+              value={item.productId ?? ''}
+              disabled={disabled}
+              onChange={(e) => selectProduct(index, e.target.value)}
+              aria-label="Product"
+            >
+              <option value="">Custom line</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.sku} — {p.name}
+                </option>
+              ))}
+            </select>
+            {showWarehouseColumn && (
+              <select
+                className={inputClass}
+                value={item.warehouseId ?? ''}
+                disabled={disabled || !item.productId}
+                onChange={(e) => updateLine(index, { warehouseId: e.target.value || undefined })}
+                aria-label="Warehouse"
+              >
+                <option value="">Default warehouse</option>
+                {warehouses.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               className={inputClass}
               value={item.description}

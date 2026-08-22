@@ -6,6 +6,8 @@ import { formatCurrency } from '@/utils/formatFinancial';
 import type { CreateCreditNoteDTO } from '../services';
 import { LineItemsEditor } from './LineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
+import { useProducts } from '@/features/inventory/hooks/useProducts';
+import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 
 const inputClass =
   'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
@@ -38,6 +40,8 @@ function today(): string {
  */
 export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, onSubmit, onCancel }: CreditNoteFormProps) {
   const { taxRates } = useTaxRates();
+  const { products } = useProducts();
+  const { warehouses } = useWarehouses();
   const [creditNoteNumber, setCreditNoteNumber] = useState(defaultCreditNoteNumber);
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? '');
   const [invoiceId, setInvoiceId] = useState<string>('');
@@ -150,7 +154,7 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
         </label>
       </div>
 
-      <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} />
+      <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} products={products} warehouses={warehouses} />
 
       <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
         <div>

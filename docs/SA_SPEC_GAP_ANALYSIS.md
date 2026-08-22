@@ -5,10 +5,14 @@ sections, 12 build phases per §116). **Updated 2026-08-21** — Phase 5 (VAT) i
 complete: `TaxRate` redesigned as an effective-dated engine, VAT calculation wired into
 every Sales/Purchases/Banking/Inventory consumer, a Tax Rates settings page, VAT
 Reporting with real GL reconciliation, and non-deductible input VAT correctly excluded.
-Phase 6 (Inventory) is now partially complete: Cost of Sales posts on Invoice, tracked
-inventory capitalizes on Bill instead of expensing — but valuation-policy selection,
-default-warehouse attribution, PO-receipt stock/value timing, and credit-note COGS
-reversal all remain open (see that section below). Phases 1-6 (Accounting Core,
+Phase 6 (Inventory) is now ✅ complete (2026-08-22): Cost of Sales posts on Invoice,
+tracked inventory capitalizes on Bill instead of expensing, credit notes reverse Cost
+of Sales/restore stock for returns, per-document warehouse attribution, real 3-way
+PO/GRN/Invoice matching, and a FIFO valuation-method option alongside WAC — see that
+section below. **Updated 2026-08-22** — getting there also meant fixing a gap that had
+made all of the above practically unreachable: no Sales/Purchases line-item editor let
+a user pick a product, and Invoices/Bills had no working post action in the UI (see
+the Phase 2/3 section below and `docs/KNOWN_ISSUES.md`). Phases 1-6 (Accounting Core,
 Customers, Suppliers, Banking, VAT, Inventory) now have real implementations to assess;
 Phases 7-12 (Fixed Assets, Payroll, Tax, Financial Reporting, Compliance, Advanced
 Accounting) are still not started, consistent with §116's ordering — not reassessed in
@@ -69,8 +73,8 @@ as part of Phase 5 (VAT), not patched in place — a real config/versioning mode
 
 | Spec requirement | Status | Where |
 |---|---|---|
-| Invoices post to GL (§8, §100) | ✅ | `invoiceService.postInvoice()` (called by `markInvoiceAsSent()`): DR AR, CR Sales Revenue, CR VAT Output |
-| Bills post to GL (§8, §100) | ✅ | `billService.postBill()`: DR Expense, DR VAT Input, CR AP |
+| Invoices post to GL (§8, §100) | ✅, and reachable from the UI as of 2026-08-22 | `invoiceService.postInvoice()` (called by `markInvoiceAsSent()`): DR AR, CR Sales Revenue, CR VAT Output. Until 2026-08-22, `InvoicesPage` never wired `onMarkAsSent` to `InvoiceDetail`, so this never rendered — see `docs/KNOWN_ISSUES.md` |
+| Bills post to GL (§8, §100) | ✅, and reachable from the UI as of 2026-08-22 | `billService.postBill()`: DR Expense, DR VAT Input, CR AP. Until 2026-08-22, a standalone Bill had no create form or post action at all (`BillsPage`'s "+ New Bill" button had no handler) — only PO→Bill conversion could post one — see `docs/KNOWN_ISSUES.md` |
 | Credit notes reverse the GL entry, not the original (§15, §36) | ✅ | `creditNoteService.issueCreditNote()` posts a genuinely reversing entry; original invoice is untouched |
 | Credit note allocation against open invoices (§15) | ✅ | `creditNoteService.allocateToInvoice()` → `InvoiceService.recordPayment()` |
 | Customer receipts, multi-invoice allocation (§17) | ✅ | `customerReceiptService` |
@@ -82,6 +86,16 @@ as part of Phase 5 (VAT), not patched in place — a real config/versioning mode
 | Tax invoice required fields (§13) | ✅ fixed 2026-08-21, still partial | `InvoiceDetail`/`CreditNoteDetail` now render the real `Company` name + VAT registration number + CIPC registration number via `useCompany()`. Still missing: `Company` has no address field to render (not fabricated — genuinely absent from the type) |
 | Invoice numbering is sequential/unique/immutable (§14) | ⚠️ partial, not addressed in this pass | Seed data and UI-suggested next-numbers (`nextDocumentNumber.ts`) follow a `PREFIX-YEAR-NNNN` pattern, but no service enforces uniqueness or sequentiality at creation time — `createInvoice()`/`createBill()`/etc. accept whatever `invoiceNumber`/`billNumber` string the caller passes. Not exploitable via the current UI (forms pre-fill the suggested next number), but not enforced at the layer the spec requires. |
 | No deletion of posted documents (§14, §36, §72, §79) | ✅ fixed 2026-08-21 | All 8 services (Invoice/Bill/CreditNote/Quote/SalesOrder/PurchaseOrder/Customer/Supplier) now guard `delete*` — see `docs/KNOWN_ISSUES.md`'s Resolved section for the exact rule per service |
+
+### No document line item created through the UI could carry a productId (fixed 2026-08-22)
+Every Sales/Purchases line-item editor (`LineItemsEditor` on both sides, plus
+`InvoiceForm`'s separate older implementation) had no product picker — `productId`
+could only ever be set via seed data or a direct service call, which meant Phase 6's
+Cost of Sales/Inventory-capitalization/credit-note-reversal logic (§22-§24) could never
+actually fire from real user input. This is a Phase 2/3 gap in the strict sense
+(it lives in the Sales/Purchases document forms, not Inventory), but it's what made
+Phase 6 unreachable, so it's fixed and logged together with the invoice/bill posting
+fix above — full detail in `docs/KNOWN_ISSUES.md`.
 
 ### Account-mapping is hard-coded per service, not a configurable mapping table (§113)
 
@@ -129,12 +143,12 @@ earlier in the known-issues pass, not this one. See `docs/KNOWN_ISSUES.md` for t
 AR/AP-side residual reconciliation gap (payment/receipt entries aren't backfilled,
 only original postings) — that one is Phase 2/3's concern, not Phase 5's.
 
-## Phase 6 (Inventory) — ⚠️ partially complete, 2026-08-21
+## Phase 6 (Inventory) — ✅ complete, 2026-08-22
 
 Products/Warehouses/stock-movement ledger existed since Phase 1 (with WAC valuation),
 but nothing ever posted Inventory to the GL or moved stock automatically from a sale or
 purchase — `StockMovementType` had carried `'sale'`/`'goods_received'` variants since
-Phase 1 with no code ever using them. Fixed this pass:
+Phase 1 with no code ever using them. Fixed across several passes, all 2026-08-21/22:
 
 - **Cost of Sales on sale (§24)** — `invoiceService.postInvoice()` now adds a Cost of
   Sales / Inventory line pair to the SAME journal entry as the sale, for every line
@@ -149,25 +163,42 @@ Phase 1 with no code ever using them. Fixed this pass:
   (`src/features/inventory/services/inventoryPostingAdapter.ts`), independently
   testable with isolated mock repositories (10 tests) rather than only via the real
   singleton.
+- **Credit-note Cost of Sales reversal + stock restore (§15/§24, fixed 2026-08-21,
+  later pass)** — `creditNoteService.issueCreditNote()` now takes an
+  `InventoryReturnMover` dependency (the same `inventoryPoster` singleton
+  Invoice/BillService already use) and posts DR Inventory / CR Cost of Sales for
+  tracked-inventory line items, gated on `reason === 'return'` (a pricing_error/
+  discount/other credit note is a value adjustment, not goods coming back).
+  `InventoryPostingAdapter.recordReturnMovement()` restores stock without
+  recalculating weighted-average cost — a return isn't a new purchase at a new price.
+- **Per-document warehouse attribution (§22, fixed 2026-08-22)** —
+  `DocumentLineItem.warehouseId?: ID` added; `InventoryPostingAdapter` resolves an
+  explicit id (falling back to the default warehouse if it's missing/invalid) instead
+  of always using the default. Both `LineItemsEditor`s show a Warehouse picker, but
+  only when more than one warehouse exists — a single-warehouse business sees no
+  change. See `docs/KNOWN_ISSUES.md`.
+- **Real 3-way (PO/GRN/Invoice) matching (§22, fixed 2026-08-22)** —
+  `purchaseOrderService.recordReceipt()` now posts DR Inventory / CR GRNI (a new
+  liability/clearing account, `acc_2050`) for tracked-inventory lines and records the
+  real stock receipt, instead of being status-only. `billService.postBill()` clears
+  GRNI instead of debiting Inventory again (and skips re-recording the stock movement)
+  when its linked PO was already GRNI-received. See `docs/KNOWN_ISSUES.md`.
+- **FIFO valuation method (§23, fixed 2026-08-22)** — `Product.valuationMethod`
+  (`'weighted_average'` default / `'fifo'`), a new `StockLot`/`StockLotService`
+  costing oldest-received-first, and `InventoryPostingAdapter` branching all four
+  operations on it. Only possible once PO/GRN receipt (above) existed to source real
+  per-lot landed costs — see `docs/KNOWN_ISSUES.md` for the full design and its
+  documented boundaries (no historical-lot backfill when switching an existing
+  product; throws rather than guessing when open lots can't cover a sale).
 
-**Still open, real Phase 6 gaps, not fixed this pass:**
-- **No valuation-policy selection (§23)** — WAC is the only method; FIFO would need a
-  unit-cost-per-lot data model `StockMovement` doesn't carry. Not attempted.
-- **No default-warehouse attribution (§22)** — neither `Invoice`/`Bill` line items nor
-  `PurchaseOrder`/`Quote`/`SalesOrder` carry a `warehouseId`, so every stock movement
-  this pass wires up posts against the single `Warehouse.isDefault` warehouse
-  regardless of which warehouse the goods actually came from/went to. A real
-  simplification for a single-default-warehouse business, not correct for genuine
-  multi-warehouse operations. See `docs/KNOWN_ISSUES.md`.
-- **PO Goods Receipt doesn't move stock or value (§22, a real simplification, not
-  silent)** — stock/GL recognition happens at Bill-posting time only, since a Bill can
-  exist standalone with no PO; recording it at both PO-receipt and Bill-posting would
-  double-count. This is real 3-way (PO/GRN/Invoice) matching's absence, documented in
-  `docs/KNOWN_ISSUES.md`, not attempted.
-- **Credit notes don't reverse Cost of Sales/stock** — `creditNoteService.issueCreditNote()`
-  reverses revenue/AR/VAT for a returned item but does not restore stock quantity or
-  reverse the original Cost of Sales entry. Found while building this pass, not fixed —
-  see `docs/KNOWN_ISSUES.md`.
+Every §116 Phase 6 checklist item (Products, Warehouses, Stock, Movements, Valuation,
+Cost of Sales) is now real, not just the terse spec list — including the two
+refinements (warehouse attribution, real 3-way matching) that go beyond it. Genuinely
+open, deliberately out of scope: a FIFO valuation-report UI (the engine is real and
+tested; nothing surfaces open lots in the Inventory pages yet), true partial PO
+receipt (only all-or-nothing per PO is modeled), and PO-to-Bill price-variance
+handling (relies on the Bill's line items matching the PO's exactly, true today via
+`convertToBill()`'s verbatim copy — see `docs/KNOWN_ISSUES.md`).
 
 ## Phases 7-12 — not started, per §116's own build order
 

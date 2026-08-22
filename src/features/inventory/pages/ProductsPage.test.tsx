@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import type { Product } from '@/types';
 import { ProductsPage } from './ProductsPage';
 import { productService } from '../services/productService';
@@ -39,6 +39,10 @@ describe('ProductsPage', () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    cleanup();
+  });
+
   it('shows a loading state while products are being fetched', () => {
     mockedGetProducts.mockReturnValue(new Promise(() => {}));
     render(<ProductsPage />);
@@ -60,13 +64,24 @@ describe('ProductsPage', () => {
   it('renders the product directory table once data loads', async () => {
     mockedGetProducts.mockResolvedValue([makeProduct()]);
     render(<ProductsPage />);
-    expect(await screen.findByText('Test Widget')).toBeInTheDocument();
+    // Uses waitFor(getByText) rather than findByText — confirmed by
+    // direct DOM inspection that findByText's own internal polling
+    // wasn't reliably catching this render (the row was demonstrably
+    // there moments after findByText reported a timeout), while
+    // waitFor's explicit poll loop does. ProductsTable's own
+    // useAllTaxRates() fetch is a second async hop after products load,
+    // so this render genuinely lands a tick later than a single-hop one.
+    await waitFor(() => {
+      expect(screen.getByText('Test Widget')).toBeInTheDocument();
+    });
     expect(screen.getByText('TST-001')).toBeInTheDocument();
   });
 
   it('flags an item at or below its reorder level as low stock', async () => {
     mockedGetProducts.mockResolvedValue([makeProduct({ quantityOnHand: 5, reorderLevel: 10 })]);
     render(<ProductsPage />);
-    expect(await screen.findByText(/low stock/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/low stock/i)).toBeInTheDocument();
+    });
   });
 });

@@ -29,8 +29,8 @@ export interface JournalPoster {
  * SA_ACCOUNTING_MASTER_SPEC.md §24.
  */
 export interface InventoryMover {
-  calculateCogs(productId: ID, quantity: number): Promise<number>;
-  recordSaleMovement(productId: ID, quantity: number, reference: string): Promise<void>;
+  calculateCogs(productId: ID, quantity: number, warehouseId?: ID): Promise<number>;
+  recordSaleMovement(productId: ID, quantity: number, reference: string, warehouseId?: ID): Promise<void>;
 }
 
 /** Fixed Chart of Accounts ids this service posts against (src/mock-data/accounts.ts). */
@@ -152,7 +152,7 @@ export class InvoiceService {
 
     const inventoryLines = invoice.lineItems.filter((line) => line.productId);
     const cogsByLine = await Promise.all(
-      inventoryLines.map((line) => this.inventoryMover.calculateCogs(line.productId!, line.quantity)),
+      inventoryLines.map((line) => this.inventoryMover.calculateCogs(line.productId!, line.quantity, line.warehouseId)),
     );
     const totalCogs = cogsByLine.reduce((sum, c) => sum + c, 0);
     if (totalCogs > 0) {
@@ -172,7 +172,12 @@ export class InvoiceService {
 
     await Promise.all(
       inventoryLines.map((line) =>
-        this.inventoryMover.recordSaleMovement(line.productId!, line.quantity, `Invoice ${invoice.invoiceNumber}`),
+        this.inventoryMover.recordSaleMovement(
+          line.productId!,
+          line.quantity,
+          `Invoice ${invoice.invoiceNumber}`,
+          line.warehouseId,
+        ),
       ),
     );
 

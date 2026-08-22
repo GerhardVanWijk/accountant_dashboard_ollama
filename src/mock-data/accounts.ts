@@ -57,6 +57,19 @@ export const seedAccounts: Account[] = [
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
+    id: 'acc_2050',
+    code: '2050',
+    name: 'Goods Received Not Invoiced (GRNI)',
+    type: 'liability',
+    subType: 'current_liability',
+    normalBalance: 'credit',
+    isActive: true,
+    description:
+      'Clearing account for tracked-inventory goods physically received against a Purchase Order before the supplier Bill has posted (SA_ACCOUNTING_MASTER_SPEC.md §22, 3-way PO/GRN/Invoice matching). Debited when the matching Bill posts, clearing the balance this account carried since receipt.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
     id: 'acc_2100',
     code: '2100',
     name: 'VAT Output (Payable)',

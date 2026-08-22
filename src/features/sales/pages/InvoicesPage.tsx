@@ -26,8 +26,20 @@ export function InvoicesPage() {
   );
   const { customers } = useCustomerMap();
   const { customers: customerList } = useCustomerList();
-  const { createInvoice, updateInvoice, saving, error: saveError } = useInvoiceMutations();
+  const { createInvoice, updateInvoice, markInvoiceAsSent, saving, error: saveError } = useInvoiceMutations();
   const { company } = useCompany();
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  async function handleMarkAsSent(invoiceId: string): Promise<void> {
+    setActionError(null);
+    try {
+      await markInvoiceAsSent(invoiceId);
+      refetchList();
+      setDataVersion((t) => t + 1);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not post invoice.');
+    }
+  }
 
   async function handleFormSubmit(values: Partial<Invoice>): Promise<void> {
     if (formState?.mode === 'edit') {
@@ -100,11 +112,16 @@ export function InvoicesPage() {
             </button>
           </div>
 
+          {actionError && (
+            <div className="p-4 bg-danger/10 border border-danger/30 rounded text-danger">{actionError}</div>
+          )}
+
           <InvoiceDetail
             invoice={detailInvoice}
             customerName={getCustomerName(detailInvoice.customerId)}
             company={company}
             onEdit={() => setFormState({ mode: 'edit', invoice: detailInvoice })}
+            onMarkAsSent={() => void handleMarkAsSent(detailInvoice.id)}
           />
         </div>
       )}

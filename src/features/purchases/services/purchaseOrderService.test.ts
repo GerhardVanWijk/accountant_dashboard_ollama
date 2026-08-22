@@ -2,14 +2,78 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { PurchaseOrderService } from './purchaseOrderService';
 import { MockPurchaseOrderRepository } from '@/repositories/mock/MockPurchaseOrderRepository';
 import { seedPurchaseOrders } from '@/mock-data/purchaseOrders';
+import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
+import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
+import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
+import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
+import { AuditLogService } from '@/services/auditLogService';
+import { MockAuditLogRepository } from '@/repositories/mock/MockAuditLogRepository';
+import { seedAccounts } from '@/mock-data/accounts';
+import type { AccountingPeriod } from '@/types';
+
+/** A single accounting period wide open enough to cover every date these tests use. */
+function makeOpenPeriod(): AccountingPeriod {
+  return {
+    id: 'period_test_open',
+    companyId: 'comp_test',
+    financialYearId: 'fy_test',
+    name: '2026 (test)',
+    startDate: '2026-01-01T00:00:00.000Z',
+    endDate: '2026-12-31T23:59:59.999Z',
+    status: 'open',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+}
+
+/**
+ * Configurable stub InventoryReceiver — `trackedProductIds` controls which
+ * products isTrackedInventory() reports as tracked, and `recordedReceipts`
+ * lets tests assert recordReceiptMovement() was only called AFTER a
+ * successful post, matching the real InventoryPostingAdapter's contract —
+ * same pattern as billService.test.ts's stub.
+ */
+function makeInventoryReceiverStub(trackedProductIds: string[] = []) {
+  const recordedReceipts: { productId: string; quantity: number; unitCost: number; reference: string; warehouseId?: string }[] = [];
+  return {
+    isTrackedInventory: async (productId: string) => trackedProductIds.includes(productId),
+    recordReceiptMovement: async (
+      productId: string,
+      quantity: number,
+      unitCost: number,
+      reference: string,
+      warehouseId?: string,
+    ) => {
+      recordedReceipts.push({ productId, quantity, unitCost, reference, warehouseId });
+    },
+    recordedReceipts,
+  };
+}
+
+/**
+ * Wires a REAL JournalEntryService so recordReceipt() tests prove a
+ * genuinely balanced GRNI journal entry is produced, not a mocked
+ * assertion — mirrors billService.test.ts/creditNoteService.test.ts.
+ */
+function setup(trackedProductIds: string[] = [], seed = true) {
+  const journalRepository = new MockJournalEntryRepository([]);
+  const accountRepository = new MockAccountRepository(seedAccounts);
+  const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
+  const auditLog = new AuditLogService(new MockAuditLogRepository());
+  const journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
+
+  const repository = seed ? new MockPurchaseOrderRepository() : new MockPurchaseOrderRepository([]);
+  const inventoryReceiver = makeInventoryReceiverStub(trackedProductIds);
+  const poService = new PurchaseOrderService(repository, journalEntryService, inventoryReceiver);
+
+  return { poService, repository, journalEntryService, inventoryReceiver };
+}
 
 describe('PurchaseOrderService', () => {
   let poService: PurchaseOrderService;
-  let repository: MockPurchaseOrderRepository;
 
   beforeEach(() => {
-    repository = new MockPurchaseOrderRepository();
-    poService = new PurchaseOrderService(repository);
+    ({ poService } = setup());
   });
 
   describe('getPurchaseOrders', () => {
@@ -134,12 +198,88 @@ describe('PurchaseOrderService', () => {
   });
 
   describe('recordReceipt', () => {
-    it('should mark PO as received', async () => {
+    it('should mark a not-yet-received PO as received', async () => {
       const pos = await poService.getPurchaseOrders();
-      const po = pos[0];
+      const po = pos.find((p) => p.status === 'sent')!;
+      expect(po).toBeDefined();
 
       const updated = await poService.recordReceipt(po.id);
       expect(updated.status).toBe('received');
+      expect(updated.receivedDate).toBeDefined();
+    });
+
+    it('rejects receiving an already-received PO (idempotency — this posts a real GL entry)', async () => {
+      const pos = await poService.getPurchaseOrders();
+      const alreadyReceived = pos.find((p) => p.status === 'received')!;
+      expect(alreadyReceived).toBeDefined();
+
+      await expect(poService.recordReceipt(alreadyReceived.id)).rejects.toThrow(/already been received/i);
+    });
+
+    it('rejects receiving a cancelled PO', async () => {
+      const { poService: svc } = setup();
+      const pos = await svc.getPurchaseOrders();
+      const po = pos.find((p) => p.status === 'sent')!;
+      await svc.cancelPurchaseOrder(po.id);
+
+      await expect(svc.recordReceipt(po.id)).rejects.toThrow(/cancelled/i);
+    });
+
+    it('posts DR Inventory / CR GRNI and records a stock receipt for a tracked-inventory line', async () => {
+      const { poService: svc, journalEntryService, inventoryReceiver } = setup(['prod_tracked'], false);
+      const created = await svc.createPurchaseOrder({
+        poNumber: 'PO-2026-GRNI-TEST',
+        supplierId: 'sup_test',
+        orderDate: '2026-08-22',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_tracked', description: 'Widgets', quantity: 10, unitPrice: 50, taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        currency: 'ZAR',
+        status: 'sent',
+      });
+
+      const received = await svc.recordReceipt(created.id);
+      expect(received.status).toBe('received');
+      expect(received.journalEntryId).toBeDefined();
+
+      const entry = await journalEntryService.getEntry(received.journalEntryId!);
+      const inventoryLine = entry!.lines.find((l) => l.accountId === 'acc_1200');
+      const grniLine = entry!.lines.find((l) => l.accountId === 'acc_2050');
+      expect(inventoryLine?.debit).toBe(500); // ex-VAT — receipt is not a tax invoice
+      expect(grniLine?.credit).toBe(500);
+
+      const totalDebit = entry!.lines.reduce((s, l) => s + l.debit, 0);
+      const totalCredit = entry!.lines.reduce((s, l) => s + l.credit, 0);
+      expect(totalDebit).toBeCloseTo(totalCredit);
+
+      expect(inventoryReceiver.recordedReceipts).toEqual([
+        { productId: 'prod_tracked', quantity: 10, unitCost: 50, reference: 'PO PO-2026-GRNI-TEST', warehouseId: undefined },
+      ]);
+    });
+
+    it('does not post a GL entry or touch stock for a PO with no tracked-inventory lines', async () => {
+      const { poService: svc, inventoryReceiver } = setup([], false); // nothing tracked
+      const created = await svc.createPurchaseOrder({
+        poNumber: 'PO-2026-NO-STOCK',
+        supplierId: 'sup_test',
+        orderDate: '2026-08-22',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_service', description: 'Consulting', quantity: 1, unitPrice: 500, taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        currency: 'ZAR',
+        status: 'sent',
+      });
+
+      const received = await svc.recordReceipt(created.id);
+      expect(received.status).toBe('received');
+      expect(received.journalEntryId).toBeUndefined();
+      expect(inventoryReceiver.recordedReceipts).toEqual([]);
     });
   });
 

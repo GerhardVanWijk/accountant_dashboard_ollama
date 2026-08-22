@@ -116,10 +116,33 @@ export function useInvoiceMutations() {
     }
   };
 
+  /**
+   * Posts the invoice to the GL and transitions draft -> sent, via
+   * invoiceService.postInvoice() (see InvoiceService.markInvoiceAsSent()).
+   * This is the ONLY legitimate way an invoice's status should ever
+   * change from 'draft' — see docs/KNOWN_ISSUES.md's now-resolved "no way
+   * to post an invoice from the UI" entry.
+   */
+  const markInvoiceAsSent = async (id: string) => {
+    setSaving(true);
+    try {
+      const service = getInvoiceService();
+      const invoice = await service.markInvoiceAsSent(id);
+      setError(null);
+      return invoice;
+    } catch (err) {
+      setError({ message: (err as Error).message });
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return {
     createInvoice,
     updateInvoice,
     deleteInvoice,
+    markInvoiceAsSent,
     saving,
     error,
   };

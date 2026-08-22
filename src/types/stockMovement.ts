@@ -8,6 +8,7 @@ import type { BaseEntity, ID } from './common';
 export type StockMovementType =
   | 'goods_received'
   | 'sale'
+  | 'sales_return'
   | 'transfer_in'
   | 'transfer_out'
   | 'adjustment'

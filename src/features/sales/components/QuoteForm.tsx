@@ -6,6 +6,8 @@ import { formatCurrency } from '@/utils/formatFinancial';
 import type { CreateQuoteDTO } from '../services';
 import { LineItemsEditor } from './LineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
+import { useProducts } from '@/features/inventory/hooks/useProducts';
+import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 
 const inputClass =
   'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
@@ -33,6 +35,8 @@ function plusDays(days: number): string {
  */
 export function QuoteForm({ customers, quote, defaultQuoteNumber, onSubmit, onCancel }: QuoteFormProps) {
   const { taxRates } = useTaxRates();
+  const { products } = useProducts();
+  const { warehouses } = useWarehouses();
   const [quoteNumber, setQuoteNumber] = useState(quote?.quoteNumber ?? defaultQuoteNumber);
   const [customerId, setCustomerId] = useState(quote?.customerId ?? customers[0]?.id ?? '');
   const [issueDate, setIssueDate] = useState(quote ? quote.issueDate.slice(0, 10) : today());
@@ -111,7 +115,7 @@ export function QuoteForm({ customers, quote, defaultQuoteNumber, onSubmit, onCa
         </label>
       </div>
 
-      <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} />
+      <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} products={products} warehouses={warehouses} />
 
       <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
         <div>

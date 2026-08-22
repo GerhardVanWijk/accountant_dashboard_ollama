@@ -24,6 +24,7 @@ const productSchema = z.object({
   unitPrice: z.string().refine(isNonNegativeNumber, { message: 'Sell price must be 0 or more' }),
   taxRateId: z.string().optional(),
   trackInventory: z.boolean(),
+  valuationMethod: z.enum(['weighted_average', 'fifo']),
   reorderLevel: z
     .string()
     .optional()
@@ -54,6 +55,7 @@ function toDefaultValues(product?: Product): ProductFormValues {
     unitPrice: String(product?.unitPrice ?? 0),
     taxRateId: product?.taxRateId ?? '',
     trackInventory: product?.trackInventory ?? true,
+    valuationMethod: product?.valuationMethod ?? 'weighted_average',
     reorderLevel: product?.reorderLevel !== undefined ? String(product.reorderLevel) : '',
     status: product?.status ?? 'active',
   };
@@ -78,6 +80,7 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
   });
 
   const type = watch('type');
+  const trackInventoryWatched = watch('trackInventory');
 
   const submit = handleSubmit(async (data) => {
     const trackInventory = type === 'service' ? false : data.trackInventory;
@@ -95,6 +98,7 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
       unitPrice: Number(data.unitPrice),
       taxRateId: data.taxRateId || undefined,
       trackInventory,
+      valuationMethod: data.valuationMethod,
       reorderLevel,
       status: data.status,
     });
@@ -219,6 +223,23 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
             <input id="reorderLevel" type="number" className={fieldInput} {...register('reorderLevel')} />
             {errors.reorderLevel && <p className={fieldError}>{errors.reorderLevel.message}</p>}
           </div>
+        </div>
+      )}
+
+      {type !== 'service' && trackInventoryWatched && (
+        <div>
+          <label className={fieldLabel} htmlFor="valuationMethod">
+            Valuation Method
+          </label>
+          <select id="valuationMethod" className={fieldInput} {...register('valuationMethod')}>
+            <option value="weighted_average">Weighted Average Cost</option>
+            <option value="fifo">FIFO (First In, First Out)</option>
+          </select>
+          <p className={fieldHint}>
+            FIFO costs each sale from the oldest stock received first, instead of a blended average. Switching an
+            existing product to FIFO only affects stock received from now on — it has no cost history to draw on
+            until then.
+          </p>
         </div>
       )}
 

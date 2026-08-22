@@ -275,7 +275,7 @@ Accounting Periods already gate posting); the AR/AP subledger
 reconciliation still shows a variance for partially-paid seed documents
 (`docs/KNOWN_ISSUES.md` — a Phase 2/3 concern, not Phase 5's).
 
-### Phase 6 (Inventory) — ⚠️ PARTIALLY COMPLETE (2026-08-21, Queen, solo)
+### Phase 6 (Inventory) — ✅ COMPLETE (2026-08-21/22, Queen, solo)
 
 Products/Warehouses/immutable stock-movement ledger/WAC valuation shipped in Phase 1
 (see above) — this wave is specifically §22-§24's "Cost of Sales" GL integration,
@@ -294,25 +294,81 @@ which nothing had wired up despite `StockMovementType` carrying `'sale'`/
   injectable (not a bare singleton), composes productService/stockService/
   warehouseService behind a narrow interface, independently tested with isolated mock
   repositories (10 tests) rather than only reachable via the real singleton.
-- [ ] Valuation-method selection (§23) — WAC is the only method available; FIFO would
-  need a unit-cost-per-lot data model `StockMovement` doesn't carry. Not attempted.
-- [ ] Per-document warehouse attribution (§22) — `Invoice`/`Bill`/`PurchaseOrder`/
-  `Quote`/`SalesOrder` line items carry no `warehouseId`, so every movement this wave
-  wired up posts against the single `Warehouse.isDefault` warehouse regardless of
-  which warehouse the goods actually moved through. Flagged in `docs/KNOWN_ISSUES.md`.
-- [ ] True 3-way (PO/GRN/Invoice) matching — `purchaseOrderService.recordReceipt()`
-  stays status-only by design; stock/GL recognition happens at Bill-posting only, to
-  avoid double-counting the PO→Bill path (a Bill can also exist standalone with no
-  PO). Real gap if goods are physically received well before the bill posts. Flagged
-  in `docs/KNOWN_ISSUES.md`.
-- [ ] Credit notes don't reverse Cost of Sales or restore stock quantity —
-  `creditNoteService.issueCreditNote()` reverses revenue/AR/VAT for a return but was
-  never wired to `InventoryPostingAdapter`. Found while building this wave, not fixed.
-  Flagged in `docs/KNOWN_ISSUES.md`.
+- [x] Valuation-method selection (§23) — fixed 2026-08-22, once PO/GRN receipt (below)
+  gave FIFO a real per-lot cost source. `Product.valuationMethod` (defaults to
+  `'weighted_average'` — every existing product unaffected); new `StockLot`/
+  `StockLotService` (`src/features/inventory/services/stockLotService.ts`) costs FIFO
+  sales from the oldest open lot first, mutating only `quantityRemaining` (a narrow,
+  documented exception to `StockMovement`'s append-only rule — that ledger stays the
+  sole authoritative audit trail regardless of valuation method).
+  `InventoryPostingAdapter` branches all four operations on it. Selectable in
+  `ProductForm`. 11 new adapter tests + 10 dedicated `StockLotService` tests (FIFO
+  ordering across lots at different costs, cross-warehouse/cross-product isolation,
+  throws rather than guessing when open lots can't cover a sale). See
+  `docs/KNOWN_ISSUES.md`'s Resolved section.
+- [x] Per-document warehouse attribution (§22) — fixed 2026-08-22.
+  `DocumentLineItem.warehouseId?: ID` added (optional — every existing document keeps
+  working unchanged); `InventoryPostingAdapter` resolves it, falling back to the
+  default warehouse when unset or invalid, instead of always using the default. Both
+  `LineItemsEditor`s show a Warehouse column, but only when `warehouses.length > 1` —
+  a single-warehouse business sees no UI change at all. See
+  `docs/KNOWN_ISSUES.md`'s Resolved section.
+- [x] True 3-way (PO/GRN/Invoice) matching — fixed 2026-08-22.
+  `purchaseOrderService.recordReceipt()` now posts DR Inventory / CR GRNI (new
+  account `acc_2050`) for tracked-inventory lines and records the real stock receipt,
+  instead of staying status-only. `billService.postBill()` clears GRNI instead of
+  debiting Inventory again — and skips re-recording the stock movement — when its
+  linked PO was already GRNI-received, avoiding the double-count the old
+  status-only design was built to prevent. 9 new tests. See
+  `docs/KNOWN_ISSUES.md`'s Resolved section.
+- [x] Credit notes reverse Cost of Sales and restore stock quantity — fixed 2026-08-21
+  in a later pass (found this exact gap already half-wired uncommitted in the working
+  tree — `StockMovementType: 'sales_return'` and
+  `InventoryPostingAdapter.recordReturnMovement()` existed with tests but nothing
+  called them). `CreditNoteService` now takes an `InventoryReturnMover` dependency
+  (the same `inventoryPoster` singleton Invoice/BillService use) and
+  `issueCreditNote()` posts DR Inventory / CR Cost of Sales for tracked-inventory line
+  items, but only when `reason === 'return'` — a pricing_error/discount/other credit
+  note is a value adjustment with nothing physically coming back. Stock restores only
+  after that entry posts. `recordReturnMovement()` deliberately doesn't recalculate
+  weighted-average cost (a return isn't a new purchase at a new price). 4 new tests.
+  See `docs/KNOWN_ISSUES.md`'s Resolved section.
 
-370/371 tests passing (up from 361 after Phase 5), type-check/lint/build clean. The
-one failure is the pre-existing, unrelated `ProductsPage` test-order flake (see Wave
-1b's entry above), still untouched.
+375/375 tests passing (up from 371 after this wave), type-check/lint/build clean. The
+`ProductsPage` test-order flake (introduced wiring `ProductsTable`/`ProductForm` to
+the new `useTaxRates()`/`useAllTaxRates()` hooks during Phase 5, see
+`docs/KNOWN_ISSUES.md`'s Resolved section) is also fixed as of the same later pass —
+`findByText`'s internal polling wasn't reliably catching a second async hop
+(`ProductsTable`'s `useAllTaxRates()` fetch); switched to `waitFor(getByText)`.
+Neither fix is committed yet.
+
+**2026-08-22 follow-up — the real remaining Phase 6 blocker turned out not to be
+warehouse/FIFO.** Starting on those surfaced that no Sales/Purchases line-item editor
+let a user pick a product at all, and Invoices/Bills had no working post action in the
+UI — meaning every Cost of Sales/Inventory posting above was only reachable via seed
+data, never real user input. Fixed: product pickers added to both `LineItemsEditor`s
+(and every form that uses them), `InvoiceForm` rebuilt onto the real
+`TaxRateService`/shared editor (was hardcoding 15% VAT), `InvoicesPage` now wires
+`onMarkAsSent`, and a new `BillForm`/"+ New Bill" flow + `BillDetail` post action make
+a standalone Bill creatable and postable for the first time. Full detail in
+`docs/KNOWN_ISSUES.md` and `docs/SA_SPEC_GAP_ANALYSIS.md`. 381/381 tests passing (up
+from 375), type-check/lint/build clean.
+
+Per-warehouse attribution done immediately after, same day: `DocumentLineItem`
+carries an optional `warehouseId`, threaded through `InventoryPostingAdapter` and
+every posting service, with a Warehouse picker in both `LineItemsEditor`s (shown only
+when there's more than one warehouse to choose from). 386/386 tests passing.
+
+User then asked for both remaining Phase 6 gaps at once: real 3-way PO/GRN/Invoice
+matching AND FIFO valuation. Built PO/GRN matching first (new GRNI account, real GL
+posting on `recordReceipt()`, GRNI-clearing on a linked Bill's `postBill()`), which is
+what gave FIFO a genuine per-lot cost source to draw on — then built FIFO on top of
+it. 408/408 tests passing (up from 386), type-check/lint/build clean. Phase 6 is now
+✅ complete — every §116 checklist item, plus both refinements beyond it. See
+`docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 6 section and `docs/KNOWN_ISSUES.md`'s Resolved
+section for full detail and the deliberately-still-open boundaries (no FIFO
+valuation-report UI, no true partial PO receipt, no PO-to-Bill price-variance
+handling).
 
 #### Reports Module (Reports Bee) — READY TO DISPATCH
 - [ ] Profit & Loss (revenue - COGS - opex = net income)

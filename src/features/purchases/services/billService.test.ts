@@ -36,13 +36,33 @@ function makeOpenPeriod(): AccountingPeriod {
  * here (see inventoryPostingAdapter.test.ts for that).
  */
 function makeInventoryReceiverStub(trackedProductIds: string[] = []) {
-  const recordedReceipts: { productId: string; quantity: number; unitCost: number; reference: string }[] = [];
+  const recordedReceipts: { productId: string; quantity: number; unitCost: number; reference: string; warehouseId?: string }[] = [];
   return {
     isTrackedInventory: async (productId: string) => trackedProductIds.includes(productId),
-    recordReceiptMovement: async (productId: string, quantity: number, unitCost: number, reference: string) => {
-      recordedReceipts.push({ productId, quantity, unitCost, reference });
+    recordReceiptMovement: async (
+      productId: string,
+      quantity: number,
+      unitCost: number,
+      reference: string,
+      warehouseId?: string,
+    ) => {
+      recordedReceipts.push({ productId, quantity, unitCost, reference, warehouseId });
     },
     recordedReceipts,
+  };
+}
+
+/**
+ * Stub PurchaseOrderLookup — `receivedPOs` maps a PO id to whatever
+ * `journalEntryId` its (stubbed) GRNI receipt posted, so tests can prove
+ * postBill() clears GRNI instead of debiting Inventory when the linked PO
+ * was already received. Empty by default: no bill in these tests is linked
+ * to a GRNI-received PO unless a test explicitly configures one.
+ */
+function makePurchaseOrderLookupStub(receivedPOs: Record<string, string> = {}) {
+  return {
+    getPurchaseOrder: async (id: string) =>
+      id in receivedPOs ? { journalEntryId: receivedPOs[id] } : undefined,
   };
 }
 
@@ -65,7 +85,7 @@ describe('BillService', () => {
       auditLog,
     );
     inventoryReceiver = makeInventoryReceiverStub();
-    billService = new BillService(repository, journalEntryService, taxRateService, inventoryReceiver);
+    billService = new BillService(repository, journalEntryService, taxRateService, inventoryReceiver, makePurchaseOrderLookupStub());
   });
 
   describe('getBills', () => {
@@ -324,7 +344,7 @@ describe('BillService', () => {
 
     it('capitalizes a tracked-inventory line to the Inventory account instead of Operating Expenses, and records a receipt after posting', async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver);
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub());
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-INV-TRACKED',
@@ -357,9 +377,84 @@ describe('BillService', () => {
       ]);
     });
 
+    it("passes a line item's warehouseId through to recordReceiptMovement", async () => {
+      const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub());
+
+      const bill = await localBillService.createBill({
+        billNumber: 'BILL-INV-WH',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [
+          {
+            id: 'li_1',
+            productId: 'prod_tracked',
+            warehouseId: 'wh_branch',
+            description: 'Widgets for resale',
+            quantity: 10,
+            unitPrice: 50,
+            taxRateId: 'tax_std_v2',
+            taxAmount: 75,
+            lineTotal: 500,
+          },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      await localBillService.postBill(bill.id);
+
+      expect(trackedReceiver.recordedReceipts).toEqual([
+        { productId: 'prod_tracked', quantity: 10, unitCost: 50, reference: 'Bill BILL-INV-WH', warehouseId: 'wh_branch' },
+      ]);
+    });
+
+    it('clears GRNI instead of debiting Inventory, and does NOT re-record the stock receipt, when the linked PO was already GRNI-received', async () => {
+      const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
+      const purchaseOrders = makePurchaseOrderLookupStub({ po_already_received: 'je_grni_receipt' });
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, purchaseOrders);
+
+      const bill = await localBillService.createBill({
+        billNumber: 'BILL-FROM-RECEIVED-PO',
+        supplierId: 'sup_test',
+        purchaseOrderId: 'po_already_received',
+        issueDate: '2026-08-22',
+        dueDate: '2026-09-22',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_tracked', description: 'Widgets for resale', quantity: 10, unitPrice: 50, taxRateId: 'tax_std_v2', taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const posted = await localBillService.postBill(bill.id);
+
+      const inventoryLedger = await journalEntryService.getAccountLedger('acc_1200');
+      expect(inventoryLedger.some((row) => row.entryId === posted.journalEntryId)).toBe(false); // Inventory NOT debited again
+
+      const grniLedger = await journalEntryService.getAccountLedger('acc_2050');
+      const grniLine = grniLedger.find((row) => row.entryId === posted.journalEntryId);
+      expect(grniLine?.debit).toBe(500); // clears the liability recorded at PO-receipt time
+
+      const totalDebit = (await journalEntryService.getEntry(posted.journalEntryId!))!.lines.reduce((s, l) => s + l.debit, 0);
+      const totalCredit = (await journalEntryService.getEntry(posted.journalEntryId!))!.lines.reduce((s, l) => s + l.credit, 0);
+      expect(totalDebit).toBeCloseTo(totalCredit);
+
+      expect(trackedReceiver.recordedReceipts).toEqual([]); // stock already moved at PO-receipt — not recorded again
+    });
+
     it('splits a mixed bill between Inventory (tracked) and Expense (non-tracked) lines', async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver);
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub());
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-INV-MIXED',
@@ -395,7 +490,7 @@ describe('BillService', () => {
 
     it('does not record a stock receipt if GL posting fails', async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver);
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub());
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-INV-FAIL',

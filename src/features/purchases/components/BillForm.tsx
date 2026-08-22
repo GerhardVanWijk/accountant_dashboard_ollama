@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import type { Customer, SalesOrder } from '@/types';
+import type { Supplier } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { FinancialNumber } from '@/components/ui/FinancialNumber';
 import { formatCurrency } from '@/utils/formatFinancial';
-import type { CreateSalesOrderDTO } from '../services';
+import type { CreateBillDTO } from '../services';
 import { LineItemsEditor } from './LineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
@@ -12,11 +12,10 @@ import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 const inputClass =
   'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
-export interface SalesOrderFormProps {
-  customers: Customer[];
-  salesOrder?: SalesOrder;
-  defaultOrderNumber: string;
-  onSubmit: (data: CreateSalesOrderDTO) => Promise<void>;
+export interface BillFormProps {
+  suppliers: Supplier[];
+  defaultBillNumber: string;
+  onSubmit: (data: CreateBillDTO) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -24,22 +23,31 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function plusDays(days: number): string {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 /**
- * Sales Order create/edit form. Sales Orders never post to the GL — this
- * only builds and validates the CreateSalesOrderDTO payload for
- * salesOrderService.createSalesOrder() / updateSalesOrder().
+ * Standalone Bill create form — this is the ONLY prior route into
+ * `billService.createBill()` for a bill with no purchase order behind it
+ * (`BillsPage`'s "+ New Bill" button had no handler at all before this).
+ * Follows PurchaseOrderForm's exact pattern: draft only, posted separately
+ * via BillDetail's "Post Bill" action so `billService.postBill()`'s GL/
+ * Inventory-capitalization logic always runs through the real service, per
+ * docs/LEDGER_ARCHITECTURE.md's post-then-mutate ordering.
  */
-export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSubmit, onCancel }: SalesOrderFormProps) {
+export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel }: BillFormProps) {
   const { taxRates } = useTaxRates();
   const { products } = useProducts();
   const { warehouses } = useWarehouses();
-  const [orderNumber, setOrderNumber] = useState(salesOrder?.orderNumber ?? defaultOrderNumber);
-  const [customerId, setCustomerId] = useState(salesOrder?.customerId ?? customers[0]?.id ?? '');
-  const [orderDate, setOrderDate] = useState(salesOrder ? salesOrder.orderDate.slice(0, 10) : today());
-  const [notes, setNotes] = useState(salesOrder?.notes ?? '');
-  const [lineItems, setLineItems] = useState<CreateSalesOrderDTO['lineItems']>(
-    salesOrder?.lineItems ?? [{ id: `li_${Date.now()}`, description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 }],
-  );
+  const [billNumber, setBillNumber] = useState(defaultBillNumber);
+  const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? '');
+  const [issueDate, setIssueDate] = useState(today());
+  const [dueDate, setDueDate] = useState(plusDays(30));
+  const [notes, setNotes] = useState('');
+  const [lineItems, setLineItems] = useState<CreateBillDTO['lineItems']>([
+    { id: `li_${Date.now()}`, description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 },
+  ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -49,8 +57,8 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
 
   async function handleSubmit() {
     setFormError(null);
-    if (!orderNumber.trim()) return setFormError('Order number is required.');
-    if (!customerId) return setFormError('Select a customer.');
+    if (!billNumber.trim()) return setFormError('Bill number is required.');
+    if (!supplierId) return setFormError('Select a supplier.');
     if (lineItems.length === 0 || lineItems.some((li) => !li.description.trim() || li.quantity <= 0)) {
       return setFormError('Every line item needs a description and a quantity greater than zero.');
     }
@@ -58,20 +66,21 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
     setIsSubmitting(true);
     try {
       await onSubmit({
-        orderNumber: orderNumber.trim(),
-        customerId,
-        quoteId: salesOrder?.quoteId,
-        orderDate,
+        billNumber: billNumber.trim(),
+        supplierId,
+        issueDate,
+        dueDate,
         lineItems,
         subtotal,
         taxTotal,
         total,
+        amountPaid: 0,
         currency: 'ZAR',
-        status: salesOrder?.status ?? 'pending',
+        status: 'draft',
         notes: notes || undefined,
       });
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not save sales order.');
+      setFormError(err instanceof Error ? err.message : 'Could not save bill.');
     } finally {
       setIsSubmitting(false);
     }
@@ -87,22 +96,26 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
 
       <div className="grid grid-cols-1 gap-md md:grid-cols-2">
         <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Order Number</span>
-          <input className={`${inputClass} font-mono`} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} />
+          <span className="font-medium text-text-primary">Bill Number</span>
+          <input className={`${inputClass} font-mono`} value={billNumber} onChange={(e) => setBillNumber(e.target.value)} />
         </label>
         <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Customer</span>
-          <select className={inputClass} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
+          <span className="font-medium text-text-primary">Supplier</span>
+          <select className={inputClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
               </option>
             ))}
           </select>
         </label>
         <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Order Date</span>
-          <input type="date" className={inputClass} value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
+          <span className="font-medium text-text-primary">Issue Date</span>
+          <input type="date" className={inputClass} value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-xs text-sm">
+          <span className="font-medium text-text-primary">Due Date</span>
+          <input type="date" className={inputClass} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </label>
       </div>
 
@@ -133,7 +146,7 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
           Cancel
         </Button>
         <Button variant="primary" type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
-          {isSubmitting ? 'Saving…' : salesOrder ? 'Save Sales Order' : 'Create Sales Order'}
+          {isSubmitting ? 'Saving…' : 'Create Bill'}
         </Button>
       </div>
     </div>

@@ -29,10 +29,25 @@ export interface InvoicePaymentRecorder {
   recordPayment(invoiceId: string, amount: number): Promise<unknown>;
 }
 
+/**
+ * Minimal surface of InventoryPoster this service depends on
+ * (src/features/inventory/services/inventoryPostingAdapter.ts) — reversing
+ * Cost of Sales and restoring stock for a customer return, mirroring
+ * InvoiceService's InventoryMover. See docs/KNOWN_ISSUES.md's now-resolved
+ * "Credit notes don't reverse Cost of Sales or restore stock quantity"
+ * entry.
+ */
+export interface InventoryReturnMover {
+  calculateCogs(productId: ID, quantity: number, warehouseId?: ID): Promise<number>;
+  recordReturnMovement(productId: ID, quantity: number, reference: string, warehouseId?: ID, unitCost?: number): Promise<void>;
+}
+
 /** Fixed Chart of Accounts ids this service posts against (src/mock-data/accounts.ts). */
 const SALES_REVENUE_ACCOUNT_ID = 'acc_4000'; // Sales Revenue (reused as a contra — see class doc)
 const VAT_OUTPUT_ACCOUNT_ID = 'acc_2100'; // VAT Output (Payable)
 const AR_ACCOUNT_ID = 'acc_1100'; // Accounts Receivable
+const COGS_ACCOUNT_ID = 'acc_5000'; // Cost of Goods Sold
+const INVENTORY_ACCOUNT_ID = 'acc_1200'; // Inventory
 
 const BALANCE_EPSILON = 0.01;
 
@@ -49,6 +64,7 @@ export class CreditNoteService {
     private readonly repository: ICreditNoteRepository,
     private readonly journalEntryService: JournalPoster,
     private readonly invoiceService: InvoicePaymentRecorder,
+    private readonly inventoryMover: InventoryReturnMover,
   ) {}
 
   async getCreditNotes(): Promise<CreditNote[]> {
@@ -90,14 +106,25 @@ export class CreditNoteService {
 
   /**
    * Posts a credit note to the ledger and transitions it from 'draft' to
-   * 'issued'. Posts BEFORE updating the domain record — see
-   * docs/LEDGER_ARCHITECTURE.md and bankTransactionService.ts's
+   * 'issued'. Posts BEFORE updating the domain record and BEFORE restoring
+   * stock — see docs/LEDGER_ARCHITECTURE.md and bankTransactionService.ts's
    * postAllocationsToLedger — so a failed post never leaves an orphaned
-   * "issued" credit note row.
+   * "issued" credit note row or stock restored with no matching journal
+   * entry.
    *
    * debit  Sales Revenue        (acc_4000) for creditNote.subtotal
    * debit  VAT Output           (acc_2100) for creditNote.taxTotal (only if > 0)
    * credit Accounts Receivable  (acc_1100) for creditNote.total
+   * debit  Inventory            (acc_1200)  credit Cost of Goods Sold
+   *        (acc_5000), for the total Cost of Sales reversal across every
+   *        tracked-inventory line item — only when `reason === 'return'`
+   *        (the goods are physically coming back; a pricing_error/discount/
+   *        other credit note is a value adjustment with nothing to put back
+   *        on the shelf). Cost is recalculated at the product's CURRENT
+   *        weighted-average cost, the same simplification
+   *        InvoiceService.postInvoice() already makes — not necessarily the
+   *        exact cost the goods left at if the WAC has since moved. Stock
+   *        itself is only restored AFTER this entry posts successfully.
    */
   async issueCreditNote(id: string, postedByUserId?: ID): Promise<CreditNote> {
     const creditNote = await this.requireCreditNote(id);
@@ -130,6 +157,18 @@ export class CreditNoteService {
       credit: creditNote.total,
     });
 
+    const returnLines = creditNote.reason === 'return' ? creditNote.lineItems.filter((line) => line.productId) : [];
+    const cogsByLine = await Promise.all(
+      returnLines.map((line) => this.inventoryMover.calculateCogs(line.productId!, line.quantity, line.warehouseId)),
+    );
+    const totalCogs = cogsByLine.reduce((sum, c) => sum + c, 0);
+    if (totalCogs > 0) {
+      lines.push(
+        { accountId: INVENTORY_ACCOUNT_ID, description: `Credit Note ${creditNote.creditNoteNumber} - Inventory`, debit: totalCogs, credit: 0 },
+        { accountId: COGS_ACCOUNT_ID, description: `Credit Note ${creditNote.creditNoteNumber} - Cost of Sales reversal`, debit: 0, credit: totalCogs },
+      );
+    }
+
     const entry = await this.journalEntryService.postJournalEntry({
       date: creditNote.issueDate,
       memo: `Credit Note ${creditNote.creditNoteNumber}`,
@@ -137,6 +176,21 @@ export class CreditNoteService {
       postedByUserId,
       lines,
     });
+
+    await Promise.all(
+      returnLines.map((line, index) =>
+        this.inventoryMover.recordReturnMovement(
+          line.productId!,
+          line.quantity,
+          `Credit Note ${creditNote.creditNoteNumber}`,
+          line.warehouseId,
+          // Ties a FIFO return lot's cost to the exact amount just
+          // reversed to the GL above, so the lot ledger and the GL can
+          // never disagree — see InventoryPostingAdapter's class doc.
+          line.quantity > 0 ? cogsByLine[index] / line.quantity : undefined,
+        ),
+      ),
+    );
 
     return this.repository.update(id, { status: 'issued', journalEntryId: entry.id });
   }
