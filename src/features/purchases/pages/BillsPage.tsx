@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { useBills } from '../hooks/useBills';
 import { useBillMutations } from '../hooks/useBillMutations';
-import { BillList, BillDetail, BillForm, Modal } from '../components';
+import { usePayments, usePaymentMutations } from '../hooks';
+import { BillList, BillDetail, BillForm, PaymentForm, Modal } from '../components';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 
 /**
@@ -19,14 +20,21 @@ export function BillsPage() {
   const { bills, isLoading, error, refetch } = useBills();
   const { suppliers } = useSuppliers();
   const billMutations = useBillMutations();
+  const { payments, refetch: refetchPayments } = usePayments();
+  const { createPayment } = usePaymentMutations();
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showRecordPayment, setShowRecordPayment] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const selectedBill = bills.find((b) => b.id === selectedBillId);
 
   const suppliersMap = useMemo(
     () => Object.fromEntries(suppliers.map((s) => [s.id, s.name])),
     [suppliers],
+  );
+  const outstandingBills = useMemo(
+    () => bills.filter((bill) => bill.status !== 'void' && bill.total > bill.amountPaid),
+    [bills],
   );
 
   async function runAction(action: () => Promise<unknown>) {
@@ -43,6 +51,17 @@ export function BillsPage() {
     await billMutations.createBill(data);
     await refetch();
     setShowCreateModal(false);
+  }
+
+  /**
+   * Deliberately does NOT catch — PaymentForm's own onSubmit handler
+   * already wraps this in try/catch and shows the error inline in the
+   * modal, same pattern PaymentsPage.handleCreate() uses.
+   */
+  async function handleRecordPayment(data: Parameters<typeof createPayment>[0]) {
+    await createPayment(data);
+    await Promise.all([refetchPayments(), refetch()]);
+    setShowRecordPayment(false);
   }
 
   if (selectedBill) {
@@ -67,7 +86,21 @@ export function BillsPage() {
           suppliersMap={suppliersMap}
           onClose={() => setSelectedBillId(null)}
           onPost={(id) => void runAction(() => billMutations.postBill(id))}
+          onRecordPayment={() => setShowRecordPayment(true)}
         />
+
+        {showRecordPayment && (
+          <Modal title={`Record Payment — ${selectedBill.billNumber}`} onClose={() => setShowRecordPayment(false)} wide>
+            <PaymentForm
+              suppliers={suppliers}
+              outstandingBills={outstandingBills}
+              defaultPaymentNumber={nextDocumentNumber(payments.map((p) => p.paymentNumber), 'PAY')}
+              presetBillId={selectedBill.id}
+              onSubmit={handleRecordPayment}
+              onCancel={() => setShowRecordPayment(false)}
+            />
+          </Modal>
+        )}
       </div>
     );
   }

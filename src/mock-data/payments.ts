@@ -1,5 +1,6 @@
 import type { Payment } from '@/types';
 import { seedSuppliers } from './suppliers';
+import { seedJournalEntryId } from './seedJournalEntryId';
 
 function nowISO(): string {
   return new Date().toISOString();
@@ -10,12 +11,14 @@ function nowISO(): string {
  * amountPaid figure already present on the corresponding seedBills record
  * (bill_00000001/0002 fully paid, bill_00000003/0012 partially paid) so the
  * Payment Register and Vendor Aging both show something coherent out of the
- * box. These are display-only seed rows created directly in the repository
- * (not run through PaymentService.createPayment()), so — like seedBills —
- * they intentionally carry no journalEntryId: there is no matching seeded
- * GL entry for them, only for payments recorded through the real service.
+ * box. Every row here is fully allocated (`unallocatedAmount: 0`) and gets
+ * a matching `journalEntryId` pointing at the JournalEntry
+ * `generateSeedPostings.ts` produces for it (`src/mock-data/journalEntries.ts`)
+ * — so the AP control account actually reconciles against real seed bills'
+ * `amountPaid`, not just their original posting (fixed 2026-08-22, see
+ * docs/KNOWN_ISSUES.md). Same pattern as `seedInvoices`/`seedCustomerReceipts`.
  */
-export const seedPayments: Payment[] = [
+const rawSeedPayments: Payment[] = [
   {
     id: 'pay_00000001',
     paymentNumber: 'PAY-2026-0001',
@@ -77,3 +80,7 @@ export const seedPayments: Payment[] = [
     updatedAt: nowISO(),
   },
 ];
+
+export const seedPayments: Payment[] = rawSeedPayments.map((payment) =>
+  payment.unallocatedAmount > 0 ? payment : { ...payment, journalEntryId: seedJournalEntryId(payment.id) },
+);

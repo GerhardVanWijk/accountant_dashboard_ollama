@@ -1,26 +1,31 @@
-import type { Bill, CreditNote, Invoice, JournalEntry, JournalLine, TaxRate } from '@/types';
+import type { Bill, CreditNote, CustomerReceipt, Invoice, JournalEntry, JournalLine, Payment, TaxRate } from '@/types';
 import { seedTaxRates } from './taxRates';
 import { seedJournalEntryId } from './seedJournalEntryId';
 
 /**
  * Generates the SAME JournalEntry a real postInvoice()/postBill()/
- * issueCreditNote() call would produce, for every non-draft/non-void seed
- * Invoice/Bill/CreditNote — so the seed data reconciles against itself
- * (docs/KNOWN_ISSUES.md: previously no seed document had a matching real
- * GL posting, so the AR/AP and VAT reconciliations always showed a
- * variance against fixture data). This intentionally mirrors
- * invoiceService.ts/billService.ts's account ids and math rather than
- * calling those services directly — repositories/seed data are plain
- * synchronous data, not a place to run async service logic — so keep the
- * two in sync if that posting logic ever changes.
+ * issueCreditNote()/recordReceipt()/createPayment() call would produce,
+ * for every non-draft/non-void seed Invoice/Bill/CreditNote and every
+ * fully-allocated seed CustomerReceipt/Payment — so the seed data
+ * reconciles against itself (docs/KNOWN_ISSUES.md: previously no seed
+ * document had a matching real GL posting, so the AR/AP and VAT
+ * reconciliations always showed a variance against fixture data). This
+ * intentionally mirrors invoiceService.ts/billService.ts/
+ * customerReceiptService.ts/paymentService.ts's account ids and math
+ * rather than calling those services directly — repositories/seed data
+ * are plain synchronous data, not a place to run async service logic —
+ * so keep these in sync if that posting logic ever changes.
  *
- * Does NOT generate anything for payment/receipt allocations — a seed
- * invoice/bill's `amountPaid` is not backed by a matching GL entry here,
- * only the ORIGINAL invoice/bill posting is. That's enough for the VAT
- * reconciliation (VAT is fully recognized at posting time, unaffected by
- * later payment status) but NOT enough for the AR/AP subledger
- * reconciliation to show zero variance for a partially-paid document —
- * see docs/KNOWN_ISSUES.md, that remains a known, separate gap.
+ * A receipt/payment with `unallocatedAmount > 0` (money received/paid "on
+ * account", not yet applied to a specific invoice/bill) is deliberately
+ * NOT backfilled here: a real recordReceipt()/createPayment() call always
+ * credits/debits the control account for the FULL amount regardless of
+ * allocation, but `reconcileAccountsReceivable()`/`reconcileAccountsPayable()`
+ * only sums OPEN INVOICE/BILL balances, not unapplied cash sitting against
+ * a customer/supplier with no invoice to net against — so posting an
+ * on-account entry would introduce a genuine (if narrow) reconciliation
+ * variance of its own, a real modeling gap distinct from "seed data was
+ * never posted" and not attempted here. See docs/KNOWN_ISSUES.md.
  */
 
 const AR_ACCOUNT_ID = 'acc_1100';
@@ -29,6 +34,7 @@ const VAT_OUTPUT_ACCOUNT_ID = 'acc_2100';
 const EXPENSE_ACCOUNT_ID = 'acc_5100';
 const VAT_INPUT_ACCOUNT_ID = 'acc_2110';
 const AP_ACCOUNT_ID = 'acc_2000';
+const CASH_AND_BANK_ACCOUNT_ID = 'acc_1000';
 
 /** Mirrors BillService.splitDeductibleVat() exactly — see that method's doc comment for the conservative-fallback rationale. */
 function splitDeductibleVat(lineItems: Bill['lineItems'], taxTotal: number, allTaxRates: TaxRate[]): { deductibleVat: number; nonDeductibleVat: number } {
@@ -126,9 +132,51 @@ function generateCreditNoteEntry(creditNote: CreditNote, entryNumber: string): J
   };
 }
 
+/** Mirrors CustomerReceiptService.recordReceipt()'s posting exactly: DR Cash and Bank / CR Accounts Receivable, for the full receipt amount. */
+function generateCustomerReceiptEntry(receipt: CustomerReceipt, entryNumber: string): JournalEntry {
+  return {
+    id: seedJournalEntryId(receipt.id),
+    entryNumber,
+    date: receipt.date,
+    memo: `Customer Receipt ${receipt.receiptNumber}`,
+    source: 'customer_receipt',
+    status: 'posted',
+    postedAt: receipt.date,
+    currency: 'ZAR',
+    lines: [
+      { id: `${entryNumber}_1`, accountId: CASH_AND_BANK_ACCOUNT_ID, description: `Receipt ${receipt.receiptNumber}`, debit: receipt.amount, credit: 0 },
+      { id: `${entryNumber}_2`, accountId: AR_ACCOUNT_ID, description: `Receipt ${receipt.receiptNumber}`, debit: 0, credit: receipt.amount },
+    ],
+    createdAt: receipt.date,
+    updatedAt: receipt.date,
+  };
+}
+
+/** Mirrors PaymentService.createPayment()'s posting exactly: DR Accounts Payable / CR Cash and Bank, for the full payment amount. */
+function generatePaymentEntry(payment: Payment, entryNumber: string): JournalEntry {
+  return {
+    id: seedJournalEntryId(payment.id),
+    entryNumber,
+    date: payment.date,
+    memo: `Payment ${payment.paymentNumber} to supplier ${payment.supplierId}`,
+    source: 'payment',
+    status: 'posted',
+    postedAt: payment.date,
+    currency: 'ZAR',
+    lines: [
+      { id: `${entryNumber}_1`, accountId: AP_ACCOUNT_ID, description: `Payment ${payment.paymentNumber}`, debit: payment.amount, credit: 0 },
+      { id: `${entryNumber}_2`, accountId: CASH_AND_BANK_ACCOUNT_ID, description: `Payment ${payment.paymentNumber}`, debit: 0, credit: payment.amount },
+    ],
+    createdAt: payment.date,
+    updatedAt: payment.date,
+  };
+}
+
 /**
  * Generates one JournalEntry per non-draft/non-void seed Invoice/Bill/
- * CreditNote, numbered sequentially starting after `startingNumber`.
+ * CreditNote, plus one per fully-allocated seed CustomerReceipt/Payment
+ * (see this file's doc comment for why on-account ones are excluded),
+ * numbered sequentially starting after `startingNumber`.
  */
 export function generateSeedPostings(
   invoices: Invoice[],
@@ -136,6 +184,8 @@ export function generateSeedPostings(
   creditNotes: CreditNote[],
   startingNumber: number,
   allTaxRates: TaxRate[] = seedTaxRates,
+  customerReceipts: CustomerReceipt[] = [],
+  payments: Payment[] = [],
 ): JournalEntry[] {
   let n = startingNumber;
   const nextEntryNumber = () => `JE-${String(n++).padStart(4, '0')}`;
@@ -149,6 +199,12 @@ export function generateSeedPostings(
   }
   for (const creditNote of creditNotes.filter(isPostedCreditNote)) {
     entries.push(generateCreditNoteEntry(creditNote, nextEntryNumber()));
+  }
+  for (const receipt of customerReceipts.filter((r) => r.unallocatedAmount <= 0)) {
+    entries.push(generateCustomerReceiptEntry(receipt, nextEntryNumber()));
+  }
+  for (const payment of payments.filter((p) => p.unallocatedAmount <= 0)) {
+    entries.push(generatePaymentEntry(payment, nextEntryNumber()));
   }
 
   // Chronological order, matching how a real ledger accumulates entries.

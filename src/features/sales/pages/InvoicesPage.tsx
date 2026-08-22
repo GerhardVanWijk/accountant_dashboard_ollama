@@ -3,8 +3,12 @@ import type { Invoice } from '@/types';
 import { InvoiceList } from '@/features/sales/components/InvoiceList';
 import { InvoiceDetail } from '@/features/sales/components/InvoiceDetail';
 import { InvoiceForm } from '@/features/sales/components/InvoiceForm';
+import { CustomerReceiptForm } from '@/features/sales/components/CustomerReceiptForm';
+import { Modal } from '@/features/sales/components/Modal';
 import { useInvoices, useInvoice, useInvoiceMutations } from '@/features/sales/hooks/useInvoices';
 import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
+import { useCustomerReceipts } from '@/features/sales/hooks/useCustomerReceipts';
+import { useCustomerReceiptMutations } from '@/features/sales/hooks/useCustomerReceiptMutations';
 import { useCompany } from '@/features/admin/hooks/useCompany';
 import type { CreateInvoiceDTO } from '@/services/invoiceService';
 
@@ -29,6 +33,25 @@ export function InvoicesPage() {
   const { createInvoice, updateInvoice, markInvoiceAsSent, saving, error: saveError } = useInvoiceMutations();
   const { company } = useCompany();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showRecordPayment, setShowRecordPayment] = useState(false);
+
+  const { receipts, refetch: refetchReceipts } = useCustomerReceipts();
+  const { recordReceipt } = useCustomerReceiptMutations();
+  const nextReceiptNumber = `RCT-${new Date().getFullYear()}-${String(receipts.length + 1).padStart(4, '0')}`;
+
+  /**
+   * Deliberately does NOT catch — CustomerReceiptForm's own onSubmit
+   * handler already wraps this in try/catch and shows the error inline
+   * in the modal (docs/DO_NOT_BREAK.md's component-state convention),
+   * same pattern CustomerReceiptsPage.handleCreate() uses.
+   */
+  async function handleRecordPayment(data: Parameters<typeof recordReceipt>[0]): Promise<void> {
+    await recordReceipt(data);
+    await refetchReceipts();
+    setShowRecordPayment(false);
+    refetchList();
+    setDataVersion((t) => t + 1);
+  }
 
   async function handleMarkAsSent(invoiceId: string): Promise<void> {
     setActionError(null);
@@ -122,8 +145,22 @@ export function InvoicesPage() {
             company={company}
             onEdit={() => setFormState({ mode: 'edit', invoice: detailInvoice })}
             onMarkAsSent={() => void handleMarkAsSent(detailInvoice.id)}
+            onRecordPayment={() => setShowRecordPayment(true)}
           />
         </div>
+      )}
+
+      {showRecordPayment && view.type === 'detail' && detailInvoice && (
+        <Modal title={`Record Payment — ${detailInvoice.invoiceNumber}`} onClose={() => setShowRecordPayment(false)} wide>
+          <CustomerReceiptForm
+            customers={customerList}
+            invoices={invoices}
+            defaultReceiptNumber={nextReceiptNumber}
+            presetInvoiceId={detailInvoice.id}
+            onSubmit={handleRecordPayment}
+            onCancel={() => setShowRecordPayment(false)}
+          />
+        </Modal>
       )}
 
       {formState && (

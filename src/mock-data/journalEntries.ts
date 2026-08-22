@@ -2,6 +2,8 @@ import type { JournalEntry } from '@/types';
 import { seedInvoices } from './invoices';
 import { seedBills } from './bills';
 import { seedCreditNotes } from './creditNotes';
+import { seedCustomerReceipts } from './customerReceipts';
+import { seedPayments } from './payments';
 import { generateSeedPostings } from './generateSeedPostings';
 
 const openingBalanceEntry: JournalEntry = {
@@ -24,19 +26,22 @@ const openingBalanceEntry: JournalEntry = {
 
 /**
  * Seed general ledger: the opening-balance entry, plus one generated
- * JournalEntry per non-draft/non-void seed Invoice/Bill/Credit Note
- * (generateSeedPostings.ts — mirrors the real postInvoice()/postBill()/
- * issueCreditNote() math) so the seed data's AR/AP/VAT control accounts
- * actually reconcile against the seed documents themselves, rather than
- * every reconciliation report showing a variance purely because these
- * fixtures were never run through the real posting pipeline (see
- * docs/KNOWN_ISSUES.md's prior entry on this, now resolved for postings —
- * payment/receipt allocations are still not backfilled, a separate,
- * narrower remaining gap noted there). Every entry here already satisfies
- * the double-entry invariant enforced by JournalEntryService.validateLines
- * — sum(debit) === sum(credit).
+ * JournalEntry per non-draft/non-void seed Invoice/Bill/Credit Note AND
+ * per fully-allocated seed CustomerReceipt/Payment (generateSeedPostings.ts
+ * — mirrors the real postInvoice()/postBill()/issueCreditNote()/
+ * recordReceipt()/createPayment() math) so the seed data's AR/AP/VAT
+ * control accounts actually reconcile against the seed documents
+ * themselves, rather than every reconciliation report showing a variance
+ * purely because these fixtures were never run through the real posting
+ * pipeline (see docs/KNOWN_ISSUES.md's Resolved section). The one seed
+ * receipt left genuinely unallocated (money on account, no invoice to
+ * apply it to yet) is deliberately excluded — see generateSeedPostings.ts's
+ * doc comment. Every entry here already satisfies the double-entry
+ * invariant enforced by JournalEntryService.validateLines — sum(debit) ===
+ * sum(credit) — and, since 2026-08-22, independently re-checked at the
+ * storage layer by MockJournalEntryRepository too.
  */
 export const seedJournalEntries: JournalEntry[] = [
   openingBalanceEntry,
-  ...generateSeedPostings(seedInvoices, seedBills, seedCreditNotes, 2),
+  ...generateSeedPostings(seedInvoices, seedBills, seedCreditNotes, 2, undefined, seedCustomerReceipts, seedPayments),
 ];

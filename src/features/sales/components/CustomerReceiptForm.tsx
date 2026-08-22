@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Customer, Invoice, ReceiptAllocation, ReceiptMethod } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -27,6 +27,15 @@ export interface CustomerReceiptFormProps {
   defaultReceiptNumber: string;
   onSubmit: (data: CreateCustomerReceiptDTO) => Promise<void>;
   onCancel: () => void;
+  /**
+   * "Record Payment" from InvoiceDetail (docs/KNOWN_ISSUES.md: the prop
+   * existed but was never wired) opens THIS form rather than a
+   * bespoke one-off — it's the real, GL-posting receipt flow, just
+   * pre-aimed at one invoice: customer, amount (the outstanding balance),
+   * and a single allocation row are all pre-filled, still fully editable
+   * (e.g. to record a partial payment) before the user submits.
+   */
+  presetInvoiceId?: string;
 }
 
 function today(): string {
@@ -40,17 +49,40 @@ function today(): string {
  * fully-validated CreateCustomerReceiptDTO (amount = sum(allocations) +
  * unallocatedAmount) before submitting.
  */
-export function CustomerReceiptForm({ customers, invoices, defaultReceiptNumber, onSubmit, onCancel }: CustomerReceiptFormProps) {
+export function CustomerReceiptForm({
+  customers,
+  invoices,
+  defaultReceiptNumber,
+  onSubmit,
+  onCancel,
+  presetInvoiceId,
+}: CustomerReceiptFormProps) {
+  const presetInvoice = presetInvoiceId ? invoices.find((inv) => inv.id === presetInvoiceId) : undefined;
+  const presetOutstanding = presetInvoice ? Math.max(0, presetInvoice.total - presetInvoice.amountPaid) : 0;
+
   const [receiptNumber, setReceiptNumber] = useState(defaultReceiptNumber);
-  const [customerId, setCustomerId] = useState(customers[0]?.id ?? '');
+  const [customerId, setCustomerId] = useState(presetInvoice?.customerId ?? customers[0]?.id ?? '');
   const [date, setDate] = useState(today());
   const [method, setMethod] = useState<ReceiptMethod>('eft');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const [amount, setAmount] = useState<number>(0);
-  const [allocations, setAllocations] = useState<ReceiptAllocation[]>([]);
+  const [amount, setAmount] = useState<number>(presetOutstanding);
+  const [allocations, setAllocations] = useState<ReceiptAllocation[]>(
+    presetInvoice ? [{ invoiceId: presetInvoice.id, amount: presetOutstanding }] : [],
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Only re-applies if the preset invoice itself changes (e.g. the modal is
+  // reused for a different invoice without unmounting) — never overwrites
+  // what the user has since typed.
+  useEffect(() => {
+    if (!presetInvoice) return;
+    setCustomerId(presetInvoice.customerId);
+    setAmount(presetOutstanding);
+    setAllocations([{ invoiceId: presetInvoice.id, amount: presetOutstanding }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetInvoiceId]);
 
   const openInvoices = invoices.filter((inv) => inv.customerId === customerId && inv.total - inv.amountPaid > EPSILON);
   const allocatedTotal = allocations.reduce((sum, a) => sum + a.amount, 0);

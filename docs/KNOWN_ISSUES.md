@@ -7,33 +7,6 @@ each section.
 
 ## Open
 
-### Invoice/Bill "Record Payment" actions exist as component props but are never wired up
-`InvoiceDetail`'s `onRecordPayment` and `BillDetail`'s `onRecordPayment` (both take an
-id and expect the parent page to collect an amount and call
-`invoiceService`/`billService`'s real `recordPayment()`) are never passed from
-`InvoicesPage`/`BillsPage` — found 2026-08-22 while fixing the adjacent "no way to
-post from the UI" gap (see Resolved below) in the same two files. Neither page has an
-amount-entry UI to drive them yet (no existing pattern to reuse — `CustomerReceiptForm`
-handles the Sales-side receipt-allocation flow but takes a different shape). Distinct
-from the posting gap: an invoice/bill can now be created and posted through the UI,
-just not paid down, through this UI, yet.
-
-### AR/AP subledger reconciliation still shows a variance for partially-paid seed documents
-`generateSeedPostings.ts` (2026-08-21) backfilled the ORIGINAL posting entry for every
-non-draft/non-void seed Invoice/Bill (see Resolved below), which is enough for VAT
-reconciliation to hold — VAT is fully recognized at posting time, unaffected by later
-payment status. It is NOT enough for the AR/AP subledger reconciliation
-(`reconcileAccountsReceivable`/`reconcileAccountsPayable`) to show zero variance for any
-seed document with `amountPaid > 0` (several seed invoices/bills are `paid`/
-`partially_paid`): the GL's AR/AP control account balance reflects the FULL original
-posting, while the subledger total (`total - amountPaid`) is net of payments that have
-no matching GL credit. Fixing this means also backfilling matching receipt/payment
-journal entries (crediting AR/debiting AP for each `amountPaid`), which is a
-meaningfully larger undertaking than the VAT-focused posting backfill done here — not
-attempted in this pass. Confirmed via `vatReportService.test.ts`'s integration test that
-VAT reconciliation itself is clean; this is specifically the AR/AP side, deliberately
-scoped out.
-
 ### Dashboard financials are fully mocked
 Revenue/Expenses/Profit and the Cash Flow chart have no real General Ledger or Banking
 data to draw from yet (`src/features/dashboard/mock-data/financials.ts`, commented
@@ -47,6 +20,64 @@ git config). This is intentional per explicit user instruction, not a misconfigu
 — noted here only so a future session doesn't "fix" it back to the global default.
 
 ## Resolved
+
+### Invoice/Bill "Record Payment" actions existed as component props but were never wired up
+`InvoiceDetail`'s `onRecordPayment` and `BillDetail`'s `onRecordPayment` were never
+passed from `InvoicesPage`/`BillsPage`, and neither page had an amount-entry UI to
+drive them. Fixed 2026-08-22 — rather than building a bespoke one-off amount field
+(which would have meant calling `invoiceService`/`billService`'s naive
+`recordPayment()` directly, bypassing the GL entirely), both detail pages now open the
+SAME real, GL-posting forms the Customer Receipts / Payment Register pages already use
+(`CustomerReceiptForm`/`PaymentForm`), pre-aimed at the one invoice/bill via a new
+`presetInvoiceId`/`presetBillId` prop: customer/supplier, amount (the outstanding
+balance), and a single allocation row are all pre-filled, still fully editable (e.g.
+to record a partial payment) before submitting. Also tightened both detail
+components' "Record Payment" button gating while wiring this — `InvoiceDetail` showed
+it for a still-`'draft'` invoice (no real AR posted yet to pay down) and `BillDetail`
+showed it for a `'void'` bill with a leftover `outstandingAmount` (a voided bill
+carries no real liability), both now excluded. 6 new tests (3 per form, covering the
+preset prefill, that it still submits correctly with no further input, and that an
+unset preset leaves the form at its normal empty-state defaults).
+
+### AR/AP subledger reconciliation showed a variance for partially-paid seed documents
+`generateSeedPostings.ts` (2026-08-21) backfilled the ORIGINAL posting entry for every
+non-draft/non-void seed Invoice/Bill, enough for VAT reconciliation (VAT is fully
+recognized at posting time, unaffected by later payment status) but not for
+`reconcileAccountsReceivable()`/`reconcileAccountsPayable()`: the GL's AR/AP control
+account reflected the FULL original posting while the subledger total
+(`total - amountPaid`) was net of payments with no matching GL credit. Fixed
+2026-08-22: `generateSeedPostings.ts` now also generates a receipt/payment entry (DR
+Cash and Bank / CR Accounts Receivable, or DR Accounts Payable / CR Cash and Bank,
+mirroring `customerReceiptService.recordReceipt()`/`paymentService.createPayment()`
+exactly) for every FULLY-ALLOCATED seed `CustomerReceipt`/`Payment`
+(`unallocatedAmount === 0`) — `seedCustomerReceipts`/`seedPayments` gained a matching
+`journalEntryId`, same `seedJournalEntryId()` pattern `seedInvoices` already used. The
+one genuinely on-account seed receipt (money received with no invoice to apply it to
+yet) is deliberately excluded — see below.
+
+**Found and fixed along the way, not guessed**: cross-checking every seed Invoice/Bill
+with `amountPaid > 0` against the seed `CustomerReceipt`/`Payment` records that were
+supposed to explain it surfaced two real fixture bugs, not just the missing GL
+postings: `rcpt_00000002` claimed `amount: 1500` against `inv_00000002`, but that
+invoice's own `amountPaid` was `1437.50` (half of its `2875` total, matching its
+`'partially_paid'` status) — the receipt was corrected to match the invoice, not the
+other way around, since the invoice is what the subledger check actually reads. Three
+paid/partially-paid invoices (`inv_00000006`, `inv_00000008`, `inv_00000014`) had NO
+seed receipt behind their `amountPaid` at all — three receipts added
+(`rcpt_00000004`-`rcpt_00000006`), each matching its invoice's real `amountPaid`
+exactly. Proven, not just claimed: a new integration test
+(`subledgerReconciliation.test.ts`) wires the real `JournalEntryService` against the
+real seed ledger and real seed Invoices/Bills and asserts both `reconcileAccountsReceivable()`
+and `reconcileAccountsPayable()` report `isReconciled: true` — it failed against the
+first backfill attempt (the two fixture bugs above), which is how they were caught.
+
+**Deliberately still not backfilled**: `rcpt_00000003` (2000 on-account, no invoice
+allocation) gets no journal entry. A real `recordReceipt()` call always credits AR for
+the full amount regardless of allocation, but `reconcileAccountsReceivable()` only
+sums open invoice balances, not unapplied cash sitting against a customer with no
+invoice to net against — posting this one would introduce a genuine reconciliation
+variance of its own (real unapplied-cash accounting, not currently modeled), a
+separate, narrower gap left as-is rather than papered over.
 
 ### No Bill-line capitalization path into the Fixed Asset Register
 `FixedAsset.sourceBillId` existed specifically for this since Phase 7 shipped

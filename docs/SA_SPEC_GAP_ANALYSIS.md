@@ -82,12 +82,12 @@ as part of Phase 5 (VAT), not patched in place — a real config/versioning mode
 | Bills post to GL (§8, §100) | ✅, and reachable from the UI as of 2026-08-22 | `billService.postBill()`: DR Expense, DR VAT Input, CR AP. Until 2026-08-22, a standalone Bill had no create form or post action at all (`BillsPage`'s "+ New Bill" button had no handler) — only PO→Bill conversion could post one — see `docs/KNOWN_ISSUES.md` |
 | Credit notes reverse the GL entry, not the original (§15, §36) | ✅ | `creditNoteService.issueCreditNote()` posts a genuinely reversing entry; original invoice is untouched |
 | Credit note allocation against open invoices (§15) | ✅ | `creditNoteService.allocateToInvoice()` → `InvoiceService.recordPayment()` |
-| Customer receipts, multi-invoice allocation (§17) | ✅ | `customerReceiptService` |
-| Vendor payments, multi-bill allocation (§18) | ✅ | `paymentService` (Purchases) |
+| Customer receipts, multi-invoice allocation (§17) | ✅, and reachable from Invoice/Bill detail as of 2026-08-22 | `customerReceiptService`. Until 2026-08-22, `InvoiceDetail`/`BillDetail`'s "Record Payment" buttons existed but were never wired to a real page — both now open the real `CustomerReceiptForm`/`PaymentForm` pre-aimed at that document — see `docs/KNOWN_ISSUES.md` |
+| Vendor payments, multi-bill allocation (§18) | ✅, and reachable from Invoice/Bill detail as of 2026-08-22 | `paymentService` (Purchases) — see the row above |
 | Quote → Sales Order → Invoice conversion chain (§63, §99 traceability) | ✅ (partial) | `quoteService.convertToSalesOrder()`, `salesOrderService.convertToInvoice()` — the resulting invoice is a draft, posted separately when the user marks it Sent (deliberate: matches "sending" an invoice being a distinct action, not silently posting on conversion) |
 | PO → Bill conversion (§63) | ✅, and no longer double-clickable | `PurchaseOrdersPage`'s convert action composes `createBill()`+`postBill()`; `PurchaseOrder.billId` (added 2026-08-21) blocks converting the same PO twice, enforced in `purchaseOrderService.convertToBill()` itself, not just the UI |
 | Debtors/Creditors ageing (§17, §18, §64) | ✅ fixed 2026-08-21 | `invoicesToOpenItems()`/`billsToOpenBills()` adapters feed real, non-draft/non-void Invoice/Bill data (aged on outstanding balance) into the existing aging math — Customer/Supplier Detail pages and the Dashboard's fleet-wide aggregation all consume real data now |
-| Customer/Supplier subledger reconciles to AR/AP control account (§17, §18, §70) | ✅ fixed 2026-08-21 | `src/features/accounting/services/subledgerReconciliation.ts`'s `reconcileAccountsReceivable()`/`reconcileAccountsPayable()`, compared against `journalEntryService.getAccountLedger()`'s real posted balance; surfaced on the Trial Balance page, 5 tests |
+| Customer/Supplier subledger reconciles to AR/AP control account (§17, §18, §70) | ✅ fixed 2026-08-21, gap closed 2026-08-22 | `src/features/accounting/services/subledgerReconciliation.ts`'s `reconcileAccountsReceivable()`/`reconcileAccountsPayable()`, compared against `journalEntryService.getAccountLedger()`'s real posted balance; surfaced on the Trial Balance page. `generateSeedPostings.ts` now backfills matching receipt/payment GL entries for every fully-allocated seed `CustomerReceipt`/`Payment`, not just the original invoice/bill posting — proven clean against the real seed ledger by an integration test, not just unit-tested in isolation (`docs/KNOWN_ISSUES.md`) |
 | Tax invoice required fields (§13) | ✅ fixed 2026-08-21, still partial | `InvoiceDetail`/`CreditNoteDetail` now render the real `Company` name + VAT registration number + CIPC registration number via `useCompany()`. Still missing: `Company` has no address field to render (not fabricated — genuinely absent from the type) |
 | Invoice numbering is sequential/unique/immutable (§14) | ⚠️ partial, not addressed in this pass | Seed data and UI-suggested next-numbers (`nextDocumentNumber.ts`) follow a `PREFIX-YEAR-NNNN` pattern, but no service enforces uniqueness or sequentiality at creation time — `createInvoice()`/`createBill()`/etc. accept whatever `invoiceNumber`/`billNumber` string the caller passes. Not exploitable via the current UI (forms pre-fill the suggested next number), but not enforced at the layer the spec requires. |
 | No deletion of posted documents (§14, §36, §72, §79) | ✅ fixed 2026-08-21 | All 8 services (Invoice/Bill/CreditNote/Quote/SalesOrder/PurchaseOrder/Customer/Supplier) now guard `delete*` — see `docs/KNOWN_ISSUES.md`'s Resolved section for the exact rule per service |
@@ -144,9 +144,11 @@ a Phase 5 gap — these are OTHER phases/concerns): §53's SBC/income-tax bracke
 Phase 9, not VAT; there is no VAT Period open/closed lifecycle (§10) separate from the
 existing Accounting Periods — a real, if non-blocking, Phase 5 gap; the tax invoice
 required-fields work (company name/VAT number on rendered documents, §13) shipped
-earlier in the known-issues pass, not this one. See `docs/KNOWN_ISSUES.md` for the
-AR/AP-side residual reconciliation gap (payment/receipt entries aren't backfilled,
-only original postings) — that one is Phase 2/3's concern, not Phase 5's.
+earlier in the known-issues pass, not this one. The Phase 2/3-side AR/AP residual
+reconciliation gap this paragraph used to flag (payment/receipt entries not backfilled)
+is fixed — see the Phase 2/3 table row above and `docs/KNOWN_ISSUES.md`'s Resolved
+section for the full 2026-08-22 fix, including two real seed-data bugs it surfaced
+along the way.
 
 ## Phase 6 (Inventory) — ✅ complete, 2026-08-22
 

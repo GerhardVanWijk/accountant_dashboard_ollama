@@ -6,6 +6,9 @@ import { MockAccountingPeriodRepository } from '../repositories/MockAccountingPe
 import { AuditLogService } from '@/services/auditLogService';
 import { MockAuditLogRepository } from '@/repositories/mock/MockAuditLogRepository';
 import { seedAccounts } from '@/mock-data/accounts';
+import { seedJournalEntries } from '@/mock-data/journalEntries';
+import { seedInvoices } from '@/mock-data/invoices';
+import { seedBills } from '@/mock-data/bills';
 import type { AccountingPeriod, Invoice, Bill } from '@/types';
 import { reconcileAccountsReceivable, reconcileAccountsPayable } from './subledgerReconciliation';
 
@@ -156,5 +159,29 @@ describe('reconcileAccountsPayable', () => {
     expect(result.subledgerTotal).toBe(1150);
     expect(result.variance).toBe(-650);
     expect(result.isReconciled).toBe(false);
+  });
+});
+
+/**
+ * Proves generateSeedPostings.ts's receipt/payment backfill (2026-08-22)
+ * actually closes the gap it was built for — not just that nothing broke.
+ * Mirrors vatReportService.test.ts's "against real seed data" integration
+ * test exactly: wires the real JournalEntryService against the real seed
+ * ledger and real seed Invoices/Bills (whose `amountPaid` reflects real,
+ * partially/fully-paid documents), and asserts both reconcile cleanly.
+ */
+describe('subledger reconciliation against real seed data', () => {
+  it('reconciles both AR and AP cleanly — proves the receipt/payment GL backfill matches seed Invoices/Bills\' real amountPaid', async () => {
+    const journalRepository = new MockJournalEntryRepository(seedJournalEntries);
+    const accountRepository = new MockAccountRepository(seedAccounts);
+    const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
+    const auditLog = new AuditLogService(new MockAuditLogRepository());
+    const journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
+
+    const ar = await reconcileAccountsReceivable(journalEntryService, seedInvoices);
+    const ap = await reconcileAccountsPayable(journalEntryService, seedBills);
+
+    expect(ar.isReconciled).toBe(true);
+    expect(ap.isReconciled).toBe(true);
   });
 });

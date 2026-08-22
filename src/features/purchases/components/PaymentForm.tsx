@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Bill, PaymentMethod, Supplier } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { FinancialNumber } from '@/components/ui/FinancialNumber';
@@ -17,6 +17,15 @@ export interface PaymentFormProps {
   defaultPaymentNumber: string;
   onSubmit: (data: CreatePaymentDTO) => Promise<void>;
   onCancel: () => void;
+  /**
+   * "Record Payment" from BillDetail (docs/KNOWN_ISSUES.md: the prop
+   * existed but was never wired) opens THIS form rather than a bespoke
+   * one-off — it's the real, GL-posting payment flow, just pre-aimed at
+   * one bill: supplier, amount (the outstanding balance), and that bill's
+   * allocation are all pre-filled, still fully editable (e.g. to record a
+   * partial payment) before the user submits.
+   */
+  presetBillId?: string;
 }
 
 function today(): string {
@@ -31,17 +40,39 @@ function today(): string {
  * LineItemsEditor: a payment allocates against existing Bills, it doesn't
  * price new line items, so the qty/unit-price/tax shape doesn't fit.
  */
-export function PaymentForm({ suppliers, outstandingBills, defaultPaymentNumber, onSubmit, onCancel }: PaymentFormProps) {
+export function PaymentForm({
+  suppliers,
+  outstandingBills,
+  defaultPaymentNumber,
+  onSubmit,
+  onCancel,
+  presetBillId,
+}: PaymentFormProps) {
+  const presetBill = presetBillId ? outstandingBills.find((b) => b.id === presetBillId) : undefined;
+  const presetOutstanding = presetBill ? Math.max(0, presetBill.total - presetBill.amountPaid) : 0;
+
   const [paymentNumber, setPaymentNumber] = useState(defaultPaymentNumber);
-  const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? '');
+  const [supplierId, setSupplierId] = useState(presetBill?.supplierId ?? suppliers[0]?.id ?? '');
   const [date, setDate] = useState(today());
   const [method, setMethod] = useState<PaymentMethod>('eft');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const [amount, setAmount] = useState(0);
-  const [allocationAmounts, setAllocationAmounts] = useState<Record<string, number>>({});
+  const [amount, setAmount] = useState(presetOutstanding);
+  const [allocationAmounts, setAllocationAmounts] = useState<Record<string, number>>(
+    presetBill ? { [presetBill.id]: presetOutstanding } : {},
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Only re-applies if the preset bill itself changes — never overwrites
+  // what the user has since typed.
+  useEffect(() => {
+    if (!presetBill) return;
+    setSupplierId(presetBill.supplierId);
+    setAmount(presetOutstanding);
+    setAllocationAmounts({ [presetBill.id]: presetOutstanding });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetBillId]);
 
   const supplierBills = useMemo(
     () => outstandingBills.filter((bill) => bill.supplierId === supplierId),

@@ -187,7 +187,7 @@ export const BillDetail: React.FC<BillDetailProps> = ({
             Post Bill
           </Button>
         )}
-        {onRecordPayment && bill.status !== 'draft' && outstandingAmount > 0 && (
+        {onRecordPayment && bill.status !== 'draft' && bill.status !== 'void' && outstandingAmount > 0 && (
           <Button variant="primary" onClick={() => onRecordPayment(bill.id)}>
             Record Payment
           </Button>

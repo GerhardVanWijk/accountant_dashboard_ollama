@@ -48,7 +48,7 @@ export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({
               Mark as Sent
             </button>
           )}
-          {onRecordPayment && invoice.status !== 'paid' && (
+          {onRecordPayment && invoice.status !== 'paid' && invoice.status !== 'draft' && invoice.status !== 'void' && (
             <button
               onClick={onRecordPayment}
               className="px-4 py-2 bg-positive text-white rounded hover:bg-positive/90 transition-colors"
