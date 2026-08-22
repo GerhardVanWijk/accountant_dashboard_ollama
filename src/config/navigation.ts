@@ -112,6 +112,9 @@ export const navigation: NavSection[] = [
     items: [
       { path: '/tax/rates', label: 'Tax Rates', icon: 'settings' },
       { path: '/tax/vat-return', label: 'VAT201 Reporting', icon: 'tax' },
+      { path: '/tax/income-tax', label: 'Income Tax', icon: 'tax' },
+      { path: '/tax/capital-gains', label: 'Capital Gains Tax', icon: 'tax' },
+      { path: '/tax/dividends', label: 'Dividends Tax', icon: 'dividends' },
     ],
   },
   {

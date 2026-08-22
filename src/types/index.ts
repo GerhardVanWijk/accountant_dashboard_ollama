@@ -27,3 +27,6 @@ export * from './auditLog';
 export * from './fixedAsset';
 export * from './employee';
 export * from './payroll';
+export * from './incomeTax';
+export * from './capitalGains';
+export * from './dividendsTax';

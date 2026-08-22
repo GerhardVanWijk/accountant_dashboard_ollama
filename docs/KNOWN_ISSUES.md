@@ -7,14 +7,22 @@ each section.
 
 ## Open
 
-Nothing open right now beyond the one deliberate non-issue below — every other item
-that was open as of the last pass (2026-08-22) has been resolved; see Resolved.
 Remaining deliberate Phase 8 simplifications (allowance/deduction taxability as
 booleans, no retirement-fund deduction cap, UIF-exempt/SDL-exempt as flags rather than
 the real statutory tests, no IRP5/payslip document generation, no settings UI to add a
 new tax year's config, no "mark payroll as paid" settlement step) are tracked in
 `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 8 section, not listed here — they're scope
 boundaries, not bugs.
+
+### Phase 9 (Tax) — Deferred Tax, Provisional Tax, and TaxComputation reversal remain open
+Built 2026-08-22 (three bees in parallel — Income Tax §51/§52/§53, Capital Gains Tax §55,
+Dividends Tax §56 — plus a Queen Bee integration pass, see Resolved below). Deliberately
+NOT attempted this pass, per `src/features/tax/incomeTax/services/taxComputationService.ts`'s
+class doc comment: Deferred Tax (§50, correctly Phase 12 per §116's own build order, not a
+Phase 9 gap); Provisional Tax (§54 — needs the Income Tax engine that just landed, planned
+as a sequential Wave 2 next); no reversal/correction path for a posted `TaxComputation` —
+once posted it is immutable, mirroring the same open gap `PayrollRunService.postPayrollRun()`
+and `DepreciationService.runDepreciation()` already carry.
 
 ### Two GitHub identities in play
 `gh auth status` shows two authenticated accounts (`GerhardVanWijk` active,
@@ -24,6 +32,24 @@ git config). This is intentional per explicit user instruction, not a misconfigu
 — noted here only so a future session doesn't "fix" it back to the global default.
 
 ## Resolved
+
+### Phase 9 Income Tax's capital-gain adjustment was a manual zero placeholder
+`TaxComputationService.prepareComputation()` (`src/features/tax/incomeTax/`) auto-suggests
+a `disposal_gain_loss_addback` line per Fixed Asset disposal, removing the ACCOUNTING
+gain/loss from taxable income per §55's "separate accounting profit from taxable capital
+gain" requirement — but at the point the income-tax bee finished, the parallel
+capital-gains bee's module (`src/features/tax/capitalGains/`) hadn't landed yet, so the
+real `recoupment_or_capital_gain` figure was a manual, zero-amount, user-filled placeholder.
+Fixed the same day, immediately after both bees finished: `TaxComputationService` gained an
+optional `capitalGainsLookup` constructor dependency (`CapitalGainsLookup`, kept optional so
+the income-tax bee's own existing tests — which construct the service without a 10th
+argument — keep passing unchanged); `src/features/tax/incomeTax/services/index.ts` wires it
+to the real `capitalGainsService.getPeriodReport()` singleton. The suggested adjustment line
+is now pre-filled with the real taxable capital gain for the financial year (still fully
+user-editable before posting, per §111), with the description citing the Capital Gains Tax
+module and surfacing any net capital loss for the period. Proven by a new test in
+`taxComputationService.test.ts` ("pre-fills the capital-gain adjustment from an injected
+CapitalGainsLookup..."). 631/631 tests passing, type-check/lint/build clean.
 
 ### Payroll (Phase 8) tax figures were unverified placeholders
 `src/mock-data/payrollTaxConfig.ts`'s PAYE brackets/rebates, UIF ceiling, and SDL

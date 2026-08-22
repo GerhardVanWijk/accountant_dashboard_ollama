@@ -76,4 +76,51 @@ export class CompanyService {
 
     return updated;
   }
+
+  /**
+   * The ONLY way isSbcEligible may change (SA_ACCOUNTING_MASTER_SPEC.md
+   * §53, Phase 9 "Tax") — copies setReportingFramework()'s exact shape
+   * above. SBC eligibility legislatively depends on shareholder
+   * composition, personal-service-company classification, and
+   * ownership-in-other-companies restrictions, none of which this app
+   * models (src/types/company.ts's isSbcEligible doc comment) — so, same
+   * as the reporting framework, a reason is mandatory and the change is
+   * written to the audit trail rather than ever being auto-determined.
+   */
+  async setSbcEligibility(companyId: ID, isEligible: boolean, userId: ID, reason: string): Promise<Company> {
+    if (!reason || !reason.trim()) {
+      throw new Error('Changing SBC eligibility requires a reason.');
+    }
+    const company = await this.repository.getById(companyId);
+    if (!company) {
+      throw new Error(`Company "${companyId}" not found.`);
+    }
+
+    const now = new Date().toISOString();
+    const updated = await this.repository.update(companyId, {
+      isSbcEligible: isEligible,
+      sbcEligibilitySetBy: userId,
+      sbcEligibilitySetAt: now,
+      sbcEligibilityReason: reason,
+    });
+
+    await this.auditLog.log({
+      userId,
+      // 'edited' — src/types/auditLog.ts's AuditAction union (outside this
+      // bee's file scope) has no dedicated SBC-specific action yet; this is
+      // the closest honest fit for "a Company field changed" without
+      // fabricating a new union member from a file this dispatch doesn't
+      // own. previousValue/newValue/reason below still record exactly what
+      // changed and why.
+      action: 'edited',
+      module: 'admin',
+      recordType: 'Company',
+      recordId: companyId,
+      previousValue: { isSbcEligible: company.isSbcEligible ?? false },
+      newValue: { isSbcEligible: isEligible },
+      reason,
+    });
+
+    return updated;
+  }
 }

@@ -21,10 +21,16 @@ below. **Updated 2026-08-22 (later same day)** — Phase 8 (Payroll) is now ✅ 
 Employee master data, a draft-then-post payroll run engine, real PAYE/UIF/SDL
 calculation against six new dedicated liability accounts, and EMP201/EMP501 statutory
 reporting with GL reconciliation — see that section below, including its own stronger-
-than-usual verification caveat on the seeded tax figures. Phases 1-8 (Accounting Core,
-Customers, Suppliers, Banking, VAT, Inventory, Fixed Assets, Payroll) now have real
-implementations to assess; Phases 9-12 (Tax, Financial Reporting, Compliance, Advanced
-Accounting) are still not started, consistent with §116's ordering — not reassessed in
+than-usual verification caveat on the seeded tax figures. **Updated 2026-08-22 (later
+same day)** — Phase 9 (Tax) Wave 1 is now ✅ complete: Income Tax (corporate/SBC
+computation and the accounting-profit-to-taxable-income reconciliation), Capital Gains
+Tax (a read-only reconciliation layer, correctly separate from accounting gain/loss), and
+Dividends Tax (declare/pay/remit lifecycle with real withholding) — see that section
+below. Provisional Tax (§54) is Wave 2, not yet built; Deferred Tax (§50) is explicitly
+Phase 12, not Phase 9. Phases 1-9 (Accounting Core, Customers, Suppliers, Banking, VAT,
+Inventory, Fixed Assets, Payroll, Tax Wave 1) now have real implementations to assess;
+Phases 10-12 (Financial Reporting, Compliance, Advanced Accounting) plus Phase 9's
+Provisional Tax are still not started, consistent with §116's ordering — not reassessed in
 detail below beyond noting what's genuinely absent.
 
 ## Phase 1 — Accounting Core
@@ -387,15 +393,62 @@ tax year's config, which must repeat the same verification when added.
   Cash and Bank directly) is chosen as the post-time contra account — unlike
   Invoice/Bill payments, nothing later clears that liability through this app.
 
-## Phases 9-12 — not started, per §116's own build order
+## Phase 9 (Tax) — Wave 1 ✅ complete, 2026-08-22 (Income Tax, Capital Gains Tax, Dividends Tax)
+
+Three bees dispatched in parallel on disjoint folders, independently QA-verified, plus a
+Queen Bee integration pass wiring the two together. 631/631 tests passing, type-check/
+lint/build clean.
+
+- **Income Tax (§51/§52/§53)** — `src/features/tax/incomeTax/`. `IncomeTaxYearConfig`
+  (flat 27% corporate rate + SBC bracket table, effective-dated, source-cited to
+  sars.gov.za, verified live 2026-08-22) and `TaxComputationService`: a draft-then-post
+  `TaxComputation` per company FinancialYear computing `accountingProfit` from real posted
+  GL revenue/expense movement, a set of suggested (always user-editable) tax-adjustment
+  lines — depreciation add-back, SARS wear-and-tear allowance for the period (reusing the
+  Tax Register's per-asset temporary-difference math as an INPUT, not a deferred-tax
+  posting), one line per Fixed Asset disposal reversing its accounting gain/loss, and the
+  real taxable-capital-gain line (see Capital Gains Tax below) — down to `taxableIncome`,
+  then `taxLiability` via the SBC brackets (if `Company.isSbcEligible`, a manual
+  reason-required override mirroring `reportingFramework`'s pattern — real SBC-eligibility
+  legislation depends on shareholder/ownership data this app doesn't model, so it is never
+  auto-determined) or the flat rate otherwise. `postComputation()` posts ONE entry (DR
+  Income Tax Expense `acc_5500` / CR Income Tax Payable `acc_2300`). Page at
+  `/tax/income-tax`. 51 new tests.
+- **Capital Gains Tax (§55)** — `src/features/tax/capitalGains/`, genuinely read-only, posts
+  nothing to the GL. Per-disposal `proceeds - baseCost(original FixedAsset.cost, not
+  accounting carrying value) - sellingCosts(user-entered)` — deliberately separate from the
+  accounting gain/loss `AssetDisposalService` already posts, exactly per §55's own framing.
+  Entity-type-based inclusion rate (natural-person-like 40%, company/trust 80%, sourced to
+  sars.gov.za) and R50,000 annual exclusion (natural-person-like only) applied once against
+  the aggregate net gain for a chosen period. Page at `/tax/capital-gains`. 28 new tests.
+- **Dividends Tax (§56)** — `src/features/tax/dividendsTax/`. `DividendDeclaration`
+  draft→declared→paid→remitted lifecycle, each transition its own balanced journal entry:
+  declare (DR Retained Earnings `acc_3900` / CR Dividends Payable `acc_2500`, gross), pay
+  (DR Dividends Payable / CR Cash and Bank `acc_1000` net / CR Dividends Tax Payable
+  `acc_2510` withheld), remitToSars (DR Dividends Tax Payable / CR Cash and Bank). 20%
+  withholding rate, sourced to sars.gov.za. Page at `/tax/dividends`. 29 new tests.
+- **Integration**: `TaxComputationService` takes the real `capitalGainsService` as an
+  optional `CapitalGainsLookup` dependency so Income Tax's capital-gain adjustment line is
+  pre-filled from the real Capital Gains Tax module rather than a manual placeholder — see
+  `docs/KNOWN_ISSUES.md`'s Resolved section.
+
+**Deliberately still open** (§116's own ordering, not Wave 1 gaps): Deferred Tax (§50,
+explicitly Phase 12, not Phase 9); Provisional Tax (§54) — needs this Income Tax engine,
+planned as a sequential Wave 2; no reversal/correction path for a posted `TaxComputation`.
+Documented simplifications per module: no shareholder register anywhere in this codebase,
+so Dividends Tax is gross/company-wide only (no per-shareholder allocation, no real s64F
+exemption-eligibility test — a manual reason-required override amount instead); Capital
+Gains Tax has no capital-improvement base-cost tracking, no special-trust 40% sub-rate, no
+assessed-capital-loss carryforward; Income Tax has no assessed-loss-brought-forward
+automation (a manual adjustment line) and SBC eligibility is a manual, reason-required
+override, never auto-determined from real shareholding/personal-service-company tests.
+
+## Phases 10-12 — not started, per §116's own build order
 
 Nothing below has been built yet. Noted here only so a future session can see at a
 glance what's genuinely absent versus partially built, without re-deriving it from
 scratch:
 
-- **Phase 9 (Tax)** — not started. No income tax computation, no accounting-profit-to-
-  taxable-income reconciliation (§51), no SBC eligibility engine (§53), no provisional
-  tax (§54), no CGT (§55), no dividends tax (§56), no deferred tax (§50).
 - **Phase 10 (Financial Reporting)** — Trial Balance exists (Phase 1); no Income
   Statement/Statement of Financial Position/Cash Flow/Statement of Changes in Equity
   derived from the GL yet (§42), no notes framework (§43).

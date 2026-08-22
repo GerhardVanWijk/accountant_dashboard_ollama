@@ -33,6 +33,9 @@ import { Emp201Page } from '@/features/employees/pages/Emp201Page';
 import { Emp501Page } from '@/features/employees/pages/Emp501Page';
 import { VatReturnPage } from '@/features/tax/pages/VatReturnPage';
 import { TaxRatesPage } from '@/features/tax/pages/TaxRatesPage';
+import { IncomeTaxPage } from '@/features/tax/incomeTax/pages/IncomeTaxPage';
+import { CapitalGainsPage } from '@/features/tax/capitalGains/pages/CapitalGainsPage';
+import { DividendsTaxPage } from '@/features/tax/dividendsTax/pages/DividendsTaxPage';
 import { ReportsPage } from '@/features/reports/pages/ReportsPage';
 import { UsersPage } from '@/features/admin/pages/UsersPage';
 import { AuditPage } from '@/features/admin/pages/AuditPage';
@@ -96,6 +99,9 @@ export const routes: RouteObject[] = [
           { path: 'payroll/emp501', element: <Emp501Page /> },
           { path: 'tax/rates', element: <TaxRatesPage /> },
           { path: 'tax/vat-return', element: <VatReturnPage /> },
+          { path: 'tax/income-tax', element: <IncomeTaxPage /> },
+          { path: 'tax/capital-gains', element: <CapitalGainsPage /> },
+          { path: 'tax/dividends', element: <DividendsTaxPage /> },
           { path: 'reports', element: <ReportsPage /> },
           { path: 'admin/users', element: <UsersPage /> },
           { path: 'admin/audit', element: <AuditPage /> },

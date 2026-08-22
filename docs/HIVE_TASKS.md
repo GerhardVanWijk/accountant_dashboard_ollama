@@ -478,6 +478,32 @@ SDL exemption as a whole-company flag rather than a real trailing-12-month payro
 projection, no IRP5/tax-certificate generation, no payslip PDF, no settings UI to add a
 new SARS tax year's config without a code change).
 
+### Phase 9 (Tax) — Wave 1 ✅ COMPLETE (2026-08-22, three bees in parallel + Queen integration)
+
+Income Tax (§51/§52/§53), Capital Gains Tax (§55), and Dividends Tax (§56) — dispatched as
+three parallel bees on disjoint folders (`src/features/tax/incomeTax/`,
+`src/features/tax/capitalGains/`, `src/features/tax/dividendsTax/`), each independently
+QA-verified, plus a Queen Bee integration pass wiring Capital Gains Tax's real taxable
+capital gain into Income Tax's reconciliation. Full detail in
+`docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 9 section. 631/631 tests passing (up from 522),
+type-check/lint/build clean.
+
+- [x] Corporate income tax computation (flat 27% / SBC brackets, SARS-verified 2026-08-22)
+- [x] Accounting-profit-to-taxable-income reconciliation, editable adjustment lines
+- [x] SBC eligibility as a manual, reason-required override (no shareholder data modeled)
+- [x] Capital Gains Tax — base cost vs. accounting carrying value, entity-type inclusion
+  rate, R50,000 annual exclusion, genuinely GL-inert (read-only reconciliation)
+- [x] Dividends Tax — declare/pay/remit lifecycle, 20% withholding, real GL postings to
+  new Dividends Payable/Dividends Tax Payable accounts
+- [ ] Provisional Tax (§54) — Wave 2, sequential, depends on the Income Tax engine above
+- [ ] Deferred Tax (§50) — explicitly Phase 12 per §116, not Phase 9
+
+**Key Requirements:**
+- ✅ Every rate/threshold effective-dated config with a real `sourceReference` (sars.gov.za,
+  fetched live 2026-08-22), never hardcoded in logic
+- ✅ `FinancialNumber`/`FinancialTableCell` for all amounts, tabular-nums, light+dark theme
+- ✅ No bee touched another's folder or a shared config file mid-dispatch
+
 #### Reports Module (Reports Bee) — READY TO DISPATCH
 - [ ] Profit & Loss (revenue - COGS - opex = net income)
 - [ ] Balance Sheet (assets = liabilities + equity)

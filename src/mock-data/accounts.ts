@@ -314,4 +314,61 @@ export const seedAccounts: Account[] = [
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
+  // --- Phase 9 (Tax) accounts, added 2026-08-22 ---
+  // NOTE: Deferred Tax (§50) is explicitly Phase 12 ("Advanced Accounting")
+  // per SA_ACCOUNTING_MASTER_SPEC.md §116, NOT Phase 9 — no Deferred Tax
+  // Asset/Liability/Expense accounts added here on purpose. Phase 9's
+  // income tax reconciliation still uses the *existing* Tax Register's
+  // temporaryDifference (src/features/assets/services/taxRegisterService.ts)
+  // as a tax-reconciliation ADJUSTMENT LINE (wear-and-tear vs accounting
+  // depreciation), but does not recognize a deferred tax balance in the GL.
+  {
+    id: 'acc_2300',
+    code: '2300',
+    name: 'Income Tax Payable',
+    type: 'liability',
+    subType: 'current_liability',
+    normalBalance: 'credit',
+    isActive: true,
+    description:
+      'Current-year corporate income tax liability owed to SARS, net of provisional tax payments already made (§51/§54).',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'acc_2500',
+    code: '2500',
+    name: 'Dividends Payable',
+    type: 'liability',
+    subType: 'current_liability',
+    normalBalance: 'credit',
+    isActive: true,
+    description: 'Dividends declared but not yet paid to shareholders (§56).',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'acc_2510',
+    code: '2510',
+    name: 'Dividends Tax Payable (Withholding)',
+    type: 'liability',
+    subType: 'current_liability',
+    normalBalance: 'credit',
+    isActive: true,
+    description:
+      'Dividends Tax withheld from a declared dividend on behalf of the shareholder, owed to SARS (§56) — a withholding liability, distinct from the company’s own Income Tax Payable.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'acc_5500',
+    code: '5500',
+    name: 'Income Tax Expense',
+    type: 'expense',
+    normalBalance: 'debit',
+    isActive: true,
+    description: 'Current-year corporate income tax charge per the tax computation (§51/§52).',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
 ];

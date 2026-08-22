@@ -115,5 +115,24 @@ export interface Company extends BaseEntity {
    * unset, matching every other boolean flag in this codebase.
    */
   sdlExempt?: boolean;
+  /**
+   * §116 Phase 9 (Tax)/§53: whether this company qualifies for Small
+   * Business Corporation tax treatment. Legislatively, SBC eligibility
+   * depends on shareholder composition (only natural persons may hold
+   * shares/members' interest), personal-service-company classification,
+   * and restrictions on holding shares in other companies (§53) — NONE of
+   * which this app models (there is no shareholder register anywhere in
+   * this codebase). This flag is therefore a MANUAL, reason-required
+   * override an accountant sets only after confirming eligibility
+   * themselves, exactly mirroring `reportingFramework` above — it is
+   * never auto-determined from gross income or any other figure this app
+   * happens to have on hand (that would violate §110's "no unsupported
+   * claims" rule). Defaults to undefined/falsy (not eligible) until set.
+   */
+  isSbcEligible?: boolean;
+  /** Set together whenever isSbcEligible is changed via an authorized override — see CompanyService.setSbcEligibility(). */
+  sbcEligibilitySetBy?: ID;
+  sbcEligibilitySetAt?: ISODateString;
+  sbcEligibilityReason?: string;
   isActive: boolean;
 }
