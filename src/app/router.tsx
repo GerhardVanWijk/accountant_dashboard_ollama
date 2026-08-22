@@ -27,6 +27,10 @@ import { AssetRegisterPage } from '@/features/assets/pages/AssetRegisterPage';
 import { DepreciationPage } from '@/features/assets/pages/DepreciationPage';
 import { DisposalsPage } from '@/features/assets/pages/DisposalsPage';
 import { TaxRegisterPage } from '@/features/assets/pages/TaxRegisterPage';
+import { EmployeesPage } from '@/features/employees/pages/EmployeesPage';
+import { PayrollRunsPage } from '@/features/employees/pages/PayrollRunsPage';
+import { Emp201Page } from '@/features/employees/pages/Emp201Page';
+import { Emp501Page } from '@/features/employees/pages/Emp501Page';
 import { VatReturnPage } from '@/features/tax/pages/VatReturnPage';
 import { TaxRatesPage } from '@/features/tax/pages/TaxRatesPage';
 import { ReportsPage } from '@/features/reports/pages/ReportsPage';
@@ -86,6 +90,10 @@ export const routes: RouteObject[] = [
           { path: 'assets/depreciation', element: <DepreciationPage /> },
           { path: 'assets/disposals', element: <DisposalsPage /> },
           { path: 'assets/tax-register', element: <TaxRegisterPage /> },
+          { path: 'payroll/employees', element: <EmployeesPage /> },
+          { path: 'payroll/runs', element: <PayrollRunsPage /> },
+          { path: 'payroll/emp201', element: <Emp201Page /> },
+          { path: 'payroll/emp501', element: <Emp501Page /> },
           { path: 'tax/rates', element: <TaxRatesPage /> },
           { path: 'tax/vat-return', element: <VatReturnPage /> },
           { path: 'reports', element: <ReportsPage /> },

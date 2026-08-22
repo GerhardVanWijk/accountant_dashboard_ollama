@@ -27,6 +27,10 @@
 | `/assets/depreciation` | `assets` | Depreciation | Fixed Assets |
 | `/assets/disposals` | `assets` | Disposals | Fixed Assets |
 | `/assets/tax-register` | `assets` | Tax Register | Fixed Assets |
+| `/payroll/employees` | `employees` | Employee Directory | Payroll |
+| `/payroll/runs` | `employees` | Payroll Runs | Payroll |
+| `/payroll/emp201` | `employees` | EMP201 Monthly Return | Payroll |
+| `/payroll/emp501` | `employees` | EMP501 Reconciliation | Payroll |
 | `/tax/rates` | `tax` | Tax Rates | Tax |
 | `/tax/vat-return` | `tax` | VAT201 Reporting | Tax |
 | `/reports` | `reports` | Financial Statements Hub | Reports |

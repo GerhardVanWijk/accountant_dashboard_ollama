@@ -14,6 +14,7 @@
 | **Tax** | ✅ `/tax/rates`, `/tax/vat-return` | ✅ | ✅ | ✅ | ✅ | ✅ 22 tests (shared) | 🟢 Done |
 | **Banking** | ✅ `/banking/*` | ✅ | ✅ | ✅ | ✅ | ✅ 281 tests (shared) | 🟢 Done |
 | **Fixed Assets** | ✅ `/assets/*` | ✅ | ✅ | ✅ | ✅ | ✅ 31 tests (shared) | 🟢 Done |
+| **Payroll (Employees)** | ✅ `/payroll/*` | ✅ | ✅ | ✅ | ✅ | ✅ 60 tests (shared) | 🟢 Done |
 | **Reports** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
 | **Admin & Audit** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
 
@@ -33,7 +34,13 @@ lifecycle, a real straight-line/reducing-balance depreciation engine posting bal
 combined GL entries, disposals computing real gain/loss, and a Tax Register comparing
 accounting vs. SARS wear-and-tear book values — see `docs/SA_SPEC_GAP_ANALYSIS.md`'s
 Phase 7 section for the deliberately-still-open boundaries (no Bill-line
-capitalization path yet).*
+capitalization path yet — since resolved, see below). Payroll (Phase 8, 2026-08-22) is
+genuinely complete too: employee master data, a draft-then-post payroll run engine, real
+PAYE/UIF/SDL calculation against six dedicated liability accounts, and EMP201/EMP501
+statutory reporting with GL reconciliation — see `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase
+8 section for its deliberately-still-open boundaries AND its stronger-than-usual
+verification caveat (the seeded PAYE/UIF/SDL figures are unverified placeholders, not
+even user-supplied — see `docs/KNOWN_ISSUES.md`).*
 
 ## Checkpoint — 2026-08-20: Phase 1 complete (Wave 1 + Wave 2)
 
@@ -135,3 +142,27 @@ once at the end. `docs/KNOWN_ISSUES.md`'s Open section now holds nothing but one
 deliberate non-issue (the dual GitHub identity, intentional per earlier explicit
 instruction). Full detail per fix in `docs/KNOWN_ISSUES.md`'s Resolved section and
 `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 2/3 and Phase 7 sections.
+
+## Checkpoint — 2026-08-22: Phase 8 (Payroll) complete
+
+New module, `src/features/employees/`: Employee master data (salary/wages, standard
+allowances/deductions, pay frequency, UIF-exempt flag), a `PayrollRunService`
+draft-then-post lifecycle matching Bill/Invoice/FixedAsset (one combined balanced GL
+entry posted per run, netPay defined as the exact remainder so the entry balances by
+construction), real annual-equivalent PAYE bracket math with age-based rebates, UIF
+employee+employer capped at a pro-rated monthly ceiling, and SDL — posted to six new
+dedicated liability accounts so PAYE/UIF-employee/UIF-employer/SDL are never combined
+into one control account. `getSarsTaxYear()` gives the app a real 1 March-end February
+SARS tax year calendar, independent of the accounting FinancialYear. EMP201 (monthly
+return + four-way GL reconciliation) and EMP501 (annual roll-up reusing the same EMP201
+calculation per month) round it out. 60 new tests, including an integration test proving
+zero-variance reconciliation against a real posted run — 522/522 total, type-check/
+lint/build clean.
+
+**Carries a stronger-than-usual verification caveat**: the seeded PAYE/UIF/SDL figures
+in `src/mock-data/payrollTaxConfig.ts` are placeholders reconstructed from general
+training knowledge, not the real published 2026/2027 SARS tables and not even
+user-supplied — see `docs/KNOWN_ISSUES.md`'s Open section and
+`docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 8 section for the full caveat and the other
+deliberate simplifications (no IRP5/payslip generation, UIF/SDL exemption as flags, no
+retirement-fund deduction cap, no tax-year-config settings UI).

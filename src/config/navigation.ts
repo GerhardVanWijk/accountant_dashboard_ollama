@@ -97,6 +97,16 @@ export const navigation: NavSection[] = [
     ],
   },
   {
+    section: 'Payroll',
+    icon: 'payroll',
+    items: [
+      { path: '/payroll/employees', label: 'Employee Directory', icon: 'employees' },
+      { path: '/payroll/runs', label: 'Payroll Runs', icon: 'payments' },
+      { path: '/payroll/emp201', label: 'EMP201 Monthly Return', icon: 'tax' },
+      { path: '/payroll/emp501', label: 'EMP501 Reconciliation', icon: 'reconciliation' },
+    ],
+  },
+  {
     section: 'Tax',
     icon: 'tax',
     items: [

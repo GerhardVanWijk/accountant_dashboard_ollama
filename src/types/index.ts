@@ -25,3 +25,5 @@ export * from './financialYear';
 export * from './accountingPeriod';
 export * from './auditLog';
 export * from './fixedAsset';
+export * from './employee';
+export * from './payroll';

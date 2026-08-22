@@ -103,5 +103,17 @@ export interface Company extends BaseEntity {
   vatFilingFrequency?: VatFilingFrequency;
   vatAccountingBasis?: VatAccountingBasis;
   incomeTaxNumber?: string;
+  /**
+   * §116 Phase 8 (Payroll)/§58: SDL (Skills Development Levy) is not payable
+   * by an employer whose total annual leviable payroll is projected to stay
+   * below SARS's exemption threshold
+   * (PayrollTaxYearConfig.sdlAnnualPayrollExemptionThreshold,
+   * src/types/payroll.ts). Modeled here as a single whole-company flag the
+   * user sets, rather than payrollRunService projecting a real trailing-
+   * 12-month payroll total — a deliberate simplification, see
+   * docs/SA_SPEC_GAP_ANALYSIS.md. Defaults to false (not exempt) wherever
+   * unset, matching every other boolean flag in this codebase.
+   */
+  sdlExempt?: boolean;
   isActive: boolean;
 }

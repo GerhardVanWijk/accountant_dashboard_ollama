@@ -413,6 +413,69 @@ line item the way Inventory lines already capitalize); account-mapping is fixed
 constants again (§113, same known limitation as every other posting service); no
 deferred-tax journal entry from the Tax Register's temporary difference.
 
+### Phase 8 (Payroll) — ✅ COMPLETE (2026-08-22, Queen, solo)
+
+Genuinely new module, `src/features/employees/` — no employee master data or payroll
+processing existed at all:
+
+- [x] Employees (§57/§116) — `Employee` type (salary/wages, standard allowances/
+  deductions, pay frequency, UIF-exempt flag) + `employeeService`, plain CRUD like
+  `productService.ts`. Delete guard: an employee referenced by any payroll run's
+  payslip lines can't be deleted, only set to `'terminated'` (real SA practice — a
+  terminated employee's record must be retained for tax-certificate/record-keeping
+  purposes, §61).
+- [x] Payroll engine (§57/§116) — `PayrollRunService`: draft-then-post lifecycle
+  matching Bill/Invoice/FixedAsset. `createPayrollRun()` computes a `PayslipLine` per
+  active employee via `computePayslipLine()` (basic + overtime/bonus overrides +
+  allowances → gross; PAYE/UIF/SDL; net pay as the exact remainder so the run's combined
+  entry balances by construction). `postPayrollRun()` posts ONE combined balanced
+  journal entry for the whole run (mirrors `depreciationService.runDepreciation()`'s
+  one-entry-per-run design). Idempotency guard on overlapping pay periods.
+- [x] PAYE/UIF/SDL (§58/§116) — `PayrollTaxYearConfig` (effective-dated by SARS tax
+  year, `payrollTaxConfigService.getConfigForDate()`), real annual-equivalent PAYE
+  bracket math with age-based rebate tiers, UIF employee+employer (rate-capped at a
+  pro-rated monthly ceiling), SDL (company-wide exemption flag, `Company.sdlExempt`).
+  Six new dedicated liability accounts (PAYE Payable, UIF Payable - Employee, UIF
+  Payable - Employer, SDL Payable, Other Payroll Deductions Payable, Net Pay Payable) —
+  §58's "do not combine all payroll liabilities into one account" enforced by
+  construction, not just convention. Three new expense accounts (Salaries and Wages,
+  Employer UIF Contribution, Employer SDL Contribution).
+- [x] Tax periods (§59) — `getSarsTaxYear()` (`utils/sarsTaxYear.ts`) computes the real
+  1 March-end February SARS tax year independent of `financialYearService`/
+  `accountingPeriodService`, used by EMP501 below.
+- [x] EMP201 (§60/§116) — `emp201Service.computeEmp201Report()` (PAYE/UIF/SDL from real
+  posted payroll runs only, deliberately not labelled with official SARS box numbers,
+  same caution as `vatReportService.ts`'s VAT201 treatment) +
+  `reconcilePayrollLiabilities()` (each of the four control accounts checked
+  separately against its own GL movement — proven clean by an integration test against
+  a real posted run, not just unit-tested). Page at `/payroll/emp201`.
+- [x] EMP501 (§60/§116) — `emp501Service.computeEmp501Report()` rolls up a full SARS
+  tax year's worth of EMP201-equivalent monthly totals (reusing `computeEmp201Report()`
+  per month so the two can never disagree). Page at `/payroll/emp501`.
+- [x] Five pages, new "Payroll" nav section: Employee Directory (`/payroll/employees`),
+  Payroll Runs (`/payroll/runs`, with an inline review/edit-then-post flow reusing the
+  same `computePayslipLine()` path a line was created with), EMP201 (`/payroll/emp201`),
+  EMP501 (`/payroll/emp501`).
+- [x] Seed data (`src/mock-data/employees.ts`) has no seeded `PayrollRun` at all — same
+  "no fabricated posted history without a real matching `JournalEntry`" discipline as
+  `seedFixedAssets.ts`. Run a real payroll run through the UI for genuine ledger history.
+- [x] 60 new tests (pure PAYE/UIF/SDL math, service-layer CRUD/lifecycle/idempotency
+  guards, an EMP201/EMP501 integration test against a real posted run proving
+  zero-variance reconciliation, one page-level smoke test). 522/522 tests passing (up
+  from 462), type-check/lint/build clean.
+
+**IMPORTANT verification caveat** (§110/§111, stronger than usual): the actual PAYE
+bracket/rebate/UIF-ceiling/SDL figures seeded in `src/mock-data/payrollTaxConfig.ts`
+were reconstructed from general training knowledge of a recent published SA individual
+tax year, NOT independently verified against any official SARS Tax Guide/Government
+Gazette, and NOT even user-supplied this time — replace with the real published figures
+and get professional/accounting sign-off before any real-payroll use. See
+`docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 8 section for the full list of deliberate
+simplifications (allowance/deduction taxability as a boolean, no retirement-fund
+deduction cap, UIF exemption as a boolean, SDL exemption as a whole-company flag rather
+than a real trailing-12-month payroll projection, no IRP5/tax-certificate generation, no
+payslip PDF, no settings UI to add a new SARS tax year's config without a code change).
+
 #### Reports Module (Reports Bee) — READY TO DISPATCH
 - [ ] Profit & Loss (revenue - COGS - opex = net income)
 - [ ] Balance Sheet (assets = liabilities + equity)
@@ -445,7 +508,10 @@ deferred-tax journal entry from the Tax Register's temporary difference.
 - [ ] Advanced Tax Scenarios (Input VAT recovery, withholding tax)
 - [x] Fixed Assets Register (depreciation, disposal) — see Phase 7 section above,
   ✅ complete 2026-08-22 (`src/features/assets/`)
-- [ ] Employee Management & Payroll (not Phase 2 scope)
+- [x] Employee Management & Payroll — see SA_ACCOUNTING_MASTER_SPEC.md Phase 8 section
+  above/below, ✅ complete 2026-08-22 (`src/features/employees/`): Employee master data,
+  a draft-then-post PayrollRun engine (PAYE/UIF/SDL), payroll GL posting to dedicated
+  liability accounts, EMP201 monthly return + reconciliation, EMP501 annual reconciliation
 - [ ] Workflow Rules & Approvals
 
 ---

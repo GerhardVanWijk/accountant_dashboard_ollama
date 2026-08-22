@@ -7,8 +7,24 @@ each section.
 
 ## Open
 
-Nothing open right now beyond the one deliberate non-issue below — every other item
-that was open as of the last pass (2026-08-22) has been resolved; see Resolved.
+### Payroll (Phase 8) tax figures are unverified placeholders
+`src/mock-data/payrollTaxConfig.ts`'s PAYE brackets/rebates, UIF ceiling, and SDL
+rate/threshold were reconstructed from general training knowledge of a recent published
+SA individual tax year and mapped onto this app's fictional current 2026/2027 SARS tax
+year as a stand-in — they are NOT the real published 2026/2027 SARS tax tables and were
+NOT independently verified against any official SARS source, and were not even
+user-supplied this time (unlike the VAT rate/wear-and-tear defaults, which at least
+came from the user or the supplied spec). Replace with the real published figures and
+get professional/accounting sign-off before any real-payroll use. See
+`docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 8 section for this and the other deliberate
+Phase 8 simplifications (allowance/deduction taxability as booleans, no retirement-fund
+deduction cap, UIF-exempt/SDL-exempt as flags rather than the real statutory tests, no
+IRP5/payslip document generation, no settings UI to add a new tax year's config, no
+"mark payroll as paid" settlement step when Net Pay Payable is used as the contra
+account).
+
+Nothing else is open right now beyond the one deliberate non-issue below — every other
+item that was open as of the last pass (2026-08-22) has been resolved; see Resolved.
 
 ### Two GitHub identities in play
 `gh auth status` shows two authenticated accounts (`GerhardVanWijk` active,
