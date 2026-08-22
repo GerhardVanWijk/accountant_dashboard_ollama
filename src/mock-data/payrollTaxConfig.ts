@@ -4,17 +4,20 @@ import type { PayrollTaxYearConfig } from '@/types';
  * Seed data for MockPayrollTaxConfigRepository
  * (src/features/employees/repositories/). ONE SARS tax year's payroll
  * statutory configuration, covering this app's current 2026/2027 SARS tax
- * year (1 March 2026 - 28 February 2027 — see getSarsTaxYear.ts) — see
- * PayrollTaxYearConfig's doc comment (src/types/payroll.ts) for the full
- * verification caveat. In short: the actual bracket/rebate/UIF/SDL FIGURES
- * below are reconstructed from general training knowledge of a recent
- * published SA individual tax year, reused here as a stand-in for the real
- * 2026/2027 SARS tax tables (which this codebase has not been given and
- * has not looked up) — NOT independently verified against any official
- * SARS Tax Guide/Government Gazette. Confirm every value with a registered
- * tax practitioner and replace with the real published figures before
- * relying on this for real payroll (SA_ACCOUNTING_MASTER_SPEC.md
- * §110/§111).
+ * year (1 March 2026 - 28 February 2027 — see getSarsTaxYear.ts).
+ *
+ * VERIFIED 2026-08-22 directly against the live sars.gov.za pages (not
+ * reconstructed from memory) — see each field's line comment below for the
+ * specific page. Two independent fetches of the individual tax rate table
+ * (a live page fetch and the 2026 Budget tax guide PDF's search summary)
+ * agreed exactly. This replaces an earlier placeholder that was
+ * Claude-reconstructed from general training knowledge and flagged as
+ * unverified — see docs/KNOWN_ISSUES.md's Resolved section for that
+ * history. Still not a substitute for professional sign-off
+ * (SA_ACCOUNTING_MASTER_SPEC.md §110/§111) — web sources can change, and
+ * this was not cross-checked against a physical Government Gazette — but
+ * every figure below now traces to SARS's own published page as of the
+ * date noted, not an unsourced guess.
  */
 export const seedPayrollTaxConfig: PayrollTaxYearConfig[] = [
   {
@@ -22,25 +25,39 @@ export const seedPayrollTaxConfig: PayrollTaxYearConfig[] = [
     taxYearLabel: '2026/2027',
     taxYearStart: '2026-03-01T00:00:00.000Z',
     taxYearEnd: '2027-02-28T23:59:59.999Z',
+    // sars.gov.za/tax-rates/income-tax/rates-of-tax-for-individuals/ (fetched 2026-08-22),
+    // "Rates of tax for individuals ... 1 March 2026 to 28 February 2027":
     payeBrackets: [
-      { upTo: 237100, rate: 18, base: 0 },
-      { upTo: 370500, rate: 26, base: 42678 },
-      { upTo: 512800, rate: 31, base: 77362 },
-      { upTo: 673000, rate: 36, base: 121475 },
-      { upTo: 857900, rate: 39, base: 179147 },
-      { upTo: 1817000, rate: 41, base: 251258 },
-      { upTo: null, rate: 45, base: 644489 },
+      { upTo: 245100, rate: 18, base: 0 },
+      { upTo: 383100, rate: 26, base: 44118 },
+      { upTo: 530200, rate: 31, base: 79998 },
+      { upTo: 695800, rate: 36, base: 125599 },
+      { upTo: 887000, rate: 39, base: 185215 },
+      { upTo: 1878600, rate: 41, base: 259783 },
+      { upTo: null, rate: 45, base: 666339 },
     ],
-    primaryRebateAnnual: 17235,
-    secondaryRebateAnnual: 9444,
-    tertiaryRebateAnnual: 3145,
+    // Same page, "Tax Rebates" for the 2027 tax year.
+    primaryRebateAnnual: 17820,
+    secondaryRebateAnnual: 9765,
+    tertiaryRebateAnnual: 3249,
+    // sars.gov.za/types-of-tax/unemployment-insurance-fund/ (fetched 2026-08-22):
+    // employee 1% + employer 1%; ceiling R17,712/month (R212,544/year),
+    // unchanged since the Government Gazette notice of 28 May 2021 (effective 1 June 2021).
     uifEmployeeRatePercent: 1,
     uifEmployerRatePercent: 1,
     uifMonthlyCeiling: 17712,
+    // sars.gov.za/types-of-tax/skills-development-levy/ (fetched 2026-08-22):
+    // 1% of total salaries paid; exempt while projected 12-month payroll <= R500,000.
     sdlRatePercent: 1,
     sdlAnnualPayrollExemptionThreshold: 500000,
     sourceReference:
-      'Placeholder for this app\'s current (2026/2027) SARS tax year: figures carried over from general training knowledge of a recent published SA individual tax year (brackets/rebates, UIF monthly remuneration ceiling effective 1 June 2021, SDL Act rate/threshold) — NOT the actual published 2026/2027 SARS tax tables, and NOT independently verified against any official SARS Tax Guide/Government Gazette. Replace with the real published 2026/2027 figures and get professional/accounting sign-off before any real-payroll use.',
+      'Verified 2026-08-22 directly against sars.gov.za: PAYE brackets/rebates from ' +
+      'https://www.sars.gov.za/tax-rates/income-tax/rates-of-tax-for-individuals/ (2026/2027 tax year, ' +
+      '1 March 2026 - 28 February 2027); UIF rate/ceiling from ' +
+      'https://www.sars.gov.za/types-of-tax/unemployment-insurance-fund/; SDL rate/threshold from ' +
+      'https://www.sars.gov.za/types-of-tax/skills-development-levy/. Not a substitute for professional ' +
+      'sign-off (SA_ACCOUNTING_MASTER_SPEC.md §110/§111) — confirm against the current SARS Government ' +
+      'Gazette before real-payroll use, and re-verify for any later tax year.',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },

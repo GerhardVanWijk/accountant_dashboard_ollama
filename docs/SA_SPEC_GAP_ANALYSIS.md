@@ -350,16 +350,21 @@ existed at all — genuinely new module, `src/features/employees/`:
   `JournalEntry`" discipline `seedFixedAssets.ts` already follows. 60 new tests (522/522
   total), type-check/lint/build clean.
 
-**IMPORTANT — a stronger verification caveat than usual (§110/§111)**: the actual PAYE
-bracket/rebate/UIF-ceiling/SDL rate-and-threshold figures seeded in
-`src/mock-data/payrollTaxConfig.ts` were reconstructed from general training knowledge
-of a recent published SA individual tax year, then mapped onto this app's fictional
-current (2026/2027) SARS tax year as a placeholder — they are NOT the actual published
-2026/2027 SARS tax tables, were NOT independently verified against any official SARS Tax
-Guide/Government Gazette, and were not even user-supplied this time (every other rate in
-this codebase — VAT, wear-and-tear — at least originated from the user or a supplied
-spec). Replace with the real published figures for the applicable tax year and get
-professional/accounting sign-off before any real-payroll use.
+**Tax figures verified 2026-08-22, same day as Phase 8 shipped** (§110/§111): the PAYE
+bracket/rebate/UIF-ceiling/SDL rate-and-threshold figures in
+`src/mock-data/payrollTaxConfig.ts` were originally a Claude-reconstructed placeholder
+(flagged as such), then replaced the same day by fetching sars.gov.za's own pages
+directly — the individual tax rate table, UIF rate/ceiling, and SDL rate/threshold —
+each cited by URL in the seed record's `sourceReference`. The bracket table was
+cross-checked two independent ways and agreed exactly. Real figures for the 2026/2027
+tax year (1 March 2026 – 28 February 2027): brackets 18%/26%/31%/36%/39%/41%/45% at
+R245,100/R383,100/R530,200/R695,800/R887,000/R1,878,600 (inflation-adjusted, the first
+such adjustment since 2023/24); rebates primary R17,820, secondary R9,765, tertiary
+R3,249; UIF 1%+1% capped at R17,712/month (unchanged since 2021); SDL 1%, exempt below
+R500,000 annual payroll. Full history in `docs/KNOWN_ISSUES.md`'s Resolved section.
+Still true, and always will be: this is a live-web verification as of one date, not a
+substitute for professional/accounting sign-off, and it does not extend to any future
+tax year's config, which must repeat the same verification when added.
 
 **Deliberately still open, simplifications documented rather than silently made:**
 - `EmployeeAllowance.taxable`/`EmployeeDeduction.preTax` are booleans — real SA

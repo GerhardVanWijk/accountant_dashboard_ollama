@@ -23,17 +23,20 @@ export interface PayeBracket {
  * version applies to a given pay date, mirroring
  * `TaxRateService.getEffectiveRate()`'s effective-dated lookup.
  *
- * IMPORTANT — VERIFICATION CAVEAT: every rate/bracket/threshold seeded here
- * (src/mock-data/payrollTaxConfig.ts) was reconstructed from general
- * training knowledge of a recent SA individual tax year, NOT independently
- * verified against the current official SARS Tax Guide / Government
- * Gazette for the tax year actually in effect. This carries the SAME
- * caution as `TaxRate.sourceReference` and
- * `FixedAsset.taxWearTearRateSource` (SA_ACCOUNTING_MASTER_SPEC.md
- * §110/§111) — arguably a stronger one, since it was not even user-
- * supplied. Confirm every figure with a registered tax practitioner or the
- * current SARS Employer's Guide before relying on this for real payroll.
- * See `sourceReference` below and docs/SA_SPEC_GAP_ANALYSIS.md.
+ * IMPORTANT — VERIFICATION CAVEAT: this type carries the SAME caution as
+ * `TaxRate.sourceReference` and `FixedAsset.taxWearTearRateSource`
+ * (SA_ACCOUNTING_MASTER_SPEC.md §110/§111) — `sourceReference` on every
+ * record must say where its figures came from and whether they've been
+ * checked, never present a number as confirmed without saying so. The
+ * current seed record (src/mock-data/payrollTaxConfig.ts) WAS verified
+ * 2026-08-22 directly against live sars.gov.za pages (cited per-field in
+ * that file) — an earlier placeholder version, reconstructed from general
+ * training knowledge and not checked against any source, was replaced;
+ * see docs/KNOWN_ISSUES.md's Resolved section for that history. Any
+ * FUTURE tax year's config added here must repeat that same verification
+ * against the current official SARS Tax Guide/Government Gazette before
+ * being trusted for real payroll — a prior year having been verified is
+ * not evidence the next one has been.
  */
 export interface PayrollTaxYearConfig extends BaseEntity {
   /** e.g. "2024/2025". */

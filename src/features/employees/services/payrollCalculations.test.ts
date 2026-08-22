@@ -42,20 +42,29 @@ describe('calculateAge', () => {
 });
 
 describe('calculateAnnualPaye', () => {
+  // Bracket boundaries/rates/bases are read from the seeded config, not
+  // hardcoded here, so these tests stay correct across a future
+  // re-verification against a new SARS tax year's real published figures.
+  const [firstBracket, secondBracket] = config.payeBrackets;
+  const topBracket = config.payeBrackets[config.payeBrackets.length - 1];
+
   it('taxes the first bracket at its flat rate, less the primary rebate', () => {
-    // 100000 * 18% = 18000; less primary rebate 17235 = 765
-    expect(calculateAnnualPaye(100000, config)).toBeCloseTo(18000 - config.primaryRebateAnnual, 2);
+    const income = firstBracket.upTo! / 2;
+    const expectedTax = (firstBracket.rate / 100) * income;
+    expect(calculateAnnualPaye(income, config)).toBeCloseTo(expectedTax - config.primaryRebateAnnual, 2);
   });
 
   it('applies the cumulative base + rate for a higher bracket', () => {
-    // bracket for 300000: base 42678 + 26% of (300000 - 237100)
-    const expectedTax = 42678 + 0.26 * (300000 - 237100);
-    expect(calculateAnnualPaye(300000, config)).toBeCloseTo(expectedTax - config.primaryRebateAnnual, 2);
+    const income = firstBracket.upTo! + 1000;
+    const expectedTax = secondBracket.base + (secondBracket.rate / 100) * (income - firstBracket.upTo!);
+    expect(calculateAnnualPaye(income, config)).toBeCloseTo(expectedTax - config.primaryRebateAnnual, 2);
   });
 
   it('taxes the unbounded top bracket', () => {
-    const expectedTax = 644489 + 0.45 * (2000000 - 1817000);
-    expect(calculateAnnualPaye(2000000, config)).toBeCloseTo(expectedTax - config.primaryRebateAnnual, 2);
+    const lowerBound = config.payeBrackets[config.payeBrackets.length - 2].upTo!;
+    const income = lowerBound + 500000;
+    const expectedTax = topBracket.base + (topBracket.rate / 100) * (income - lowerBound);
+    expect(calculateAnnualPaye(income, config)).toBeCloseTo(expectedTax - config.primaryRebateAnnual, 2);
   });
 
   it('never goes negative when the rebate exceeds the tax', () => {
@@ -63,9 +72,10 @@ describe('calculateAnnualPaye', () => {
   });
 
   it('stacks the secondary (65+) rebate on top of the primary', () => {
-    const tax = 42678 + 0.26 * (300000 - 237100);
+    const income = firstBracket.upTo! + 1000;
+    const tax = secondBracket.base + (secondBracket.rate / 100) * (income - firstBracket.upTo!);
     const expected = Math.max(0, tax - config.primaryRebateAnnual - config.secondaryRebateAnnual);
-    expect(calculateAnnualPaye(300000, config, 70)).toBeCloseTo(expected, 2);
+    expect(calculateAnnualPaye(income, config, 70)).toBeCloseTo(expected, 2);
   });
 
   it('returns 0 for zero or negative income', () => {

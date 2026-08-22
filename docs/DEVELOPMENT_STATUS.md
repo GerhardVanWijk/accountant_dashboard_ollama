@@ -38,9 +38,10 @@ capitalization path yet — since resolved, see below). Payroll (Phase 8, 2026-0
 genuinely complete too: employee master data, a draft-then-post payroll run engine, real
 PAYE/UIF/SDL calculation against six dedicated liability accounts, and EMP201/EMP501
 statutory reporting with GL reconciliation — see `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase
-8 section for its deliberately-still-open boundaries AND its stronger-than-usual
-verification caveat (the seeded PAYE/UIF/SDL figures are unverified placeholders, not
-even user-supplied — see `docs/KNOWN_ISSUES.md`).*
+8 section for its deliberately-still-open boundaries. The seeded PAYE/UIF/SDL figures
+were verified 2026-08-22 directly against live sars.gov.za pages (see
+`docs/KNOWN_ISSUES.md`'s Resolved section) — a live-web check as of one date, not a
+substitute for professional sign-off.*
 
 ## Checkpoint — 2026-08-20: Phase 1 complete (Wave 1 + Wave 2)
 
@@ -159,10 +160,12 @@ calculation per month) round it out. 60 new tests, including an integration test
 zero-variance reconciliation against a real posted run — 522/522 total, type-check/
 lint/build clean.
 
-**Carries a stronger-than-usual verification caveat**: the seeded PAYE/UIF/SDL figures
-in `src/mock-data/payrollTaxConfig.ts` are placeholders reconstructed from general
-training knowledge, not the real published 2026/2027 SARS tables and not even
-user-supplied — see `docs/KNOWN_ISSUES.md`'s Open section and
-`docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 8 section for the full caveat and the other
-deliberate simplifications (no IRP5/payslip generation, UIF/SDL exemption as flags, no
+**Update, same day**: the seeded PAYE/UIF/SDL figures in
+`src/mock-data/payrollTaxConfig.ts` originally shipped as a Claude-reconstructed
+placeholder (flagged as unverified) — replaced later the same day by fetching
+sars.gov.za's own pages directly for the real 2026/2027 individual tax rate table,
+UIF rate/ceiling, and SDL rate/threshold, each cited by URL. See
+`docs/KNOWN_ISSUES.md`'s Resolved section for the full before/after and
+`docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 8 section for the other deliberate
+simplifications (no IRP5/payslip generation, UIF/SDL exemption as flags, no
 retirement-fund deduction cap, no tax-year-config settings UI).

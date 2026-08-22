@@ -464,17 +464,19 @@ processing existed at all:
   zero-variance reconciliation, one page-level smoke test). 522/522 tests passing (up
   from 462), type-check/lint/build clean.
 
-**IMPORTANT verification caveat** (§110/§111, stronger than usual): the actual PAYE
-bracket/rebate/UIF-ceiling/SDL figures seeded in `src/mock-data/payrollTaxConfig.ts`
-were reconstructed from general training knowledge of a recent published SA individual
-tax year, NOT independently verified against any official SARS Tax Guide/Government
-Gazette, and NOT even user-supplied this time — replace with the real published figures
-and get professional/accounting sign-off before any real-payroll use. See
-`docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 8 section for the full list of deliberate
-simplifications (allowance/deduction taxability as a boolean, no retirement-fund
-deduction cap, UIF exemption as a boolean, SDL exemption as a whole-company flag rather
-than a real trailing-12-month payroll projection, no IRP5/tax-certificate generation, no
-payslip PDF, no settings UI to add a new SARS tax year's config without a code change).
+**Tax figures verified 2026-08-22** (§110/§111): the PAYE bracket/rebate/UIF-ceiling/SDL
+figures in `src/mock-data/payrollTaxConfig.ts` shipped as a Claude-reconstructed
+placeholder, flagged unverified — same day, replaced by fetching sars.gov.za's own pages
+directly for the real 2026/2027 individual tax rate table, UIF rate/ceiling, and SDL
+rate/threshold, each cited by URL in the seed record. Cross-checked two independent
+ways, agreed exactly. Full before/after in `docs/KNOWN_ISSUES.md`'s Resolved section.
+Still a live-web check as of one date, not a substitute for professional sign-off, and
+any future tax year's config must repeat it. See `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase
+8 section for the full list of other deliberate simplifications (allowance/deduction
+taxability as a boolean, no retirement-fund deduction cap, UIF exemption as a boolean,
+SDL exemption as a whole-company flag rather than a real trailing-12-month payroll
+projection, no IRP5/tax-certificate generation, no payslip PDF, no settings UI to add a
+new SARS tax year's config without a code change).
 
 #### Reports Module (Reports Bee) — READY TO DISPATCH
 - [ ] Profit & Loss (revenue - COGS - opex = net income)

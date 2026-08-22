@@ -7,24 +7,14 @@ each section.
 
 ## Open
 
-### Payroll (Phase 8) tax figures are unverified placeholders
-`src/mock-data/payrollTaxConfig.ts`'s PAYE brackets/rebates, UIF ceiling, and SDL
-rate/threshold were reconstructed from general training knowledge of a recent published
-SA individual tax year and mapped onto this app's fictional current 2026/2027 SARS tax
-year as a stand-in — they are NOT the real published 2026/2027 SARS tax tables and were
-NOT independently verified against any official SARS source, and were not even
-user-supplied this time (unlike the VAT rate/wear-and-tear defaults, which at least
-came from the user or the supplied spec). Replace with the real published figures and
-get professional/accounting sign-off before any real-payroll use. See
-`docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 8 section for this and the other deliberate
-Phase 8 simplifications (allowance/deduction taxability as booleans, no retirement-fund
-deduction cap, UIF-exempt/SDL-exempt as flags rather than the real statutory tests, no
-IRP5/payslip document generation, no settings UI to add a new tax year's config, no
-"mark payroll as paid" settlement step when Net Pay Payable is used as the contra
-account).
-
-Nothing else is open right now beyond the one deliberate non-issue below — every other
-item that was open as of the last pass (2026-08-22) has been resolved; see Resolved.
+Nothing open right now beyond the one deliberate non-issue below — every other item
+that was open as of the last pass (2026-08-22) has been resolved; see Resolved.
+Remaining deliberate Phase 8 simplifications (allowance/deduction taxability as
+booleans, no retirement-fund deduction cap, UIF-exempt/SDL-exempt as flags rather than
+the real statutory tests, no IRP5/payslip document generation, no settings UI to add a
+new tax year's config, no "mark payroll as paid" settlement step) are tracked in
+`docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 8 section, not listed here — they're scope
+boundaries, not bugs.
 
 ### Two GitHub identities in play
 `gh auth status` shows two authenticated accounts (`GerhardVanWijk` active,
@@ -34,6 +24,29 @@ git config). This is intentional per explicit user instruction, not a misconfigu
 — noted here only so a future session doesn't "fix" it back to the global default.
 
 ## Resolved
+
+### Payroll (Phase 8) tax figures were unverified placeholders
+`src/mock-data/payrollTaxConfig.ts`'s PAYE brackets/rebates, UIF ceiling, and SDL
+rate/threshold were originally reconstructed from general training knowledge of a
+recent published SA individual tax year, mapped onto this app's fictional current
+2026/2027 SARS tax year as a stand-in — not the real published 2026/2027 tables and not
+independently verified against any official source. Fixed 2026-08-22, same day: fetched
+the live sars.gov.za pages directly (`WebFetch`/`WebSearch`, not recalled from memory)
+— the individual tax rate table, UIF rate/ceiling, and SDL rate/threshold, each cited by
+URL in the seed record's `sourceReference` and per-field comments. The bracket table was
+cross-checked two independent ways (a direct page fetch and a search-engine summary of
+the 2026 Budget tax guide PDF) and agreed exactly. Real changes from the old placeholder
+figures: PAYE bracket thresholds/bases moved up (245,100/383,100/530,200/695,800/887,000/
+1,878,600 vs. the old 237,100/370,500/512,800/673,000/857,900/1,817,000 — the genuine
+2026/27 inflation-adjusted brackets, the first such adjustment since 2023/24) and
+rebates increased (primary R17,820/secondary R9,765/tertiary R3,249 vs. the old
+R17,235/R9,444/R3,145); UIF ceiling (R17,712/month) and SDL rate/threshold (1%,
+R500,000) were unchanged — the placeholder had gotten those two right already. Tests
+that hardcoded the old bracket boundaries as literals were rewritten to derive expected
+values from the seeded config instead, so they stay correct across any future
+re-verification. `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 8 section still carries a
+caveat — this is a live-web verification as of one date, not a substitute for
+professional sign-off, and any future tax year's config must repeat the same process.
 
 ### Dashboard financials were fully mocked
 Revenue/Expenses/Profit and the Cash Flow chart had no real General Ledger or Banking
