@@ -30,3 +30,4 @@ export * from './payroll';
 export * from './incomeTax';
 export * from './capitalGains';
 export * from './dividendsTax';
+export * from './provisionalTax';

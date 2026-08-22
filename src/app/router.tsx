@@ -36,7 +36,13 @@ import { TaxRatesPage } from '@/features/tax/pages/TaxRatesPage';
 import { IncomeTaxPage } from '@/features/tax/incomeTax/pages/IncomeTaxPage';
 import { CapitalGainsPage } from '@/features/tax/capitalGains/pages/CapitalGainsPage';
 import { DividendsTaxPage } from '@/features/tax/dividendsTax/pages/DividendsTaxPage';
+import { ProvisionalTaxPage } from '@/features/tax/provisionalTax/pages/ProvisionalTaxPage';
 import { ReportsPage } from '@/features/reports/pages/ReportsPage';
+import { IncomeStatementPage } from '@/features/reports/financialStatements/pages/IncomeStatementPage';
+import { BalanceSheetPage } from '@/features/reports/financialStatements/pages/BalanceSheetPage';
+import { CashFlowStatementPage } from '@/features/reports/cashFlow/pages/CashFlowStatementPage';
+import { CustomerAgingPage } from '@/features/reports/aging/pages/CustomerAgingPage';
+import { SupplierAgingPage } from '@/features/reports/aging/pages/SupplierAgingPage';
 import { UsersPage } from '@/features/admin/pages/UsersPage';
 import { AuditPage } from '@/features/admin/pages/AuditPage';
 import { NotFoundPage } from '@/features/admin/pages/NotFoundPage';
@@ -102,7 +108,13 @@ export const routes: RouteObject[] = [
           { path: 'tax/income-tax', element: <IncomeTaxPage /> },
           { path: 'tax/capital-gains', element: <CapitalGainsPage /> },
           { path: 'tax/dividends', element: <DividendsTaxPage /> },
+          { path: 'tax/provisional-tax', element: <ProvisionalTaxPage /> },
           { path: 'reports', element: <ReportsPage /> },
+          { path: 'reports/income-statement', element: <IncomeStatementPage /> },
+          { path: 'reports/balance-sheet', element: <BalanceSheetPage /> },
+          { path: 'reports/cash-flow', element: <CashFlowStatementPage /> },
+          { path: 'reports/customer-aging', element: <CustomerAgingPage /> },
+          { path: 'reports/supplier-aging', element: <SupplierAgingPage /> },
           { path: 'admin/users', element: <UsersPage /> },
           { path: 'admin/audit', element: <AuditPage /> },
           { path: '*', element: <NotFoundPage /> },

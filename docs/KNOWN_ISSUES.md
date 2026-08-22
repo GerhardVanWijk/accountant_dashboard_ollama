@@ -14,15 +14,16 @@ new tax year's config, no "mark payroll as paid" settlement step) are tracked in
 `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 8 section, not listed here — they're scope
 boundaries, not bugs.
 
-### Phase 9 (Tax) — Deferred Tax, Provisional Tax, and TaxComputation reversal remain open
-Built 2026-08-22 (three bees in parallel — Income Tax §51/§52/§53, Capital Gains Tax §55,
-Dividends Tax §56 — plus a Queen Bee integration pass, see Resolved below). Deliberately
-NOT attempted this pass, per `src/features/tax/incomeTax/services/taxComputationService.ts`'s
-class doc comment: Deferred Tax (§50, correctly Phase 12 per §116's own build order, not a
-Phase 9 gap); Provisional Tax (§54 — needs the Income Tax engine that just landed, planned
-as a sequential Wave 2 next); no reversal/correction path for a posted `TaxComputation` —
-once posted it is immutable, mirroring the same open gap `PayrollRunService.postPayrollRun()`
-and `DepreciationService.runDepreciation()` already carry.
+### Phase 9 (Tax) — Deferred Tax and TaxComputation reversal remain open
+Built 2026-08-22 (Income Tax §51/§52/§53, Capital Gains Tax §55, Dividends Tax §56, then
+Provisional Tax §54 as a sequential Wave 2 — see Resolved below for Provisional Tax's
+completion). Deliberately NOT attempted, per
+`src/features/tax/incomeTax/services/taxComputationService.ts`'s class doc comment:
+Deferred Tax (§50, correctly Phase 12 per §116's own build order, not a Phase 9 gap); no
+reversal/correction path for a posted `TaxComputation` — once posted it is immutable,
+mirroring the same open gap `PayrollRunService.postPayrollRun()` and
+`DepreciationService.runDepreciation()` already carry (Provisional Tax's own
+`ProvisionalTaxPeriod` inherits the same "no revision once a slot is paid" shape).
 
 ### Two GitHub identities in play
 `gh auth status` shows two authenticated accounts (`GerhardVanWijk` active,
@@ -32,6 +33,70 @@ git config). This is intentional per explicit user instruction, not a misconfigu
 — noted here only so a future session doesn't "fix" it back to the global default.
 
 ## Resolved
+
+### `calculateAgingForCustomer` silently summed every customer together when given an unfiltered multi-customer source
+`src/features/customers/utils/calculateAging.ts`'s `calculateAgingForCustomer(customerId,
+asOf, source)` only filtered `source` down to `customerId` via its third parameter's
+*default value* (`getOpenItemsForCustomer(customerId)`) — a caller that passed its OWN
+explicit `source` array (as any fleet-wide report reusing one invoice fetch across every
+customer must) got no internal filtering at all, silently summing every customer's open
+items together. Suppliers' equivalent (`src/features/suppliers/utils/calculateAging.ts`'s
+`calculateAging(supplierId, asOf, bills)`) never had this asymmetry — it always filters by
+`supplierId` internally regardless of caller. Found 2026-08-22 while building the Reports
+module's Customer Aging report (the bee worked around it locally with an explicit
+pre-filter and flagged it rather than silently trusting the existing function). Fixed at
+the source the same day: `calculateAgingForCustomer` now always calls
+`getOpenItemsForCustomer(customerId, source)` internally before bucketing — idempotent (a
+no-op) on the default-parameter path, corrective on the bug path. New regression test in
+`calculateAging.test.ts` passes an unfiltered two-customer array and proves only the
+target customer's total comes back; QA independently confirmed this test would have failed
+against the old code.
+
+### Phase 9 Wave 2 (Provisional Tax) and the Reports module — both ✅ complete
+**Provisional Tax (§54)**, `src/features/tax/provisionalTax/`: due dates for the
+first/second/top-up payments computed from the company's own FinancialYear (never the
+unrelated 1 March–end-Feb individual/PAYE tax year `getSarsTaxYear()` computes — a
+distinction this module's own doc comments draw explicitly, mirroring Income Tax's). Estimates
+reuse `calculateTaxLiability()` rather than reimplementing SBC/flat-rate math a second way.
+`payProvisionalTax()` posts DR Income Tax Payable (`acc_2300`) / CR Cash and Bank
+(`acc_1000`) — no new GL account needed, since a provisional payment is simply an early
+debit against the same liability the final `TaxComputation` will credit at year-end; the
+reconciliation (paid vs. actual) falls out of the GL for free rather than needing its own
+mechanism. No underpayment-interest calculation — SARS's rate floats with the repo rate
+rather than being a fixed statutory figure (§110/§111), so only the plain Rand-value gap is
+surfaced. 23 new tests.
+
+**Reports module**, three bees in parallel plus this session's own resume-after-usage-limit
+recovery (see below): `src/features/reports/financialStatements/` (a classified Income
+Statement ending in Net Profit After Tax, and a Balance Sheet that computes and displays
+`Assets = Liabilities + Equity` rather than assuming it — flagged one honest constraint:
+the identity only holds cleanly because this app has no year-end closing entry yet, verified
+against real seed data that this doesn't currently cause a problem, not papered over);
+`src/features/reports/cashFlow/` (indirect-method Cash Flow reconciled to real Cash and Bank
+movement — the bee found and correctly fixed a real discrepancy in its own dispatch brief,
+that dividends-paid is the GROSS debit to Dividends Payable net of the Dividends Tax Payable
+credit, not a flat net figure, by reading `dividendDeclarationService.pay()` directly rather
+than trusting the brief); `src/features/reports/aging/` (Customer/Supplier Aging Reports,
+one row per entity — see the aging bug entry above, found while building this).
+
+**A three-bee wave hit the session's usage limit mid-build** (each stopped with progress
+saved, per the harness's own checkpoint mechanism) and was resumed via SendMessage once the
+limit reset — each bee picked up exactly where it left off rather than restarting from
+scratch, per its own "resume" report. Queen Bee then wired routes/nav for all 6 new pages,
+rebuilt the `ReportsPage` hub (previously a bare placeholder) into a real grid linking to
+all 5 new report pages, added `provisionalTax` to `src/types/index.ts`'s barrel, fixed the
+aging bug above, and deliberately kept the pre-existing `/purchases/aging` Vendor Aging page
+(bills-only suppliers) alongside the new, broader `/reports/supplier-aging` (every supplier,
+with a toggle) as two legitimately different reports rather than dedup**e**ing them.
+
+706/706 tests passing (up from 631), type-check/lint/build clean, independently QA-verified
+(zero defects found — the QA pass specifically traced the Balance Sheet identity and the
+Cash Flow reconciliation's non-circularity rather than trusting the tests alone).
+Deliberately still open, not gaps in this pass: Deferred Tax (§50, Phase 12); no reversal
+path for a posted `TaxComputation`/`ProvisionalTaxPeriod` slot; no Notes to Financial
+Statements/Statement of Changes in Equity/comparatives/export (§43, out of scope); Cash
+Flow's working-capital tracking is scoped to AR/Inventory/AP only (any other cash-touching
+account would correctly surface as a reconciliation variance, not silently pass).
 
 ### Phase 9 Income Tax's capital-gain adjustment was a manual zero placeholder
 `TaxComputationService.prepareComputation()` (`src/features/tax/incomeTax/`) auto-suggests

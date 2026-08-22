@@ -85,4 +85,19 @@ describe('calculateAging', () => {
     );
     expect(buckets.total).toBe(100);
   });
+
+  it('calculateAgingForCustomer filters internally even when passed an UNFILTERED multi-customer source (regression, 2026-08-22)', () => {
+    // A caller that reuses one fetch across many customers (e.g. a fleet-wide
+    // aging report) must not have to pre-filter itself — the function used to
+    // trust an explicitly-passed `source` as-is, silently summing every
+    // customer's items together. Found while building the Reports module's
+    // Customer Aging report.
+    const unfilteredSource: OpenItem[] = [
+      item({ customerId: 'cust_a', dueDate: '2026-08-01', amountOutstanding: 100 }),
+      item({ customerId: 'cust_b', dueDate: '2026-08-01', amountOutstanding: 900 }),
+    ];
+    const buckets = calculateAgingForCustomer('cust_a', asOf, unfilteredSource);
+    expect(buckets.total).toBe(100);
+    expect(buckets.days30).toBe(100);
+  });
 });

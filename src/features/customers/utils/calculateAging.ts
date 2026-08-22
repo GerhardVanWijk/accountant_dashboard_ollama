@@ -58,13 +58,24 @@ export function calculateAging(items: OpenItem[], asOf: Date = new Date()): Agin
   return buckets;
 }
 
-/** Aging buckets for a single customer, looked up from the mock open items dataset. */
+/**
+ * Aging buckets for a single customer. Always filters `source` down to
+ * this customerId first via getOpenItemsForCustomer() — NOT just when
+ * `source` is defaulted. Fixed 2026-08-22: a caller that passes its own
+ * pre-fetched multi-customer array (e.g. a fleet-wide report reusing one
+ * `invoicesToOpenItems(allInvoices)` call across every customer, per
+ * docs/KNOWN_ISSUES.md) used to bypass filtering entirely and silently sum
+ * every customer's items together — Suppliers' equivalent
+ * (src/features/suppliers/utils/calculateAging.ts's calculateAging())
+ * never had this bug, since it always filters by supplierId internally
+ * regardless of who called it.
+ */
 export function calculateAgingForCustomer(
   customerId: ID,
   asOf: Date = new Date(),
   source: OpenItem[] = getOpenItemsForCustomer(customerId),
 ): AgingBuckets {
-  return calculateAging(source, asOf);
+  return calculateAging(getOpenItemsForCustomer(customerId, source), asOf);
 }
 
 /** Sum of every overdue bucket (everything except "current"). */

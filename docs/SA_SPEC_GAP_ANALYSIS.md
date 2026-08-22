@@ -26,12 +26,15 @@ same day)** — Phase 9 (Tax) Wave 1 is now ✅ complete: Income Tax (corporate/
 computation and the accounting-profit-to-taxable-income reconciliation), Capital Gains
 Tax (a read-only reconciliation layer, correctly separate from accounting gain/loss), and
 Dividends Tax (declare/pay/remit lifecycle with real withholding) — see that section
-below. Provisional Tax (§54) is Wave 2, not yet built; Deferred Tax (§50) is explicitly
-Phase 12, not Phase 9. Phases 1-9 (Accounting Core, Customers, Suppliers, Banking, VAT,
-Inventory, Fixed Assets, Payroll, Tax Wave 1) now have real implementations to assess;
-Phases 10-12 (Financial Reporting, Compliance, Advanced Accounting) plus Phase 9's
-Provisional Tax are still not started, consistent with §116's ordering — not reassessed in
-detail below beyond noting what's genuinely absent.
+below. Deferred Tax (§50) is explicitly Phase 12, not Phase 9. **Updated 2026-08-22 (later
+same day)** — Phase 9 Wave 2 (Provisional Tax, §54) is now ✅ complete, and Phase 10
+(Financial Reporting) core is now ✅ complete: Income Statement, Balance Sheet (proves
+Assets = Liabilities + Equity), Cash Flow Statement (indirect method, reconciled to real
+cash movement), plus Customer/Supplier Aging reports — see those sections below. Phases
+1-10 core now have real implementations to assess; Phase 10's Notes/Statement of Changes
+in Equity/comparatives, and Phases 11-12 (Compliance, Advanced Accounting) are still not
+started, consistent with §116's ordering — not reassessed in detail below beyond noting
+what's genuinely absent.
 
 ## Phase 1 — Accounting Core
 
@@ -433,8 +436,7 @@ lint/build clean.
   `docs/KNOWN_ISSUES.md`'s Resolved section.
 
 **Deliberately still open** (§116's own ordering, not Wave 1 gaps): Deferred Tax (§50,
-explicitly Phase 12, not Phase 9); Provisional Tax (§54) — needs this Income Tax engine,
-planned as a sequential Wave 2; no reversal/correction path for a posted `TaxComputation`.
+explicitly Phase 12, not Phase 9); no reversal/correction path for a posted `TaxComputation`.
 Documented simplifications per module: no shareholder register anywhere in this codebase,
 so Dividends Tax is gross/company-wide only (no per-shareholder allocation, no real s64F
 exemption-eligibility test — a manual reason-required override amount instead); Capital
@@ -443,15 +445,71 @@ assessed-capital-loss carryforward; Income Tax has no assessed-loss-brought-forw
 automation (a manual adjustment line) and SBC eligibility is a manual, reason-required
 override, never auto-determined from real shareholding/personal-service-company tests.
 
-## Phases 10-12 — not started, per §116's own build order
+## Phase 9 (Tax) — Wave 2 ✅ complete, 2026-08-22 (Provisional Tax, sequential)
+
+`src/features/tax/provisionalTax/` — `ProvisionalTaxPeriod` (§54) holds all three payment
+slots (first/second/top-up); due dates computed from the company's own FinancialYear, never
+the unrelated 1 March–end-Feb individual/PAYE tax year (`getSarsTaxYear()`, a different
+concept this module's doc comments explicitly distinguish, same reasoning Income Tax already
+established). Estimates and the final reconciliation both reuse `calculateTaxLiability()`
+from the Income Tax module rather than reimplementing SBC/flat-rate math a second way.
+`payProvisionalTax()` posts DR Income Tax Payable (`acc_2300`) / CR Cash and Bank
+(`acc_1000`) — deliberately no new GL account, since a provisional payment is just an early
+debit against the exact liability the final `TaxComputation` will credit at year-end, so the
+paid-vs-actual reconciliation falls out of the GL identity for free. No underpayment-interest
+calculation (§110/§111 — SARS's rate floats with the repo rate, not a fixed statutory
+figure); only the plain Rand-value gap is surfaced. 23 new tests.
+
+## Phase 10 (Financial Reporting) — core ✅ complete, 2026-08-22 (Income Statement, Balance
+Sheet, Cash Flow Statement)
+
+Trial Balance existed since Phase 1. Built this session, three bees in parallel:
+- **Income Statement** (§42) — `src/features/reports/financialStatements/`. A real
+  classified P&L: Revenue → Cost of Goods Sold (`acc_5000`) → Gross Profit → Operating
+  Expenses → Profit Before Tax → Income Tax Expense (`acc_5500`, the new Phase 9 account) →
+  Net Profit After Tax — not a flat revenue-minus-expenses number.
+- **Balance Sheet** (§42) — same folder. Assets (net of contra-asset accounts like
+  Accumulated Depreciation) vs. Liabilities + Equity (Owner's Equity + Retained Earnings +
+  a "Current Year Earnings" line reusing the Income Statement's own calculation) — the
+  module computes and displays whether `Assets = Liabilities + Equity` rather than assuming
+  it, proven against real posted GL data by a dedicated test. One honestly-flagged
+  constraint: the identity only holds cleanly because this app has no year-end closing
+  journal yet (a pre-existing data-model gap, not something this report introduced or could
+  fix within its own scope) — verified this doesn't currently cause a problem against the
+  real seed data, which spans only one still-open FinancialYear.
+- **Cash Flow Statement** (§42, indirect method) — `src/features/reports/cashFlow/`.
+  Operating (net profit + depreciation/disposal-gain-loss addbacks + AR/Inventory/AP
+  working-capital deltas), Investing (Fixed Asset acquisitions net of real disposal
+  proceeds from `AssetDisposal.proceeds`, not the accounting gain/loss), Financing (Owner's
+  Equity movement, dividends paid net of Dividends Tax withholding — found and correctly
+  fixed a real discrepancy from its own dispatch brief here, by reading
+  `dividendDeclarationService.pay()`'s actual three-line posting rather than assuming a
+  flat net figure). Reconciles to the real net Cash and Bank movement for the period, proven
+  non-circular by a dedicated test that breaks the reconciliation on purpose (a cash
+  movement through an untracked account) and confirms the check actually catches it.
+  Working-capital tracking is scoped to AR/Inventory/AP only — any other cash-touching
+  account (VAT, PAYE/UIF/SDL, Provisional Tax, a future loan) would correctly surface as a
+  reconciliation variance rather than silently reconciling anyway.
+- **Aging Reports** (a Reports-module addition, not itself a §42 line item but built
+  alongside) — `src/features/reports/aging/`. Customer/Supplier Aging, one row per entity.
+  Found and fixed a real latent bug in `calculateAgingForCustomer` while building this — see
+  `docs/KNOWN_ISSUES.md`'s Resolved section.
+
+706/706 tests passing (up from 631), type-check/lint/build clean, independently QA-verified
+(zero defects — QA specifically traced the Balance Sheet identity and Cash Flow's
+reconciliation non-circularity rather than trusting the tests alone).
+
+**Deliberately still open, per §42/§43 and this pass's own scope**: Notes to Financial
+Statements (§43); Statement of Changes in Equity; comparative/YoY columns (no budget entity
+exists anywhere in this app, so budget-vs-actual specifically is out of scope, not just
+deferred); export/PDF/print; a direct-method Cash Flow presentation (indirect only).
+
+## Phases 11-12 — not started, per §116's own build order
 
 Nothing below has been built yet. Noted here only so a future session can see at a
 glance what's genuinely absent versus partially built, without re-deriving it from
 scratch:
 
-- **Phase 10 (Financial Reporting)** — Trial Balance exists (Phase 1); no Income
-  Statement/Statement of Financial Position/Cash Flow/Statement of Changes in Equity
-  derived from the GL yet (§42), no notes framework (§43).
 - **Phase 11 (Compliance)** — Public Interest Score and automatic reporting-framework
   determination remain deliberately unbuilt (§3; see Phase 1 section above — still the
   right call, still requires verified Companies Regulations methodology, not guessed).

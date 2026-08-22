@@ -495,7 +495,7 @@ type-check/lint/build clean.
   rate, R50,000 annual exclusion, genuinely GL-inert (read-only reconciliation)
 - [x] Dividends Tax — declare/pay/remit lifecycle, 20% withholding, real GL postings to
   new Dividends Payable/Dividends Tax Payable accounts
-- [ ] Provisional Tax (§54) — Wave 2, sequential, depends on the Income Tax engine above
+- [x] Provisional Tax (§54) — Wave 2 ✅ COMPLETE (2026-08-22, sequential, solo bee dispatch)
 - [ ] Deferred Tax (§50) — explicitly Phase 12 per §116, not Phase 9
 
 **Key Requirements:**
@@ -504,15 +504,41 @@ type-check/lint/build clean.
 - ✅ `FinancialNumber`/`FinancialTableCell` for all amounts, tabular-nums, light+dark theme
 - ✅ No bee touched another's folder or a shared config file mid-dispatch
 
-#### Reports Module (Reports Bee) — READY TO DISPATCH
-- [ ] Profit & Loss (revenue - COGS - opex = net income)
-- [ ] Balance Sheet (assets = liabilities + equity)
-- [ ] Cash Flow (operating, investing, financing activities)
-- [ ] Customer Aging (current/30/60/90+ buckets)
-- [ ] Supplier Aging (current/30/60/90+ buckets)
-- [ ] Key P&L reports with financial number formatting
-- [ ] Use `FinancialNumber` for all currency and percentage displays
-- [ ] Comparative reports (YoY, budget vs actual)
+**Phase 9 (Tax) Wave 2 — Provisional Tax, ✅ COMPLETE (2026-08-22).** Dispatched sequentially
+(depends on Wave 1's Income Tax engine) at `src/features/tax/provisionalTax/`.
+`ProvisionalTaxPeriod` holds all three payment slots (first/second/top-up) with due dates
+computed from the company's own FinancialYear (not the unrelated SARS individual tax year);
+estimates reuse `calculateTaxLiability()` from Income Tax rather than reimplementing SBC/flat
+math; `payProvisionalTax()` posts DR Income Tax Payable (`acc_2300`) / CR Cash and Bank
+(`acc_1000`) — no new GL account, since a provisional payment simply pre-pays the same
+liability the final `TaxComputation` will credit at year-end, so the reconciliation (paid vs.
+actual liability) falls out of the GL for free. No underpayment-interest calculation — SARS's
+rate floats with the repo rate rather than being a fixed statutory figure, so only the plain
+Rand-value gap is surfaced (§110/§111). 23 new tests.
+
+#### Reports Module — ✅ COMPLETE (2026-08-22, three bees in parallel + one sequential Wave 2 bee)
+- [x] Profit & Loss (`src/features/reports/financialStatements/`) — classified: Revenue →
+  COGS → Gross Profit → Operating Expenses → Profit Before Tax → Income Tax Expense (new
+  Phase 9 account) → Net Profit After Tax
+- [x] Balance Sheet (same folder) — Assets (net of contra-assets) vs. Liabilities + Equity
+  (Owner's Equity + Retained Earnings + a "Current Year Earnings" line reusing the Income
+  Statement calc) — proves `isBalanced`, never assumes it
+- [x] Cash Flow Statement (`src/features/reports/cashFlow/`, indirect method) — Operating
+  (net profit + depreciation/disposal addbacks + AR/Inventory/AP working-capital deltas),
+  Investing (Fixed Asset acquisitions net of real disposal proceeds), Financing (Owner's
+  Equity movement, dividends paid net of withholding) — reconciles to the real Cash and
+  Bank movement, proven non-circular by a dedicated negative-control test
+- [x] Customer Aging Report + Supplier Aging Report (`src/features/reports/aging/`) — one
+  row per entity, reusing the existing per-entity aging math (and fixing a real latent bug
+  in `calculateAgingForCustomer` found along the way — see `docs/KNOWN_ISSUES.md`)
+- [x] `FinancialNumber`/`FinancialTableCell` throughout, tabular-nums, light+dark theme
+- [ ] Comparative reports (YoY, budget vs actual) — no budget entity exists anywhere in this
+  app; YoY explicitly out of scope for this pass
+- [ ] Notes to Financial Statements (§43), Statement of Changes in Equity, export/PDF/print
+  — all explicitly out of scope, flagged in-code
+
+92 test files / 706 tests passing project-wide after this wave (up from 631), type-check/
+lint/build clean, independently QA-verified (zero defects found).
 
 **Key Requirements:**
 - ✅ Read `docs/FINANCIAL_UI_GUIDE.md` for P&L and Report examples

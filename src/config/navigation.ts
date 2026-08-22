@@ -115,12 +115,20 @@ export const navigation: NavSection[] = [
       { path: '/tax/income-tax', label: 'Income Tax', icon: 'tax' },
       { path: '/tax/capital-gains', label: 'Capital Gains Tax', icon: 'tax' },
       { path: '/tax/dividends', label: 'Dividends Tax', icon: 'dividends' },
+      { path: '/tax/provisional-tax', label: 'Provisional Tax', icon: 'tax' },
     ],
   },
   {
     section: 'Reports',
     icon: 'reports',
-    items: [{ path: '/reports', label: 'Financial Statements Hub', icon: 'reports' }],
+    items: [
+      { path: '/reports', label: 'Financial Statements Hub', icon: 'reports' },
+      { path: '/reports/income-statement', label: 'Income Statement', icon: 'reports' },
+      { path: '/reports/balance-sheet', label: 'Balance Sheet', icon: 'reports' },
+      { path: '/reports/cash-flow', label: 'Cash Flow Statement', icon: 'reports' },
+      { path: '/reports/customer-aging', label: 'Customer Aging Report', icon: 'customers' },
+      { path: '/reports/supplier-aging', label: 'Supplier Aging Report', icon: 'suppliers' },
+    ],
   },
   {
     section: 'Admin',
