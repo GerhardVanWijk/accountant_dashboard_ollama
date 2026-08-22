@@ -23,6 +23,10 @@ import { BankTransactionsPage } from '@/features/banking/pages/BankTransactionsP
 import { BankReconciliationPage } from '@/features/banking/pages/BankReconciliationPage';
 import { ProductsPage } from '@/features/inventory/pages/ProductsPage';
 import { WarehousesPage } from '@/features/inventory/pages/WarehousesPage';
+import { AssetRegisterPage } from '@/features/assets/pages/AssetRegisterPage';
+import { DepreciationPage } from '@/features/assets/pages/DepreciationPage';
+import { DisposalsPage } from '@/features/assets/pages/DisposalsPage';
+import { TaxRegisterPage } from '@/features/assets/pages/TaxRegisterPage';
 import { VatReturnPage } from '@/features/tax/pages/VatReturnPage';
 import { TaxRatesPage } from '@/features/tax/pages/TaxRatesPage';
 import { ReportsPage } from '@/features/reports/pages/ReportsPage';
@@ -78,6 +82,10 @@ export const routes: RouteObject[] = [
           { path: 'banking/reconciliation', element: <BankReconciliationPage /> },
           { path: 'inventory/products', element: <ProductsPage /> },
           { path: 'inventory/warehouses', element: <WarehousesPage /> },
+          { path: 'assets/register', element: <AssetRegisterPage /> },
+          { path: 'assets/depreciation', element: <DepreciationPage /> },
+          { path: 'assets/disposals', element: <DisposalsPage /> },
+          { path: 'assets/tax-register', element: <TaxRegisterPage /> },
           { path: 'tax/rates', element: <TaxRatesPage /> },
           { path: 'tax/vat-return', element: <VatReturnPage /> },
           { path: 'reports', element: <ReportsPage /> },

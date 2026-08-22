@@ -13,6 +13,7 @@
 | **Dashboard** | ✅ `/` | ✅ | n/a (read-only) | ✅ | n/a (aggregates other modules) | ✅ 90 tests (shared) | 🟢 Done |
 | **Tax** | ✅ `/tax/rates`, `/tax/vat-return` | ✅ | ✅ | ✅ | ✅ | ✅ 22 tests (shared) | 🟢 Done |
 | **Banking** | ✅ `/banking/*` | ✅ | ✅ | ✅ | ✅ | ✅ 281 tests (shared) | 🟢 Done |
+| **Fixed Assets** | ✅ `/assets/*` | ✅ | ✅ | ✅ | ✅ | ✅ 31 tests (shared) | 🟢 Done |
 | **Reports** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
 | **Admin & Audit** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
 
@@ -26,7 +27,13 @@ Banking/Tax despite all six being 🟢 on this feature-completeness matrix. Inve
 (Phase 6) is now genuinely complete per `docs/SA_SPEC_GAP_ANALYSIS.md`, including
 valuation-method choice (WAC/FIFO), per-warehouse attribution, real 3-way PO/GRN/
 Invoice matching, and credit notes reversing Cost of Sales/restoring stock for returns
-(all fixed 2026-08-21/22, see `docs/KNOWN_ISSUES.md`).*
+(all fixed 2026-08-21/22, see `docs/KNOWN_ISSUES.md`). Fixed Assets (Phase 7,
+2026-08-22) is genuinely complete too: an asset register with a draft-then-capitalize
+lifecycle, a real straight-line/reducing-balance depreciation engine posting balanced
+combined GL entries, disposals computing real gain/loss, and a Tax Register comparing
+accounting vs. SARS wear-and-tear book values — see `docs/SA_SPEC_GAP_ANALYSIS.md`'s
+Phase 7 section for the deliberately-still-open boundaries (no Bill-line
+capitalization path yet).*
 
 ## Checkpoint — 2026-08-20: Phase 1 complete (Wave 1 + Wave 2)
 
@@ -73,3 +80,19 @@ type-check/lint/build clean, independently re-verified by Queen Bee.
 **Flagged gap, not blocking:** a Purchase Order can be converted to a Bill more than
 once — no `billId`/converted-status field exists yet to guard it (see
 `docs/KNOWN_ISSUES.md`).
+
+## Checkpoint — 2026-08-22: Phase 7 (Fixed Assets) complete
+
+New module, `src/features/assets/`: Asset Register (draft-then-capitalize, matching
+Bill/Invoice/PurchaseOrder's create-draft-then-explicit-post pattern), a straight-line/
+reducing-balance depreciation engine posting one combined balanced journal entry per
+run (idempotent per period, auto-flips to `'fully_depreciated'`), disposals computing
+real gain/loss (proven for gain/loss/break-even/zero-proceeds cases), and a read-only
+Tax Register comparing accounting carrying value against a SARS wear-and-tear tax
+written-down value. Five new GL accounts (Fixed Assets, Accumulated Depreciation,
+Depreciation Expense, Gain/Loss on Disposal). Seed data deliberately left as `'draft'`
+— no fabricated posted history without a real matching `JournalEntry` behind it, per
+the lesson from Phase 5's VAT reconciliation gap. 31 new tests (445/445 total),
+type-check/lint/build clean. Full detail in `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 7
+section and `docs/HIVE_TASKS.md`. Deliberately still open: no Bill-line capitalization
+path yet (`FixedAsset.sourceBillId` exists on the type but nothing sets it).

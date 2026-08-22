@@ -23,6 +23,10 @@
 | `/banking/reconciliation` | `banking` | Bank Reconciliation | Banking |
 | `/inventory/products` | `inventory` | Products & Services | Inventory |
 | `/inventory/warehouses`| `inventory` | Multi-Warehouse Stock | Inventory |
+| `/assets/register` | `assets` | Asset Register | Fixed Assets |
+| `/assets/depreciation` | `assets` | Depreciation | Fixed Assets |
+| `/assets/disposals` | `assets` | Disposals | Fixed Assets |
+| `/assets/tax-register` | `assets` | Tax Register | Fixed Assets |
 | `/tax/rates` | `tax` | Tax Rates | Tax |
 | `/tax/vat-return` | `tax` | VAT201 Reporting | Tax |
 | `/reports` | `reports` | Financial Statements Hub | Reports |

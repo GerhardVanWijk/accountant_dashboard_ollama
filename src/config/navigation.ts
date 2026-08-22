@@ -87,6 +87,16 @@ export const navigation: NavSection[] = [
     ],
   },
   {
+    section: 'Fixed Assets',
+    icon: 'assets',
+    items: [
+      { path: '/assets/register', label: 'Asset Register', icon: 'assets' },
+      { path: '/assets/depreciation', label: 'Depreciation', icon: 'trendDown' },
+      { path: '/assets/disposals', label: 'Disposals', icon: 'creditNotes' },
+      { path: '/assets/tax-register', label: 'Tax Register', icon: 'tax' },
+    ],
+  },
+  {
     section: 'Tax',
     icon: 'tax',
     items: [

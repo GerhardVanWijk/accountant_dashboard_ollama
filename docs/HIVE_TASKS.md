@@ -370,6 +370,49 @@ section for full detail and the deliberately-still-open boundaries (no FIFO
 valuation-report UI, no true partial PO receipt, no PO-to-Bill price-variance
 handling).
 
+### Phase 7 (Fixed Assets) — ✅ COMPLETE (2026-08-22, Queen, solo)
+
+Genuinely new module — no asset register, depreciation, disposal, or tax-register
+support existed at all. Built in `src/features/assets/`:
+
+- [x] Asset Register (§116) — `FixedAsset` type + `fixedAssetService`, draft-then-
+  capitalize lifecycle matching Bill/Invoice/PurchaseOrder: `createFixedAsset()` writes
+  a `'draft'` row with no GL history; `postAcquisition()` posts DR Fixed Asset
+  (`acc_1500`) / CR a user-chosen funding account and flips to `'active'`. Cost/useful-
+  life/method/dates/GL-mapping lock once capitalized (posted-record-immutability guard,
+  applied to *edit* here rather than delete).
+- [x] Depreciation (§116) — `depreciationService.runDepreciation(periodEnd)` posts ONE
+  combined balanced journal entry per run (DR Depreciation Expense `acc_5200` / CR
+  Accumulated Depreciation `acc_1590`, a contra-asset, per eligible asset). Idempotent
+  per exact period-end; caps the charge so accumulated depreciation can never exceed
+  the depreciable base; auto-flips an asset to `'fully_depreciated'` once exhausted.
+  Straight-line and reducing-balance both supported,
+  `calculateMonthlyDepreciation()` shared between the real run and any future preview.
+- [x] Disposals (§116) — `assetDisposalService.disposeAsset()` posts CR Fixed Asset /
+  DR Accumulated Depreciation / DR proceeds account, balanced by a gain (CR new
+  `acc_4200`) or loss (DR new `acc_5300`) line. Terminal `'disposed'` status; rejects
+  disposing a draft or already-disposed asset.
+- [x] Tax Register (§116) — `taxRegisterService.getTaxRegister(asOfDate)`, read-only,
+  compares accounting carrying value against a SARS wear-and-tear tax written-down
+  value per asset. Every default rate flagged "typical/indicative, pending
+  professional verification" (same caveat as `TaxRate.sourceReference`, §110/§111) —
+  no deferred-tax posting (genuinely Phase 12).
+- [x] Four pages wired to a new "Fixed Assets" nav section: Asset Register
+  (`/assets/register`), Depreciation (`/assets/depreciation`), Disposals
+  (`/assets/disposals`), Tax Register (`/assets/tax-register`).
+- [x] Seed data (`src/mock-data/fixedAssets.ts`) is deliberately all `'draft'` — no
+  fabricated posted history without a real matching `JournalEntry` behind it (the exact
+  gap Phase 5's VAT reconciliation work found and fixed for seeded Invoices/Bills).
+- [x] 31 new tests (service-layer + one page-level smoke test). 445/445 tests passing
+  (up from 408), type-check/lint/build clean.
+
+Deliberately still open, tracked in `docs/KNOWN_ISSUES.md`/`docs/SA_SPEC_GAP_ANALYSIS.md`:
+no Bill-line capitalization path yet (`FixedAsset.sourceBillId` exists on the type but
+nothing sets it — an asset is registered manually today, not driven by flagging a Bill
+line item the way Inventory lines already capitalize); account-mapping is fixed
+constants again (§113, same known limitation as every other posting service); no
+deferred-tax journal entry from the Tax Register's temporary difference.
+
 #### Reports Module (Reports Bee) — READY TO DISPATCH
 - [ ] Profit & Loss (revenue - COGS - opex = net income)
 - [ ] Balance Sheet (assets = liabilities + equity)
@@ -400,7 +443,8 @@ handling).
 
 ## Phase 3: Compliance & Reporting
 - [ ] Advanced Tax Scenarios (Input VAT recovery, withholding tax)
-- [ ] Fixed Assets Register (depreciation, disposal)
+- [x] Fixed Assets Register (depreciation, disposal) — see Phase 7 section above,
+  ✅ complete 2026-08-22 (`src/features/assets/`)
 - [ ] Employee Management & Payroll (not Phase 2 scope)
 - [ ] Workflow Rules & Approvals
 

@@ -12,11 +12,16 @@ PO/GRN/Invoice matching, and a FIFO valuation-method option alongside WAC — se
 section below. **Updated 2026-08-22** — getting there also meant fixing a gap that had
 made all of the above practically unreachable: no Sales/Purchases line-item editor let
 a user pick a product, and Invoices/Bills had no working post action in the UI (see
-the Phase 2/3 section below and `docs/KNOWN_ISSUES.md`). Phases 1-6 (Accounting Core,
-Customers, Suppliers, Banking, VAT, Inventory) now have real implementations to assess;
-Phases 7-12 (Fixed Assets, Payroll, Tax, Financial Reporting, Compliance, Advanced
-Accounting) are still not started, consistent with §116's ordering — not reassessed in
-detail below beyond noting what's genuinely absent.
+the Phase 2/3 section below and `docs/KNOWN_ISSUES.md`). **Updated 2026-08-22 (later
+same day)** — Phase 7 (Fixed Assets) is now ✅ complete: an Asset Register with a
+draft-then-capitalize flow, a straight-line/reducing-balance depreciation engine
+posting real combined GL entries, disposals computing genuine gain/loss, and a Tax
+Register comparing accounting vs. SARS wear-and-tear book values — see that section
+below. Phases 1-7 (Accounting Core, Customers, Suppliers, Banking, VAT, Inventory,
+Fixed Assets) now have real implementations to assess; Phases 8-12 (Payroll, Tax,
+Financial Reporting, Compliance, Advanced Accounting) are still not started, consistent
+with §116's ordering — not reassessed in detail below beyond noting what's genuinely
+absent.
 
 ## Phase 1 — Accounting Core
 
@@ -200,14 +205,84 @@ receipt (only all-or-nothing per PO is modeled), and PO-to-Bill price-variance
 handling (relies on the Bill's line items matching the PO's exactly, true today via
 `convertToBill()`'s verbatim copy — see `docs/KNOWN_ISSUES.md`).
 
-## Phases 7-12 — not started, per §116's own build order
+## Phase 7 (Fixed Assets) — ✅ complete, 2026-08-22
+
+No asset register, depreciation, disposal, or tax-register support existed at all —
+`StockMovementType`-style groundwork didn't apply here, this was a genuinely new
+module. Built in one pass, `src/features/assets/`:
+
+- **Asset register (§116)** — `FixedAsset` (`src/types/fixedAsset.ts`) with cost,
+  residual value, useful life, category, and a choice of `straight_line`/
+  `reducing_balance` depreciation. New draft-then-capitalize lifecycle, matching every
+  other posting document in this codebase (Bill/Invoice/PurchaseOrder): `createFixedAsset()`
+  only ever writes a `'draft'` register row with no GL history behind it;
+  `postAcquisition()` is the explicit action that posts DR Fixed Asset (`acc_1500`) / CR
+  a user-chosen funding-source account (typically Accounts Payable or Cash and Bank) and
+  flips the asset to `'active'`. Cost/useful-life/method/dates/GL-mapping lock once an
+  asset leaves draft — the same posted-record-immutability guard already applied to
+  Invoice/Bill/CreditNote delete (`docs/KNOWN_ISSUES.md`), applied here to *edit*
+  instead, since a register row (unlike those documents) is legitimately still editable
+  in other respects (name, category, tax rate) after capitalization.
+- **Depreciation (§116)** — `depreciationService.runDepreciation(periodEnd)` posts ONE
+  combined journal entry per run (a DR Depreciation Expense (`acc_5200`) / CR
+  Accumulated Depreciation (`acc_1590`, a contra-asset) line pair per eligible active
+  asset — still a single balanced entry). Idempotent per exact `periodEnd` (a second run
+  for the same date finds nothing left to do, mirroring
+  `purchaseOrderService.recordReceipt()`'s already-received guard), and the per-period
+  charge is capped so accumulated depreciation can never exceed `cost - residualValue`
+  regardless of method — an asset that reaches that cap flips to `'fully_depreciated'`
+  automatically. `calculateMonthlyDepreciation()` is a pure, independently-tested
+  function shared by the real run (no separate "preview" implementation to drift out of
+  sync, same principle as `stockLotService`'s shared lot-walking algorithm).
+- **Disposals (§116)** — `assetDisposalService.disposeAsset()` posts CR Fixed Asset (at
+  original cost) / DR Accumulated Depreciation (clearing whatever built up) / DR the
+  proceeds account, with the balancing gain (CR `acc_4200`, new) or loss (DR `acc_5300`,
+  new) computed from `proceeds - carryingValue` — proven balanced by test for a gain, a
+  loss, an exact break-even (no gain/loss line posted at all), and a zero-proceeds
+  scrapped-asset case. An asset can only be disposed once (`'disposed'` is terminal);
+  disposing a still-draft asset is rejected (nothing capitalized to remove).
+- **Tax Register (§116)** — `taxRegisterService.getTaxRegister(asOfDate)` compares each
+  capitalized asset's accounting carrying value against a SARS wear-and-tear-based tax
+  written-down value, surfacing the temporary difference — read-only, no GL posting, no
+  deferred-tax journal entry (that computation is explicitly Phase 12, not built here).
+  Every wear-and-tear rate (`src/features/assets/constants.ts`'s
+  `WEAR_TEAR_RATE_DEFAULTS`, prefilled per category, always user-editable) carries the
+  same "typical/indicative, pending professional verification against SARS Binding
+  General Practice Note 7" caveat as `TaxRate.sourceReference` (§110/§111) — not
+  presented as a confirmed statutory rate for any specific asset.
+- Seed data (`src/mock-data/fixedAssets.ts`) is deliberately all `'draft'` — no
+  fabricated `'active'` asset with depreciation history and no real matching
+  `JournalEntry` behind it, the exact "status claims posted but nothing was really
+  posted" gap Phase 5's VAT reconciliation work found and fixed for seeded Invoices/
+  Bills. Use the Asset Register's Post Acquisition action to build genuine ledger
+  history.
+- New GL accounts: `acc_1500` Fixed Assets, `acc_1590` Accumulated Depreciation
+  (contra-asset), `acc_4200` Gain on Disposal, `acc_5200` Depreciation Expense,
+  `acc_5300` Loss on Disposal — added to the seed Chart of Accounts.
+- 31 new tests (service-layer: creation guards, capitalization, edit-lock,
+  delete-lock, straight-line/reducing-balance math, multi-asset combined-entry
+  balancing, idempotent re-run, fully-depreciated cap, gain/loss/break-even/
+  zero-proceeds disposal, tax-register computation; plus a page-level smoke test on
+  the Asset Register's load/error/empty/create/post-acquisition flows).
+
+**Deliberately still open, not a Phase 7 gap in the strict §116 sense but worth
+tracking**: no Bill-line capitalization path yet (an asset is currently only ever
+registered manually on the Asset Register page, not by flagging a Bill line item as a
+fixed asset the way Inventory lines already capitalize — `FixedAsset.sourceBillId`
+exists on the type for this but nothing sets it yet); account-mapping is fixed
+constants again, same known limitation as every other posting service (§113, see the
+Phase 2/3 section above); no deferred-tax journal entry from the Tax Register's
+temporary difference (genuinely Phase 12); no partial-year proration UI beyond what the
+monthly-charge math already does implicitly.
+
+445/445 tests passing (up from 408), type-check/lint/build clean.
+
+## Phases 8-12 — not started, per §116's own build order
 
 Nothing below has been built yet. Noted here only so a future session can see at a
 glance what's genuinely absent versus partially built, without re-deriving it from
 scratch:
 
-- **Phase 7 (Fixed Assets)** — not started. No asset register, no accounting-vs-tax
-  depreciation split (§26, §27).
 - **Phase 8 (Payroll)** — not started. No employee master data, PAYE/UIF/SDL control
   accounts (§58), EMP201/EMP501 support.
 - **Phase 9 (Tax)** — not started. No income tax computation, no accounting-profit-to-

@@ -7,6 +7,21 @@ each section.
 
 ## Open
 
+### No Bill-line capitalization path into the Fixed Asset Register
+`FixedAsset.sourceBillId` (`src/types/fixedAsset.ts`) exists specifically for this, but
+nothing sets it yet — an asset can only be registered manually on the Asset Register
+page (2026-08-22), not by flagging a Bill line item as "this is a fixed asset, not an
+expense" the way Inventory lines already capitalize via `billService.postBill()`'s
+tracked-product check. A user buying, say, a delivery vehicle on a supplier Bill today
+has to record the Bill as a normal expense/AP posting AND separately register + post
+the acquisition on the Asset Register — two disconnected postings for one real-world
+purchase, not one Bill driving both. Fixing this means threading an
+"is this line a fixed asset" flag (or a `FixedAsset` link) through `Bill`'s line items
+and `billService.postBill()`'s expense/inventory split, the same shape of change
+Inventory capitalization already made there — deliberately not attempted in the same
+pass that built the register/depreciation/disposal/tax-register engine, to keep that
+change reviewable on its own.
+
 ### Invoice/Bill "Record Payment" actions exist as component props but are never wired up
 `InvoiceDetail`'s `onRecordPayment` and `BillDetail`'s `onRecordPayment` (both take an
 id and expect the parent page to collect an amount and call
