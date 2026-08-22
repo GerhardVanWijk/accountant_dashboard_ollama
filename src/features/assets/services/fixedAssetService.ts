@@ -1,6 +1,11 @@
-import type { FixedAsset, ID, JournalEntry } from '@/types';
+import type { AssetCategory, DepreciationMethod, FixedAsset, ID, JournalEntry } from '@/types';
 import type { IFixedAssetRepository } from '../repositories/IFixedAssetRepository';
 import type { NewJournalLineInput } from '@/features/accounting/services';
+
+/** Default GL account ids for an asset capitalized straight from a Bill line — same defaults AssetForm prefills for a manually-registered asset. */
+const DEFAULT_ASSET_ACCOUNT_ID = 'acc_1500';
+const DEFAULT_ACCUMULATED_DEPRECIATION_ACCOUNT_ID = 'acc_1590';
+const DEFAULT_DEPRECIATION_EXPENSE_ACCOUNT_ID = 'acc_5200';
 
 /**
  * Minimal surface of JournalEntryService this service depends on — an
@@ -30,6 +35,44 @@ export type CreateFixedAssetDTO = Omit<
   | 'disposalJournalEntryId'
 >;
 export type UpdateFixedAssetDTO = Partial<CreateFixedAssetDTO>;
+
+export interface CapitalizeFromBillLineInput {
+  sourceBillId: ID;
+  /** The Bill's own posted journal entry id — the capitalization rides in that same entry, no separate posting. */
+  journalEntryId: ID;
+  name: string;
+  category: AssetCategory;
+  acquisitionDate: string;
+  /** The line's ex-VAT lineTotal. */
+  cost: number;
+  residualValue: number;
+  usefulLifeYears: number;
+  depreciationMethod: DepreciationMethod;
+  reducingBalanceRatePercent?: number;
+  taxWearTearRatePercent?: number;
+}
+
+/** Shared economics validation for both createFixedAsset() and capitalizeFromBillLine() — one asset, two entry points, must agree on what's a valid asset. */
+function validateAssetEconomics(data: {
+  cost: number;
+  residualValue: number;
+  usefulLifeYears: number;
+  depreciationMethod: DepreciationMethod;
+  reducingBalanceRatePercent?: number;
+}): void {
+  if (data.cost <= 0) {
+    throw new Error('Fixed asset cost must be greater than zero.');
+  }
+  if (data.residualValue < 0 || data.residualValue > data.cost) {
+    throw new Error('Residual value must be between 0 and the asset cost.');
+  }
+  if (data.usefulLifeYears <= 0) {
+    throw new Error('Useful life must be greater than zero years.');
+  }
+  if (data.depreciationMethod === 'reducing_balance' && data.reducingBalanceRatePercent === undefined) {
+    throw new Error('Reducing-balance depreciation requires a reducingBalanceRatePercent.');
+  }
+}
 
 /**
  * Once an asset leaves 'draft' (capitalized via postAcquisition, or later
@@ -73,18 +116,7 @@ export class FixedAssetService {
   }
 
   async createFixedAsset(data: CreateFixedAssetDTO): Promise<FixedAsset> {
-    if (data.cost <= 0) {
-      throw new Error('Fixed asset cost must be greater than zero.');
-    }
-    if (data.residualValue < 0 || data.residualValue > data.cost) {
-      throw new Error('Residual value must be between 0 and the asset cost.');
-    }
-    if (data.usefulLifeYears <= 0) {
-      throw new Error('Useful life must be greater than zero years.');
-    }
-    if (data.depreciationMethod === 'reducing_balance' && data.reducingBalanceRatePercent === undefined) {
-      throw new Error('Reducing-balance depreciation requires a reducingBalanceRatePercent.');
-    }
+    validateAssetEconomics(data);
 
     const now = new Date().toISOString();
     return this.repository.create({
@@ -171,5 +203,53 @@ export class FixedAssetService {
     });
 
     return this.repository.update(id, { status: 'active', journalEntryId: entry.id });
+  }
+
+  /**
+   * Capitalizes a Bill line item that was flagged as a fixed asset
+   * (DocumentLineItem.fixedAssetDetails, src/types/common.ts) directly to
+   * 'active' — NOT through the draft-then-postAcquisition() flow above.
+   * The Bill's own posting IS the capitalization event here: the caller
+   * (billService.postBill()) has already debited the Fixed Asset account
+   * for `cost` in the SAME journal entry that credits Accounts Payable, so
+   * there is no separate acquisition entry left to post — this only
+   * writes the register row, pointing `journalEntryId` at that already-
+   * posted entry. Mirrors how a Bill's tracked-inventory line results in
+   * stock being received immediately (recordReceiptMovement()) with no
+   * separate "post" step of its own.
+   */
+  async capitalizeFromBillLine(input: CapitalizeFromBillLineInput): Promise<FixedAsset> {
+    validateAssetEconomics(input);
+
+    const assetNumber = await this.nextAssetNumber();
+    const now = new Date().toISOString();
+    return this.repository.create({
+      id: '',
+      assetNumber,
+      name: input.name,
+      category: input.category,
+      acquisitionDate: input.acquisitionDate,
+      cost: input.cost,
+      residualValue: input.residualValue,
+      usefulLifeYears: input.usefulLifeYears,
+      depreciationMethod: input.depreciationMethod,
+      reducingBalanceRatePercent: input.reducingBalanceRatePercent,
+      taxWearTearRatePercent: input.taxWearTearRatePercent,
+      glAssetAccountId: DEFAULT_ASSET_ACCOUNT_ID,
+      glAccumulatedDepreciationAccountId: DEFAULT_ACCUMULATED_DEPRECIATION_ACCOUNT_ID,
+      glDepreciationExpenseAccountId: DEFAULT_DEPRECIATION_EXPENSE_ACCOUNT_ID,
+      accumulatedDepreciation: 0,
+      status: 'active',
+      journalEntryId: input.journalEntryId,
+      sourceBillId: input.sourceBillId,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  /** Mirrors JournalEntryService.nextEntryNumber()'s shape — sequential, based on register size. */
+  private async nextAssetNumber(): Promise<string> {
+    const assets = await this.repository.getAll();
+    return `FA-${String(assets.length + 1).padStart(4, '0')}`;
   }
 }

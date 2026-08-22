@@ -1,8 +1,9 @@
-import type { DocumentLineItem, Product, TaxRate, Warehouse } from '@/types';
+import type { AssetCategory, DepreciationMethod, DocumentLineItem, FixedAssetLineDetails, Product, TaxRate, Warehouse } from '@/types';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { FinancialNumber } from '@/components/ui/FinancialNumber';
 import { formatCurrency } from '@/utils/formatFinancial';
+import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS } from '@/features/assets/constants';
 
 const inputClass =
   'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
@@ -34,7 +35,26 @@ export interface LineItemsEditorProps {
    */
   warehouses?: Warehouse[];
   disabled?: boolean;
+  /**
+   * Bill-only: lets a line be flagged "capitalize this as a fixed asset"
+   * instead of expensed/inventoried (DocumentLineItem.fixedAssetDetails,
+   * consumed by billService.postBill() ->
+   * FixedAssetService.capitalizeFromBillLine() — see
+   * docs/KNOWN_ISSUES.md "No Bill-line capitalization path into the Fixed
+   * Asset Register"). Defaults to false so PurchaseOrderForm (which also
+   * uses this shared editor) renders unchanged — capitalizing on a PO
+   * makes no accounting sense, nothing has been invoiced yet.
+   */
+  allowFixedAssetCapitalization?: boolean;
 }
+
+const DEFAULT_FIXED_ASSET_DETAILS: FixedAssetLineDetails = {
+  category: 'other',
+  usefulLifeYears: 5,
+  depreciationMethod: 'straight_line',
+  residualValue: 0,
+  taxWearTearRatePercent: WEAR_TEAR_RATE_DEFAULTS.other,
+};
 
 function computeLine(
   quantity: number,
@@ -64,12 +84,34 @@ export function LineItemsEditor({
   products = [],
   warehouses = [],
   disabled = false,
+  allowFixedAssetCapitalization = false,
 }: LineItemsEditorProps) {
   const showWarehouseColumn = warehouses.length > 1;
-  const gridColsClass = showWarehouseColumn
-    ? 'grid-cols-[160px_140px_2fr_80px_100px_140px_100px_100px_36px]'
-    : 'grid-cols-[160px_2fr_80px_100px_140px_100px_100px_36px]';
-  const minWidthClass = showWarehouseColumn ? 'min-w-[940px]' : 'min-w-[800px]';
+  const showAssetColumn = allowFixedAssetCapitalization;
+  /**
+   * Four fully-literal grid-cols-[...] strings, one per
+   * showAssetColumn/showWarehouseColumn combination — NEVER a
+   * runtime-interpolated arbitrary value (docs/DO_NOT_BREAK.md: Tailwind's
+   * JIT compiler only generates CSS for class names it can see as literal
+   * text in the source, so a template-literal-built class silently
+   * produces no styles at all).
+   */
+  const gridColsClass =
+    showAssetColumn && showWarehouseColumn
+      ? 'grid-cols-[160px_90px_140px_2fr_80px_100px_140px_100px_100px_36px]'
+      : showAssetColumn
+        ? 'grid-cols-[160px_90px_2fr_80px_100px_140px_100px_100px_36px]'
+        : showWarehouseColumn
+          ? 'grid-cols-[160px_140px_2fr_80px_100px_140px_100px_100px_36px]'
+          : 'grid-cols-[160px_2fr_80px_100px_140px_100px_100px_36px]';
+  const minWidthClass =
+    showAssetColumn && showWarehouseColumn
+      ? 'min-w-[1030px]'
+      : showAssetColumn
+        ? 'min-w-[890px]'
+        : showWarehouseColumn
+          ? 'min-w-[940px]'
+          : 'min-w-[800px]';
 
   function updateLine(index: number, patch: Partial<DocumentLineItem>) {
     const merged = { ...lineItems[index], ...patch };
@@ -103,6 +145,25 @@ export function LineItemsEditor({
     });
   }
 
+  /** Toggling the asset checkbox on clears productId (mutually exclusive); off clears fixedAssetDetails. */
+  function toggleFixedAsset(index: number, checked: boolean) {
+    if (checked) {
+      updateLine(index, { productId: undefined, fixedAssetDetails: { ...DEFAULT_FIXED_ASSET_DETAILS } });
+    } else {
+      updateLine(index, { fixedAssetDetails: undefined });
+    }
+  }
+
+  function updateFixedAssetDetails(index: number, patch: Partial<FixedAssetLineDetails>) {
+    const current = lineItems[index].fixedAssetDetails ?? DEFAULT_FIXED_ASSET_DETAILS;
+    updateLine(index, { fixedAssetDetails: { ...current, ...patch } });
+  }
+
+  /** Prefills the wear-and-tear rate default the first time a category is picked — never overwrites a value already there. */
+  function selectAssetCategory(index: number, category: AssetCategory) {
+    updateFixedAssetDetails(index, { category, taxWearTearRatePercent: WEAR_TEAR_RATE_DEFAULTS[category] });
+  }
+
   function addLine() {
     onChange([
       ...lineItems,
@@ -134,6 +195,7 @@ export function LineItemsEditor({
       <div className="overflow-x-auto rounded-md border border-border">
         <div className={`grid ${minWidthClass} ${gridColsClass} gap-2 bg-primary/10 px-sm py-xs text-xs font-semibold tabular-nums`}>
           <div>Product</div>
+          {showAssetColumn && <div>Asset</div>}
           {showWarehouseColumn && <div>Warehouse</div>}
           <div>Description</div>
           <div className="text-right">Qty</div>
@@ -144,14 +206,14 @@ export function LineItemsEditor({
           <div />
         </div>
         {lineItems.map((item, index) => (
+          <div key={item.id} className="border-t border-border/50">
           <div
-            key={item.id}
-            className={`grid ${minWidthClass} ${gridColsClass} items-center gap-2 border-t border-border/50 px-sm py-xs tabular-nums`}
+            className={`grid ${minWidthClass} ${gridColsClass} items-center gap-2 px-sm py-xs tabular-nums`}
           >
             <select
               className={inputClass}
               value={item.productId ?? ''}
-              disabled={disabled}
+              disabled={disabled || Boolean(item.fixedAssetDetails)}
               onChange={(e) => selectProduct(index, e.target.value)}
               aria-label="Product"
             >
@@ -162,6 +224,18 @@ export function LineItemsEditor({
                 </option>
               ))}
             </select>
+            {showAssetColumn && (
+              <label className="flex items-center justify-center gap-xs text-xs text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={Boolean(item.fixedAssetDetails)}
+                  disabled={disabled || Boolean(item.productId)}
+                  onChange={(e) => toggleFixedAsset(index, e.target.checked)}
+                  aria-label="Capitalize as fixed asset"
+                />
+                Asset
+              </label>
+            )}
             {showWarehouseColumn && (
               <select
                 className={inputClass}
@@ -231,6 +305,97 @@ export function LineItemsEditor({
             >
               <Icon name="delete" size={14} />
             </button>
+          </div>
+          {item.fixedAssetDetails && (
+            <div className="grid grid-cols-1 gap-2 border-t border-dashed border-border/50 bg-background px-sm py-xs sm:grid-cols-3 md:grid-cols-5">
+              <label className="flex flex-col gap-0.5 text-xs text-text-secondary">
+                Category
+                <select
+                  className={inputClass}
+                  value={item.fixedAssetDetails.category}
+                  disabled={disabled}
+                  onChange={(e) => selectAssetCategory(index, e.target.value as AssetCategory)}
+                >
+                  {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-0.5 text-xs text-text-secondary">
+                Useful Life (Years)
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  className={inputClass}
+                  value={item.fixedAssetDetails.usefulLifeYears || ''}
+                  disabled={disabled}
+                  onChange={(e) => updateFixedAssetDetails(index, { usefulLifeYears: parseFloat(e.target.value) || 0 })}
+                />
+              </label>
+              <label className="flex flex-col gap-0.5 text-xs text-text-secondary">
+                Depreciation Method
+                <select
+                  className={inputClass}
+                  value={item.fixedAssetDetails.depreciationMethod}
+                  disabled={disabled}
+                  onChange={(e) =>
+                    updateFixedAssetDetails(index, { depreciationMethod: e.target.value as DepreciationMethod })
+                  }
+                >
+                  {Object.entries(DEPRECIATION_METHOD_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-0.5 text-xs text-text-secondary">
+                Residual Value
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={inputClass}
+                  value={item.fixedAssetDetails.residualValue || ''}
+                  disabled={disabled}
+                  onChange={(e) => updateFixedAssetDetails(index, { residualValue: parseFloat(e.target.value) || 0 })}
+                />
+              </label>
+              {item.fixedAssetDetails.depreciationMethod === 'reducing_balance' && (
+                <label className="flex flex-col gap-0.5 text-xs text-text-secondary">
+                  Reducing Balance Rate (%)
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className={inputClass}
+                    value={item.fixedAssetDetails.reducingBalanceRatePercent ?? ''}
+                    disabled={disabled}
+                    onChange={(e) =>
+                      updateFixedAssetDetails(index, { reducingBalanceRatePercent: parseFloat(e.target.value) || 0 })
+                    }
+                  />
+                </label>
+              )}
+              <label className="flex flex-col gap-0.5 text-xs text-text-secondary">
+                SARS Wear-and-Tear Rate (%)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={inputClass}
+                  value={item.fixedAssetDetails.taxWearTearRatePercent ?? ''}
+                  disabled={disabled}
+                  onChange={(e) =>
+                    updateFixedAssetDetails(index, { taxWearTearRatePercent: parseFloat(e.target.value) || 0 })
+                  }
+                />
+              </label>
+            </div>
+          )}
           </div>
         ))}
         {lineItems.length === 0 && (

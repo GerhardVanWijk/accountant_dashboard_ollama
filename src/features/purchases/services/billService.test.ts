@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { BillService } from './billService';
+import { BillService, type FixedAssetCapitalizer } from './billService';
 import { MockBillRepository } from '@/repositories/mock/MockBillRepository';
 import { seedBills } from '@/mock-data/bills';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
@@ -66,6 +66,22 @@ function makePurchaseOrderLookupStub(receivedPOs: Record<string, string> = {}) {
   };
 }
 
+/**
+ * Stub FixedAssetCapitalizer — records every call so tests can assert
+ * postBill() capitalized the right lines with the right details, without
+ * pulling in the real FixedAssetService/repository here (see
+ * fixedAssetService.test.ts for that).
+ */
+function makeFixedAssetCapitalizerStub() {
+  const capitalized: Parameters<FixedAssetCapitalizer['capitalizeFromBillLine']>[0][] = [];
+  return {
+    capitalizeFromBillLine: async (input: Parameters<FixedAssetCapitalizer['capitalizeFromBillLine']>[0]) => {
+      capitalized.push(input);
+    },
+    capitalized,
+  };
+}
+
 describe('BillService', () => {
   let billService: BillService;
   let repository: MockBillRepository;
@@ -85,7 +101,14 @@ describe('BillService', () => {
       auditLog,
     );
     inventoryReceiver = makeInventoryReceiverStub();
-    billService = new BillService(repository, journalEntryService, taxRateService, inventoryReceiver, makePurchaseOrderLookupStub());
+    billService = new BillService(
+      repository,
+      journalEntryService,
+      taxRateService,
+      inventoryReceiver,
+      makePurchaseOrderLookupStub(),
+      makeFixedAssetCapitalizerStub(),
+    );
   });
 
   describe('getBills', () => {
@@ -344,7 +367,7 @@ describe('BillService', () => {
 
     it('capitalizes a tracked-inventory line to the Inventory account instead of Operating Expenses, and records a receipt after posting', async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub());
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub());
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-INV-TRACKED',
@@ -379,7 +402,7 @@ describe('BillService', () => {
 
     it("passes a line item's warehouseId through to recordReceiptMovement", async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub());
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub());
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-INV-WH',
@@ -417,7 +440,7 @@ describe('BillService', () => {
     it('clears GRNI instead of debiting Inventory, and does NOT re-record the stock receipt, when the linked PO was already GRNI-received', async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
       const purchaseOrders = makePurchaseOrderLookupStub({ po_already_received: 'je_grni_receipt' });
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, purchaseOrders);
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, purchaseOrders, makeFixedAssetCapitalizerStub());
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-FROM-RECEIVED-PO',
@@ -454,7 +477,7 @@ describe('BillService', () => {
 
     it('splits a mixed bill between Inventory (tracked) and Expense (non-tracked) lines', async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub());
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub());
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-INV-MIXED',
@@ -488,9 +511,132 @@ describe('BillService', () => {
       ]);
     });
 
+    it('capitalizes a fixedAssetDetails line to the Fixed Assets account instead of Operating Expenses, and calls the capitalizer after posting', async () => {
+      const capitalizer = makeFixedAssetCapitalizerStub();
+      const localBillService = new BillService(
+        repository,
+        journalEntryService,
+        taxRateService,
+        makeInventoryReceiverStub(),
+        makePurchaseOrderLookupStub(),
+        capitalizer,
+      );
+
+      const bill = await localBillService.createBill({
+        billNumber: 'BILL-FA-1',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [
+          {
+            id: 'li_1',
+            description: 'Delivery Van',
+            quantity: 1,
+            unitPrice: 350000,
+            taxRateId: 'tax_std_v2',
+            taxAmount: 52500,
+            lineTotal: 350000,
+            fixedAssetDetails: {
+              category: 'motor_vehicles',
+              usefulLifeYears: 5,
+              depreciationMethod: 'straight_line',
+              residualValue: 50000,
+              taxWearTearRatePercent: 20,
+            },
+          },
+        ],
+        subtotal: 350000,
+        taxTotal: 52500,
+        total: 402500,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const posted = await localBillService.postBill(bill.id);
+
+      const fixedAssetLedger = await journalEntryService.getAccountLedger('acc_1500');
+      expect(fixedAssetLedger.find((row) => row.entryId === posted.journalEntryId)?.debit).toBe(350000);
+
+      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
+      expect(expenseLedger.find((row) => row.entryId === posted.journalEntryId)).toBeUndefined();
+
+      expect(capitalizer.capitalized).toHaveLength(1);
+      expect(capitalizer.capitalized[0]).toMatchObject({
+        sourceBillId: bill.id,
+        journalEntryId: posted.journalEntryId,
+        name: 'Delivery Van',
+        category: 'motor_vehicles',
+        acquisitionDate: '2026-08-21',
+        cost: 350000,
+        residualValue: 50000,
+        usefulLifeYears: 5,
+        depreciationMethod: 'straight_line',
+        taxWearTearRatePercent: 20,
+      });
+    });
+
+    it('splits a bill three ways between Inventory, Fixed Assets, and Expense lines', async () => {
+      const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
+      const capitalizer = makeFixedAssetCapitalizerStub();
+      const localBillService = new BillService(
+        repository,
+        journalEntryService,
+        taxRateService,
+        trackedReceiver,
+        makePurchaseOrderLookupStub(),
+        capitalizer,
+      );
+
+      const bill = await localBillService.createBill({
+        billNumber: 'BILL-3WAY',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_tracked', description: 'Widgets for resale', quantity: 10, unitPrice: 50, taxRateId: 'tax_std_v2', taxAmount: 75, lineTotal: 500 },
+          { id: 'li_2', description: 'Office supplies (not tracked)', quantity: 1, unitPrice: 200, taxRateId: 'tax_std_v2', taxAmount: 30, lineTotal: 200 },
+          {
+            id: 'li_3',
+            description: 'Office Printer',
+            quantity: 1,
+            unitPrice: 15000,
+            taxRateId: 'tax_std_v2',
+            taxAmount: 2250,
+            lineTotal: 15000,
+            fixedAssetDetails: {
+              category: 'office_equipment',
+              usefulLifeYears: 4,
+              depreciationMethod: 'straight_line',
+              residualValue: 0,
+            },
+          },
+        ],
+        subtotal: 15700,
+        taxTotal: 2355,
+        total: 18055,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const posted = await localBillService.postBill(bill.id);
+
+      const inventoryLedger = await journalEntryService.getAccountLedger('acc_1200');
+      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
+      const fixedAssetLedger = await journalEntryService.getAccountLedger('acc_1500');
+      const apLedger = await journalEntryService.getAccountLedger('acc_2000');
+
+      expect(inventoryLedger.find((row) => row.entryId === posted.journalEntryId)?.debit).toBe(500);
+      expect(expenseLedger.find((row) => row.entryId === posted.journalEntryId)?.debit).toBe(200);
+      expect(fixedAssetLedger.find((row) => row.entryId === posted.journalEntryId)?.debit).toBe(15000);
+      expect(apLedger.find((row) => row.entryId === posted.journalEntryId)?.credit).toBe(18055);
+      expect(capitalizer.capitalized).toHaveLength(1);
+    });
+
     it('does not record a stock receipt if GL posting fails', async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub());
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub());
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-INV-FAIL',

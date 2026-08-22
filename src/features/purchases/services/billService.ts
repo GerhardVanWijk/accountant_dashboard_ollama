@@ -1,4 +1,4 @@
-import type { Bill, ID, JournalEntry } from '@/types';
+import type { AssetCategory, Bill, DepreciationMethod, ID, JournalEntry } from '@/types';
 import type { IBillRepository } from '@/repositories/IBillRepository';
 import type { NewJournalLineInput } from '@/features/accounting/services';
 
@@ -36,6 +36,30 @@ export interface PurchaseOrderLookup {
   getPurchaseOrder(id: ID): Promise<{ journalEntryId?: ID } | undefined>;
 }
 
+/**
+ * Minimal surface of FixedAssetService this service depends on
+ * (src/features/assets/services/fixedAssetService.ts) — a Bill line
+ * flagged `fixedAssetDetails` must capitalize to the Fixed Asset Register
+ * (DR acc_1500) instead of being expensed, per
+ * SA_ACCOUNTING_MASTER_SPEC.md §116 Phase 7 (docs/KNOWN_ISSUES.md: "No
+ * Bill-line capitalization path into the Fixed Asset Register").
+ */
+export interface FixedAssetCapitalizer {
+  capitalizeFromBillLine(input: {
+    sourceBillId: ID;
+    journalEntryId: ID;
+    name: string;
+    category: AssetCategory;
+    acquisitionDate: string;
+    cost: number;
+    residualValue: number;
+    usefulLifeYears: number;
+    depreciationMethod: DepreciationMethod;
+    reducingBalanceRatePercent?: number;
+    taxWearTearRatePercent?: number;
+  }): Promise<unknown>;
+}
+
 export type CreateBillDTO = Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>;
 
 /**
@@ -62,6 +86,7 @@ const VAT_INPUT_ACCOUNT_ID = 'acc_2110'; // VAT Input (Receivable)
 const AP_ACCOUNT_ID = 'acc_2000'; // Accounts Payable
 const INVENTORY_ACCOUNT_ID = 'acc_1200'; // Inventory
 const GRNI_ACCOUNT_ID = 'acc_2050'; // Goods Received Not Invoiced
+const FIXED_ASSET_ACCOUNT_ID = 'acc_1500'; // Fixed Assets
 
 /**
  * Business-logic layer for supplier bills.
@@ -74,6 +99,7 @@ export class BillService {
     private readonly taxRateResolver: TaxRateResolver,
     private readonly inventoryReceiver: InventoryReceiver,
     private readonly purchaseOrders: PurchaseOrderLookup,
+    private readonly fixedAssetCapitalizer: FixedAssetCapitalizer,
   ) {}
 
   async getBills(): Promise<Bill[]> {
@@ -140,29 +166,43 @@ export class BillService {
   }
 
   /**
-   * Splits a bill's line items into tracked-inventory lines (capitalize
-   * to the Inventory asset — SA_ACCOUNTING_MASTER_SPEC.md §22) vs
-   * everything else (expensed immediately, as before). A line with no
-   * `productId` can never be inventory. The two totals are computed from
+   * Splits a bill's line items three ways: tracked-inventory lines
+   * (capitalize to the Inventory asset — SA_ACCOUNTING_MASTER_SPEC.md
+   * §22), lines flagged `fixedAssetDetails` (capitalize to the Fixed
+   * Asset Register — §116 Phase 7), and everything else (expensed
+   * immediately, as before). A `fixedAssetDetails` line is checked FIRST
+   * and is mutually exclusive with the inventory check — a fixed asset
+   * never comes from the Product catalog, per FixedAssetLineDetails' doc
+   * comment (src/types/fixedAsset.ts). The three totals are computed from
    * the same `lineTotal`s that sum to `bill.subtotal`, so
-   * `inventoryValue + expenseValue === bill.subtotal` always holds —
-   * nothing here can desync the posting from the AP credit.
+   * `inventoryValue + fixedAssetValue + expenseValue === bill.subtotal`
+   * always holds — nothing here can desync the posting from the AP
+   * credit.
    */
-  private async splitExpenseAndInventory(
-    bill: Bill,
-  ): Promise<{ expenseValue: number; inventoryValue: number; inventoryLines: Bill['lineItems'] }> {
+  private async splitLineItems(bill: Bill): Promise<{
+    expenseValue: number;
+    inventoryValue: number;
+    inventoryLines: Bill['lineItems'];
+    fixedAssetValue: number;
+    fixedAssetLines: Bill['lineItems'];
+  }> {
     let inventoryValue = 0;
     let expenseValue = 0;
+    let fixedAssetValue = 0;
     const inventoryLines: Bill['lineItems'] = [];
+    const fixedAssetLines: Bill['lineItems'] = [];
     for (const line of bill.lineItems) {
-      if (line.productId && (await this.inventoryReceiver.isTrackedInventory(line.productId))) {
+      if (line.fixedAssetDetails) {
+        fixedAssetValue += line.lineTotal;
+        fixedAssetLines.push(line);
+      } else if (line.productId && (await this.inventoryReceiver.isTrackedInventory(line.productId))) {
         inventoryValue += line.lineTotal;
         inventoryLines.push(line);
       } else {
         expenseValue += line.lineTotal;
       }
     }
-    return { expenseValue, inventoryValue, inventoryLines };
+    return { expenseValue, inventoryValue, inventoryLines, fixedAssetValue, fixedAssetLines };
   }
 
   /**
@@ -188,6 +228,14 @@ export class BillService {
    *     already recognized then; recording it again here would
    *     double-count both the quantity and the weighted-average cost
    *     recalculation.
+   *
+   * A line flagged `fixedAssetDetails` (§116 Phase 7) debits Fixed Assets
+   * (acc_1500) instead of Expense/Inventory. AFTER the entry posts,
+   * `fixedAssetCapitalizer.capitalizeFromBillLine()` writes the register
+   * row directly as 'active' with `journalEntryId` pointing at THIS same
+   * entry — the Bill's posting is the only capitalization event, there is
+   * no separate acquisition entry (see FixedAssetService.
+   * capitalizeFromBillLine()'s doc comment).
    */
   async postBill(id: string): Promise<Bill> {
     const bill = await this.repository.getById(id);
@@ -199,7 +247,7 @@ export class BillService {
     }
 
     const { deductibleVat, nonDeductibleVat } = await this.splitDeductibleVat(bill);
-    const { expenseValue, inventoryValue, inventoryLines } = await this.splitExpenseAndInventory(bill);
+    const { expenseValue, inventoryValue, inventoryLines, fixedAssetValue, fixedAssetLines } = await this.splitLineItems(bill);
     const linkedPO = bill.purchaseOrderId ? await this.purchaseOrders.getPurchaseOrder(bill.purchaseOrderId) : undefined;
     const grniAlreadyRecognized = Boolean(linkedPO?.journalEntryId);
 
@@ -220,6 +268,14 @@ export class BillService {
           ? `Bill ${bill.billNumber} - GRNI clearing`
           : `Bill ${bill.billNumber} - Inventory`,
         debit: inventoryValue,
+        credit: 0,
+      });
+    }
+    if (fixedAssetValue > 0) {
+      lines.push({
+        accountId: FIXED_ASSET_ACCOUNT_ID,
+        description: `Bill ${bill.billNumber} - Fixed Assets`,
+        debit: fixedAssetValue,
         credit: 0,
       });
     }
@@ -266,6 +322,24 @@ export class BillService {
         ),
       );
     }
+
+    await Promise.all(
+      fixedAssetLines.map((line) =>
+        this.fixedAssetCapitalizer.capitalizeFromBillLine({
+          sourceBillId: bill.id,
+          journalEntryId: entry.id,
+          name: line.description,
+          category: line.fixedAssetDetails!.category,
+          acquisitionDate: bill.issueDate,
+          cost: line.lineTotal,
+          residualValue: line.fixedAssetDetails!.residualValue,
+          usefulLifeYears: line.fixedAssetDetails!.usefulLifeYears,
+          depreciationMethod: line.fixedAssetDetails!.depreciationMethod,
+          reducingBalanceRatePercent: line.fixedAssetDetails!.reducingBalanceRatePercent,
+          taxWearTearRatePercent: line.fixedAssetDetails!.taxWearTearRatePercent,
+        }),
+      ),
+    );
 
     return this.repository.update(id, { status: 'awaiting_payment', journalEntryId: entry.id });
   }

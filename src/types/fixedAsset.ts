@@ -20,6 +20,28 @@ export type AssetCategory =
 export type DepreciationMethod = 'straight_line' | 'reducing_balance';
 
 /**
+ * Carried on a Bill's `DocumentLineItem` (src/types/common.ts) to flag
+ * "this line is a fixed asset, capitalize it — do not expense or
+ * inventory it" and supply everything `billService.postBill()` needs to
+ * capitalize it in the same journal entry as the bill via
+ * `fixedAssetService.capitalizeFromBillLine()`. Mutually exclusive with
+ * `productId` on the same line (a fixed asset doesn't come from the
+ * Product catalog) — enforced by the line-item editor, not the type
+ * system. Only meaningful on a Bill line; ignored on every other document
+ * type, same precedent as `DocumentLineItem.warehouseId`.
+ */
+export interface FixedAssetLineDetails {
+  category: AssetCategory;
+  usefulLifeYears: number;
+  depreciationMethod: DepreciationMethod;
+  residualValue: number;
+  /** Required when depreciationMethod is 'reducing_balance'. */
+  reducingBalanceRatePercent?: number;
+  /** Prefilled from WEAR_TEAR_RATE_DEFAULTS in the UI, always user-editable — see FixedAsset.taxWearTearRateSource. */
+  taxWearTearRatePercent?: number;
+}
+
+/**
  * 'draft': registered but not yet capitalized to the GL (no journal entry
  * posted yet) — excluded from depreciation runs, mirrors Bill/Invoice's
  * draft-until-posted pattern (docs/LEDGER_ARCHITECTURE.md).

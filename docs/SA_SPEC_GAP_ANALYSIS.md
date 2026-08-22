@@ -265,17 +265,25 @@ module. Built in one pass, `src/features/assets/`:
   zero-proceeds disposal, tax-register computation; plus a page-level smoke test on
   the Asset Register's load/error/empty/create/post-acquisition flows).
 
-**Deliberately still open, not a Phase 7 gap in the strict §116 sense but worth
-tracking**: no Bill-line capitalization path yet (an asset is currently only ever
-registered manually on the Asset Register page, not by flagging a Bill line item as a
-fixed asset the way Inventory lines already capitalize — `FixedAsset.sourceBillId`
-exists on the type for this but nothing sets it yet); account-mapping is fixed
-constants again, same known limitation as every other posting service (§113, see the
-Phase 2/3 section above); no deferred-tax journal entry from the Tax Register's
-temporary difference (genuinely Phase 12); no partial-year proration UI beyond what the
-monthly-charge math already does implicitly.
+**Bill-line capitalization — fixed 2026-08-22, later same day.** A supplier Bill line
+can now be flagged "capitalize this as a fixed asset" (a new `fixedAssetDetails` on
+`DocumentLineItem`, mutually exclusive with `productId`) instead of requiring a
+disconnected manual Asset Register entry after the fact. `billService.postBill()`
+debits Fixed Assets (`acc_1500`) for that line in the SAME journal entry as the rest of
+the bill, and `FixedAssetService.capitalizeFromBillLine()` writes the register row
+directly as `'active'` — the Bill's posting IS the capitalization event, same principle
+as tracked-inventory lines capitalizing to Inventory in that same entry. Only rendered
+on the Bill form (`LineItemsEditor`'s new `allowFixedAssetCapitalization` prop) — a
+Purchase Order can't capitalize anything, nothing has been invoiced yet. 15 new tests
+across `billService`/`fixedAssetService`/`LineItemsEditor`.
 
-445/445 tests passing (up from 408), type-check/lint/build clean.
+**Deliberately still open, not a Phase 7 gap in the strict §116 sense but worth
+tracking**: account-mapping is fixed constants again, same known limitation as every
+other posting service (§113, see the Phase 2/3 section above); no deferred-tax journal
+entry from the Tax Register's temporary difference (genuinely Phase 12); no
+partial-year proration UI beyond what the monthly-charge math already does implicitly.
+
+462/462 tests passing (up from 408), type-check/lint/build clean.
 
 ## Phases 8-12 — not started, per §116's own build order
 

@@ -130,10 +130,13 @@ browser-only SPA yet.
 
 ## Known gaps (deliberately out of scope here)
 
-- **Multi-currency.** `CurrencyCode` exists as a shared primitive (`src/types/
-  common.ts`) but `JournalLine` doesn't carry a currency or an exchange rate yet. Every
-  seeded account and posting here is implicitly single-currency. Needed before real
-  multi-currency invoices/bills can post to the GL — flagged, not solved, in this pass.
+- **Multi-currency FX translation.** `JournalEntry` gained an entry-level `currency`
+  field 2026-08-22 (`postJournalEntry()` always populates it, defaulting to `'ZAR'`),
+  so a posting is no longer implicitly single-currency — it's explicit. What's still
+  NOT built: a genuine foreign-currency transaction (a USD invoice against a ZAR
+  functional currency, say) needs a per-line transaction-currency + exchange-rate pair
+  and realized/unrealized FX gain/loss treatment — that translation engine is Phase 12
+  (Advanced/IFRS) scope, not attempted here.
 - **No UI yet** — resolved in Wave 2 (Accounting Bee): `ChartOfAccountsPage`,
   `JournalsPage`, `LedgerPage`, `TrialBalancePage` are real pages now, not placeholders.
 - **Sales/Purchases don't post yet** — resolved in Wave 1b (2026-08-21):

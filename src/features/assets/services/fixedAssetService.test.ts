@@ -140,4 +140,81 @@ describe('FixedAssetService', () => {
       await expect(fixedAssetService.deleteFixedAsset(asset.id)).rejects.toThrow(/only a draft/i);
     });
   });
+
+  describe('capitalizeFromBillLine', () => {
+    it('creates an already-active asset pointing at the given journal entry, no separate posting', async () => {
+      const asset = await fixedAssetService.capitalizeFromBillLine({
+        sourceBillId: 'bill_123',
+        journalEntryId: 'je_456',
+        name: 'Delivery Van',
+        category: 'motor_vehicles',
+        acquisitionDate: '2026-08-21',
+        cost: 350000,
+        residualValue: 50000,
+        usefulLifeYears: 5,
+        depreciationMethod: 'straight_line',
+        taxWearTearRatePercent: 20,
+      });
+
+      expect(asset.status).toBe('active');
+      expect(asset.journalEntryId).toBe('je_456');
+      expect(asset.sourceBillId).toBe('bill_123');
+      expect(asset.accumulatedDepreciation).toBe(0);
+      expect(asset.glAssetAccountId).toBe('acc_1500');
+      expect(asset.assetNumber).toBeTruthy();
+
+      // No journal entry posted through the JournalEntryService by this call —
+      // the Bill's own posting already covered it.
+      const trialBalance = await journalEntryService.computeTrialBalance();
+      expect(trialBalance.rows).toHaveLength(0);
+    });
+
+    it('assigns sequential asset numbers alongside manually-created assets', async () => {
+      const manual = await fixedAssetService.createFixedAsset(makeAsset({ assetNumber: 'ignored-manual-number' }));
+      const fromBill = await fixedAssetService.capitalizeFromBillLine({
+        sourceBillId: 'bill_1',
+        journalEntryId: 'je_1',
+        name: 'Office Printer',
+        category: 'office_equipment',
+        acquisitionDate: '2026-08-21',
+        cost: 15000,
+        residualValue: 0,
+        usefulLifeYears: 4,
+        depreciationMethod: 'straight_line',
+      });
+      expect(fromBill.assetNumber).not.toBe(manual.assetNumber);
+    });
+
+    it('rejects reducing-balance with no rate, same as createFixedAsset', async () => {
+      await expect(
+        fixedAssetService.capitalizeFromBillLine({
+          sourceBillId: 'bill_1',
+          journalEntryId: 'je_1',
+          name: 'Bad Asset',
+          category: 'other',
+          acquisitionDate: '2026-08-21',
+          cost: 1000,
+          residualValue: 0,
+          usefulLifeYears: 5,
+          depreciationMethod: 'reducing_balance',
+        }),
+      ).rejects.toThrow(/reducing-balance/i);
+    });
+
+    it('rejects zero cost, same as createFixedAsset', async () => {
+      await expect(
+        fixedAssetService.capitalizeFromBillLine({
+          sourceBillId: 'bill_1',
+          journalEntryId: 'je_1',
+          name: 'Bad Asset',
+          category: 'other',
+          acquisitionDate: '2026-08-21',
+          cost: 0,
+          residualValue: 0,
+          usefulLifeYears: 5,
+          depreciationMethod: 'straight_line',
+        }),
+      ).rejects.toThrow(/cost/i);
+    });
+  });
 });

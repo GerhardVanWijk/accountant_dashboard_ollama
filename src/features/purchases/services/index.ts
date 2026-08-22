@@ -7,6 +7,7 @@ import { MockPaymentRepository } from '@/repositories/mock/MockPaymentRepository
 import { journalEntryService } from '@/features/accounting/services';
 import { taxRateService } from '@/features/tax/services';
 import { inventoryPoster } from '@/features/inventory/services/inventoryPostingAdapter';
+import { fixedAssetService } from '@/features/assets/services';
 
 export type { CreateBillDTO } from './billService';
 export type { CreatePurchaseOrderDTO } from './purchaseOrderService';
@@ -43,5 +44,6 @@ export const billService = new BillService(
   taxRateService,
   inventoryPoster,
   purchaseOrderService,
+  fixedAssetService,
 );
 export const paymentService = new PaymentService(new MockPaymentRepository(), journalEntryService, billService);

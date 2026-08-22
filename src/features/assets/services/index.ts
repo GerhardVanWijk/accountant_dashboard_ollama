@@ -5,7 +5,7 @@ import { TaxRegisterService } from './taxRegisterService';
 import { fixedAssetRepository, depreciationEntryRepository, assetDisposalRepository } from '../repositories/instances';
 import { journalEntryService } from '@/features/accounting/services';
 
-export type { CreateFixedAssetDTO, UpdateFixedAssetDTO } from './fixedAssetService';
+export type { CreateFixedAssetDTO, UpdateFixedAssetDTO, CapitalizeFromBillLineInput } from './fixedAssetService';
 export type { DepreciationRunResult } from './depreciationService';
 export { calculateMonthlyDepreciation } from './depreciationService';
 export type { DisposeAssetInput } from './assetDisposalService';

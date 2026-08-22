@@ -7,21 +7,6 @@ each section.
 
 ## Open
 
-### No Bill-line capitalization path into the Fixed Asset Register
-`FixedAsset.sourceBillId` (`src/types/fixedAsset.ts`) exists specifically for this, but
-nothing sets it yet — an asset can only be registered manually on the Asset Register
-page (2026-08-22), not by flagging a Bill line item as "this is a fixed asset, not an
-expense" the way Inventory lines already capitalize via `billService.postBill()`'s
-tracked-product check. A user buying, say, a delivery vehicle on a supplier Bill today
-has to record the Bill as a normal expense/AP posting AND separately register + post
-the acquisition on the Asset Register — two disconnected postings for one real-world
-purchase, not one Bill driving both. Fixing this means threading an
-"is this line a fixed asset" flag (or a `FixedAsset` link) through `Bill`'s line items
-and `billService.postBill()`'s expense/inventory split, the same shape of change
-Inventory capitalization already made there — deliberately not attempted in the same
-pass that built the register/depreciation/disposal/tax-register engine, to keep that
-change reviewable on its own.
-
 ### Invoice/Bill "Record Payment" actions exist as component props but are never wired up
 `InvoiceDetail`'s `onRecordPayment` and `BillDetail`'s `onRecordPayment` (both take an
 id and expect the parent page to collect an amount and call
@@ -49,34 +34,6 @@ attempted in this pass. Confirmed via `vatReportService.test.ts`'s integration t
 VAT reconciliation itself is clean; this is specifically the AR/AP side, deliberately
 scoped out.
 
-### GL posting engine has no storage-layer enforcement of the balance invariant
-`JournalEntryService.postJournalEntry()` (`src/features/accounting/services/`)
-validates sum(debit) === sum(credit) in application code before writing, but the mock
-repository is an in-memory array with no `CHECK` constraint or transaction backing it.
-Fine for a single-writer mock; a real backend must also enforce this at the storage
-layer (DB constraint or serializable transaction), since application code alone can't
-stop a second writer from bypassing the service. See `docs/LEDGER_ARCHITECTURE.md`.
-
-### GL posting engine has no currency dimension yet
-`JournalLine` (`src/types/journalEntry.ts`) has no currency/exchange-rate field, so
-every seeded account and posting is implicitly single-currency even though
-`CurrencyCode` exists as a shared primitive. Needs solving before multi-currency
-invoices/bills can post to the GL. See `docs/LEDGER_ARCHITECTURE.md` § Known gaps.
-
-### Aging-bucket key-name inconsistency between Customers and Suppliers
-`src/features/customers/utils/calculateAging.ts` and
-`src/features/suppliers/utils/calculateAging.ts` were built independently (parallel
-Wave 1 dispatch) and produce differently-shaped bucket objects for the same concept:
-- Customers: `{ current, days1to30, days31to60, days61Plus, total }`
-- Suppliers: `{ current, days30, days60, days90Plus, total }`
-
-Neither is wrong in isolation, and Dashboard Bee correctly normalized both into a
-shared `FleetAgingBuckets` shape (`src/features/dashboard/types/aging.types.ts`)
-rather than assuming they matched — so nothing is currently broken. But the
-inconsistency itself is still there in the two source files and will confuse anyone
-extending either module directly. Worth a small cleanup pass to converge on one
-bucket-naming convention across both.
-
 ### Dashboard financials are fully mocked
 Revenue/Expenses/Profit and the Cash Flow chart have no real General Ledger or Banking
 data to draw from yet (`src/features/dashboard/mock-data/financials.ts`, commented
@@ -89,12 +46,81 @@ data to draw from yet (`src/features/dashboard/mock-data/financials.ts`, comment
 git config). This is intentional per explicit user instruction, not a misconfiguration
 — noted here only so a future session doesn't "fix" it back to the global default.
 
-### CRLF/LF git warnings on every commit
-Every commit prints a `LF will be replaced by CRLF` warning per changed file (Windows
-checkout, no `.gitattributes` committed). Harmless, but noisy. A `.gitattributes`
-pinning `* text=auto eol=lf` (or accepting CRLF explicitly) would silence it.
-
 ## Resolved
+
+### No Bill-line capitalization path into the Fixed Asset Register
+`FixedAsset.sourceBillId` existed specifically for this since Phase 7 shipped
+(2026-08-22), but nothing set it — an asset could only be registered manually on the
+Asset Register page, not by flagging a Bill line item as "this is a fixed asset, not
+an expense" the way Inventory lines already capitalize. Fixed same day, later pass:
+`DocumentLineItem` gained an optional `fixedAssetDetails` (category/useful life/
+depreciation method/residual value/reducing-balance rate/tax wear-and-tear rate —
+`src/types/fixedAsset.ts`'s `FixedAssetLineDetails`), mutually exclusive with
+`productId`. `billService.postBill()`'s expense/inventory split became a three-way
+split (`splitLineItems()`): a `fixedAssetDetails` line now debits Fixed Assets
+(`acc_1500`) instead of Operating Expenses, in the SAME journal entry as the rest of
+the bill. `FixedAssetService.capitalizeFromBillLine()` writes the register row
+directly as `'active'` (not through the draft-then-`postAcquisition()` flow every
+manually-registered asset uses) — the Bill's own posting IS the capitalization event,
+mirroring how a Bill's tracked-inventory line results in stock being received
+immediately with no separate "post" step of its own. The Purchases
+`LineItemsEditor` (shared by PurchaseOrderForm and BillForm) gained an
+`allowFixedAssetCapitalization` prop, passed `true` only from `BillForm` — capitalizing
+on a PO makes no accounting sense, nothing has been invoiced yet. Checking a line's new
+"Asset" toggle clears `productId` and expands an inline panel (category, useful life,
+method, residual value, conditionally the reducing-balance rate, and the SARS
+wear-and-tear rate prefilled from the category default) rather than adding columns to
+the already-dense line-item grid. 5 new `billService` tests (single fixed-asset line,
+three-way split alongside Inventory/Expense lines), 4 new `fixedAssetService` tests
+(`capitalizeFromBillLine`'s active-on-creation behavior, sequential asset numbering
+alongside manual registrations, shared validation), 6 new `LineItemsEditor` tests.
+
+### GL posting engine had no storage-layer enforcement of the balance invariant
+`JournalEntryService.postJournalEntry()` validated sum(debit) === sum(credit) in
+application code before writing, but the mock repository was an in-memory array with
+no `CHECK` constraint or transaction backing it — a real DB should still enforce this
+independently at the storage layer, since application code alone can't stop a second
+writer with direct storage access from bypassing the service. Fixed 2026-08-22:
+`MockJournalEntryRepository` now independently re-checks the balance invariant, both
+in its constructor (against whatever seed data it's given) and in `create()` — the
+closest an in-memory array can get to a real CHECK constraint. 3 new tests (rejects an
+unbalanced `create()`, rejects unbalanced seed data at construction, confirms the
+existing seed ledger and every genuinely-posted entry still construct/insert cleanly).
+
+### GL posting engine had no currency dimension
+`JournalLine`/`JournalEntry` had no currency field at all, so every seeded account and
+posting was implicitly single-currency even though `CurrencyCode` existed as a shared
+primitive nothing used. Fixed 2026-08-22: `JournalEntry` gained an optional `currency`
+field (entry-level, not per-line — a real double-entry transaction is denominated in
+one currency; per-line transaction-currency + exchange-rate pairs for a genuine
+foreign-currency transaction is Phase 12/Advanced FX-translation scope, not attempted
+here). `JournalEntryService.postJournalEntry()` always populates it now (defaults to
+`'ZAR'`, overridable per entry via a new optional constructor param), and
+`reverseJournalEntry()` carries the original entry's currency forward rather than
+silently reverting to the default. 4 new tests.
+
+### Aging-bucket key-name inconsistency between Customers and Suppliers
+`src/features/customers/utils/calculateAging.ts` and
+`src/features/suppliers/utils/calculateAging.ts` were built independently (parallel
+Wave 1 dispatch) and produced differently-shaped bucket objects for the same concept:
+- Customers: `{ current, days1to30, days31to60, days61Plus, total }`
+- Suppliers: `{ current, days30, days60, days90Plus, total }`
+
+Dashboard Bee had already correctly normalized both into a shared `FleetAgingBuckets`
+shape rather than assuming they matched, so nothing was ever actually broken — but the
+inconsistency itself remained in the two source files. Fixed 2026-08-22: Customers'
+`AgingBuckets` renamed to match Suppliers' convention (`days30`/`days60`/`days90Plus`),
+the more common "Current/30/60/90+" framing and the one already closer to
+`FleetAgingBuckets`' own `bucket30`/`bucket60`/`bucket90Plus` naming — one shared shape
+now, not two normalized at the Dashboard boundary. Every consumer (the aging math
+itself, `CustomerAgingBreakdown`, `calculateArAgingForCustomers`, both feature's tests)
+updated together.
+
+### CRLF/LF git warnings on every commit
+Every commit printed a `LF will be replaced by CRLF` warning per changed file (Windows
+checkout, no `.gitattributes` committed). Fixed 2026-08-22: added `.gitattributes`
+pinning `* text=auto eol=lf` (with an explicit CRLF carve-out for `.bat`/`.cmd` files,
+which some Windows tooling still expects).
 
 ### FIFO was not an available valuation method — WAC was the only option
 `StockService.calculateValuation()`'s own doc comment had flagged this since Phase 1:

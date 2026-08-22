@@ -1,3 +1,5 @@
+import type { FixedAssetLineDetails } from './fixedAsset';
+
 /**
  * Shared primitives used across every base domain type in src/types/.
  * Feature-specific extensions belong in src/features/*\/types/, not here.
@@ -59,4 +61,11 @@ export interface DocumentLineItem {
   taxRateId?: ID;
   taxAmount: number;
   lineTotal: number;
+  /**
+   * Bill lines only: flags this line as a fixed asset to be capitalized
+   * to the Asset Register instead of expensed/inventoried — see
+   * FixedAssetLineDetails' doc comment (src/types/fixedAsset.ts) and
+   * billService.postBill(). Mutually exclusive with `productId`.
+   */
+  fixedAssetDetails?: FixedAssetLineDetails;
 }

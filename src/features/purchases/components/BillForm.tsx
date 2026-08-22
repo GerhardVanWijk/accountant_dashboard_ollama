@@ -119,7 +119,14 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel }: B
         </label>
       </div>
 
-      <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} products={products} warehouses={warehouses} />
+      <LineItemsEditor
+        lineItems={lineItems}
+        onChange={setLineItems}
+        taxRates={taxRates}
+        products={products}
+        warehouses={warehouses}
+        allowFixedAssetCapitalization
+      />
 
       <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
         <div>
