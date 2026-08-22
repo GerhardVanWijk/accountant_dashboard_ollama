@@ -96,3 +96,42 @@ the lesson from Phase 5's VAT reconciliation gap. 31 new tests (445/445 total),
 type-check/lint/build clean. Full detail in `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 7
 section and `docs/HIVE_TASKS.md`. Deliberately still open: no Bill-line capitalization
 path yet (`FixedAsset.sourceBillId` exists on the type but nothing sets it).
+
+## Checkpoint — 2026-08-22: every open `docs/KNOWN_ISSUES.md` item closed
+
+User asked to fix the Bill-line capitalization gap and get "everything clean and fixed"
+per SA accounting standards. Closed every remaining Open item in one session, in order:
+
+1. **Quick wins**: `.gitattributes` silences the CRLF noise; `MockJournalEntryRepository`
+   independently re-checks the balance invariant at the storage boundary (constructor +
+   `create()`); `JournalEntry` gained an entry-level `currency` field, always populated
+   (defaults `'ZAR'`), carried forward on reversal; Customers' aging buckets renamed to
+   match Suppliers' `days30`/`days60`/`days90Plus` convention — one shared shape, not
+   two normalized only at the Dashboard boundary.
+2. **Bill-line capitalization** (the explicit ask): a Bill line can now be flagged
+   `fixedAssetDetails` and capitalizes directly to the Fixed Asset Register in the SAME
+   journal entry as the rest of the bill (`FixedAssetService.capitalizeFromBillLine()`,
+   `billService.postBill()`'s new three-way expense/inventory/fixed-asset split), via a
+   new "Asset" toggle on the Purchases `LineItemsEditor`, Bill-only.
+3. **Record Payment wiring**: `InvoiceDetail`/`BillDetail`'s long-unwired buttons now
+   open the real `CustomerReceiptForm`/`PaymentForm` pre-aimed at one document
+   (`presetInvoiceId`/`presetBillId`), instead of ever risking a call to the naive
+   non-GL-posting `recordPayment()` methods directly.
+4. **AR/AP subledger reconciliation**: `generateSeedPostings.ts` now backfills a
+   receipt/payment GL entry for every fully-allocated seed `CustomerReceipt`/`Payment`
+   — found and fixed two real seed-data bugs along the way (a receipt amount that never
+   matched its invoice's `amountPaid`, and three paid invoices with no seed receipt
+   behind them at all). Proven clean by a new integration test against the real seed
+   ledger, not just claimed.
+5. **Dashboard financials**: the fixed 6-month mock time series is gone —
+   `calculateMonthlyFinancials()` now computes real monthly Revenue/Expenses from
+   posted GL entries and real Cash In/Out from the Cash and Bank control account's own
+   movement. `calculateDashboardKpis()`/`calculateCashFlowSeries()` needed no changes,
+   only their input source changed.
+
+479/479 tests passing (up from 445 at the start of this session), type-check/lint/build
+clean throughout — verified after each of the 4 commits this pass produced, not just
+once at the end. `docs/KNOWN_ISSUES.md`'s Open section now holds nothing but one
+deliberate non-issue (the dual GitHub identity, intentional per earlier explicit
+instruction). Full detail per fix in `docs/KNOWN_ISSUES.md`'s Resolved section and
+`docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 2/3 and Phase 7 sections.

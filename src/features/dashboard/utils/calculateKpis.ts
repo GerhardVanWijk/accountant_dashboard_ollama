@@ -1,4 +1,4 @@
-import type { MonthlyFinancials } from '../mock-data/financials';
+import type { MonthlyFinancials } from './calculateMonthlyFinancials';
 import { calculateCashFlowSeries } from './calculateCashFlow';
 
 export interface KpiTrend {
@@ -32,11 +32,10 @@ function emptyKpis(): DashboardKpis {
 /**
  * Computes the four Executive Dashboard KPI cards (Revenue, Expenses, Net
  * Profit, Cash Position) plus each one's period-over-period trend
- * percentage (latest month vs the month before it), from the TEMPORARY
- * mock monthly financials (../mock-data/financials.ts). Superseded once a
- * real Banking/Accounting GL module supplies live figures — the shape of
- * this function's output should not need to change, only its input
- * source. Kept out of JSX per docs/DO_NOT_BREAK.md.
+ * percentage (latest month vs the month before it), from real monthly
+ * financials (./calculateMonthlyFinancials.ts, computed from posted GL
+ * entries — see that file's doc comment). Kept out of JSX per
+ * docs/DO_NOT_BREAK.md.
  */
 export function calculateDashboardKpis(months: MonthlyFinancials[]): DashboardKpis {
   if (months.length === 0) return emptyKpis();

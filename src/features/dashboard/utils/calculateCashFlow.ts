@@ -1,4 +1,4 @@
-import type { MonthlyFinancials } from '../mock-data/financials';
+import type { MonthlyFinancials } from './calculateMonthlyFinancials';
 
 export interface CashFlowPoint {
   label: string;
@@ -10,10 +10,11 @@ export interface CashFlowPoint {
 
 /**
  * Derives per-month net cash flow and running cumulative cash position
- * from the TEMPORARY mock monthly financials (../mock-data/financials.ts).
- * Kept out of JSX per docs/DO_NOT_BREAK.md ("never perform isolated
- * UI-only math for financial totals") — CashFlowChart and the Cash
- * Position KPI card only render this already-computed result.
+ * from real monthly financials (./calculateMonthlyFinancials.ts, itself
+ * computed from posted GL entries — see that file's doc comment). Kept
+ * out of JSX per docs/DO_NOT_BREAK.md ("never perform isolated UI-only
+ * math for financial totals") — CashFlowChart and the Cash Position KPI
+ * card only render this already-computed result.
  */
 export function calculateCashFlowSeries(months: MonthlyFinancials[]): CashFlowPoint[] {
   let running = 0;

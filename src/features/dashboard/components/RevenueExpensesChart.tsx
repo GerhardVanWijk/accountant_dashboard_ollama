@@ -2,7 +2,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import type { CurrencyCode } from '@/types';
 import { Card } from '@/components/ui/Card';
 import { formatCurrency } from '@/utils/formatCurrency';
-import type { MonthlyFinancials } from '../mock-data/financials';
+import type { MonthlyFinancials } from '../utils/calculateMonthlyFinancials';
 
 export interface RevenueExpensesChartProps {
   data: MonthlyFinancials[];

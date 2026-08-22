@@ -5,13 +5,17 @@ import { productService } from '@/features/inventory/services/productService';
 import { stockService } from '@/features/inventory/services/stockService';
 import { invoiceService } from '@/services';
 import { billService } from '@/features/purchases/services';
+import { journalEntryService, accountService } from '@/features/accounting/services';
 import { calculateArAgingForCustomers } from '../utils/calculateArAging';
 import { calculateApAgingForSuppliers } from '../utils/calculateApAging';
 import { calculateDashboardKpis, type DashboardKpis } from '../utils/calculateKpis';
 import { calculateCashFlowSeries, type CashFlowPoint } from '../utils/calculateCashFlow';
 import { buildRecentActivity, type ActivityItem } from '../utils/buildRecentActivity';
-import { mockMonthlyFinancials, type MonthlyFinancials } from '../mock-data/financials';
+import { calculateMonthlyFinancials, trailingMonthKeys, type MonthlyFinancials } from '../utils/calculateMonthlyFinancials';
 import type { FleetAgingBuckets } from '../types/aging.types';
+
+/** Trailing 6 months, matching the window the dashboard has always shown. */
+const TRAILING_MONTHS = 6;
 
 export interface DashboardData {
   kpis: DashboardKpis;
@@ -35,11 +39,13 @@ export interface UseDashboardDataResult {
 
 /**
  * Component -> Hook -> Service chain (docs/ARCHITECTURE.md) for the
- * Executive Dashboard. Fetches real customer/supplier/product data from
+ * Executive Dashboard. Fetches real customer/supplier/product/GL data from
  * their own feature services, then routes every derived figure through a
  * dashboard-owned util (never computed inline here or in JSX, per
- * docs/DO_NOT_BREAK.md) — aging aggregation, KPI trends, cash-flow
- * series, and the recent-activity feed.
+ * docs/DO_NOT_BREAK.md) — aging aggregation, monthly Revenue/Expenses/
+ * Cash Flow from posted journal entries (calculateMonthlyFinancials —
+ * previously a mock time series, fixed 2026-08-22 per docs/KNOWN_ISSUES.md),
+ * KPI trends, cash-flow series, and the recent-activity feed.
  */
 export function useDashboardData(): UseDashboardDataResult {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -59,22 +65,26 @@ export function useDashboardData(): UseDashboardDataResult {
       stockService.calculateTotalValuation(),
       invoiceService.getInvoices(),
       billService.getBills(),
+      journalEntryService.getEntries(),
+      accountService.getAccounts(),
     ])
-      .then(([customers, suppliers, products, inventoryValuation, invoices, bills]) => {
+      .then(([customers, suppliers, products, inventoryValuation, invoices, bills, journalEntries, accounts]) => {
         if (cancelled) return;
 
         const arAging = calculateArAgingForCustomers(customers, invoices);
         const apAging = calculateApAgingForSuppliers(suppliers, bills);
         const activity = buildRecentActivity(customers, suppliers, products);
+        const monthKeys = trailingMonthKeys(new Date(), TRAILING_MONTHS);
+        const monthlyFinancials = calculateMonthlyFinancials(journalEntries, accounts, monthKeys);
 
         setData({
-          kpis: calculateDashboardKpis(mockMonthlyFinancials),
+          kpis: calculateDashboardKpis(monthlyFinancials),
           arAging,
           apAging,
           inventoryValuation,
           activity,
-          monthlyFinancials: mockMonthlyFinancials,
-          cashFlowSeries: calculateCashFlowSeries(mockMonthlyFinancials),
+          monthlyFinancials,
+          cashFlowSeries: calculateCashFlowSeries(monthlyFinancials),
           hasAnyData: arAging.total > 0 || apAging.total > 0 || inventoryValuation > 0 || activity.length > 0,
         });
       })

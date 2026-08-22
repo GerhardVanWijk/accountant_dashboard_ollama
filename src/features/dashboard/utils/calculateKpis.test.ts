@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { MonthlyFinancials } from '../mock-data/financials';
+import type { MonthlyFinancials } from './calculateMonthlyFinancials';
 import { calculateDashboardKpis } from './calculateKpis';
 
 function month(overrides: Partial<MonthlyFinancials>): MonthlyFinancials {

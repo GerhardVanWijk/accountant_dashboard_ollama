@@ -7,10 +7,8 @@ each section.
 
 ## Open
 
-### Dashboard financials are fully mocked
-Revenue/Expenses/Profit and the Cash Flow chart have no real General Ledger or Banking
-data to draw from yet (`src/features/dashboard/mock-data/financials.ts`, commented
-`TEMPORARY`). Will need rewiring once the Accounting/Banking modules exist.
+Nothing open right now beyond the one deliberate non-issue below — every other item
+that was open as of the last pass (2026-08-22) has been resolved; see Resolved.
 
 ### Two GitHub identities in play
 `gh auth status` shows two authenticated accounts (`GerhardVanWijk` active,
@@ -20,6 +18,26 @@ git config). This is intentional per explicit user instruction, not a misconfigu
 — noted here only so a future session doesn't "fix" it back to the global default.
 
 ## Resolved
+
+### Dashboard financials were fully mocked
+Revenue/Expenses/Profit and the Cash Flow chart had no real General Ledger or Banking
+data to draw from (`src/features/dashboard/mock-data/financials.ts`, commented
+`TEMPORARY`, a fixed 6-month hand-typed series). Fixed 2026-08-22, now that the GL has
+enough real posted activity to draw from: new `calculateMonthlyFinancials()`
+(`src/features/dashboard/utils/`) computes real monthly Revenue/Expenses from posted
+`JournalEntry` lines against revenue-/expense-type Chart-of-Accounts accounts (so a
+credit note, which debits Sales Revenue, correctly reduces that month's revenue — no
+special-casing needed) and real Cash In/Out from debit/credit movement on the single
+Cash and Bank control account (`acc_1000`) — one source of truth rather than mixing in
+Banking's `BankTransaction` records separately and risking the two disagreeing.
+`calculateDashboardKpis()`/`calculateCashFlowSeries()` needed NO changes at all — both
+only ever depended on the `MonthlyFinancials[]` shape, never the mock source directly,
+so `useDashboardData.ts` just fetches `journalEntryService.getEntries()`/
+`accountService.getAccounts()` now and computes real trailing-6-months data instead.
+10 new tests, including two against the real seed ledger (non-zero Revenue/Expenses/
+Cash In/Out for August 2026 — the month the seed data concentrates in — and a sanity
+bound proving computed revenue can never exceed what was actually ever posted to Sales
+Revenue).
 
 ### Invoice/Bill "Record Payment" actions existed as component props but were never wired up
 `InvoiceDetail`'s `onRecordPayment` and `BillDetail`'s `onRecordPayment` were never
