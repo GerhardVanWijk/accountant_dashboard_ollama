@@ -26,6 +26,7 @@ the test-suite's own backing store (see the Testing note below).
 | E | Transactional documents (Sales, Purchases, Banking, Inventory) | ✅ schema/repositories done 2026-08-23 — GL posting blocked by a pre-existing gap, see below |
 | F | Fixed Assets, Payroll, Tax modules | not started |
 | G | Compliance & Phase 12 (Deferred Tax, ECL, Leases, Related Parties, FX, Reporting Standards) | ✅ done 2026-08-23 |
+| T | Multi-Tenant Auth + Role System + Superuser Dashboard | ✅ done 2026-08-23 |
 
 ## Testing note — read before trusting a green test run as migration proof
 
@@ -1254,3 +1255,155 @@ domain was explicitly out of scope by design (no multi-tenant Company
 scoping beyond the single-company pattern; `StockLot` FIFO costing layers
 and `PayrollTaxConfigRepository` Mock seed-data verification remain
 open items flagged in earlier phases, unrelated to this one).
+
+The "no multi-tenant Company scoping" gap above is exactly what Phase T
+(below) started closing.
+
+---
+
+## Phase T — Multi-Tenant Auth + Role System + Superuser Dashboard ✅
+
+2026-08-23, same day as Phase G. User-supplied brief asked for a 5-table
+RBAC schema, a Superuser Dashboard, a company-admin Users & Roles page,
+`usePermission()`, a realtime example hook, and Cloudflare Pages config.
+Two architecture questions were confirmed with the user before any schema
+change, because the live project already had real conflicts with the
+brief's literal spec (not a greenfield build — 3 real `auth.users` rows
+already existed):
+
+1. **Layer on top, don't replace.** `profiles.role` (`profile_role` enum:
+   admin/accountant/manager/operator/viewer) already gates every one of the
+   ~45 previously-shipped tables' RLS via `get_my_company_id()`. Rewriting
+   RLS on all 45 tables to the brief's literal per-feature-permission
+   pattern was rejected as too large/risky for what was asked; the new
+   roles/permissions/role_permissions/user_roles/audit_logs_access tables
+   are additive, driving `usePermission()` UI-gating and the two new admin
+   UIs — they do NOT change what any pre-existing table's RLS allows.
+2. **Superuser is a normal, RLS-blocked account**, not an out-of-band
+   service-role mechanism. `'superuser'` was added to `profile_role`
+   (migration 0009, its own migration — Postgres forbids using a new enum
+   value in the same transaction that adds it). A superuser's
+   `company_id` is always NULL, which every existing
+   `company_id = get_my_company_id()` policy already treats as zero rows
+   (NULL never equals anything) — no rewrite needed on the 45 tables for
+   that blocking to work. Two new ADDITIVE policies grant superuser
+   read-only access to `companies`/`profiles` only (never any financial
+   table), plus role/suspend authority over `profiles`.
+
+### A third, bigger gap found before building anything
+
+`ensureAnonymousSession()` (src/config/supabase.ts) meant this app had NO
+real login anywhere — every page load signed in anonymously regardless of
+the Phase-0 `useAuthStore` boolean stub. Surfaced to the user (a role/
+superuser system is meaningless without real accounts); confirmed to build
+real Supabase email/password auth as this phase's foundation rather than
+layering roles on top of anonymous sessions.
+
+### Migrations applied (0009-0015)
+
+- **0009** — `alter type profile_role add value 'superuser'`, alone.
+- **0010** — the 5 new tables (`permissions`, `roles`, `role_permissions`,
+  `user_roles`, `audit_logs_access`), RLS, and seed data. `roles.company_id`
+  is nullable (NULL = system role, shared by every tenant) rather than the
+  brief's literal `not null` — avoids duplicating the 6 seeded system roles
+  per company. `role_permissions` seed mapping extends the brief's own
+  table (which left `payroll` ungranted to any role) — see
+  `docs/KNOWN_ISSUES.md`'s Phase T entry.
+- **0011** — hardening from the first `get_advisors` pass: `get_my_role()`
+  was still callable by `anon` despite `revoke ... from public` (the same
+  `ALTER DEFAULT PRIVILEGES`-grants-to-anon-directly landmine 0003 already
+  hit and fixed for `get_my_company_id()`); split a `for all` policy that
+  was redundantly covering `SELECT`; added 3 missing FK indexes.
+- **0012** — **a real, pre-existing security gap found while designing
+  onboarding**: `profiles_update_self` (from 0001) had no `with_check` at
+  all — any signed-in user could self-elevate `role` to `'admin'`/
+  `'superuser'` or reassign their own `company_id` into any other tenant
+  via a plain client update. Fixed with a `BEFORE UPDATE` trigger that
+  locks `role`/`company_id`/`is_active` unless the caller is superuser (any
+  row) or admin (their own company's rows, and never able to grant
+  `'superuser'`). Also added `profiles_update_admin_same_company` (lets an
+  admin edit rows in their own company OR unassigned rows, for onboarding)
+  and the `create_company_and_become_admin` SECURITY DEFINER RPC — company
+  creation deliberately goes through this RPC, not raw table writes,
+  specifically because the trigger above blocks a plain client update from
+  doing it.
+- **0013** — same anon-grant landmine again on the two new 0012 functions;
+  explicit per-role revokes.
+- **0014** — `find_unassigned_profile_by_email(text)`, a narrow SECURITY
+  DEFINER RPC (admin-only, exact match only) so a company admin can add an
+  already-signed-up-but-companyless colleague without a broader SELECT
+  policy that would leak every pending signup's email to any authenticated
+  user.
+- **0015** — **a second real, pre-existing gap**, found while wiring the
+  Suspend button: `profiles.is_active` (present since Phase A) was never
+  checked by any RLS policy anywhere — a "suspended" user could still fully
+  use the app. Fixed at `get_my_company_id()`/`get_my_role()` themselves
+  (both now `and is_active = true`) rather than touching any of the 45
+  tables whose policies call them — an inactive profile resolves to no
+  company/role, and every existing policy already treats that as zero
+  access.
+
+### App code
+
+- `src/config/supabase.ts` / `src/stores/authStore.ts` /
+  `src/features/auth/bootstrapAuth.ts` — real session bootstrap replacing
+  anonymous sign-in; `useAuthStore` no longer uses zustand `persist`
+  (Supabase's own client already persists its session).
+- `src/features/auth/pages/{LoginPage,SignUpPage,OnboardingPage}.tsx` — real
+  forms. Onboarding offers ONLY "create a company" — a self-serve "join an
+  existing company by id" was designed and rejected: every company-scoped
+  table grants full CRUD the instant `company_id` matches, with no separate
+  membership-approval gate, so letting a user set their own `company_id` to
+  any company they can find would have been a real tenant-isolation bypass.
+  Joining is admin-initiated instead (Users & Roles page, exact-email
+  lookup via 0014's RPC).
+- `src/repositories/auth/*` + `src/features/auth/services/*` — repository/
+  service pairs for profiles, roles, permissions, user_roles,
+  audit_logs_access, mirroring every other feature's
+  Interface→Supabase-impl→Service→singleton shape exactly.
+- `src/features/auth/hooks/usePermission.ts` + `stores/permissionStore.ts` +
+  `components/PermissionsLoader.tsx` (mounted once in `AppLayout`) — the
+  UI-gating layer. Returns `false` for everyone until an admin explicitly
+  assigns a fine-grained role — correct fail-closed behavior, not a bug,
+  since nothing auto-assigns the new system roles to existing profiles.
+- `src/features/admin/pages/{UsersPage,SuperUserDashboardPage,AuditPage}.tsx`
+  — real content replacing 3 placeholders. `SuperUserDashboardPage` lives
+  under `src/features/admin/pages/`, not the brief's literal
+  `src/pages/admin/` — this codebase has no `src/pages/` directory
+  anywhere. It deliberately does not reuse `AppLayout`/`Topbar`/
+  `navigation.ts` (the tenant-facing accounting nav is irrelevant and
+  actively misleading for an account with zero company access). "Suspend
+  tenant" bulk-suspends every user in that company (the only thing that
+  actually blocks access, per 0015) rather than a cosmetic
+  `companies.is_active` toggle nothing reads.
+- `src/features/auth/hooks/useRealtimeProfiles.ts` — Step 7 of the brief,
+  written against the real `supabase-js` v2 `channel().on('postgres_changes',
+  ...)` API (the brief's own pseudocode used a `.from(...).on(...)` v1-style
+  shape that no longer exists in this project's installed version). Built
+  and correct, not wired into a page yet — see `docs/KNOWN_ISSUES.md`.
+- `wrangler.toml` — Step 8, minimal correct Cloudflare Pages config (current
+  `pages_build_output_dir` format, not the brief's slightly stale nested
+  `[env.production.build]` shape).
+
+### Verification
+
+`get_advisors` (security + performance) re-run after every migration in
+this phase; every WARN either fixed at the source (both anon-grant leaks,
+the redundant policy) or is the same accepted category already documented
+for `get_my_company_id()` in Phase A (`authenticated` can call a
+`SECURITY DEFINER` helper — the standard trade-off of that pattern).
+`auth_leaked_password_protection` remains open — a Supabase dashboard
+toggle (Authentication → Providers) no MCP tool exposes, same class of gap
+as Phase A's "Anonymous Sign-ins" toggle.
+
+843/844 tests passing (one pre-existing, unrelated `MockSupplierRepository`
+failure — confirmed to fail in isolation and before any Phase T change, see
+`docs/KNOWN_ISSUES.md`), type-check/lint/build clean. `App.test.tsx` updated
+to set `useAuthStore`'s real signed-out state explicitly (component tests
+never run `bootstrapAuth()`) and to assert the real LoginPage's "Sign in"
+button instead of the retired Phase-0 stub's "Continue".
+
+Real, deliberate scope boundaries (not bugs) are catalogued in
+`docs/KNOWN_ISSUES.md`'s Phase T entry — most importantly, the new
+fine-grained roles gate the UI only; the ~45 pre-existing tables' RLS is
+still `profiles.role`-only, unchanged by this phase.

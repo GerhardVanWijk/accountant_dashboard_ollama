@@ -2,6 +2,9 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { RouteGuard } from './RouteGuard';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
+import { SignUpPage } from '@/features/auth/pages/SignUpPage';
+import { OnboardingPage } from '@/features/auth/pages/OnboardingPage';
+import { SuperUserDashboardPage } from '@/features/admin/pages/SuperUserDashboardPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { ChartOfAccountsPage } from '@/features/accounting/pages/ChartOfAccountsPage';
 import { JournalsPage } from '@/features/accounting/pages/JournalsPage';
@@ -79,9 +82,15 @@ export const routes: RouteObject[] = [
     element: <LoginPage />,
   },
   {
+    path: '/signup',
+    element: <SignUpPage />,
+  },
+  {
     path: '/',
     element: <RouteGuard />,
     children: [
+      { path: 'onboarding', element: <OnboardingPage /> },
+      { path: 'admin/superuser', element: <SuperUserDashboardPage /> },
       {
         element: <AppLayout />,
         children: [

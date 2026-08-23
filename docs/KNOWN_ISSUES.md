@@ -7,6 +7,86 @@ each section.
 
 ## Open
 
+### Pre-existing, unrelated to Phase T: `MockSupplierRepository.test.ts`'s accounts-payable delete guard fails, even in isolation
+Found while verifying Phase T (2026-08-23) — `npm test` reported this failing before and
+after every Phase T change, and it fails standalone (`npx vitest run
+src/features/suppliers/repositories/MockSupplierRepository.test.ts`), so it is not a
+test-order flake and not something this session's auth/roles/superuser work touched
+(Suppliers/Bills were never in scope). `service.deleteSupplier('sup_00000004')` resolves
+instead of rejecting when the supplier has linked open bills. Not investigated further —
+out of scope for Phase T; whoever picks up Suppliers/Purchases next should treat this as
+a real regression, not assume it's environmental.
+
+### Phase T (Multi-Tenant Auth + Role System + Superuser Dashboard) — real, deliberate scope boundaries
+Built 2026-08-23: real Supabase email/password auth (replacing the anonymous-session
+bootstrap and the Phase-0 `isAuthenticated` boolean stub), a company-creation onboarding
+flow, the fine-grained roles/permissions/user_roles/audit_logs_access schema (migrations
+0009-0015), `usePermission()` feature-gating, a real Superuser Dashboard, and a real
+Users & Roles admin page. Full design rationale in
+`docs/SUPABASE_MIGRATION_GUIDE.md`'s Phase T section — summarized gaps below:
+
+- **The new fine-grained roles (accountant/stock_controller/sales_manager/
+  finance_manager/employee/viewer) only gate the UI** (`usePermission()`), confirmed with
+  the user before building: the ~45 pre-existing tables' RLS is still gated by the
+  original coarse `profiles.role` enum (admin/accountant/manager/operator/viewer/
+  superuser) only, unchanged by this phase. Assigning someone the new "stock_controller"
+  role does not, by itself, restrict what their `profiles.role` already lets them read/
+  write at the database level.
+- **No self-serve "join an existing company."** Every company-scoped table grants full
+  CRUD the instant `company_id` matches, with no separate membership-approval gate — a
+  self-service join-by-company-id would have been a real tenant-isolation bypass (found
+  while designing onboarding, not shipped). Joining is admin-initiated instead: a
+  colleague signs up, then a company admin adds them by exact email from the Users &
+  Roles page.
+- **No real email delivery anywhere in this app** (no backend/edge functions) — "Invite
+  User" from the brief doesn't exist as an email invite; see the point above for the
+  actual flow shipped instead.
+- **Superuser Dashboard usage stats are real activity counts, not infra metering.**
+  Storage/egress/API-call-per-tenant numbers are Supabase platform-level data no MCP
+  tool or client API here can reach — deliberately not fabricated, per §110's
+  "no unsupported claims" rule applied to infra, not just accounting figures.
+- **`useRealtimeProfiles` (Step 7 of the brief) is built and correct against the current
+  supabase-js v2 API but not wired into any page** — a demonstrated pattern, not a
+  shipped live-updating feature yet.
+- **`Company.subscriptionTier` and `roles`/`permissions` role_permissions seed mappings
+  are this session's own reasonable defaults, not user-specified.** The brief's own
+  system-role permission table left `payroll` ungranted to every role; extended to
+  accountant (create/read/update) and finance_manager (read) as a real-world default,
+  called out explicitly in migration 0010's comment rather than silently guessed.
+
+**Two real pre-existing security gaps found and fixed while building this** (not Phase T
+regressions — these existed since the original Phase A schema, just never exercised
+until Phase T built the first UI that would have exposed them):
+- `profiles_update_self`'s RLS policy had no `with_check` at all — any signed-in user
+  could have set their own `role` to `'admin'`/`'superuser'` or jumped their own
+  `company_id` into any other tenant via a plain client `.update()`. Fixed with a
+  `BEFORE UPDATE` trigger (migration 0012) that locks `role`/`company_id`/`is_active`
+  against self-elevation, superuser and same-company-admin exempted.
+- `profiles.is_active` (present since Phase A) was never checked by any RLS policy
+  anywhere — a "suspended" user could still fully use the app. Fixed at the two shared
+  helper functions (`get_my_company_id()`/`get_my_role()`) every one of the ~45
+  company-scoped tables' policies already call (migration 0015), so a suspended
+  profile now resolves to no company/role and loses access everywhere, without
+  touching any of those 45 tables directly.
+
+### Phase 11 (Compliance): Regulation 27's low-score/internally-compiled reporting-framework band, and the s30(2A) owner-managed exemption, aren't machine-verified
+Built 2026-08-22: the Public Interest Score engine (§3, Companies Regulations 2011 reg
+26(2)) and its audit/independent-review (reg 28-29) and reporting-framework (reg 27)
+suggestions. Every source consulted (CIPC's own summary page, RSM, RandCo, The Glass
+Castle) converged exactly on the score formula and the reg 28/29 audit-vs-review bands,
+so those are implemented with `confidence: 'high'`. WebFetch could not reliably extract
+the primary Government Gazette PDF text (scanned/compressed), so this is a multi-source
+cross-check, not a verified primary-source quote — see
+`complianceDeterminations.ts`'s doc comment. Two specific pieces stayed genuinely
+uncertain even after that cross-check and are deliberately flagged
+`requires_professional_review` / surfaced as a note rather than presented as confirmed
+(§110): which standard Regulation 27 leaves to a company's own discretion when its score
+is below 100 AND internally compiled, and the Companies Act s30(2A) "owner-managed"
+exemption from independent review (this app has no shareholder register to check every
+shareholder is also a director against). Neither blocks the feature — the score still
+calculates, the suggestion still shows — but neither should be relied on for an actual
+statutory filing without an accountant confirming it.
+
 Remaining deliberate Phase 8 simplifications (allowance/deduction taxability as
 booleans, no retirement-fund deduction cap, UIF-exempt/SDL-exempt as flags rather than
 the real statutory tests, no IRP5/payslip document generation, no settings UI to add a

@@ -47,3 +47,7 @@
 | `/leases/amortization` | `leases` | Lease Amortization | Leases |
 | `/admin/users` | `admin` | User & Role Management | Admin |
 | `/admin/audit` | `audit` | System Audit Trail | Admin |
+| `/login` | `auth` | Sign In | *(unauthenticated, no nav entry)* |
+| `/signup` | `auth` | Create Account | *(unauthenticated, no nav entry)* |
+| `/onboarding` | `auth` | Set Up Your Company | *(authenticated, pre-company, no nav entry)* |
+| `/admin/superuser` | `admin` | Superuser Dashboard | *(superuser-only, self-contained layout, no top nav)* |
