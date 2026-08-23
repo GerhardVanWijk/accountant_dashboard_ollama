@@ -38,3 +38,4 @@ export * from './reportingStandard';
 export * from './relatedParty';
 export * from './foreignExchange';
 export * from './lease';
+export * from './accessAudit';
