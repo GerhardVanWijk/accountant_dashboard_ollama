@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { computeVatReport, reconcileVatControlAccounts } from './vatReportService';
 import type { Bill, CreditNote, Invoice, TaxRate } from '@/types';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
+import { AccountService } from '@/features/accounting/services/accountService';
+import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
@@ -250,7 +252,8 @@ describe('reconcileVatControlAccounts against real seed data', () => {
     const periodStart = new Date('2026-01-01');
     const periodEnd = new Date('2026-12-31');
     const report = computeVatReport(periodStart, periodEnd, seedInvoices, seedCreditNotes, seedBills, seedTaxRates);
-    const reconciliation = await reconcileVatControlAccounts(journalEntryService, periodStart, periodEnd, report);
+    const accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
+    const reconciliation = await reconcileVatControlAccounts(journalEntryService, accountMapper, periodStart, periodEnd, report);
 
     expect(reconciliation.outputVat.isReconciled).toBe(true);
     expect(reconciliation.inputVat.isReconciled).toBe(true);

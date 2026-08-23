@@ -3,7 +3,7 @@ import { DepreciationService } from './depreciationService';
 import { AssetDisposalService } from './assetDisposalService';
 import { TaxRegisterService } from './taxRegisterService';
 import { fixedAssetRepository, depreciationEntryRepository, assetDisposalRepository } from '../repositories/instances';
-import { journalEntryService } from '@/features/accounting/services';
+import { journalEntryService, accountMappingService } from '@/features/accounting/services';
 
 export type { CreateFixedAssetDTO, UpdateFixedAssetDTO, CapitalizeFromBillLineInput } from './fixedAssetService';
 export type { DepreciationRunResult } from './depreciationService';
@@ -23,7 +23,7 @@ export { TaxRegisterService } from './taxRegisterService';
  * accountingPeriodService's period-open rule. Hooks depend on these
  * singletons instead of importing repositories directly.
  */
-export const fixedAssetService = new FixedAssetService(fixedAssetRepository, journalEntryService);
+export const fixedAssetService = new FixedAssetService(fixedAssetRepository, journalEntryService, accountMappingService);
 export const depreciationService = new DepreciationService(depreciationEntryRepository, fixedAssetRepository, journalEntryService);
-export const assetDisposalService = new AssetDisposalService(assetDisposalRepository, fixedAssetRepository, journalEntryService);
+export const assetDisposalService = new AssetDisposalService(assetDisposalRepository, fixedAssetRepository, journalEntryService, accountMappingService);
 export const taxRegisterService = new TaxRegisterService(fixedAssetRepository);

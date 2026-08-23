@@ -1,7 +1,7 @@
 import { IncomeTaxConfigService } from './incomeTaxConfigService';
 import { TaxComputationService } from './taxComputationService';
 import { incomeTaxConfigRepository, taxComputationRepository } from '../repositories/instances';
-import { journalEntryService, accountService, financialYearService } from '@/features/accounting/services';
+import { journalEntryService, accountService, financialYearService, accountMappingService } from '@/features/accounting/services';
 import { companyService } from '@/features/admin/services';
 import { fixedAssetService, assetDisposalService } from '@/features/assets/services';
 import { capitalGainsService } from '@/features/tax/capitalGains/services';
@@ -59,5 +59,6 @@ export const taxComputationService = new TaxComputationService(
   assetDisposalService,
   incomeTaxConfigService,
   journalEntryService,
+  accountMappingService,
   capitalGainsService,
 );

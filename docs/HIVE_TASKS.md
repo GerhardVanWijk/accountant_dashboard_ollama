@@ -546,6 +546,83 @@ lint/build clean, independently QA-verified (zero defects found).
 - ✅ Right-aligned numbers, semantic colors (positive green, negative red)
 - ✅ Dark + light theme tested
 
+#### Phase 11 (Compliance) — ✅ COMPLETE (2026-08-22, solo pass)
+- [x] Public Interest Score engine (§3, reg 26(2)) — `src/features/compliance/`. Real
+  employee/turnover/liability points from real Employee/GL data via the Phase 10 Reports
+  module's own calculators; shareholder points from a manual input (no shareholder
+  register exists anywhere in this codebase). Append-only history per company.
+- [x] Audit/independent-review suggestion (reg 28-29) and reporting-framework suggestion
+  (reg 27) — `complianceDeterminations.ts`, cross-checked against CIPC/RSM/RandCo/The
+  Glass Castle (WebFetch couldn't extract the primary Gazette PDF text). Never applies a
+  suggestion automatically — `CompanyService.setReportingFramework()`'s existing
+  reason-required override is the only path, now with a real UI entry point for the
+  first time (Public Interest Score page).
+- [x] Compliance Dashboard (§108) — `/compliance/dashboard`, aggregates VAT/Income
+  Tax/Payroll/Company/Accounting status by re-running each module's own existing
+  computation for the current month/open financial year, no new calculation logic.
+  "Certificates" (no IRP5 generation) and a suspense account (§40, not modeled) shown as
+  explicitly absent rather than faked.
+- 25 new tests, 727/727 total, type-check/lint/build clean. Full detail in
+  `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 11 section.
+
+#### Phase 12 (Advanced Accounting) Wave 1 — Deferred Tax, ✅ COMPLETE (2026-08-22, new session, solo pass)
+User chose to pace Phase 12's 10-item checklist one piece at a time given its size —
+Deferred Tax first, since it reuses real existing data rather than needing a brand-new
+module.
+- [x] Deferred Tax engine (§50) — `src/features/tax/deferredTax/`. Real temporary
+  differences auto-suggested from the Fixed Asset Tax Register (Phase 7's
+  `taxRegisterService`), not `accountingProfit x taxRate`. Taxable differences always
+  recognize a Deferred Tax Liability; deductible ones only recognize a Deferred Tax Asset
+  when the user explicitly confirms it (§50's recognition criteria — never assumed).
+  Draft-then-post; posts only the period MOVEMENT since the prior posted computation, not
+  the full balance every time.
+- [x] Three new GL accounts: `acc_1600` Deferred Tax Asset, `acc_2400` Deferred Tax
+  Liability, `acc_5600` Deferred Tax Expense.
+- 20 new tests, 747/747 total, type-check/lint/build clean. Full detail in
+  `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 12 section.
+
+#### Phase 12 (Advanced Accounting) Wave 2 — Expected Credit Losses, ✅ COMPLETE (2026-08-22, same session, solo pass)
+- [x] ECL provision matrix on trade receivables (§46/IFRS 9's simplified approach) —
+  `src/features/financialInstruments/`. Real gross receivables per aging bucket from the
+  Customer Aging Report (`getCustomerAgingReport()`, never re-derived); loss rates always
+  a manual per-bucket entry (no historical default-rate data exists in this codebase),
+  carried forward from the prior posted computation for continuity. Same draft-then-post,
+  movement-only-posting shape as Deferred Tax — a genuine reversal (overdue balance
+  shrinking year-over-year) is proven by test.
+- [x] Two new GL accounts: `acc_1150` Allowance for Doubtful Debts (contra-asset, nets
+  against Accounts Receivable), `acc_5700` Impairment Loss - Expected Credit Losses.
+- 18 new tests, 765/765 total, type-check/lint/build clean. Full detail in
+  `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 12 section.
+
+#### Phase 12 (Advanced Accounting) Wave 3 — ✅ COMPLETE except Leases (2026-08-23, new session, 3 parallel bees + 2 solo Queen passes)
+- [x] Related Parties (§88) — `src/features/relatedParties/`, disclosure-only register +
+  transaction log + summary, no GL posting. 21 new tests.
+- [x] Foreign Exchange infrastructure (§33) — `src/features/foreignExchange/`, exchange
+  rate engine + realized/unrealized gain-loss calculators + a standalone FX Calculator
+  tool. Explicitly does NOT integrate with real Invoices/Bills/Customers/Bank Accounts
+  (none of them carry a foreign transaction currency yet) — flagged, not faked. 18 new
+  tests.
+- [x] Reporting Standards versioning (§48/§49) — `src/features/compliance/` (new
+  `ReportingStandardService` alongside Public Interest Score). Resolves which edition of
+  Full IFRS/IFRS for SMEs applies to a period; IFRS-for-SMEs 2025 edition date from the
+  master spec text, IFRS 18's date independently verified live. 8 new tests.
+- [x] Consolidation architecture (§87) — audited, not built (the spec's own wording is
+  "architect for future support," not a feature). Findings recorded as ADR 003 in
+  `docs/DECISIONS.md`: nothing in the schema blocks future consolidation, but the real
+  prerequisite (multi-company tenant scoping, §75) doesn't exist yet.
+- 844/844 tests total, type-check/lint/build clean. Full detail in
+  `docs/SA_SPEC_GAP_ANALYSIS.md`'s Phase 12 section.
+- [x] Leases (§32/§47) — `src/features/leases/`, lessee-only, draft→commence→amortize→
+  terminate lifecycle mirroring Fixed Assets. PV-of-annuity initial recognition,
+  combined-entry periodic amortization run (interest + principal + ROU depreciation via
+  the debit-vector technique), termination gain/loss reusing the existing Fixed-Asset
+  disposal accounts. 32 new tests. All three bees resumed cleanly once after hitting the
+  session usage-limit checkpoint mid-build (SendMessage-resume, same precedent as Phase
+  9 Wave 2).
+
+**Phase 12 (Advanced Accounting) — ✅ FULLY COMPLETE, 2026-08-23.** Every §116 checklist
+item now has a real answer. 844/844 tests total, type-check/lint/build clean.
+
 #### Admin Module (Admin Bee) — BACKEND FOR COMPANY SETTINGS + AUDIT LOGS DONE, UI STILL TO DISPATCH
 - ✅ `CompanyService` (`src/features/admin/services/companyService.ts`) — CRUD +
   `setReportingFramework()` (reason-required override, audit-logged). `AuditLogService`

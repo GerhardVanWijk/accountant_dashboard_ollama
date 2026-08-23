@@ -1,6 +1,6 @@
 import { ProvisionalTaxService } from './provisionalTaxService';
 import { provisionalTaxPeriodRepository } from '../repositories/instances';
-import { financialYearService, journalEntryService } from '@/features/accounting/services';
+import { financialYearService, journalEntryService, accountMappingService } from '@/features/accounting/services';
 import { companyService } from '@/features/admin/services';
 import { incomeTaxConfigService, taxComputationService } from '@/features/tax/incomeTax/services';
 
@@ -28,4 +28,5 @@ export const provisionalTaxService = new ProvisionalTaxService(
   incomeTaxConfigService,
   journalEntryService,
   taxComputationService,
+  accountMappingService,
 );

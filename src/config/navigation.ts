@@ -116,6 +116,8 @@ export const navigation: NavSection[] = [
       { path: '/tax/capital-gains', label: 'Capital Gains Tax', icon: 'tax' },
       { path: '/tax/dividends', label: 'Dividends Tax', icon: 'dividends' },
       { path: '/tax/provisional-tax', label: 'Provisional Tax', icon: 'tax' },
+      { path: '/tax/deferred-tax', label: 'Deferred Tax', icon: 'tax' },
+      { path: '/tax/expected-credit-losses', label: 'Expected Credit Losses', icon: 'tax' },
     ],
   },
   {
@@ -128,6 +130,39 @@ export const navigation: NavSection[] = [
       { path: '/reports/cash-flow', label: 'Cash Flow Statement', icon: 'reports' },
       { path: '/reports/customer-aging', label: 'Customer Aging Report', icon: 'customers' },
       { path: '/reports/supplier-aging', label: 'Supplier Aging Report', icon: 'suppliers' },
+    ],
+  },
+  {
+    section: 'Compliance',
+    icon: 'compliance',
+    items: [
+      { path: '/compliance/dashboard', label: 'Compliance Dashboard', icon: 'compliance' },
+      { path: '/compliance/public-interest-score', label: 'Public Interest Score', icon: 'trialBalance' },
+      { path: '/compliance/reporting-standards', label: 'Reporting Standards', icon: 'reports' },
+    ],
+  },
+  {
+    section: 'Related Parties',
+    icon: 'relatedParties',
+    items: [
+      { path: '/related-parties/register', label: 'Related Party Register', icon: 'relatedParties' },
+      { path: '/related-parties/transactions', label: 'Related Party Transactions', icon: 'payments' },
+    ],
+  },
+  {
+    section: 'Leases',
+    icon: 'leases',
+    items: [
+      { path: '/leases/register', label: 'Lease Register', icon: 'leases' },
+      { path: '/leases/amortization', label: 'Lease Amortization', icon: 'trendDown' },
+    ],
+  },
+  {
+    section: 'Foreign Exchange',
+    icon: 'foreignExchange',
+    items: [
+      { path: '/foreign-exchange/rates', label: 'Exchange Rates', icon: 'foreignExchange' },
+      { path: '/foreign-exchange/calculator', label: 'FX Calculator', icon: 'settings' },
     ],
   },
   {

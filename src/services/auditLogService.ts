@@ -1,6 +1,7 @@
 import type { AuditAction, AuditLogEntry, ID } from '@/types';
 import type { IAuditLogRepository } from '@/repositories/IAuditLogRepository';
-import { MockAuditLogRepository } from '@/repositories/mock/MockAuditLogRepository';
+import { SupabaseAuditLogRepository } from '@/repositories/SupabaseAuditLogRepository';
+import { supabase } from '@/config/supabase';
 
 export interface LogEntryInput {
   userId: ID;
@@ -43,5 +44,14 @@ export class AuditLogService {
   }
 }
 
-/** Singleton every feature service should depend on rather than importing repositories directly. */
-export const auditLogService = new AuditLogService(new MockAuditLogRepository());
+/**
+ * Singleton every feature service should depend on rather than importing
+ * repositories directly. Supabase-backed since Phase C
+ * (docs/SUPABASE_MIGRATION_GUIDE.md) — because this is one shared singleton
+ * every feature writes to, swapping it also moves every still-Mock module's
+ * (Sales/Purchases/Banking/Payroll/Tax — Phase D+, not started) audit calls
+ * onto the network; SupabaseAuditLogRepository's doc comment covers why its
+ * columns stay permissive (`text`, not uuid/FK/enum) specifically to keep
+ * those calls working unchanged.
+ */
+export const auditLogService = new AuditLogService(new SupabaseAuditLogRepository(supabase));

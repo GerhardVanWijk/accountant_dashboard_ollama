@@ -1,13 +1,9 @@
 import type { AssetDisposal, FixedAsset, ID, JournalEntry } from '@/types';
 import type { IAssetDisposalRepository } from '../repositories/IAssetDisposalRepository';
-import type { NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 
 /** Half a cent — same rounding tolerance as journalEntryService.ts. */
 const EPSILON = 0.005;
-
-/** Fixed GL account ids (src/mock-data/accounts.ts) this service posts against. */
-const GAIN_ON_DISPOSAL_ACCOUNT_ID = 'acc_4200';
-const LOSS_ON_DISPOSAL_ACCOUNT_ID = 'acc_5300';
 
 export interface JournalPoster {
   postJournalEntry(input: {
@@ -51,6 +47,7 @@ export class AssetDisposalService {
     private readonly disposalRepository: IAssetDisposalRepository,
     private readonly assetStore: AssetStore,
     private readonly journalPoster: JournalPoster,
+    private readonly accounts: AccountMapper,
   ) {}
 
   async getDisposals(): Promise<AssetDisposal[]> {
@@ -105,14 +102,14 @@ export class AssetDisposalService {
     }
     if (gainLoss > EPSILON) {
       lines.push({
-        accountId: GAIN_ON_DISPOSAL_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('GAIN_ON_DISPOSAL'),
         description: `Disposal of ${asset.assetNumber} - gain on disposal`,
         debit: 0,
         credit: gainLoss,
       });
     } else if (gainLoss < -EPSILON) {
       lines.push({
-        accountId: LOSS_ON_DISPOSAL_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('LOSS_ON_DISPOSAL'),
         description: `Disposal of ${asset.assetNumber} - loss on disposal`,
         debit: -gainLoss,
         credit: 0,

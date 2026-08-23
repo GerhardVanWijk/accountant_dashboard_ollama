@@ -32,9 +32,23 @@ same day)** — Phase 9 Wave 2 (Provisional Tax, §54) is now ✅ complete, and 
 Assets = Liabilities + Equity), Cash Flow Statement (indirect method, reconciled to real
 cash movement), plus Customer/Supplier Aging reports — see those sections below. Phases
 1-10 core now have real implementations to assess; Phase 10's Notes/Statement of Changes
-in Equity/comparatives, and Phases 11-12 (Compliance, Advanced Accounting) are still not
-started, consistent with §116's ordering — not reassessed in detail below beyond noting
-what's genuinely absent.
+in Equity/comparatives are still not started. **Updated 2026-08-22 — Phase 11
+(Compliance) core is now ✅ complete**: the Public Interest Score engine (§3 — the last
+piece deliberately deferred from Phase 1, now built after live-verifying the Companies
+Regulations 2011 methodology) and the Compliance Dashboard (§108) — see those sections
+below. **Updated 2026-08-22 (new session) — Phase 12 (Advanced Accounting) Wave 1
+(Deferred Tax, §50) is now ✅ complete**: a real temporary-difference-based deferred tax
+engine reusing the Fixed Asset Tax Register, posting only the period movement — see that
+section below. **Updated 2026-08-22 (same session) — Phase 12 Wave 2 (Expected Credit
+Losses, §46/IFRS 9) is now ✅ complete**: a real provision-matrix engine on trade
+receivables reusing the Customer Aging Report, same movement-only posting shape as
+Deferred Tax — see that section below. **Updated 2026-08-23 — Phase 12 Wave 3 (the
+remainder of the phase, dispatched as three parallel bees — Leases, Related Parties,
+Foreign Exchange — plus two solo Queen passes for Reporting Standards versioning and the
+Consolidation architecture audit) is now ✅ complete, closing out Phase 12 entirely.**
+Every §116 phase (1 through 12) now has a real implementation or, where the spec itself
+only asks for architecture (Consolidation), a real documented audit — see the Phase 12
+section below for full per-piece detail.
 
 ## Phase 1 — Accounting Core
 
@@ -50,8 +64,8 @@ what's genuinely absent.
 | **Financial Year** | ✅ exists (minimal) | `src/types/financialYear.ts`, `src/features/accounting/services/financialYearService.ts` |
 | **Accounting Periods** (open/soft-closed/closed/locked, §35 + §68) | ✅ exists, and enforced | `src/types/accountingPeriod.ts`, `accountingPeriodService.ts`; `journalEntryService.postJournalEntry()`/`reverseJournalEntry()` now reject posting outside an 'open' period |
 | **Audit Trail** (§37: append-only log of who/what/when/previous/new value, across create/edit/post/approve/reverse/period-close/reopen/permission changes) | ✅ exists, and wired in | `src/types/auditLog.ts`, `src/services/auditLogService.ts` (shared, append-only); every journal post/reversal and every period/financial-year/reporting-framework transition writes an entry |
-| Public Interest Score engine (§3) | ❌ still missing, deliberately | requires verifying the exact Companies Regulations calculation methodology against source legislation — not done, not guessed. `Company.publicInterestScore` exists as a manually-entered field only. |
-| Reporting framework determination (Full IFRS / IFRS for SMEs / other) (§2) | ❌ still missing, deliberately | same reason — depends on the Public Interest Score engine above. `Company.reportingFramework` defaults to `'not_yet_determined'` and can only be set via `CompanyService.setReportingFramework()`, which requires a recorded reason (the "authorized override" mechanism §2 requires) |
+| Public Interest Score engine (§3) | ✅ complete, 2026-08-22 (Phase 11) | `src/features/compliance/` — see the Phase 11 section below. `Company.publicInterestScore` (this row used to describe it as the only option) is now superseded by real per-financial-year `PublicInterestScore` history. |
+| Reporting framework determination (Full IFRS / IFRS for SMEs / other) (§2) | ✅ suggested automatically, 2026-08-22 (Phase 11) | `publicInterestScoreService.calculateScore()` SUGGESTS a framework from the real score (see Phase 11 below) — it never applies it. `Company.reportingFramework` still only ever changes via `CompanyService.setReportingFramework()`, which requires a recorded reason (§2's "authorized override" mechanism), now with a real UI entry point on the Public Interest Score page. |
 
 **Phase 1 core is now done**: Company, Financial Year, Accounting Periods (with real
 open/closed/locked enforcement at the posting boundary), Chart of Accounts, General
@@ -60,10 +74,10 @@ posting/reversal/period-transition/reporting-framework-change. 203 tests passing
 build/lint/type-check clean as of 2026-08-21.
 
 **Deliberately still open, and why that's the right call, not an oversight:**
-- **Public Interest Score + automatic reporting-framework determination** — both
-  require a verified reading of the Companies Regulations, 2011 methodology. Guessing
-  the formula would violate §110 ("no unsupported claims"). `reportingFramework` is a
-  manually-set, reason-required override in the meantime.
+- ~~Public Interest Score + automatic reporting-framework determination~~ — built
+  2026-08-22, Phase 11 (see that section below). `reportingFramework` still only ever
+  changes via the same manually-triggered, reason-required override — the score engine
+  suggests, never applies.
 - **Real user attribution** — `JournalEntryService`/audit entries accept a `userId`
   parameter and fall back to a `SYSTEM_USER_ID` sentinel when none is supplied, because
   there's no real authenticated session yet (`src/stores/authStore.ts` is a boolean
@@ -504,26 +518,246 @@ Statements (§43); Statement of Changes in Equity; comparative/YoY columns (no b
 exists anywhere in this app, so budget-vs-actual specifically is out of scope, not just
 deferred); export/PDF/print; a direct-method Cash Flow presentation (indirect only).
 
-## Phases 11-12 — not started, per §116's own build order
+## Phase 11 (Compliance) — core ✅ complete, 2026-08-22
 
-Nothing below has been built yet. Noted here only so a future session can see at a
-glance what's genuinely absent versus partially built, without re-deriving it from
-scratch:
+The last piece of §3 deliberately deferred since Phase 1 ("requires verifying the exact
+Companies Regulations methodology against source legislation, not guessed" —
+docs/SA_SPEC_GAP_ANALYSIS.md's own prior wording). That verification is now done:
+cross-checked the Companies Regulations, 2011 (GN R351) regulations 26-29 against CIPC's
+own summary page and several independent secondary sources (RSM South Africa, RandCo,
+The Glass Castle) — WebFetch could not reliably extract the primary Government Gazette
+PDF text directly (scanned/compressed), so this is a multi-source cross-check, not a
+single verified primary-source quote; see `complianceDeterminations.ts`'s doc comment
+for exactly what's high-confidence versus flagged `requires_professional_review`.
 
-- **Phase 11 (Compliance)** — Public Interest Score and automatic reporting-framework
-  determination remain deliberately unbuilt (§3; see Phase 1 section above — still the
-  right call, still requires verified Companies Regulations methodology, not guessed).
-  No Compliance Dashboard (§108).
-- **Phase 12 (Advanced)** — not started: no deferred tax, lease accounting (§32,
-  §47), financial instruments (§46), consolidation (§87), related parties (§88).
+- **Public Interest Score engine (§3)** — `src/features/compliance/`.
+  `publicInterestScoreService.calculateScore()` computes a real reg 26(2) score for a
+  company FinancialYear: employee points from real `Employee` employment-date data
+  (`calculateAverageEmployeeCount()`, monthly-sampled), turnover/third-party-liability
+  points from real posted GL data via the Phase 10 Reports module's own
+  `calculateIncomeStatement()`/`calculateBalanceSheet()` (never re-implemented), and
+  shareholder/member points from a manual input (no shareholder register exists
+  anywhere in this codebase — same honestly-flagged gap Dividends Tax already carries).
+  Append-only history per company (`IPublicInterestScoreRepository`, no update/delete —
+  same shape as `IJournalEntryRepository`), satisfying §3's "retain historical scores."
+- **Audit/independent-review suggestion (reg 28-29)** — `determineAssuranceLevel()`:
+  public/state-owned always audited; fiduciary assets over R5m always audited; score
+  ≥350 always audited; score 100-349 audited only if internally compiled (defaults to
+  the stricter "audit" outcome when the compilation method isn't recorded, rather than
+  guessing); score <100 requires independent review, with the Companies Act s30(2A)
+  "owner-managed" exemption explicitly flagged as unmodeled (no shareholder-vs-director
+  overlap data exists) rather than silently assumed.
+- **Reporting-framework suggestion (reg 27, §2/§3)** — `determineReportingFramework()`
+  SUGGESTS a framework; it is never applied automatically anywhere in this codebase.
+  Public/state-owned → full IFRS; score ≥100 or fiduciary assets over R5m → IFRS for
+  SMEs; score <100 and independently compiled → IFRS for SMEs; score <100 and
+  internally compiled (or compilation method unrecorded) → flagged
+  `requires_professional_review`, since Regulation 27 itself leaves that one band to
+  the company's own discretion. Applying a suggestion still requires
+  `CompanyService.setReportingFramework()`'s existing reason-required override — the
+  Public Interest Score page is now the first real UI entry point to that method (it
+  previously had none, tested only via `companyService.test.ts`).
+  `Company.financialStatementsCompilation` (`'internal' | 'independent'`, optional) is
+  a new manually-set field feeding both determinations.
+- **Compliance Dashboard (§108)** — `src/features/compliance/pages/ComplianceDashboardPage.tsx`
+  at `/compliance/dashboard`. A read-only aggregation, not a new calculation source (per
+  docs/DO_NOT_BREAK.md) — every figure is recomputed live by the SAME function its own
+  dedicated page already uses (`computeVatReport`, `computeEmp201Report`,
+  `reconcileAccountsReceivable`/`reconcileAccountsPayable`, the latest
+  `PublicInterestScore`/`TaxComputation`/`ProvisionalTaxPeriod`). Two §108 bullets are
+  deliberately shown as absent rather than faked: "certificates" (no IRP5/tax-
+  certificate generation exists anywhere in this app) and a suspense account (§40, not
+  modeled in this Chart of Accounts). Inventory/Fixed-Assets/Bank-Reconciliation are
+  link-outs to their own dedicated pages rather than duplicated cards, matching
+  `ReportsPage`'s existing hub-of-links precedent for pieces that already have a real
+  page of their own.
+- 25 new tests (`calculateAverageEmployeeCount`, `complianceDeterminations`,
+  `publicInterestScoreService` — including a listed-public-company forces-audit case and
+  an append-only-history/newest-first case), 727/727 total, type-check/lint/build clean.
+
+**Deliberately still open, not Phase 11 gaps in the strict sense**: the two
+`requires_professional_review` bands noted above (Regulation 27's discretionary band, the
+s30(2A) owner-managed exemption); no Public Interest Score reversal/correction path (a
+re-calculation adds a new record rather than editing, same one-way-door shape every other
+compliance record in this codebase has); Compliance Dashboard shows the CURRENT month/open
+financial year only, no historical trend view.
+
+## Phase 12 (Advanced Accounting) — ✅ complete, 2026-08-23 (Deferred Tax, Expected Credit Losses, Related Parties, Foreign Exchange infrastructure, Leases, Reporting Standards versioning; Consolidation audited per the spec's own "architecture only" wording)
+
+§116's Phase 12 checklist spans 10 items of very different sizes (IFRS/IFRS-for-SMEs
+disclosure framework, deferred tax, leases, financial instruments, consolidation, related
+parties, foreign exchange, impairment, advanced disclosures). Given the size, the user
+chose to pace this phase one piece at a time rather than attempt it in one pass — Deferred
+Tax first, since it's the one piece this codebase can build on real existing data rather
+than a brand-new module with nothing to build on yet.
+
+- **Deferred Tax (§50)** — `src/features/tax/deferredTax/`. Explicitly NOT
+  `accountingProfit x taxRate` (the spec forbids that shortcut): `DeferredTaxComputationService`
+  auto-suggests one temporary-difference item per Fixed Asset with a real difference between
+  its accounting carrying value and its SARS wear-and-tear tax written-down value, reusing
+  `taxRegisterService.getTaxRegister()` (Phase 7) as the source rather than re-deriving it —
+  the one source of temporary differences this codebase can compute without guessing. Manual
+  items (a provision, an assessed tax loss) can be added the same way `TaxComputation`'s
+  adjustment lines work — auto-suggest what's real, let the user add the rest. A taxable
+  temporary difference (carrying amount > tax base) always recognizes a Deferred Tax
+  Liability; a deductible one (carrying amount < tax base) only contributes a Deferred Tax
+  Asset if the user explicitly marks it `recognized` (§50's "probable future taxable profit"
+  recognition criteria — a forward-looking judgment this system cannot make on its own,
+  defaults to false). Draft-then-post lifecycle matching every other computation in this
+  codebase; `postComputation()` posts only the MOVEMENT since the prior POSTED computation
+  for the company (not the full balance every time — deferred tax accumulates on the balance
+  sheet, unlike `TaxComputation`'s fresh annual charge), as one balanced entry built via the
+  "debits and credits as vectors" technique `journalEntryService.ts` already established.
+  Three new GL accounts: `acc_1600` Deferred Tax Asset, `acc_2400` Deferred Tax Liability,
+  `acc_5600` Deferred Tax Expense (a credit balance there is a tax benefit, not an expense).
+  Deliberately does NOT apply the SBC progressive bracket table to any item — every item uses
+  the flat corporate rate regardless of `Company.isSbcEligible`, since deferred tax should in
+  principle use the rate expected to apply when a temporary difference reverses, which is
+  genuinely ambiguous for a progressive bracket years into the future — a documented
+  simplification, not an oversight (§110/§111). 20 new tests, 747/747 total, type-check/
+  lint/build clean.
+
+**Deliberately still open, not Deferred Tax gaps in the strict sense**: no reversal path for
+a posted `DeferredTaxComputation` (same one-way-door shape every other posted computation in
+this codebase has); temporary differences are sourced from Fixed Assets only — no automatic
+source for provisions or assessed tax losses (manual entry only, same honest "not modeled"
+gap as everywhere else a shareholder register or profit forecast would be needed);
+recognition of a Deferred Tax Asset is a per-item manual flag, not a modeled probability
+assessment.
+
+- **Expected Credit Losses (§46/IFRS 9)** — `src/features/financialInstruments/`. This
+  codebase only models one financial instrument concretely — trade receivables — so this is
+  scoped to IFRS 9's own "simplified approach" for trade receivables (a provision matrix by
+  aging bucket), the one part of §46 that has real data to build on; loans/investments/other
+  financial assets aren't modeled anywhere and weren't attempted. `EclComputationService`
+  pulls real gross receivables per bucket from the SAME Customer Aging Report calculation
+  the Reports module already uses (`getCustomerAgingReport()`, never re-derived); loss RATES
+  per bucket are always a manual entry — this codebase has no historical default-rate data to
+  derive them from, so it never guesses one, defaulting to 0% (or the prior posted
+  computation's rate, carried forward for continuity across periods). Same draft-then-post,
+  movement-only-posting shape as `DeferredTaxComputationService` — `postComputation()` posts
+  only the change in the provision since the prior posted computation (including a genuine
+  reversal, proven by a test where the overdue balance shrinks year-over-year), as one
+  two-line entry: DR Impairment Loss (`acc_5700`, new) / CR Allowance for Doubtful Debts
+  (`acc_1150`, new contra-asset, nets against Accounts Receivable on the Balance Sheet the
+  same way Accumulated Depreciation nets against Fixed Assets — required zero changes to
+  `calculateBalanceSheet()`, which already handles any `subType: 'contra_asset'` account
+  generically). 18 new tests, 765/765 total, type-check/lint/build clean.
+
+**Deliberately still open, not an ECL gap in the strict sense**: no reversal path for a
+posted `EclComputation`; loans/investments/amortised cost/fair value (§46's other bullets)
+have no real data anywhere in this codebase to compute against — not attempted, not faked.
+
+**Related Parties (§88) — ✅ complete, 2026-08-22.** `src/features/relatedParties/`. A
+manual disclosure-support register: `RelatedParty` records (director/shareholder/
+subsidiary/associate/key_management/other_related_entity, with a free-text relationship-
+detail field, since no shareholder register or org-chart exists anywhere in this codebase
+to derive directorships/ownership percentages from automatically) and
+`RelatedPartyTransaction` records against them, plus a pure
+`buildRelatedPartyDisclosureSummary()` grouping transactions per related party (count +
+total amount) for financial-statement disclosure. Genuinely read-only, no GL posting of
+any kind (closest precedent: Capital Gains Tax) — a referenced-record delete guard blocks
+removing a related party with transactions logged against it, same guard class every other
+service in this codebase already uses. `natureOfTransaction` is deliberately free text, not
+a closed enum — real related-party transactions are too varied to force into a taxonomy
+this codebase hasn't verified against actual disclosure standards. 21 new tests.
+Deliberately still open: no automatic detection of related parties from any existing data;
+no enforced link against real Invoices/Bills (`sourceReference` is a free-text
+cross-check pointer only).
+
+**Foreign Exchange (§33) — infrastructure ✅ complete, real-document integration
+deliberately NOT attempted, 2026-08-22.** `src/features/foreignExchange/`. A point-in-time
+`ExchangeRate` engine (`getRateForDate()` resolves the most recent rate on/before a date,
+never interpolates/guesses), pure realized/unrealized FX gain-loss calculator functions
+with correct asset-vs-liability sign handling (proven by a hand-computable test: USD 1000
+recognized at 18.00 then settled at 18.50 — an asset gains R500, a liability loses R500),
+an Exchange Rates management page, and a standalone FX Calculator tool usable today with
+zero other module dependencies. **Explicitly NOT built, and said so rather than faked**: no
+Customer/Supplier/Invoice/Bill/Bank Account in this codebase carries a transaction currency
+distinct from the functional currency (ZAR) — building that would mean touching Sales/
+Purchases/Banking line items broadly, a much larger separate cross-cutting change, not
+attempted in this pass per this codebase's "never fake reachability" discipline (see
+`docs/KNOWN_ISSUES.md`'s history of catching exactly this anti-pattern elsewhere). Two new
+GL accounts (`acc_4300` FX Gain, `acc_5900` FX Loss) exist ready for when that integration
+happens; nothing posts to them yet. All rates are manually entered — no live FX feed. 18
+new tests.
+
+**Reporting Standards / IFRS-IFRS-for-SMEs versioning (§48/§49) — ✅ complete, 2026-08-22.**
+`src/features/compliance/` (a new `ReportingStandardService` alongside the existing Public
+Interest Score engine, since both are Company/Compliance-adjacent). Resolves which EDITION
+of Full IFRS or IFRS for SMEs applies to a reporting period — the IFRS-for-SMEs 2025 third
+edition's effective date (periods beginning on/after 1 January 2027, early adoption
+permitted) is quoted directly from the master spec's own §49 text; IFRS 18's replacement of
+IAS 1's presentation model (same 1 January 2027 date, early application permitted) was NOT
+in the spec text and was independently verified live (WebSearch, cross-checked against
+ifrs.org/PwC/ICAEW/KPMG, all agreeing) rather than recalled from training data, per §110.
+`supersede()` mirrors `TaxRateService`'s exact versioning discipline — a new edition never
+edits a prior one's fields, only marks it superseded, so a past reporting period always
+resolves against whichever edition actually applied at the time. Early adoption is an
+explicit, recorded toggle, never assumed. **Deliberately does NOT** attempt to encode the
+actual clause-level disclosure requirements of any edition (e.g. "IFRS 18 requires a
+management-performance-measures note") — fabricating that checklist without a complete
+verified source would itself violate §110; what's built is the honest, buildable part §49
+explicitly asks for (the versioning/effective-date engine), not invented content. 8 new
+tests.
+
+**Consolidation architecture (§87) — audited, no code changes, 2026-08-22.** The master
+spec's own wording for this section is "architect for future support... do not design the
+database in a way that makes consolidation impossible later" — not a feature to build. A
+real audit (not a guess) is recorded as ADR 003 in `docs/DECISIONS.md`: confirms nothing in
+the current schema blocks future consolidation (every field a future consolidation build
+would need — `Company.parentCompanyId`, a `companyId` on every domain type, an ownership
+percentage, a separate elimination-entries structure — is additive and backward-compatible,
+the same pattern already used repeatedly in this codebase), but also confirms the real
+prerequisite (multi-company tenant scoping, §75, already flagged since Phase 1) does not
+exist yet and is a separate, larger, deliberately-deferred migration, not something this
+audit schedules or attempts.
+
+**Leases (§32, §47/IFRS 16) — ✅ complete, 2026-08-23.** `src/features/leases/`, lessee
+accounting only (this app never plays the role of lessor). A full draft → commence →
+amortize → terminate lifecycle mirroring the Fixed Asset Register's shape exactly.
+`LeaseContract.initialLeaseLiability`/`initialRightOfUseAsset` are computed at creation
+from the present value of a fixed monthly-payment annuity
+(`calculateLeaseLiabilityPresentValue()` — ordinary annuity formula, `discountRatePercent`
+always a manual input, same "don't guess" principle as Deferred Tax's loss rates, since no
+market-rate lookup exists in this codebase); `postCommencement()` posts DR Right-of-Use
+Assets (`acc_1700`) / CR Lease Liability (`acc_2450`); `runAmortization(periodEnd)` posts
+ONE combined entry per period across every active lease (interest unwind + principal
+repayment + straight-line ROU depreciation, aggregated via the SAME debit-vector technique
+`journalEntryService.ts`/Deferred Tax already established, proven to sum to exactly zero by
+test); `terminateLease()` derecognizes the remaining ROU carrying value and lease liability
+with a gain/loss line, reusing the EXISTING Fixed-Asset Gain/Loss-on-Disposal accounts
+(`acc_4200`/`acc_5300`) rather than adding new ones — the same P&L concept either way. The
+current/non-current classification (§32) is a real simulated computation
+(`calculateCurrentPortionOfLiability()`, walking the amortization schedule forward 12
+months), shown informationally rather than as a separate GL account — no other liability in
+this Chart of Accounts is split into two GL accounts that way either. 32 new tests.
+
+**Deliberately still open, not Leases gaps in the strict sense**: no lease escalation
+clauses (a single fixed payment for the whole term); no initial direct costs or lease
+incentives (the ROU asset always equals the initial liability exactly); no in-place
+modification/remeasurement (a changed lease requires terminate-and-recreate); no sublease
+accounting; ROU depreciation always uses the lease term itself, not a separately-modeled
+shorter useful life for the underlying asset.
+
+**Every Phase 12 checklist item (§116) now has a real answer** — built where the spec asks
+for a feature, audited-and-documented where it explicitly asks only for architecture
+(Consolidation), and infrastructure-with-an-honest-boundary where real integration would
+require a much larger separate change (Foreign Exchange). 844/844 tests passing (up from
+765 at the start of this wave), type-check/lint/build clean throughout.
+
+**Not started**: advanced disclosures generally (beyond what Reporting Standards above
+resolves) — no Notes-to-Financial-Statements content-generation engine exists (Phase 10
+already flagged Notes/Statement of Changes in Equity as out of scope); Deferred Tax's/
+ECL's/Leases' own already-flagged individual gaps above.
 
 Also cross-cutting and still absent regardless of phase: role-based approval workflows
-(§38-§39; only a stub `Role`/`User` type exists), suspense account (§40), a central
-Reconciliation Centre (§71 — Banking's own reconciliation and the new AR/AP subledger
-reconciliation, both 2026-08-21, are two independent checks, not the single tied-together
-view §71 describes — Inventory/Payroll/Tax reconciliation don't exist to tie in yet
-anyway), document/attachment management (§62), multi-company tenant scoping (§75 —
-noted in Phase 1 section above).
+(§38-§39; only a stub `Role`/`User` type exists), a suspense account (§40, now explicitly
+surfaced as absent on the Compliance Dashboard rather than only in this document), a
+central Reconciliation Centre (§71 — Banking's own reconciliation, the AR/AP subledger
+reconciliation, and the Compliance Dashboard are now three separate views touching
+reconciliation, not the single tied-together view §71 describes), document/attachment
+management (§62), multi-company tenant scoping (§75 — noted in Phase 1 section above).
 
 ## What this document is not
 

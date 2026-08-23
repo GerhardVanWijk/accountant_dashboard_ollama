@@ -1,7 +1,7 @@
 import { DividendsWithholdingTaxConfigService } from './dividendsWithholdingTaxConfigService';
 import { DividendDeclarationService } from './dividendDeclarationService';
 import { dividendsWithholdingTaxConfigRepository, dividendDeclarationRepository } from '../repositories/instances';
-import { journalEntryService } from '@/features/accounting/services';
+import { journalEntryService, accountMappingService } from '@/features/accounting/services';
 
 export type { CreateDividendsWithholdingTaxRateConfigDTO } from './dividendsWithholdingTaxConfigService';
 export type {
@@ -24,4 +24,5 @@ export const dividendDeclarationService = new DividendDeclarationService(
   dividendDeclarationRepository,
   journalEntryService,
   dividendsWithholdingTaxConfigService,
+  accountMappingService,
 );

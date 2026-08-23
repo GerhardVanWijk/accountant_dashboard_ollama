@@ -1,14 +1,16 @@
 import type { Account, ID, JournalEntry } from '@/types';
 
 /**
- * Fixed GL account ids (src/mock-data/accounts.ts) that get their own
- * dedicated line on the Income Statement rather than being folded into a
- * category total — mirrors the CASH_AND_BANK_ACCOUNT_ID pattern in
- * src/features/dashboard/utils/calculateMonthlyFinancials.ts.
+ * Chart of Accounts codes that get their own dedicated line on the Income
+ * Statement rather than being folded into a category total — matched by
+ * `code`, not a fixed id (account ids are real Supabase-generated uuids,
+ * not the old Mock-era `'acc_XXXX'` literal). Mirrors the
+ * DEFAULT_CONTRA_ACCOUNT_CODE pattern in
+ * src/features/employees/components/PostPayrollRunForm.tsx.
  */
-export const COST_OF_GOODS_SOLD_ACCOUNT_ID = 'acc_5000';
+export const COST_OF_GOODS_SOLD_ACCOUNT_CODE = '5000';
 /** New in Phase 9 Wave 1 — the corporate income tax charge (§51/§52). */
-export const INCOME_TAX_EXPENSE_ACCOUNT_ID = 'acc_5500';
+export const INCOME_TAX_EXPENSE_ACCOUNT_CODE = '5500';
 
 export interface StatementAccountLine {
   accountId: ID;
@@ -109,9 +111,9 @@ export function calculateIncomeStatement(
     } else if (account.type === 'expense') {
       const amount = -net; // debit - credit, the expense's own normal direction
       const line = { accountId: account.id, code: account.code, name: account.name, amount };
-      if (account.id === COST_OF_GOODS_SOLD_ACCOUNT_ID) {
+      if (account.code === COST_OF_GOODS_SOLD_ACCOUNT_CODE) {
         costOfGoodsSoldLines.push(line);
-      } else if (account.id === INCOME_TAX_EXPENSE_ACCOUNT_ID) {
+      } else if (account.code === INCOME_TAX_EXPENSE_ACCOUNT_CODE) {
         incomeTaxExpenseLines.push(line);
       } else {
         operatingExpenseLines.push(line);

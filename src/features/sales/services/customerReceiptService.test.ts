@@ -4,6 +4,8 @@ import { MockCustomerReceiptRepository } from '@/repositories/mock/MockCustomerR
 import { InvoiceService } from '@/services/invoiceService';
 import { MockInvoiceRepository } from '@/repositories/mock/MockInvoiceRepository';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
+import { AccountService } from '@/features/accounting/services/accountService';
+import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
@@ -39,10 +41,11 @@ async function setup() {
   const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
   const auditLog = new AuditLogService(new MockAuditLogRepository());
   const journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
+  const accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
 
   const invoiceRepository = new MockInvoiceRepository([]);
   const noOpInventoryMover = { calculateCogs: async () => 0, recordSaleMovement: async () => {} };
-  const invoiceService = new InvoiceService(invoiceRepository, journalEntryService, noOpInventoryMover);
+  const invoiceService = new InvoiceService(invoiceRepository, journalEntryService, noOpInventoryMover, accountMapper);
   const invoice = await invoiceService.createInvoice({
     invoiceNumber: 'INV-2026-RCT-TEST',
     customerId: 'cust_test',
@@ -58,7 +61,7 @@ async function setup() {
   });
 
   const receiptRepository = new MockCustomerReceiptRepository([]);
-  const service = new CustomerReceiptService(receiptRepository, journalEntryService, invoiceService);
+  const service = new CustomerReceiptService(receiptRepository, journalEntryService, invoiceService, accountMapper);
 
   return { service, journalEntryService, invoiceService, invoiceRepository, receiptRepository, invoice };
 }

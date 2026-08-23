@@ -3,6 +3,8 @@ import { BillService, type FixedAssetCapitalizer } from './billService';
 import { MockBillRepository } from '@/repositories/mock/MockBillRepository';
 import { seedBills } from '@/mock-data/bills';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
+import { AccountService } from '@/features/accounting/services/accountService';
+import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
@@ -86,6 +88,7 @@ describe('BillService', () => {
   let billService: BillService;
   let repository: MockBillRepository;
   let journalEntryService: JournalEntryService;
+  let accountMapper: AccountMappingService;
   let inventoryReceiver: ReturnType<typeof makeInventoryReceiverStub>;
 
   beforeEach(() => {
@@ -100,6 +103,10 @@ describe('BillService', () => {
       periodRepository,
       auditLog,
     );
+    // Real AccountMappingService (docs/SUPABASE_MIGRATION_GUIDE.md Phase
+    // E.5) resolving against the same seedAccounts codes the old
+    // hardcoded acc_XXXX constants used to point at directly.
+    accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
     inventoryReceiver = makeInventoryReceiverStub();
     billService = new BillService(
       repository,
@@ -108,6 +115,7 @@ describe('BillService', () => {
       inventoryReceiver,
       makePurchaseOrderLookupStub(),
       makeFixedAssetCapitalizerStub(),
+      accountMapper,
     );
   });
 
@@ -367,7 +375,7 @@ describe('BillService', () => {
 
     it('capitalizes a tracked-inventory line to the Inventory account instead of Operating Expenses, and records a receipt after posting', async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub());
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub(), accountMapper);
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-INV-TRACKED',
@@ -402,7 +410,7 @@ describe('BillService', () => {
 
     it("passes a line item's warehouseId through to recordReceiptMovement", async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub());
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub(), accountMapper);
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-INV-WH',
@@ -440,7 +448,7 @@ describe('BillService', () => {
     it('clears GRNI instead of debiting Inventory, and does NOT re-record the stock receipt, when the linked PO was already GRNI-received', async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
       const purchaseOrders = makePurchaseOrderLookupStub({ po_already_received: 'je_grni_receipt' });
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, purchaseOrders, makeFixedAssetCapitalizerStub());
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, purchaseOrders, makeFixedAssetCapitalizerStub(), accountMapper);
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-FROM-RECEIVED-PO',
@@ -477,7 +485,7 @@ describe('BillService', () => {
 
     it('splits a mixed bill between Inventory (tracked) and Expense (non-tracked) lines', async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub());
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub(), accountMapper);
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-INV-MIXED',
@@ -520,6 +528,7 @@ describe('BillService', () => {
         makeInventoryReceiverStub(),
         makePurchaseOrderLookupStub(),
         capitalizer,
+        accountMapper,
       );
 
       const bill = await localBillService.createBill({
@@ -586,6 +595,7 @@ describe('BillService', () => {
         trackedReceiver,
         makePurchaseOrderLookupStub(),
         capitalizer,
+        accountMapper,
       );
 
       const bill = await localBillService.createBill({
@@ -636,7 +646,7 @@ describe('BillService', () => {
 
     it('does not record a stock receipt if GL posting fails', async () => {
       const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub());
+      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub(), accountMapper);
 
       const bill = await localBillService.createBill({
         billNumber: 'BILL-INV-FAIL',

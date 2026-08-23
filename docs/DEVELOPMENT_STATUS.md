@@ -15,7 +15,14 @@
 | **Banking** | ✅ `/banking/*` | ✅ | ✅ | ✅ | ✅ | ✅ 281 tests (shared) | 🟢 Done |
 | **Fixed Assets** | ✅ `/assets/*` | ✅ | ✅ | ✅ | ✅ | ✅ 31 tests (shared) | 🟢 Done |
 | **Payroll (Employees)** | ✅ `/payroll/*` | ✅ | ✅ | ✅ | ✅ | ✅ 60 tests (shared) | 🟢 Done |
-| **Reports** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
+| **Reports** | ✅ `/reports/*` | ✅ | n/a (read-only) | ✅ | n/a (reads other modules' GL/document data) | ✅ 75 tests (shared) | 🟢 Done |
+| **Compliance** | ✅ `/compliance/*` | ✅ | ✅ (score calc + framework override) | ✅ | ✅ (append-only PI Score history) | ✅ 25 tests (shared) | 🟢 Done |
+| **Deferred Tax** | ✅ `/tax/deferred-tax` | ✅ | ✅ (draft-then-post) | ✅ | ✅ (draft-then-post history) | ✅ 20 tests (shared) | 🟢 Done |
+| **Expected Credit Losses** | ✅ `/tax/expected-credit-losses` | ✅ | ✅ (draft-then-post) | ✅ | ✅ (draft-then-post history) | ✅ 18 tests (shared) | 🟢 Done |
+| **Related Parties** | ✅ `/related-parties/*` | ✅ | ✅ (plain CRUD) | ✅ | ✅ | ✅ 21 tests (shared) | 🟢 Done |
+| **Foreign Exchange** | ✅ `/foreign-exchange/*` | ✅ | ✅ (rate CRUD) | ✅ | ✅ | ✅ 18 tests (shared) | 🟢 Done |
+| **Reporting Standards** | ✅ `/compliance/reporting-standards` | ✅ | ✅ (supersede) | ✅ | ✅ | ✅ 8 tests (shared) | 🟢 Done |
+| **Leases** | ✅ `/leases/*` | ✅ | ✅ (draft-then-commence) | ✅ | ✅ (register + amortization history) | ✅ 32 tests (shared) | 🟢 Done |
 | **Admin & Audit** | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | ⏳ Pending | 🔴 Incomplete |
 
 *Status Legend: 🟢 Done (20/20 DoD Points Met) | 🟡 In-Progress | 🔴 Incomplete / Pending*

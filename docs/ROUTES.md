@@ -33,6 +33,17 @@
 | `/payroll/emp501` | `employees` | EMP501 Reconciliation | Payroll |
 | `/tax/rates` | `tax` | Tax Rates | Tax |
 | `/tax/vat-return` | `tax` | VAT201 Reporting | Tax |
+| `/tax/deferred-tax` | `tax` | Deferred Tax | Tax |
+| `/tax/expected-credit-losses` | `tax` | Expected Credit Losses | Tax |
 | `/reports` | `reports` | Financial Statements Hub | Reports |
+| `/compliance/dashboard` | `compliance` | Compliance Dashboard | Compliance |
+| `/compliance/public-interest-score` | `compliance` | Public Interest Score | Compliance |
+| `/compliance/reporting-standards` | `compliance` | Reporting Standards | Compliance |
+| `/related-parties/register` | `relatedParties` | Related Party Register | Related Parties |
+| `/related-parties/transactions` | `relatedParties` | Related Party Transactions | Related Parties |
+| `/foreign-exchange/rates` | `foreignExchange` | Exchange Rates | Foreign Exchange |
+| `/foreign-exchange/calculator` | `foreignExchange` | FX Calculator | Foreign Exchange |
+| `/leases/register` | `leases` | Lease Register | Leases |
+| `/leases/amortization` | `leases` | Lease Amortization | Leases |
 | `/admin/users` | `admin` | User & Role Management | Admin |
 | `/admin/audit` | `audit` | System Audit Trail | Admin |

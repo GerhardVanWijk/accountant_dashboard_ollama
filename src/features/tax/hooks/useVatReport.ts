@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { invoiceService } from '@/services';
 import { creditNoteService } from '@/features/sales/services';
 import { billService } from '@/features/purchases/services';
-import { journalEntryService } from '@/features/accounting/services';
+import { journalEntryService, accountMappingService } from '@/features/accounting/services';
 import { taxRateService } from '../services';
 import { computeVatReport, reconcileVatControlAccounts, type VatReconciliation, type VatReport } from '../services/vatReportService';
 
@@ -43,7 +43,7 @@ export function useVatReport(periodStart: Date, periodEnd: Date): UseVatReportRe
         if (cancelled) return;
         const computed = computeVatReport(periodStart, periodEnd, invoices, creditNotes, bills, allTaxRates);
         setReport(computed);
-        return reconcileVatControlAccounts(journalEntryService, periodStart, periodEnd, computed);
+        return reconcileVatControlAccounts(journalEntryService, accountMappingService, periodStart, periodEnd, computed);
       })
       .then((recon) => {
         if (!cancelled && recon) setReconciliation(recon);

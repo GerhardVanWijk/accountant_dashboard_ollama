@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { journalEntryService } from '../services';
+import { journalEntryService, accountMappingService } from '../services';
 import { reconcileAccountsReceivable, reconcileAccountsPayable, type SubledgerReconciliation } from '../services/subledgerReconciliation';
 import { invoiceService } from '@/services';
 import { billService } from '@/features/purchases/services';
@@ -34,8 +34,8 @@ export function useSubledgerReconciliation(): UseSubledgerReconciliationResult {
     Promise.all([invoiceService.getInvoices(), billService.getBills()])
       .then(([invoices, bills]) =>
         Promise.all([
-          reconcileAccountsReceivable(journalEntryService, invoices),
-          reconcileAccountsPayable(journalEntryService, bills),
+          reconcileAccountsReceivable(journalEntryService, accountMappingService, invoices),
+          reconcileAccountsPayable(journalEntryService, accountMappingService, bills),
         ]),
       )
       .then(([arResult, apResult]) => {

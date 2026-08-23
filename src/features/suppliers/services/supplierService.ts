@@ -1,6 +1,7 @@
 import type { Supplier } from '@/types';
 import type { ISupplierRepository } from '../repositories/ISupplierRepository';
-import { MockSupplierRepository } from '../repositories/MockSupplierRepository';
+import { SupabaseSupplierRepository } from '../repositories/SupabaseSupplierRepository';
+import { supabase } from '@/config/supabase';
 import { hasOpenBills, billsToOpenBills } from '../utils/calculateAging';
 import { billService } from '@/features/purchases/services';
 
@@ -64,9 +65,10 @@ export class SupplierService {
 }
 
 /**
- * Wires SupplierService to its Phase 1 mock repository. Hooks
+ * Wires SupplierService to its Supabase repository
+ * (docs/SUPABASE_MIGRATION_GUIDE.md Phase D). Hooks
  * (see ../hooks/useSuppliers.ts) depend on this singleton instead of
  * importing a repository directly — components never touch repositories
  * per docs/DO_NOT_BREAK.md.
  */
-export const supplierService = new SupplierService(new MockSupplierRepository());
+export const supplierService = new SupplierService(new SupabaseSupplierRepository(supabase));

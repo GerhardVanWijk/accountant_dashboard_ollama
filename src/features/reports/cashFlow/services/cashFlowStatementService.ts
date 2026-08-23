@@ -25,30 +25,61 @@ import { assetDisposalService } from '@/features/assets/services';
  * asset/liability account is future scope, not attempted here.
  */
 
-/** Fixed GL account ids (src/mock-data/accounts.ts) this statement classifies. */
-const CASH_AND_BANK_ACCOUNT_ID = 'acc_1000';
-const ACCOUNTS_RECEIVABLE_ACCOUNT_ID = 'acc_1100';
-const INVENTORY_ACCOUNT_ID = 'acc_1200';
-const FIXED_ASSETS_ACCOUNT_ID = 'acc_1500';
-const ACCOUNTS_PAYABLE_ACCOUNT_ID = 'acc_2000';
-const OWNERS_EQUITY_ACCOUNT_ID = 'acc_3000';
-const GAIN_ON_DISPOSAL_ACCOUNT_ID = 'acc_4200';
-const DEPRECIATION_EXPENSE_ACCOUNT_ID = 'acc_5200';
-const LOSS_ON_DISPOSAL_ACCOUNT_ID = 'acc_5300';
-const DIVIDENDS_PAYABLE_ACCOUNT_ID = 'acc_2500';
 /**
- * Dividends Tax Payable (Withholding) — NOT one of the fixed account ids
- * the dispatch spec listed, but read directly from the real
+ * Chart of Accounts codes this statement classifies — matched by `code`,
+ * not a fixed id (account ids are real Supabase-generated uuids, not the
+ * old Mock-era `'acc_XXXX'` literal). `resolveAccountIdsByCode()` below
+ * turns these into real ids from the `accounts` list this module always
+ * has in scope, before filtering any journal line.
+ */
+const CASH_AND_BANK_ACCOUNT_CODE = '1000';
+const ACCOUNTS_RECEIVABLE_ACCOUNT_CODE = '1100';
+const INVENTORY_ACCOUNT_CODE = '1200';
+const FIXED_ASSETS_ACCOUNT_CODE = '1500';
+const ACCOUNTS_PAYABLE_ACCOUNT_CODE = '2000';
+const OWNERS_EQUITY_ACCOUNT_CODE = '3000';
+const GAIN_ON_DISPOSAL_ACCOUNT_CODE = '4200';
+const DEPRECIATION_EXPENSE_ACCOUNT_CODE = '5200';
+const LOSS_ON_DISPOSAL_ACCOUNT_CODE = '5300';
+const DIVIDENDS_PAYABLE_ACCOUNT_CODE = '2500';
+/**
+ * Dividends Tax Payable (Withholding) — NOT one of the fixed account
+ * codes the dispatch spec listed, but read directly from the real
  * DividendDeclarationService.pay() posting
  * (src/features/tax/dividendsTax/services/dividendDeclarationService.ts):
  * that entry debits Dividends Payable for the FULL GROSS dividend, credits
  * Cash and Bank for only the net-of-withholding amount, and credits this
  * account for the withheld portion — i.e. the withheld amount is not yet
- * real cash out. Netting it out of the acc_2500 debit is required for the
- * reconciliation check to hold; see computeCashFlowStatement()'s financing
- * section below for the derivation.
+ * real cash out. Netting it out of the Dividends Payable debit is required
+ * for the reconciliation check to hold; see computeCashFlowStatement()'s
+ * financing section below for the derivation.
  */
-const DIVIDENDS_TAX_PAYABLE_ACCOUNT_ID = 'acc_2510';
+const DIVIDENDS_TAX_PAYABLE_ACCOUNT_CODE = '2510';
+
+/**
+ * Resolves every code above to a real account id from the `accounts` list
+ * already in scope — a code with no matching account resolves to
+ * `undefined`, and every movement helper below treats "no id" as a zero
+ * contribution (same "missing account surfaces as a variance, not a
+ * crash" philosophy this file's own doc comment already describes for
+ * untracked working-capital accounts).
+ */
+function resolveAccountIdsByCode(accounts: Account[]) {
+  const byCode = new Map(accounts.map((a) => [a.code, a.id]));
+  return {
+    cashAndBank: byCode.get(CASH_AND_BANK_ACCOUNT_CODE),
+    accountsReceivable: byCode.get(ACCOUNTS_RECEIVABLE_ACCOUNT_CODE),
+    inventory: byCode.get(INVENTORY_ACCOUNT_CODE),
+    fixedAssets: byCode.get(FIXED_ASSETS_ACCOUNT_CODE),
+    accountsPayable: byCode.get(ACCOUNTS_PAYABLE_ACCOUNT_CODE),
+    ownersEquity: byCode.get(OWNERS_EQUITY_ACCOUNT_CODE),
+    gainOnDisposal: byCode.get(GAIN_ON_DISPOSAL_ACCOUNT_CODE),
+    depreciationExpense: byCode.get(DEPRECIATION_EXPENSE_ACCOUNT_CODE),
+    lossOnDisposal: byCode.get(LOSS_ON_DISPOSAL_ACCOUNT_CODE),
+    dividendsPayable: byCode.get(DIVIDENDS_PAYABLE_ACCOUNT_CODE),
+    dividendsTaxPayable: byCode.get(DIVIDENDS_TAX_PAYABLE_ACCOUNT_CODE),
+  };
+}
 
 /** Half a cent — same rounding tolerance used across the ledger (journalEntryService.ts). */
 const EPSILON = 0.005;
@@ -95,8 +126,9 @@ function inPeriod(entry: JournalEntry, period: CashFlowPeriod): boolean {
   return isPosted(entry) && entry.date >= period.start && entry.date <= period.end;
 }
 
-/** Sum of (debit - credit) across every line touching accountId, in the given entries. Positive = net debit movement. */
-function netDebitMovement(entries: JournalEntry[], accountId: ID): number {
+/** Sum of (debit - credit) across every line touching accountId, in the given entries. Positive = net debit movement. `undefined` (no matching account) contributes zero. */
+function netDebitMovement(entries: JournalEntry[], accountId: ID | undefined): number {
+  if (!accountId) return 0;
   let total = 0;
   for (const entry of entries) {
     for (const line of entry.lines) {
@@ -106,8 +138,9 @@ function netDebitMovement(entries: JournalEntry[], accountId: ID): number {
   return total;
 }
 
-/** Sum of debit lines only touching accountId (ignores any credit lines on the same account). */
-function sumDebitLinesOnly(entries: JournalEntry[], accountId: ID): number {
+/** Sum of debit lines only touching accountId (ignores any credit lines on the same account). `undefined` contributes zero. */
+function sumDebitLinesOnly(entries: JournalEntry[], accountId: ID | undefined): number {
+  if (!accountId) return 0;
   let total = 0;
   for (const entry of entries) {
     for (const line of entry.lines) {
@@ -117,8 +150,9 @@ function sumDebitLinesOnly(entries: JournalEntry[], accountId: ID): number {
   return total;
 }
 
-/** Sum of credit lines only touching accountId (ignores any debit lines on the same account). */
-function sumCreditLinesOnly(entries: JournalEntry[], accountId: ID): number {
+/** Sum of credit lines only touching accountId (ignores any debit lines on the same account). `undefined` contributes zero. */
+function sumCreditLinesOnly(entries: JournalEntry[], accountId: ID | undefined): number {
+  if (!accountId) return 0;
   let total = 0;
   for (const entry of entries) {
     for (const line of entry.lines) {
@@ -140,6 +174,7 @@ export function computeCashFlowStatement(
 ): CashFlowStatement {
   const periodEntries = entries.filter((e) => inPeriod(e, period));
   const accountType = new Map(accounts.map((a) => [a.id, a.type]));
+  const ids = resolveAccountIdsByCode(accounts);
 
   // --- Net Profit: own single-pass bottom line, not imported from the ---
   // --- Income Statement feature (parallel dispatch, may not exist yet). ---
@@ -153,16 +188,16 @@ export function computeCashFlowStatement(
   }
 
   // --- Operating activities ---
-  const depreciation = netDebitMovement(periodEntries, DEPRECIATION_EXPENSE_ACCOUNT_ID);
-  const lossOnDisposal = netDebitMovement(periodEntries, LOSS_ON_DISPOSAL_ACCOUNT_ID);
-  // acc_4200 is credit-normal (revenue-like); a positive "gain" figure is a net CREDIT movement.
-  const gainOnDisposal = -netDebitMovement(periodEntries, GAIN_ON_DISPOSAL_ACCOUNT_ID);
+  const depreciation = netDebitMovement(periodEntries, ids.depreciationExpense);
+  const lossOnDisposal = netDebitMovement(periodEntries, ids.lossOnDisposal);
+  // Gain on Disposal is credit-normal (revenue-like); a positive "gain" figure is a net CREDIT movement.
+  const gainOnDisposal = -netDebitMovement(periodEntries, ids.gainOnDisposal);
 
-  // acc_1100/acc_1200 are debit-normal assets: a positive netDebitMovement is a real increase (cash used).
-  const arChange = netDebitMovement(periodEntries, ACCOUNTS_RECEIVABLE_ACCOUNT_ID);
-  const inventoryChange = netDebitMovement(periodEntries, INVENTORY_ACCOUNT_ID);
-  // acc_2000 is credit-normal: a positive increase in the payable is a net CREDIT movement.
-  const apChange = -netDebitMovement(periodEntries, ACCOUNTS_PAYABLE_ACCOUNT_ID);
+  // Accounts Receivable/Inventory are debit-normal assets: a positive netDebitMovement is a real increase (cash used).
+  const arChange = netDebitMovement(periodEntries, ids.accountsReceivable);
+  const inventoryChange = netDebitMovement(periodEntries, ids.inventory);
+  // Accounts Payable is credit-normal: a positive increase in the payable is a net CREDIT movement.
+  const apChange = -netDebitMovement(periodEntries, ids.accountsPayable);
 
   const operatingItems: CashFlowLineItem[] = [
     { label: 'Net Profit', amount: netProfit },
@@ -176,8 +211,8 @@ export function computeCashFlowStatement(
   const operatingTotal = operatingItems.reduce((sum, item) => sum + item.amount, 0);
 
   // --- Investing activities ---
-  // Debits alone on acc_1500 are always genuine acquisitions (a disposal only ever credits it — see assetDisposalService.disposeAsset()).
-  const acquisitions = sumDebitLinesOnly(periodEntries, FIXED_ASSETS_ACCOUNT_ID);
+  // Debits alone on Fixed Assets are always genuine acquisitions (a disposal only ever credits it — see assetDisposalService.disposeAsset()).
+  const acquisitions = sumDebitLinesOnly(periodEntries, ids.fixedAssets);
   const periodDisposals = disposals.filter((d) => d.disposalDate >= period.start && d.disposalDate <= period.end);
   const disposalProceeds = periodDisposals.reduce((sum, d) => sum + d.proceeds, 0);
 
@@ -188,21 +223,20 @@ export function computeCashFlowStatement(
   const investingTotal = investingItems.reduce((sum, item) => sum + item.amount, 0);
 
   // --- Financing activities ---
-  // acc_3000 is credit-normal: a net credit movement (contribution) is positive cash in; a net debit movement (drawing) is cash out.
-  const equityMovement = -netDebitMovement(periodEntries, OWNERS_EQUITY_ACCOUNT_ID);
+  // Owner's Equity is credit-normal: a net credit movement (contribution) is positive cash in; a net debit movement (drawing) is cash out.
+  const equityMovement = -netDebitMovement(periodEntries, ids.ownersEquity);
 
   // Dividends: DividendDeclarationService.pay() debits Dividends Payable for
   // the FULL GROSS amount but only credits Cash for the net-of-withholding
   // amount (the rest is credited to Dividends Tax Payable, not yet real
-  // cash). Netting the acc_2510 credit back out of the acc_2500 debit
-  // isolates the actual cash paid to shareholders at pay() time. A later
-  // remitToSars() debits acc_2510 directly against Cash — that IS real cash
-  // out, shown as its own line, and captured by adding back any acc_2510
-  // debit movement.
+  // cash). Netting the Dividends Tax Payable credit back out of the
+  // Dividends Payable debit isolates the actual cash paid to shareholders
+  // at pay() time. A later remitToSars() debits Dividends Tax Payable
+  // directly against Cash — that IS real cash out, shown as its own line,
+  // and captured by adding back any Dividends Tax Payable debit movement.
   const dividendsPaidToShareholders =
-    sumDebitLinesOnly(periodEntries, DIVIDENDS_PAYABLE_ACCOUNT_ID) -
-    sumCreditLinesOnly(periodEntries, DIVIDENDS_TAX_PAYABLE_ACCOUNT_ID);
-  const dividendsTaxRemitted = sumDebitLinesOnly(periodEntries, DIVIDENDS_TAX_PAYABLE_ACCOUNT_ID);
+    sumDebitLinesOnly(periodEntries, ids.dividendsPayable) - sumCreditLinesOnly(periodEntries, ids.dividendsTaxPayable);
+  const dividendsTaxRemitted = sumDebitLinesOnly(periodEntries, ids.dividendsTaxPayable);
 
   const financingItems: CashFlowLineItem[] = [
     { label: "Owner's Equity Movement (Contributions / Drawings)", amount: equityMovement },
@@ -212,7 +246,7 @@ export function computeCashFlowStatement(
   const financingTotal = financingItems.reduce((sum, item) => sum + item.amount, 0);
 
   const netCashMovement = operatingTotal + investingTotal + financingTotal;
-  const actualCashMovement = netDebitMovement(periodEntries, CASH_AND_BANK_ACCOUNT_ID);
+  const actualCashMovement = netDebitMovement(periodEntries, ids.cashAndBank);
   const variance = netCashMovement - actualCashMovement;
 
   return {

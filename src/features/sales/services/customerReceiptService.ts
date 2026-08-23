@@ -1,6 +1,6 @@
 import type { CustomerReceipt, ID } from '@/types';
 import type { ICustomerReceiptRepository } from '@/repositories/ICustomerReceiptRepository';
-import type { NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 
 export type CreateCustomerReceiptDTO = Omit<CustomerReceipt, 'id' | 'createdAt' | 'updatedAt' | 'journalEntryId'>;
 
@@ -29,17 +29,12 @@ export interface InvoicePaymentRecorder {
 }
 
 /**
- * Fixed Chart of Accounts ids this service posts against
- * (src/mock-data/accounts.ts). Every receipt posts to the default Cash and
- * Bank control account regardless of `bankAccountId` — resolving the
- * actual bank account's real GL mapping is explicitly out of scope this
- * wave; the Banking module itself only maps all seeded bank accounts to
- * acc_1000 too right now (a known, already-flagged gap, not a new one
- * introduced here).
+ * Every receipt posts to the default Cash and Bank control account
+ * regardless of `bankAccountId` — resolving the actual bank account's real
+ * GL mapping is explicitly out of scope this wave; the Banking module
+ * itself posts against a fixed default account too right now (a known,
+ * already-flagged gap, not a new one introduced here).
  */
-const CASH_AND_BANK_ACCOUNT_ID = 'acc_1000';
-const AR_ACCOUNT_ID = 'acc_1100'; // Accounts Receivable
-
 const BALANCE_EPSILON = 0.01;
 
 /**
@@ -54,6 +49,7 @@ export class CustomerReceiptService {
     private readonly repository: ICustomerReceiptRepository,
     private readonly journalEntryService: JournalPoster,
     private readonly invoiceService: InvoicePaymentRecorder,
+    private readonly accounts: AccountMapper,
   ) {}
 
   async getReceipts(): Promise<CustomerReceipt[]> {
@@ -67,8 +63,8 @@ export class CustomerReceiptService {
   /**
    * Records (and posts) a new customer receipt.
    *
-   * debit  Cash and Bank        (acc_1000) for the receipt amount
-   * credit Accounts Receivable  (acc_1100) for the receipt amount
+   * debit  Cash and Bank        for the receipt amount
+   * credit Accounts Receivable  for the receipt amount
    *
    * Posts BEFORE creating the domain record — see
    * docs/LEDGER_ARCHITECTURE.md and bankTransactionService.ts's
@@ -92,13 +88,13 @@ export class CustomerReceiptService {
 
     const lines: NewJournalLineInput[] = [
       {
-        accountId: CASH_AND_BANK_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('CASH_AND_BANK'),
         description: `Receipt ${data.receiptNumber}`,
         debit: data.amount,
         credit: 0,
       },
       {
-        accountId: AR_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('AR'),
         description: `Receipt ${data.receiptNumber}`,
         debit: 0,
         credit: data.amount,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { computeEmp201Report, payrollRunService, reconcilePayrollLiabilities, type Emp201Report, type PayrollReconciliation } from '../services';
-import { journalEntryService } from '@/features/accounting/services';
+import { journalEntryService, accountMappingService } from '@/features/accounting/services';
 
 export interface UseEmp201ReportResult {
   report: Emp201Report | null;
@@ -24,7 +24,7 @@ export function useEmp201Report(periodStart: Date, periodEnd: Date): UseEmp201Re
       const runs = await payrollRunService.getPayrollRuns();
       const computed = computeEmp201Report(periodStart, periodEnd, runs);
       setReport(computed);
-      setReconciliation(await reconcilePayrollLiabilities(journalEntryService, periodStart, periodEnd, computed));
+      setReconciliation(await reconcilePayrollLiabilities(journalEntryService, accountMappingService, periodStart, periodEnd, computed));
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to compute the EMP201 return'));
     } finally {

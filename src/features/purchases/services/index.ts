@@ -1,13 +1,14 @@
 import { BillService } from './billService';
 import { PurchaseOrderService } from './purchaseOrderService';
 import { PaymentService } from './paymentService';
-import { MockBillRepository } from '@/repositories/mock/MockBillRepository';
-import { MockPurchaseOrderRepository } from '@/repositories/mock/MockPurchaseOrderRepository';
-import { MockPaymentRepository } from '@/repositories/mock/MockPaymentRepository';
-import { journalEntryService } from '@/features/accounting/services';
+import { SupabaseBillRepository } from '@/repositories/SupabaseBillRepository';
+import { SupabasePurchaseOrderRepository } from '@/repositories/SupabasePurchaseOrderRepository';
+import { SupabasePaymentRepository } from '@/repositories/SupabasePaymentRepository';
+import { journalEntryService, accountMappingService } from '@/features/accounting/services';
 import { taxRateService } from '@/features/tax/services';
 import { inventoryPoster } from '@/features/inventory/services/inventoryPostingAdapter';
 import { fixedAssetService } from '@/features/assets/services';
+import { supabase } from '@/config/supabase';
 
 export type { CreateBillDTO } from './billService';
 export type { CreatePurchaseOrderDTO } from './purchaseOrderService';
@@ -34,16 +35,23 @@ export { PaymentService } from './paymentService';
  * construction rather than caught later.
  */
 export const purchaseOrderService = new PurchaseOrderService(
-  new MockPurchaseOrderRepository(),
+  new SupabasePurchaseOrderRepository(supabase),
   journalEntryService,
   inventoryPoster,
+  accountMappingService,
 );
 export const billService = new BillService(
-  new MockBillRepository(),
+  new SupabaseBillRepository(supabase),
   journalEntryService,
   taxRateService,
   inventoryPoster,
   purchaseOrderService,
   fixedAssetService,
+  accountMappingService,
 );
-export const paymentService = new PaymentService(new MockPaymentRepository(), journalEntryService, billService);
+export const paymentService = new PaymentService(
+  new SupabasePaymentRepository(supabase),
+  journalEntryService,
+  billService,
+  accountMappingService,
+);

@@ -5,6 +5,8 @@ import { IncomeTaxConfigService } from './incomeTaxConfigService';
 import { MockIncomeTaxConfigRepository } from '../repositories/MockIncomeTaxConfigRepository';
 import { MockTaxComputationRepository } from '../repositories/MockTaxComputationRepository';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
+import { AccountService } from '@/features/accounting/services/accountService';
+import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
@@ -71,6 +73,7 @@ describe('TaxComputationService', () => {
   let taxComputationRepository: MockTaxComputationRepository;
   let incomeTaxConfigService: IncomeTaxConfigService;
   let service: TaxComputationService;
+  let accountMapper: AccountMappingService;
   let company: Company;
   let financialYear: FinancialYear;
   let fixedAssets: FixedAsset[];
@@ -82,6 +85,7 @@ describe('TaxComputationService', () => {
     const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
     const auditLog = new AuditLogService(new MockAuditLogRepository());
     journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
+    accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
 
     taxComputationRepository = new MockTaxComputationRepository();
     incomeTaxConfigService = new IncomeTaxConfigService(new MockIncomeTaxConfigRepository());
@@ -101,6 +105,7 @@ describe('TaxComputationService', () => {
       { getDisposals: async () => disposals },
       incomeTaxConfigService,
       journalEntryService,
+      accountMapper,
     );
   });
 
@@ -155,6 +160,7 @@ describe('TaxComputationService', () => {
       { getDisposals: async () => disposals },
       incomeTaxConfigService,
       journalEntryService,
+      accountMapper,
       {
         getPeriodReport: async () => ({ taxableCapitalGain: 12345, netCapitalLossForPeriod: 0 }),
       },

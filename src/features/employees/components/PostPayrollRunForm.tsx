@@ -9,12 +9,13 @@ export interface PostPayrollRunFormProps {
   onCancel: () => void;
 }
 
-const DEFAULT_CONTRA_ACCOUNT_ID = 'acc_1000'; // Cash and Bank — paid immediately
+/** Cash and Bank's Chart of Accounts code — matched by `code`, not a fixed id, since account ids are real (Supabase-generated) uuids, not the old Mock-era `'acc_1000'` literal. */
+const DEFAULT_CONTRA_ACCOUNT_CODE = '1000';
 
 /** Picks the account net pay is credited to when the run posts — mirrors PostAcquisitionForm.tsx's "choose a funding/contra account" pattern. */
 export function PostPayrollRunForm({ accounts, onSubmit, onCancel }: PostPayrollRunFormProps) {
   const [contraAccountId, setContraAccountId] = useState(
-    accounts.some((a) => a.id === DEFAULT_CONTRA_ACCOUNT_ID) ? DEFAULT_CONTRA_ACCOUNT_ID : (accounts[0]?.id ?? ''),
+    accounts.find((a) => a.code === DEFAULT_CONTRA_ACCOUNT_CODE)?.id ?? (accounts[0]?.id ?? ''),
   );
   const [submitting, setSubmitting] = useState(false);
 

@@ -1,10 +1,6 @@
 import type { ID, ISODateString, PayrollRun } from '@/types';
 import type { JournalEntryService } from '@/features/accounting/services/journalEntryService';
-
-const PAYE_ACCOUNT_ID = 'acc_2200';
-const UIF_EMPLOYEE_ACCOUNT_ID = 'acc_2210';
-const UIF_EMPLOYER_ACCOUNT_ID = 'acc_2220';
-const SDL_ACCOUNT_ID = 'acc_2230';
+import type { AccountMapper } from '@/features/accounting/services';
 
 /** Half a rand — tolerance for floating-point rounding, not a real discrepancy (mirrors vatReportService.ts). */
 const VARIANCE_EPSILON = 0.005;
@@ -127,15 +123,22 @@ async function checkAccount(
  */
 export async function reconcilePayrollLiabilities(
   journalEntryService: Pick<JournalEntryService, 'getAccountLedger'>,
+  accounts: AccountMapper,
   periodStart: Date,
   periodEnd: Date,
   report: Emp201Report,
 ): Promise<PayrollReconciliation> {
+  const [payeId, uifEmployeeId, uifEmployerId, sdlId] = await Promise.all([
+    accounts.getAccountId('PAYE_PAYABLE'),
+    accounts.getAccountId('UIF_EMPLOYEE_PAYABLE'),
+    accounts.getAccountId('UIF_EMPLOYER_PAYABLE'),
+    accounts.getAccountId('SDL_PAYABLE'),
+  ]);
   const [paye, uifEmployee, uifEmployer, sdl] = await Promise.all([
-    checkAccount(journalEntryService, PAYE_ACCOUNT_ID, periodStart, periodEnd, report.paye),
-    checkAccount(journalEntryService, UIF_EMPLOYEE_ACCOUNT_ID, periodStart, periodEnd, report.uifEmployee),
-    checkAccount(journalEntryService, UIF_EMPLOYER_ACCOUNT_ID, periodStart, periodEnd, report.uifEmployer),
-    checkAccount(journalEntryService, SDL_ACCOUNT_ID, periodStart, periodEnd, report.sdl),
+    checkAccount(journalEntryService, payeId, periodStart, periodEnd, report.paye),
+    checkAccount(journalEntryService, uifEmployeeId, periodStart, periodEnd, report.uifEmployee),
+    checkAccount(journalEntryService, uifEmployerId, periodStart, periodEnd, report.uifEmployer),
+    checkAccount(journalEntryService, sdlId, periodStart, periodEnd, report.sdl),
   ]);
   return { paye, uifEmployee, uifEmployer, sdl };
 }

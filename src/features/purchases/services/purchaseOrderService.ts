@@ -1,6 +1,6 @@
 import type { Bill, ID, PurchaseOrder } from '@/types';
 import type { IPurchaseOrderRepository } from '@/repositories/IPurchaseOrderRepository';
-import type { NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 
 export type CreatePurchaseOrderDTO = Omit<PurchaseOrder, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -29,10 +29,6 @@ export interface InventoryReceiver {
   recordReceiptMovement(productId: ID, quantity: number, unitCost: number, reference: string, warehouseId?: ID): Promise<void>;
 }
 
-/** Fixed Chart of Accounts ids this service posts against (src/mock-data/accounts.ts). */
-const INVENTORY_ACCOUNT_ID = 'acc_1200'; // Inventory
-const GRNI_ACCOUNT_ID = 'acc_2050'; // Goods Received Not Invoiced
-
 /**
  * Business-logic layer for purchase orders.
  * Handles PO creation, updates, status changes, goods receipt (3-way
@@ -43,6 +39,7 @@ export class PurchaseOrderService {
     private readonly repository: IPurchaseOrderRepository,
     private readonly journalEntryService: JournalPoster,
     private readonly inventoryReceiver: InventoryReceiver,
+    private readonly accounts: AccountMapper,
   ) {}
 
   async getPurchaseOrders(): Promise<PurchaseOrder[]> {
@@ -148,8 +145,18 @@ export class PurchaseOrderService {
     let journalEntryId: ID | undefined;
     if (inventoryValue > 0) {
       const lines: NewJournalLineInput[] = [
-        { accountId: INVENTORY_ACCOUNT_ID, description: `PO ${po.poNumber} - Goods Received`, debit: inventoryValue, credit: 0 },
-        { accountId: GRNI_ACCOUNT_ID, description: `PO ${po.poNumber} - GRNI`, debit: 0, credit: inventoryValue },
+        {
+          accountId: await this.accounts.getAccountId('INVENTORY'),
+          description: `PO ${po.poNumber} - Goods Received`,
+          debit: inventoryValue,
+          credit: 0,
+        },
+        {
+          accountId: await this.accounts.getAccountId('GRNI'),
+          description: `PO ${po.poNumber} - GRNI`,
+          debit: 0,
+          credit: inventoryValue,
+        },
       ];
       const entry = await this.journalEntryService.postJournalEntry({
         date: receivedDate,

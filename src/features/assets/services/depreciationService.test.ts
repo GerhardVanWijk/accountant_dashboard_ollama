@@ -4,6 +4,8 @@ import { FixedAssetService } from './fixedAssetService';
 import { MockFixedAssetRepository } from '../repositories/MockFixedAssetRepository';
 import { MockDepreciationEntryRepository } from '../repositories/MockDepreciationEntryRepository';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
+import { AccountService } from '@/features/accounting/services/accountService';
+import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
@@ -125,7 +127,8 @@ describe('DepreciationService.runDepreciation', () => {
     const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
     const auditLog = new AuditLogService(new MockAuditLogRepository());
     journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
-    fixedAssetService = new FixedAssetService(fixedAssetRepository, journalEntryService);
+    const accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
+    fixedAssetService = new FixedAssetService(fixedAssetRepository, journalEntryService, accountMapper);
     depreciationService = new DepreciationService(depreciationRepository, fixedAssetRepository, journalEntryService);
   });
 

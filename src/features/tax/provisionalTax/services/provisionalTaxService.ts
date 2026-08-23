@@ -6,22 +6,12 @@ import type {
   ProvisionalTaxReconciliation,
 } from '@/types/provisionalTax';
 import type { IProvisionalTaxPeriodRepository } from '../repositories/IProvisionalTaxPeriodRepository';
-import type { NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 import { calculateTaxLiability } from '@/features/tax/incomeTax/services';
 import { calculateProvisionalTaxDueDates } from '../utils/provisionalTaxDueDates';
 
 /** Half a cent — same rounding tolerance used across every other posting service in this codebase. */
 const EPSILON = 0.005;
-
-/**
- * Fixed GL account ids (src/mock-data/accounts.ts). No new account is
- * introduced for provisional tax — see class doc comment below: a
- * provisional payment is an early payment against the SAME Income Tax
- * Payable control account TaxComputationService.postComputation() credits
- * at year-end.
- */
-const INCOME_TAX_PAYABLE_ACCOUNT_ID = 'acc_2300';
-const CASH_AND_BANK_ACCOUNT_ID = 'acc_1000';
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -113,6 +103,7 @@ export class ProvisionalTaxService {
     private readonly configLookup: IncomeTaxConfigLookup,
     private readonly journalPoster: JournalPoster,
     private readonly taxComputationLookup: TaxComputationLookup,
+    private readonly accounts: AccountMapper,
   ) {}
 
   async getPeriods(): Promise<ProvisionalTaxPeriod[]> {
@@ -246,9 +237,13 @@ export class ProvisionalTaxService {
     const paidDate = date ?? new Date().toISOString().slice(0, 10);
     const memo = `${slotLabel(slot)} - ${period.financialYearLabel}`;
 
+    const [incomeTaxPayableId, cashAndBankId] = await Promise.all([
+      this.accounts.getAccountId('INCOME_TAX_PAYABLE'),
+      this.accounts.getAccountId('CASH_AND_BANK'),
+    ]);
     const lines: NewJournalLineInput[] = [
-      { accountId: INCOME_TAX_PAYABLE_ACCOUNT_ID, description: memo, debit: round2(amountPaid), credit: 0 },
-      { accountId: CASH_AND_BANK_ACCOUNT_ID, description: memo, debit: 0, credit: round2(amountPaid) },
+      { accountId: incomeTaxPayableId, description: memo, debit: round2(amountPaid), credit: 0 },
+      { accountId: cashAndBankId, description: memo, debit: 0, credit: round2(amountPaid) },
     ];
 
     const entry = await this.journalPoster.postJournalEntry({

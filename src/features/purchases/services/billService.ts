@@ -1,6 +1,6 @@
 import type { AssetCategory, Bill, DepreciationMethod, ID, JournalEntry } from '@/types';
 import type { IBillRepository } from '@/repositories/IBillRepository';
-import type { NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 
 /**
  * Minimal surface of TaxRateService this service depends on — resolving a
@@ -80,14 +80,6 @@ export interface JournalPoster {
   }): Promise<JournalEntry>;
 }
 
-/** Fixed GL account ids (src/mock-data/accounts.ts) this service posts against. */
-const EXPENSE_ACCOUNT_ID = 'acc_5100'; // Operating Expenses
-const VAT_INPUT_ACCOUNT_ID = 'acc_2110'; // VAT Input (Receivable)
-const AP_ACCOUNT_ID = 'acc_2000'; // Accounts Payable
-const INVENTORY_ACCOUNT_ID = 'acc_1200'; // Inventory
-const GRNI_ACCOUNT_ID = 'acc_2050'; // Goods Received Not Invoiced
-const FIXED_ASSET_ACCOUNT_ID = 'acc_1500'; // Fixed Assets
-
 /**
  * Business-logic layer for supplier bills.
  * Handles bill creation, updates, status changes, and GL posting.
@@ -100,6 +92,7 @@ export class BillService {
     private readonly inventoryReceiver: InventoryReceiver,
     private readonly purchaseOrders: PurchaseOrderLookup,
     private readonly fixedAssetCapitalizer: FixedAssetCapitalizer,
+    private readonly accounts: AccountMapper,
   ) {}
 
   async getBills(): Promise<Bill[]> {
@@ -230,7 +223,7 @@ export class BillService {
    *     recalculation.
    *
    * A line flagged `fixedAssetDetails` (§116 Phase 7) debits Fixed Assets
-   * (acc_1500) instead of Expense/Inventory. AFTER the entry posts,
+   * instead of Expense/Inventory. AFTER the entry posts,
    * `fixedAssetCapitalizer.capitalizeFromBillLine()` writes the register
    * row directly as 'active' with `journalEntryId` pointing at THIS same
    * entry — the Bill's posting is the only capitalization event, there is
@@ -255,7 +248,7 @@ export class BillService {
     const expenseDebit = expenseValue + nonDeductibleVat;
     if (expenseDebit > 0) {
       lines.push({
-        accountId: EXPENSE_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('EXPENSE'),
         description: `Bill ${bill.billNumber}`,
         debit: expenseDebit,
         credit: 0,
@@ -263,7 +256,7 @@ export class BillService {
     }
     if (inventoryValue > 0) {
       lines.push({
-        accountId: grniAlreadyRecognized ? GRNI_ACCOUNT_ID : INVENTORY_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId(grniAlreadyRecognized ? 'GRNI' : 'INVENTORY'),
         description: grniAlreadyRecognized
           ? `Bill ${bill.billNumber} - GRNI clearing`
           : `Bill ${bill.billNumber} - Inventory`,
@@ -273,7 +266,7 @@ export class BillService {
     }
     if (fixedAssetValue > 0) {
       lines.push({
-        accountId: FIXED_ASSET_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('FIXED_ASSET'),
         description: `Bill ${bill.billNumber} - Fixed Assets`,
         debit: fixedAssetValue,
         credit: 0,
@@ -288,7 +281,7 @@ export class BillService {
 
     if (deductibleVat > 0) {
       lines.push({
-        accountId: VAT_INPUT_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('VAT_INPUT'),
         description: `Bill ${bill.billNumber} - VAT Input`,
         debit: deductibleVat,
         credit: 0,
@@ -296,7 +289,7 @@ export class BillService {
     }
 
     lines.push({
-      accountId: AP_ACCOUNT_ID,
+      accountId: await this.accounts.getAccountId('AP'),
       description: `Bill ${bill.billNumber}`,
       debit: 0,
       credit: bill.total,

@@ -1,11 +1,6 @@
 import type { AssetCategory, DepreciationMethod, FixedAsset, ID, JournalEntry } from '@/types';
 import type { IFixedAssetRepository } from '../repositories/IFixedAssetRepository';
-import type { NewJournalLineInput } from '@/features/accounting/services';
-
-/** Default GL account ids for an asset capitalized straight from a Bill line — same defaults AssetForm prefills for a manually-registered asset. */
-const DEFAULT_ASSET_ACCOUNT_ID = 'acc_1500';
-const DEFAULT_ACCUMULATED_DEPRECIATION_ACCOUNT_ID = 'acc_1590';
-const DEFAULT_DEPRECIATION_EXPENSE_ACCOUNT_ID = 'acc_5200';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 
 /**
  * Minimal surface of JournalEntryService this service depends on — an
@@ -105,6 +100,7 @@ export class FixedAssetService {
   constructor(
     private readonly repository: IFixedAssetRepository,
     private readonly journalPoster: JournalPoster,
+    private readonly accounts: AccountMapper,
   ) {}
 
   async getFixedAssets(): Promise<FixedAsset[]> {
@@ -222,6 +218,11 @@ export class FixedAssetService {
     validateAssetEconomics(input);
 
     const assetNumber = await this.nextAssetNumber();
+    const [glAssetAccountId, glAccumulatedDepreciationAccountId, glDepreciationExpenseAccountId] = await Promise.all([
+      this.accounts.getAccountId('FIXED_ASSET'),
+      this.accounts.getAccountId('ACCUMULATED_DEPRECIATION'),
+      this.accounts.getAccountId('DEPRECIATION_EXPENSE'),
+    ]);
     const now = new Date().toISOString();
     return this.repository.create({
       id: '',
@@ -235,9 +236,9 @@ export class FixedAssetService {
       depreciationMethod: input.depreciationMethod,
       reducingBalanceRatePercent: input.reducingBalanceRatePercent,
       taxWearTearRatePercent: input.taxWearTearRatePercent,
-      glAssetAccountId: DEFAULT_ASSET_ACCOUNT_ID,
-      glAccumulatedDepreciationAccountId: DEFAULT_ACCUMULATED_DEPRECIATION_ACCOUNT_ID,
-      glDepreciationExpenseAccountId: DEFAULT_DEPRECIATION_EXPENSE_ACCOUNT_ID,
+      glAssetAccountId,
+      glAccumulatedDepreciationAccountId,
+      glDepreciationExpenseAccountId,
       accumulatedDepreciation: 0,
       status: 'active',
       journalEntryId: input.journalEntryId,

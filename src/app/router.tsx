@@ -37,12 +37,23 @@ import { IncomeTaxPage } from '@/features/tax/incomeTax/pages/IncomeTaxPage';
 import { CapitalGainsPage } from '@/features/tax/capitalGains/pages/CapitalGainsPage';
 import { DividendsTaxPage } from '@/features/tax/dividendsTax/pages/DividendsTaxPage';
 import { ProvisionalTaxPage } from '@/features/tax/provisionalTax/pages/ProvisionalTaxPage';
+import { DeferredTaxPage } from '@/features/tax/deferredTax/pages/DeferredTaxPage';
+import { EclProvisionPage } from '@/features/financialInstruments/pages/EclProvisionPage';
 import { ReportsPage } from '@/features/reports/pages/ReportsPage';
 import { IncomeStatementPage } from '@/features/reports/financialStatements/pages/IncomeStatementPage';
 import { BalanceSheetPage } from '@/features/reports/financialStatements/pages/BalanceSheetPage';
 import { CashFlowStatementPage } from '@/features/reports/cashFlow/pages/CashFlowStatementPage';
 import { CustomerAgingPage } from '@/features/reports/aging/pages/CustomerAgingPage';
 import { SupplierAgingPage } from '@/features/reports/aging/pages/SupplierAgingPage';
+import { ComplianceDashboardPage } from '@/features/compliance/pages/ComplianceDashboardPage';
+import { PublicInterestScorePage } from '@/features/compliance/pages/PublicInterestScorePage';
+import { ReportingStandardsPage } from '@/features/compliance/pages/ReportingStandardsPage';
+import { RelatedPartyRegisterPage } from '@/features/relatedParties/pages/RelatedPartyRegisterPage';
+import { RelatedPartyTransactionsPage } from '@/features/relatedParties/pages/RelatedPartyTransactionsPage';
+import { ExchangeRatesPage } from '@/features/foreignExchange/pages/ExchangeRatesPage';
+import { FxCalculatorPage } from '@/features/foreignExchange/pages/FxCalculatorPage';
+import { LeaseRegisterPage } from '@/features/leases/pages/LeaseRegisterPage';
+import { LeaseAmortizationPage } from '@/features/leases/pages/LeaseAmortizationPage';
 import { UsersPage } from '@/features/admin/pages/UsersPage';
 import { AuditPage } from '@/features/admin/pages/AuditPage';
 import { NotFoundPage } from '@/features/admin/pages/NotFoundPage';
@@ -109,12 +120,23 @@ export const routes: RouteObject[] = [
           { path: 'tax/capital-gains', element: <CapitalGainsPage /> },
           { path: 'tax/dividends', element: <DividendsTaxPage /> },
           { path: 'tax/provisional-tax', element: <ProvisionalTaxPage /> },
+          { path: 'tax/deferred-tax', element: <DeferredTaxPage /> },
+          { path: 'tax/expected-credit-losses', element: <EclProvisionPage /> },
           { path: 'reports', element: <ReportsPage /> },
           { path: 'reports/income-statement', element: <IncomeStatementPage /> },
           { path: 'reports/balance-sheet', element: <BalanceSheetPage /> },
           { path: 'reports/cash-flow', element: <CashFlowStatementPage /> },
           { path: 'reports/customer-aging', element: <CustomerAgingPage /> },
           { path: 'reports/supplier-aging', element: <SupplierAgingPage /> },
+          { path: 'compliance/dashboard', element: <ComplianceDashboardPage /> },
+          { path: 'compliance/public-interest-score', element: <PublicInterestScorePage /> },
+          { path: 'compliance/reporting-standards', element: <ReportingStandardsPage /> },
+          { path: 'related-parties/register', element: <RelatedPartyRegisterPage /> },
+          { path: 'related-parties/transactions', element: <RelatedPartyTransactionsPage /> },
+          { path: 'foreign-exchange/rates', element: <ExchangeRatesPage /> },
+          { path: 'foreign-exchange/calculator', element: <FxCalculatorPage /> },
+          { path: 'leases/register', element: <LeaseRegisterPage /> },
+          { path: 'leases/amortization', element: <LeaseAmortizationPage /> },
           { path: 'admin/users', element: <UsersPage /> },
           { path: 'admin/audit', element: <AuditPage /> },
           { path: '*', element: <NotFoundPage /> },

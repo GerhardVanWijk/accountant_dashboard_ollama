@@ -7,8 +7,8 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 /** Matches taxRegisterService.ts's yearsElapsed() constant exactly, so a cumulative-allowance-to-date figure computed here never disagrees with the Tax Register's own math. */
 const MS_PER_YEAR = 365.25 * MS_PER_DAY;
 
-/** Fixed GL account id (src/mock-data/accounts.ts) this module reads — the periodic accounting depreciation charge, not tax-deductible on its own (§51). */
-const DEPRECIATION_EXPENSE_ACCOUNT_ID = 'acc_5200';
+/** Chart of Accounts code this module reads — the periodic accounting depreciation charge, not tax-deductible on its own (§51). Matched by `code`, not a fixed id (account ids are real Supabase-generated uuids). */
+const DEPRECIATION_EXPENSE_ACCOUNT_CODE = '5200';
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -66,7 +66,8 @@ export function calculateAccountingProfit(
  * never itself SARS-deductible, only the wear-and-tear allowance is (see
  * calculateWearAndTearAllowanceForPeriod below).
  */
-export function calculateDepreciationAddback(entries: JournalEntry[], startDateISO: string, endDateISO: string): number {
+export function calculateDepreciationAddback(entries: JournalEntry[], accounts: Account[], startDateISO: string, endDateISO: string): number {
+  const depreciationExpenseAccountId = accounts.find((a) => a.code === DEPRECIATION_EXPENSE_ACCOUNT_CODE)?.id;
   const start = new Date(startDateISO).getTime();
   const end = new Date(endDateISO).getTime();
   let total = 0;
@@ -77,7 +78,7 @@ export function calculateDepreciationAddback(entries: JournalEntry[], startDateI
     if (t < start || t > end) continue;
 
     for (const line of entry.lines) {
-      if (line.accountId === DEPRECIATION_EXPENSE_ACCOUNT_ID) {
+      if (depreciationExpenseAccountId && line.accountId === depreciationExpenseAccountId) {
         total += line.debit - line.credit;
       }
     }

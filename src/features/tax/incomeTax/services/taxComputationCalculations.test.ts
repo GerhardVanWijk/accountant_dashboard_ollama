@@ -46,6 +46,17 @@ const OTHER_ACCOUNT: Account = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
+const DEPRECIATION_EXPENSE_ACCOUNT: Account = {
+  id: 'acc_5200',
+  code: '5200',
+  name: 'Depreciation Expense',
+  type: 'expense',
+  normalBalance: 'debit',
+  isActive: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
 function makeEntry(overrides: Partial<JournalEntry> = {}): JournalEntry {
   return {
     id: 'je_1',
@@ -173,7 +184,7 @@ describe('calculateDepreciationAddback', () => {
         ],
       }),
     ];
-    expect(calculateDepreciationAddback(entries, FY_START, FY_END)).toBeCloseTo(300, 2);
+    expect(calculateDepreciationAddback(entries, [DEPRECIATION_EXPENSE_ACCOUNT], FY_START, FY_END)).toBeCloseTo(300, 2);
   });
 });
 

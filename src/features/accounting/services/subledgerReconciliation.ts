@@ -1,11 +1,8 @@
 import type { Bill, ID, Invoice } from '@/types';
 import type { JournalEntryService } from './journalEntryService';
+import type { AccountMapper } from './accountMappingService';
 import { invoicesToOpenItems } from '@/features/customers/mock-data/openItems';
 import { billsToOpenBills } from '@/features/suppliers/utils/calculateAging';
-
-/** Same fixed account ids invoiceService.ts/billService.ts post against (src/mock-data/accounts.ts). */
-const AR_CONTROL_ACCOUNT_ID = 'acc_1100'; // Accounts Receivable
-const AP_CONTROL_ACCOUNT_ID = 'acc_2000'; // Accounts Payable
 
 /** Half a rand — tolerance for floating-point rounding, not a real discrepancy. */
 const VARIANCE_EPSILON = 0.005;
@@ -41,13 +38,15 @@ async function controlAccountBalance(
  */
 export async function reconcileAccountsReceivable(
   journalEntryService: Pick<JournalEntryService, 'getAccountLedger'>,
+  accounts: AccountMapper,
   invoices: Invoice[],
 ): Promise<SubledgerReconciliation> {
   const subledgerTotal = invoicesToOpenItems(invoices).reduce((sum, item) => sum + item.amountOutstanding, 0);
-  const balance = await controlAccountBalance(journalEntryService, AR_CONTROL_ACCOUNT_ID);
+  const arControlAccountId = await accounts.getAccountId('AR');
+  const balance = await controlAccountBalance(journalEntryService, arControlAccountId);
   const variance = balance - subledgerTotal;
   return {
-    controlAccountId: AR_CONTROL_ACCOUNT_ID,
+    controlAccountId: arControlAccountId,
     controlAccountBalance: balance,
     subledgerTotal,
     variance,
@@ -58,13 +57,15 @@ export async function reconcileAccountsReceivable(
 /** Accounts Payable equivalent of reconcileAccountsReceivable() above. */
 export async function reconcileAccountsPayable(
   journalEntryService: Pick<JournalEntryService, 'getAccountLedger'>,
+  accounts: AccountMapper,
   bills: Bill[],
 ): Promise<SubledgerReconciliation> {
   const subledgerTotal = billsToOpenBills(bills).reduce((sum, bill) => sum + bill.amount, 0);
-  const balance = await controlAccountBalance(journalEntryService, AP_CONTROL_ACCOUNT_ID);
+  const apControlAccountId = await accounts.getAccountId('AP');
+  const balance = await controlAccountBalance(journalEntryService, apControlAccountId);
   const variance = balance - subledgerTotal;
   return {
-    controlAccountId: AP_CONTROL_ACCOUNT_ID,
+    controlAccountId: apControlAccountId,
     controlAccountBalance: balance,
     subledgerTotal,
     variance,

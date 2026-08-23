@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { InvoiceService } from './invoiceService';
 import { MockInvoiceRepository } from '@/repositories/mock/MockInvoiceRepository';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
+import { AccountService } from '@/features/accounting/services/accountService';
+import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
@@ -56,10 +58,11 @@ function setup(initialInvoices?: Invoice[], costPerUnit: Record<string, number> 
   const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
   const auditLog = new AuditLogService(new MockAuditLogRepository());
   const journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
+  const accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
 
   const repo = initialInvoices ? new MockInvoiceRepository(initialInvoices) : new MockInvoiceRepository();
   const inventoryMover = makeInventoryMoverStub(costPerUnit);
-  const service = new InvoiceService(repo, journalEntryService, inventoryMover);
+  const service = new InvoiceService(repo, journalEntryService, inventoryMover, accountMapper);
 
   return { service, journalEntryService, repo, inventoryMover };
 }

@@ -1,15 +1,9 @@
 import type { DividendDeclaration, ID, JournalEntry } from '@/types';
 import type { IDividendDeclarationRepository } from '../repositories/IDividendDeclarationRepository';
-import type { NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 
 /** Half a cent — same rounding tolerance as journalEntryService.ts. */
 const EPSILON = 0.005;
-
-/** Fixed GL account ids (src/mock-data/accounts.ts) this service posts against. */
-const RETAINED_EARNINGS_ACCOUNT_ID = 'acc_3900'; // Retained Earnings
-const DIVIDENDS_PAYABLE_ACCOUNT_ID = 'acc_2500'; // Dividends Payable
-const DIVIDENDS_TAX_PAYABLE_ACCOUNT_ID = 'acc_2510'; // Dividends Tax Payable (Withholding)
-const CASH_AND_BANK_ACCOUNT_ID = 'acc_1000'; // Cash and Bank
 
 /**
  * Minimal surface of JournalEntryService this service depends on — an
@@ -84,6 +78,7 @@ export class DividendDeclarationService {
     private readonly repository: IDividendDeclarationRepository,
     private readonly journalPoster: JournalPoster,
     private readonly rateResolver: DividendsRateResolver,
+    private readonly accounts: AccountMapper,
   ) {}
 
   async getDeclarations(): Promise<DividendDeclaration[]> {
@@ -217,15 +212,19 @@ export class DividendDeclarationService {
       throw new Error(`Cannot declare dividend "${id}": only a draft can be declared (current status: ${declaration.status}).`);
     }
 
+    const [retainedEarningsId, dividendsPayableId] = await Promise.all([
+      this.accounts.getAccountId('RETAINED_EARNINGS'),
+      this.accounts.getAccountId('DIVIDENDS_PAYABLE'),
+    ]);
     const lines: NewJournalLineInput[] = [
       {
-        accountId: RETAINED_EARNINGS_ACCOUNT_ID,
+        accountId: retainedEarningsId,
         description: `Dividend declared ${declaration.declarationDate}`,
         debit: declaration.totalAmount,
         credit: 0,
       },
       {
-        accountId: DIVIDENDS_PAYABLE_ACCOUNT_ID,
+        accountId: dividendsPayableId,
         description: `Dividend declared ${declaration.declarationDate}`,
         debit: 0,
         credit: declaration.totalAmount,
@@ -260,21 +259,26 @@ export class DividendDeclarationService {
 
     const date = paidDate ?? new Date().toISOString().slice(0, 10);
 
+    const [dividendsPayableId, cashAndBankId, dividendsTaxPayableId] = await Promise.all([
+      this.accounts.getAccountId('DIVIDENDS_PAYABLE'),
+      this.accounts.getAccountId('CASH_AND_BANK'),
+      this.accounts.getAccountId('DIVIDENDS_TAX_PAYABLE'),
+    ]);
     const lines: NewJournalLineInput[] = [
       {
-        accountId: DIVIDENDS_PAYABLE_ACCOUNT_ID,
+        accountId: dividendsPayableId,
         description: `Dividend paid - ${date}`,
         debit: declaration.totalAmount,
         credit: 0,
       },
       {
-        accountId: CASH_AND_BANK_ACCOUNT_ID,
+        accountId: cashAndBankId,
         description: `Dividend paid - ${date} - net to shareholders`,
         debit: 0,
         credit: declaration.netPayableToShareholders,
       },
       {
-        accountId: DIVIDENDS_TAX_PAYABLE_ACCOUNT_ID,
+        accountId: dividendsTaxPayableId,
         description: `Dividend paid - ${date} - Dividends Tax withheld`,
         debit: 0,
         credit: declaration.dividendsTaxWithheld,
@@ -319,15 +323,19 @@ export class DividendDeclarationService {
       return this.repository.update(id, { status: 'remitted', remittedDate: date });
     }
 
+    const [dividendsTaxPayableId, cashAndBankId] = await Promise.all([
+      this.accounts.getAccountId('DIVIDENDS_TAX_PAYABLE'),
+      this.accounts.getAccountId('CASH_AND_BANK'),
+    ]);
     const lines: NewJournalLineInput[] = [
       {
-        accountId: DIVIDENDS_TAX_PAYABLE_ACCOUNT_ID,
+        accountId: dividendsTaxPayableId,
         description: `Dividends Tax remitted to SARS - ${date}`,
         debit: declaration.dividendsTaxWithheld,
         credit: 0,
       },
       {
-        accountId: CASH_AND_BANK_ACCOUNT_ID,
+        accountId: cashAndBankId,
         description: `Dividends Tax remitted to SARS - ${date}`,
         debit: 0,
         credit: declaration.dividendsTaxWithheld,

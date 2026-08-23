@@ -7,6 +7,8 @@ import { PayrollTaxConfigService } from './payrollTaxConfigService';
 import { MockPayrollRunRepository } from '../repositories/MockPayrollRunRepository';
 import { MockPayrollTaxConfigRepository } from '../repositories/MockPayrollTaxConfigRepository';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
+import { AccountService } from '@/features/accounting/services/accountService';
+import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
@@ -33,6 +35,7 @@ function makeOpenPeriod(): AccountingPeriod {
 describe('EMP201/EMP501 reporting — integration against a real posted payroll run', () => {
   let runService: PayrollRunService;
   let journalEntryService: JournalEntryService;
+  let accountMapper: AccountMappingService;
   let employees: Employee[];
 
   beforeEach(() => {
@@ -42,6 +45,7 @@ describe('EMP201/EMP501 reporting — integration against a real posted payroll 
     const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
     const auditLog = new AuditLogService(new MockAuditLogRepository());
     journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
+    accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
     const taxConfigService = new PayrollTaxConfigService(new MockPayrollTaxConfigRepository(seedPayrollTaxConfig));
 
     employees = [
@@ -73,6 +77,7 @@ describe('EMP201/EMP501 reporting — integration against a real posted payroll 
       taxConfigService,
       { getCompanies: async () => [{ sdlExempt: false } as Company] },
       journalEntryService,
+      accountMapper,
     );
   });
 
@@ -89,7 +94,7 @@ describe('EMP201/EMP501 reporting — integration against a real posted payroll 
     expect(report.employeeCount).toBe(1);
     expect(report.statutoryLiability).toBeCloseTo(report.paye + report.totalUif + report.sdl, 2);
 
-    const reconciliation = await reconcilePayrollLiabilities(journalEntryService, periodStart, periodEnd, report);
+    const reconciliation = await reconcilePayrollLiabilities(journalEntryService, accountMapper, periodStart, periodEnd, report);
     expect(reconciliation.paye.isReconciled).toBe(true);
     expect(reconciliation.uifEmployee.isReconciled).toBe(true);
     expect(reconciliation.uifEmployer.isReconciled).toBe(true);

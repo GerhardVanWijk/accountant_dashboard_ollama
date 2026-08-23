@@ -1,6 +1,6 @@
 import type { ID, Invoice } from '@/types';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
-import type { NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 
 export type CreateInvoiceDTO = Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -33,13 +33,6 @@ export interface InventoryMover {
   recordSaleMovement(productId: ID, quantity: number, reference: string, warehouseId?: ID): Promise<void>;
 }
 
-/** Fixed Chart of Accounts ids this service posts against (src/mock-data/accounts.ts). */
-const AR_ACCOUNT_ID = 'acc_1100'; // Accounts Receivable
-const SALES_REVENUE_ACCOUNT_ID = 'acc_4000'; // Sales Revenue
-const VAT_OUTPUT_ACCOUNT_ID = 'acc_2100'; // VAT Output (Payable)
-const COGS_ACCOUNT_ID = 'acc_5000'; // Cost of Goods Sold
-const INVENTORY_ACCOUNT_ID = 'acc_1200'; // Inventory
-
 /**
  * Business-logic layer between hooks/components and the repository.
  * Handles invoice operations including CRUD, status transitions, payment
@@ -50,6 +43,7 @@ export class InvoiceService {
     private readonly repository: IInvoiceRepository,
     private readonly journalEntryService: JournalPoster,
     private readonly inventoryMover: InventoryMover,
+    private readonly accounts: AccountMapper,
   ) {}
 
   async getInvoices(): Promise<Invoice[]> {
@@ -106,10 +100,10 @@ export class InvoiceService {
    * orphaned "posted" invoice row or stock reduced with no matching
    * journal entry.
    *
-   * debit  Accounts Receivable (acc_1100)  for invoice.total
-   * credit Sales Revenue      (acc_4000)  for invoice.subtotal
-   * credit VAT Output         (acc_2100)  for invoice.taxTotal (only if > 0)
-   * debit  Cost of Goods Sold (acc_5000)  credit Inventory (acc_1200), for
+   * debit  Accounts Receivable for invoice.total
+   * credit Sales Revenue      for invoice.subtotal
+   * credit VAT Output         for invoice.taxTotal (only if > 0)
+   * debit  Cost of Goods Sold  credit Inventory, for
    *        the total Cost of Sales across every tracked-inventory line
    *        item (only if > 0) — SA_ACCOUNTING_MASTER_SPEC.md §24: revenue
    *        must never post without the corresponding inventory/cost
@@ -129,13 +123,13 @@ export class InvoiceService {
 
     const lines: NewJournalLineInput[] = [
       {
-        accountId: AR_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('AR'),
         description: `Invoice ${invoice.invoiceNumber}`,
         debit: invoice.total,
         credit: 0,
       },
       {
-        accountId: SALES_REVENUE_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('SALES_REVENUE'),
         description: `Invoice ${invoice.invoiceNumber}`,
         debit: 0,
         credit: invoice.subtotal,
@@ -143,7 +137,7 @@ export class InvoiceService {
     ];
     if (invoice.taxTotal > 0) {
       lines.push({
-        accountId: VAT_OUTPUT_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('VAT_OUTPUT'),
         description: 'VAT Output',
         debit: 0,
         credit: invoice.taxTotal,
@@ -157,8 +151,18 @@ export class InvoiceService {
     const totalCogs = cogsByLine.reduce((sum, c) => sum + c, 0);
     if (totalCogs > 0) {
       lines.push(
-        { accountId: COGS_ACCOUNT_ID, description: `Invoice ${invoice.invoiceNumber} - Cost of Sales`, debit: totalCogs, credit: 0 },
-        { accountId: INVENTORY_ACCOUNT_ID, description: `Invoice ${invoice.invoiceNumber} - Inventory`, debit: 0, credit: totalCogs },
+        {
+          accountId: await this.accounts.getAccountId('COGS'),
+          description: `Invoice ${invoice.invoiceNumber} - Cost of Sales`,
+          debit: totalCogs,
+          credit: 0,
+        },
+        {
+          accountId: await this.accounts.getAccountId('INVENTORY'),
+          description: `Invoice ${invoice.invoiceNumber} - Inventory`,
+          debit: 0,
+          credit: totalCogs,
+        },
       );
     }
 

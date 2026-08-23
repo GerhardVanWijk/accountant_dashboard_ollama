@@ -1,6 +1,6 @@
 import type { CreditNote, ID } from '@/types';
 import type { ICreditNoteRepository } from '@/repositories/ICreditNoteRepository';
-import type { NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 
 export type CreateCreditNoteDTO = Omit<CreditNote, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -42,22 +42,14 @@ export interface InventoryReturnMover {
   recordReturnMovement(productId: ID, quantity: number, reference: string, warehouseId?: ID, unitCost?: number): Promise<void>;
 }
 
-/** Fixed Chart of Accounts ids this service posts against (src/mock-data/accounts.ts). */
-const SALES_REVENUE_ACCOUNT_ID = 'acc_4000'; // Sales Revenue (reused as a contra — see class doc)
-const VAT_OUTPUT_ACCOUNT_ID = 'acc_2100'; // VAT Output (Payable)
-const AR_ACCOUNT_ID = 'acc_1100'; // Accounts Receivable
-const COGS_ACCOUNT_ID = 'acc_5000'; // Cost of Goods Sold
-const INVENTORY_ACCOUNT_ID = 'acc_1200'; // Inventory
-
 const BALANCE_EPSILON = 0.01;
 
 /**
  * Business-logic layer for Credit Notes (Accounts Receivable contra
  * documents). Issuing one posts the reverse of an Invoice posting; see
  * docs/LEDGER_ARCHITECTURE.md. There is no separate "Sales Returns"
- * contra-account in the seed chart of accounts (src/mock-data/accounts.ts)
- * — reusing acc_4000 (Sales Revenue) for the debit leg is a deliberate,
- * flagged simplification for this wave.
+ * contra-account in the Chart of Accounts — reusing Sales Revenue for the
+ * debit leg is a deliberate, flagged simplification for this wave.
  */
 export class CreditNoteService {
   constructor(
@@ -65,6 +57,7 @@ export class CreditNoteService {
     private readonly journalEntryService: JournalPoster,
     private readonly invoiceService: InvoicePaymentRecorder,
     private readonly inventoryMover: InventoryReturnMover,
+    private readonly accounts: AccountMapper,
   ) {}
 
   async getCreditNotes(): Promise<CreditNote[]> {
@@ -112,12 +105,12 @@ export class CreditNoteService {
    * "issued" credit note row or stock restored with no matching journal
    * entry.
    *
-   * debit  Sales Revenue        (acc_4000) for creditNote.subtotal
-   * debit  VAT Output           (acc_2100) for creditNote.taxTotal (only if > 0)
-   * credit Accounts Receivable  (acc_1100) for creditNote.total
-   * debit  Inventory            (acc_1200)  credit Cost of Goods Sold
-   *        (acc_5000), for the total Cost of Sales reversal across every
-   *        tracked-inventory line item — only when `reason === 'return'`
+   * debit  Sales Revenue        for creditNote.subtotal
+   * debit  VAT Output           for creditNote.taxTotal (only if > 0)
+   * credit Accounts Receivable  for creditNote.total
+   * debit  Inventory  credit Cost of Goods Sold, for the total Cost of
+   *        Sales reversal across every tracked-inventory line item — only
+   *        when `reason === 'return'`
    *        (the goods are physically coming back; a pricing_error/discount/
    *        other credit note is a value adjustment with nothing to put back
    *        on the shelf). Cost is recalculated at the product's CURRENT
@@ -136,7 +129,7 @@ export class CreditNoteService {
 
     const lines: NewJournalLineInput[] = [
       {
-        accountId: SALES_REVENUE_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('SALES_REVENUE'),
         description: `Credit Note ${creditNote.creditNoteNumber}`,
         debit: creditNote.subtotal,
         credit: 0,
@@ -144,14 +137,14 @@ export class CreditNoteService {
     ];
     if (creditNote.taxTotal > 0) {
       lines.push({
-        accountId: VAT_OUTPUT_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('VAT_OUTPUT'),
         description: 'VAT Output reversal',
         debit: creditNote.taxTotal,
         credit: 0,
       });
     }
     lines.push({
-      accountId: AR_ACCOUNT_ID,
+      accountId: await this.accounts.getAccountId('AR'),
       description: `Credit Note ${creditNote.creditNoteNumber}`,
       debit: 0,
       credit: creditNote.total,
@@ -164,8 +157,18 @@ export class CreditNoteService {
     const totalCogs = cogsByLine.reduce((sum, c) => sum + c, 0);
     if (totalCogs > 0) {
       lines.push(
-        { accountId: INVENTORY_ACCOUNT_ID, description: `Credit Note ${creditNote.creditNoteNumber} - Inventory`, debit: totalCogs, credit: 0 },
-        { accountId: COGS_ACCOUNT_ID, description: `Credit Note ${creditNote.creditNoteNumber} - Cost of Sales reversal`, debit: 0, credit: totalCogs },
+        {
+          accountId: await this.accounts.getAccountId('INVENTORY'),
+          description: `Credit Note ${creditNote.creditNoteNumber} - Inventory`,
+          debit: totalCogs,
+          credit: 0,
+        },
+        {
+          accountId: await this.accounts.getAccountId('COGS'),
+          description: `Credit Note ${creditNote.creditNoteNumber} - Cost of Sales reversal`,
+          debit: 0,
+          credit: totalCogs,
+        },
       );
     }
 

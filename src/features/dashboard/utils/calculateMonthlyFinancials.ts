@@ -1,7 +1,7 @@
 import type { Account, JournalEntry } from '@/types';
 
-/** Fixed GL account id (src/mock-data/accounts.ts) — the single Cash and Bank control account every posting module credits/debits. */
-const CASH_AND_BANK_ACCOUNT_ID = 'acc_1000';
+/** Chart of Accounts code for the single Cash and Bank control account every posting module credits/debits — matched by `code`, not a fixed id (account ids are real Supabase-generated uuids). */
+const CASH_AND_BANK_ACCOUNT_CODE = '1000';
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -68,6 +68,7 @@ export function calculateMonthlyFinancials(
   monthKeys: string[],
 ): MonthlyFinancials[] {
   const accountType = new Map(accounts.map((a) => [a.id, a.type]));
+  const cashAndBankAccountId = accounts.find((a) => a.code === CASH_AND_BANK_ACCOUNT_CODE)?.id;
   const totals = new Map<string, { revenue: number; expenses: number; cashIn: number; cashOut: number }>();
   for (const key of monthKeys) {
     totals.set(key, { revenue: 0, expenses: 0, cashIn: 0, cashOut: 0 });
@@ -85,7 +86,7 @@ export function calculateMonthlyFinancials(
       } else if (type === 'expense') {
         bucket.expenses += line.debit - line.credit;
       }
-      if (line.accountId === CASH_AND_BANK_ACCOUNT_ID) {
+      if (cashAndBankAccountId && line.accountId === cashAndBankAccountId) {
         bucket.cashIn += line.debit;
         bucket.cashOut += line.credit;
       }

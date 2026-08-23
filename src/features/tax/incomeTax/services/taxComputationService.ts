@@ -11,7 +11,7 @@ import type {
 } from '@/types';
 import type { ITaxComputationRepository } from '../repositories/ITaxComputationRepository';
 import type { IncomeTaxConfigService } from './incomeTaxConfigService';
-import type { NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 import {
   calculateAccountingProfit,
   calculateDepreciationAddback,
@@ -24,10 +24,7 @@ import {
 /** Half a cent — same rounding tolerance used across every other posting service in this codebase. */
 const EPSILON = 0.005;
 
-/** Fixed GL account ids (src/mock-data/accounts.ts) — see docs/KNOWN_ISSUES.md's Phase 9 note: Deferred Tax accounts deliberately do NOT exist yet (§50 is Phase 12). */
-const INCOME_TAX_EXPENSE_ACCOUNT_ID = 'acc_5500';
-const INCOME_TAX_PAYABLE_ACCOUNT_ID = 'acc_2300';
-
+/** Fixed GL account ids (src/mock-data/accounts.ts). This computation posts CURRENT tax only — the Deferred Tax accounts (acc_1600/acc_2400/acc_5600, added for Phase 12) are posted separately by deferredTaxComputationService, never here. */
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -127,6 +124,7 @@ export class TaxComputationService {
     private readonly disposalLookup: AssetDisposalLookup,
     private readonly configService: Pick<IncomeTaxConfigService, 'getConfigForDate' | 'getById'>,
     private readonly journalPoster: JournalPoster,
+    private readonly accounts: AccountMapper,
     private readonly capitalGainsLookup?: CapitalGainsLookup,
   ) {}
 
@@ -176,7 +174,7 @@ export class TaxComputationService {
     ]);
 
     const accountingProfit = calculateAccountingProfit(entries, accounts, financialYear.startDate, financialYear.endDate);
-    const depreciationAddback = calculateDepreciationAddback(entries, financialYear.startDate, financialYear.endDate);
+    const depreciationAddback = calculateDepreciationAddback(entries, accounts, financialYear.startDate, financialYear.endDate);
     const wearAndTearAllowance = calculateWearAndTearAllowanceForPeriod(assets, financialYear.startDate, financialYear.endDate);
     const disposalAdjustments = suggestDisposalAddbackAdjustments(disposals, assets, financialYear.startDate, financialYear.endDate);
 
@@ -368,9 +366,13 @@ export class TaxComputationService {
     const financialYear = await this.resolveFinancialYear(computation.financialYearId);
 
     const memo = `Corporate income tax - ${computation.financialYearLabel} (${computation.taxConfigTaxYearLabel})`;
+    const [incomeTaxExpenseId, incomeTaxPayableId] = await Promise.all([
+      this.accounts.getAccountId('INCOME_TAX_EXPENSE'),
+      this.accounts.getAccountId('INCOME_TAX_PAYABLE'),
+    ]);
     const lines: NewJournalLineInput[] = [
-      { accountId: INCOME_TAX_EXPENSE_ACCOUNT_ID, description: memo, debit: round2(computation.taxLiability), credit: 0 },
-      { accountId: INCOME_TAX_PAYABLE_ACCOUNT_ID, description: memo, debit: 0, credit: round2(computation.taxLiability) },
+      { accountId: incomeTaxExpenseId, description: memo, debit: round2(computation.taxLiability), credit: 0 },
+      { accountId: incomeTaxPayableId, description: memo, debit: 0, credit: round2(computation.taxLiability) },
     ];
 
     const entry = await this.journalPoster.postJournalEntry({

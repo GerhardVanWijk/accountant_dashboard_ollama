@@ -4,13 +4,14 @@ import { QuoteService } from './quoteService';
 import { SalesOrderService } from './salesOrderService';
 import { CreditNoteService } from './creditNoteService';
 import { CustomerReceiptService } from './customerReceiptService';
-import { MockQuoteRepository } from '@/repositories/mock/MockQuoteRepository';
-import { MockSalesOrderRepository } from '@/repositories/mock/MockSalesOrderRepository';
-import { MockCreditNoteRepository } from '@/repositories/mock/MockCreditNoteRepository';
-import { MockCustomerReceiptRepository } from '@/repositories/mock/MockCustomerReceiptRepository';
-import { journalEntryService } from '@/features/accounting/services';
+import { SupabaseQuoteRepository } from '@/repositories/SupabaseQuoteRepository';
+import { SupabaseSalesOrderRepository } from '@/repositories/SupabaseSalesOrderRepository';
+import { SupabaseCreditNoteRepository } from '@/repositories/SupabaseCreditNoteRepository';
+import { SupabaseCustomerReceiptRepository } from '@/repositories/SupabaseCustomerReceiptRepository';
+import { journalEntryService, accountMappingService } from '@/features/accounting/services';
 import { invoiceService } from '@/services';
 import { inventoryPoster } from '@/features/inventory/services/inventoryPostingAdapter';
+import { supabase } from '@/config/supabase';
 
 export type { CreateQuoteDTO } from './quoteService';
 export type { CreateSalesOrderDTO } from './salesOrderService';
@@ -21,10 +22,10 @@ export { SalesOrderService } from './salesOrderService';
 export { CreditNoteService } from './creditNoteService';
 export { CustomerReceiptService } from './customerReceiptService';
 
-const quoteRepository = new MockQuoteRepository();
-const salesOrderRepository = new MockSalesOrderRepository();
-const creditNoteRepository = new MockCreditNoteRepository();
-const customerReceiptRepository = new MockCustomerReceiptRepository();
+const quoteRepository = new SupabaseQuoteRepository(supabase);
+const salesOrderRepository = new SupabaseSalesOrderRepository(supabase);
+const creditNoteRepository = new SupabaseCreditNoteRepository(supabase);
+const customerReceiptRepository = new SupabaseCustomerReceiptRepository(supabase);
 
 /**
  * SalesOrderService.convertToInvoice() writes new invoices straight through
@@ -74,9 +75,16 @@ const sharedInvoiceRepository = new SharedInvoiceRepositoryAdapter();
  */
 export const quoteService = new QuoteService(quoteRepository, salesOrderRepository);
 export const salesOrderService = new SalesOrderService(salesOrderRepository, sharedInvoiceRepository);
-export const creditNoteService = new CreditNoteService(creditNoteRepository, journalEntryService, invoiceService, inventoryPoster);
+export const creditNoteService = new CreditNoteService(
+  creditNoteRepository,
+  journalEntryService,
+  invoiceService,
+  inventoryPoster,
+  accountMappingService,
+);
 export const customerReceiptService = new CustomerReceiptService(
   customerReceiptRepository,
   journalEntryService,
   invoiceService,
+  accountMappingService,
 );

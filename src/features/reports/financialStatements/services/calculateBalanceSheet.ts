@@ -1,9 +1,9 @@
 import type { Account, ID, JournalEntry } from '@/types';
 import { calculateIncomeStatement, type StatementAccountLine } from './calculateIncomeStatement';
 
-/** Fixed GL account ids (src/mock-data/accounts.ts) — see that file's Phase 9 note. */
-export const OWNERS_EQUITY_ACCOUNT_ID = 'acc_3000';
-export const RETAINED_EARNINGS_ACCOUNT_ID = 'acc_3900';
+/** Chart of Accounts codes — matched by `code`, not a fixed id; see calculateIncomeStatement.ts's equivalent comment. */
+export const OWNERS_EQUITY_ACCOUNT_CODE = '3000';
+export const RETAINED_EARNINGS_ACCOUNT_CODE = '3900';
 
 /** Half a cent — same float tolerance journalEntryService.computeTrialBalance() uses. */
 const BALANCE_EPSILON = 0.005;
@@ -142,14 +142,14 @@ export function calculateBalanceSheet(
   const totalAssets = grossAssets - contraAssetTotal;
   const totalLiabilities = sumLines(liabilityLines);
 
-  const ownersEquityAccount = accounts.find((a) => a.id === OWNERS_EQUITY_ACCOUNT_ID);
-  const retainedEarningsAccount = accounts.find((a) => a.id === RETAINED_EARNINGS_ACCOUNT_ID);
+  const ownersEquityAccount = accounts.find((a) => a.code === OWNERS_EQUITY_ACCOUNT_CODE);
+  const retainedEarningsAccount = accounts.find((a) => a.code === RETAINED_EARNINGS_ACCOUNT_CODE);
 
   const ownersEquity = ownersEquityAccount
-    ? accountBalanceAsOf(OWNERS_EQUITY_ACCOUNT_ID, entries, asOfDate, ownersEquityAccount.normalBalance)
+    ? accountBalanceAsOf(ownersEquityAccount.id, entries, asOfDate, ownersEquityAccount.normalBalance)
     : 0;
   const retainedEarnings = retainedEarningsAccount
-    ? accountBalanceAsOf(RETAINED_EARNINGS_ACCOUNT_ID, entries, asOfDate, retainedEarningsAccount.normalBalance)
+    ? accountBalanceAsOf(retainedEarningsAccount.id, entries, asOfDate, retainedEarningsAccount.normalBalance)
     : 0;
 
   const currentYearEarnings = calculateIncomeStatement(entries, accounts, financialYearStartDate, asOfDate).netProfitAfterTax;

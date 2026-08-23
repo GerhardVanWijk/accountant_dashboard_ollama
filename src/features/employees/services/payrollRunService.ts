@@ -1,17 +1,8 @@
 import type { Company, Employee, ID, JournalEntry, PayrollRun, PayslipLine } from '@/types';
 import type { IPayrollRunRepository } from '../repositories/IPayrollRunRepository';
-import type { NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 import type { PayrollTaxConfigService } from './payrollTaxConfigService';
 import { computePayslipLine, type PayslipOverrideInput } from './payrollCalculations';
-
-const SALARIES_EXPENSE_ACCOUNT_ID = 'acc_5400';
-const UIF_EMPLOYER_EXPENSE_ACCOUNT_ID = 'acc_5410';
-const SDL_EXPENSE_ACCOUNT_ID = 'acc_5420';
-const PAYE_PAYABLE_ACCOUNT_ID = 'acc_2200';
-const UIF_EMPLOYEE_PAYABLE_ACCOUNT_ID = 'acc_2210';
-const UIF_EMPLOYER_PAYABLE_ACCOUNT_ID = 'acc_2220';
-const SDL_PAYABLE_ACCOUNT_ID = 'acc_2230';
-const OTHER_DEDUCTIONS_PAYABLE_ACCOUNT_ID = 'acc_2240';
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -77,6 +68,7 @@ export class PayrollRunService {
     private readonly taxConfigService: Pick<PayrollTaxConfigService, 'getConfigForDate'>,
     private readonly companyStore: CompanyStore,
     private readonly journalPoster: JournalPoster,
+    private readonly accounts: AccountMapper,
   ) {}
 
   async getPayrollRuns(): Promise<PayrollRun[]> {
@@ -227,16 +219,27 @@ export class PayrollRunService {
 
     const totals = sumTotals(run.payslips);
     const memo = `Payroll run ${run.runNumber} (${run.payPeriodStart} to ${run.payPeriodEnd})`;
+    const [salariesExpenseId, uifEmployerExpenseId, sdlExpenseId, payePayableId, uifEmployeePayableId, uifEmployerPayableId, sdlPayableId, otherDeductionsPayableId] =
+      await Promise.all([
+        this.accounts.getAccountId('SALARIES_EXPENSE'),
+        this.accounts.getAccountId('UIF_EMPLOYER_EXPENSE'),
+        this.accounts.getAccountId('SDL_EXPENSE'),
+        this.accounts.getAccountId('PAYE_PAYABLE'),
+        this.accounts.getAccountId('UIF_EMPLOYEE_PAYABLE'),
+        this.accounts.getAccountId('UIF_EMPLOYER_PAYABLE'),
+        this.accounts.getAccountId('SDL_PAYABLE'),
+        this.accounts.getAccountId('OTHER_DEDUCTIONS_PAYABLE'),
+      ]);
     const lines: NewJournalLineInput[] = [];
 
-    if (totals.grossPay > 0) lines.push({ accountId: SALARIES_EXPENSE_ACCOUNT_ID, description: memo, debit: round2(totals.grossPay), credit: 0 });
-    if (totals.uifEmployer > 0) lines.push({ accountId: UIF_EMPLOYER_EXPENSE_ACCOUNT_ID, description: memo, debit: round2(totals.uifEmployer), credit: 0 });
-    if (totals.sdlEmployer > 0) lines.push({ accountId: SDL_EXPENSE_ACCOUNT_ID, description: memo, debit: round2(totals.sdlEmployer), credit: 0 });
-    if (totals.paye > 0) lines.push({ accountId: PAYE_PAYABLE_ACCOUNT_ID, description: memo, debit: 0, credit: round2(totals.paye) });
-    if (totals.uifEmployee > 0) lines.push({ accountId: UIF_EMPLOYEE_PAYABLE_ACCOUNT_ID, description: memo, debit: 0, credit: round2(totals.uifEmployee) });
-    if (totals.uifEmployer > 0) lines.push({ accountId: UIF_EMPLOYER_PAYABLE_ACCOUNT_ID, description: memo, debit: 0, credit: round2(totals.uifEmployer) });
-    if (totals.sdlEmployer > 0) lines.push({ accountId: SDL_PAYABLE_ACCOUNT_ID, description: memo, debit: 0, credit: round2(totals.sdlEmployer) });
-    if (totals.deductionsTotal > 0) lines.push({ accountId: OTHER_DEDUCTIONS_PAYABLE_ACCOUNT_ID, description: memo, debit: 0, credit: round2(totals.deductionsTotal) });
+    if (totals.grossPay > 0) lines.push({ accountId: salariesExpenseId, description: memo, debit: round2(totals.grossPay), credit: 0 });
+    if (totals.uifEmployer > 0) lines.push({ accountId: uifEmployerExpenseId, description: memo, debit: round2(totals.uifEmployer), credit: 0 });
+    if (totals.sdlEmployer > 0) lines.push({ accountId: sdlExpenseId, description: memo, debit: round2(totals.sdlEmployer), credit: 0 });
+    if (totals.paye > 0) lines.push({ accountId: payePayableId, description: memo, debit: 0, credit: round2(totals.paye) });
+    if (totals.uifEmployee > 0) lines.push({ accountId: uifEmployeePayableId, description: memo, debit: 0, credit: round2(totals.uifEmployee) });
+    if (totals.uifEmployer > 0) lines.push({ accountId: uifEmployerPayableId, description: memo, debit: 0, credit: round2(totals.uifEmployer) });
+    if (totals.sdlEmployer > 0) lines.push({ accountId: sdlPayableId, description: memo, debit: 0, credit: round2(totals.sdlEmployer) });
+    if (totals.deductionsTotal > 0) lines.push({ accountId: otherDeductionsPayableId, description: memo, debit: 0, credit: round2(totals.deductionsTotal) });
     if (totals.netPay > 0) lines.push({ accountId: contraAccountId, description: memo, debit: 0, credit: round2(totals.netPay) });
 
     const entry = await this.journalPoster.postJournalEntry({

@@ -2,7 +2,7 @@ import { EmployeeService } from './employeeService';
 import { PayrollTaxConfigService } from './payrollTaxConfigService';
 import { PayrollRunService } from './payrollRunService';
 import { employeeRepository, payrollRunRepository, payrollTaxConfigRepository } from '../repositories/instances';
-import { journalEntryService } from '@/features/accounting/services';
+import { journalEntryService, accountMappingService } from '@/features/accounting/services';
 import { companyService } from '@/features/admin/services';
 
 export type { CreateEmployeeDTO, UpdateEmployeeDTO } from './employeeService';
@@ -42,4 +42,5 @@ export const payrollRunService = new PayrollRunService(
   payrollTaxConfigService,
   companyService,
   journalEntryService,
+  accountMappingService,
 );

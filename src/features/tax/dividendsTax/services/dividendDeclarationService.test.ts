@@ -5,6 +5,8 @@ import { MockDividendDeclarationRepository } from '../repositories/MockDividendD
 import { MockDividendsWithholdingTaxConfigRepository } from '../repositories/MockDividendsWithholdingTaxConfigRepository';
 import { seedDividendsWithholdingTaxConfig } from '@/mock-data/dividendsTaxConfig';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
+import { AccountService } from '@/features/accounting/services/accountService';
+import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
@@ -49,7 +51,12 @@ describe('DividendDeclarationService', () => {
 
     journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
     rateService = new DividendsWithholdingTaxConfigService(rateRepository);
-    declarationService = new DividendDeclarationService(declarationRepository, journalEntryService, rateService);
+    declarationService = new DividendDeclarationService(
+      declarationRepository,
+      journalEntryService,
+      rateService,
+      new AccountMappingService(new AccountService(accountRepository, journalRepository)),
+    );
   });
 
   describe('withholding math', () => {

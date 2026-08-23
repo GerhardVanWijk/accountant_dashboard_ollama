@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { JournalEntryService } from './journalEntryService';
+import { AccountService } from './accountService';
+import { AccountMappingService } from './accountMappingService';
 import { MockJournalEntryRepository } from '../repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '../repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '../repositories/MockAccountingPeriodRepository';
@@ -32,6 +34,11 @@ function setupJournalEntryService() {
   const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
   const auditLog = new AuditLogService(new MockAuditLogRepository());
   return new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
+}
+
+/** Real AccountMappingService resolving against the same seedAccounts codes the hardcoded acc_XXXX journal lines below already use. */
+function setupAccountMapper() {
+  return new AccountMappingService(new AccountService(new MockAccountRepository(seedAccounts), new MockJournalEntryRepository([])));
 }
 
 function invoice(overrides: Partial<Invoice> = {}): Invoice {
@@ -87,7 +94,7 @@ describe('reconcileAccountsReceivable', () => {
       ],
     });
 
-    const result = await reconcileAccountsReceivable(journalEntryService, [invoice()]);
+    const result = await reconcileAccountsReceivable(journalEntryService, setupAccountMapper(), [invoice()]);
 
     expect(result.controlAccountBalance).toBe(1150);
     expect(result.subledgerTotal).toBe(1150);
@@ -100,7 +107,7 @@ describe('reconcileAccountsReceivable', () => {
     // No journal entry posted at all — simulates a bug where an invoice
     // was created/sent without going through postInvoice().
 
-    const result = await reconcileAccountsReceivable(journalEntryService, [invoice()]);
+    const result = await reconcileAccountsReceivable(journalEntryService, setupAccountMapper(), [invoice()]);
 
     expect(result.controlAccountBalance).toBe(0);
     expect(result.subledgerTotal).toBe(1150);
@@ -111,7 +118,7 @@ describe('reconcileAccountsReceivable', () => {
   it('excludes draft and void invoices from the subledger total', async () => {
     const journalEntryService = setupJournalEntryService();
 
-    const result = await reconcileAccountsReceivable(journalEntryService, [
+    const result = await reconcileAccountsReceivable(journalEntryService, setupAccountMapper(), [
       invoice({ id: 'inv_draft', status: 'draft' }),
       invoice({ id: 'inv_void', status: 'void' }),
     ]);
@@ -134,7 +141,7 @@ describe('reconcileAccountsPayable', () => {
       ],
     });
 
-    const result = await reconcileAccountsPayable(journalEntryService, [bill()]);
+    const result = await reconcileAccountsPayable(journalEntryService, setupAccountMapper(), [bill()]);
 
     expect(result.controlAccountBalance).toBe(1150);
     expect(result.subledgerTotal).toBe(1150);
@@ -153,7 +160,7 @@ describe('reconcileAccountsPayable', () => {
       ],
     });
 
-    const result = await reconcileAccountsPayable(journalEntryService, [bill()]);
+    const result = await reconcileAccountsPayable(journalEntryService, setupAccountMapper(), [bill()]);
 
     expect(result.controlAccountBalance).toBe(500);
     expect(result.subledgerTotal).toBe(1150);
@@ -178,8 +185,9 @@ describe('subledger reconciliation against real seed data', () => {
     const auditLog = new AuditLogService(new MockAuditLogRepository());
     const journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
 
-    const ar = await reconcileAccountsReceivable(journalEntryService, seedInvoices);
-    const ap = await reconcileAccountsPayable(journalEntryService, seedBills);
+    const accountMapper = setupAccountMapper();
+    const ar = await reconcileAccountsReceivable(journalEntryService, accountMapper, seedInvoices);
+    const ap = await reconcileAccountsPayable(journalEntryService, accountMapper, seedBills);
 
     expect(ar.isReconciled).toBe(true);
     expect(ap.isReconciled).toBe(true);

@@ -19,11 +19,11 @@ function account(overrides: Partial<Account> = {}): Account {
 }
 
 const ACCOUNTS: Account[] = [
-  account({ id: 'acc_1000', name: 'Cash and Bank', type: 'asset', normalBalance: 'debit' }),
-  account({ id: 'acc_1100', name: 'Accounts Receivable', type: 'asset', normalBalance: 'debit' }),
-  account({ id: 'acc_4000', name: 'Sales Revenue', type: 'revenue', normalBalance: 'credit' }),
-  account({ id: 'acc_5000', name: 'Cost of Goods Sold', type: 'expense', normalBalance: 'debit' }),
-  account({ id: 'acc_5100', name: 'Operating Expenses', type: 'expense', normalBalance: 'debit' }),
+  account({ id: 'acc_1000', code: '1000', name: 'Cash and Bank', type: 'asset', normalBalance: 'debit' }),
+  account({ id: 'acc_1100', code: '1100', name: 'Accounts Receivable', type: 'asset', normalBalance: 'debit' }),
+  account({ id: 'acc_4000', code: '4000', name: 'Sales Revenue', type: 'revenue', normalBalance: 'credit' }),
+  account({ id: 'acc_5000', code: '5000', name: 'Cost of Goods Sold', type: 'expense', normalBalance: 'debit' }),
+  account({ id: 'acc_5100', code: '5100', name: 'Operating Expenses', type: 'expense', normalBalance: 'debit' }),
 ];
 
 function entry(overrides: Partial<JournalEntry> = {}): JournalEntry {

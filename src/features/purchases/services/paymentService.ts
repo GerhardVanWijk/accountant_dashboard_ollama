@@ -1,6 +1,6 @@
 import type { Bill, ID, JournalEntry, Payment } from '@/types';
 import type { IPaymentRepository } from '@/repositories/IPaymentRepository';
-import type { NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 
 export type CreatePaymentDTO = Omit<Payment, 'id' | 'createdAt' | 'updatedAt' | 'journalEntryId' | 'unallocatedAmount'>;
 
@@ -28,16 +28,12 @@ export interface BillPaymentRecorder {
   recordPayment(id: ID, amount: number): Promise<Bill>;
 }
 
-/** Fixed GL account ids (src/mock-data/accounts.ts) this service posts against. */
-const AP_ACCOUNT_ID = 'acc_2000'; // Accounts Payable
 /**
- * Default Cash and Bank control account. Every seeded BankAccount maps to
- * this same GL account today (src/mock-data/bankAccounts.ts) — resolving a
- * Payment's real bank account to its own GL mapping is out of scope this
- * wave (docs/KNOWN_ISSUES.md), matching Banking's own current behavior, not
- * introducing a new gap.
+ * Every Payment posts against the default Cash and Bank control account —
+ * resolving a Payment's real bank account to its own GL mapping is out of
+ * scope this wave (docs/KNOWN_ISSUES.md), matching Banking's own current
+ * behavior, not introducing a new gap.
  */
-const CASH_ACCOUNT_ID = 'acc_1000';
 
 /** Half a cent — tolerance for floating-point rounding, not a real over-allocation. */
 const ALLOCATION_EPSILON = 0.01;
@@ -56,6 +52,7 @@ export class PaymentService {
     private readonly repository: IPaymentRepository,
     private readonly journalEntryService: JournalPoster,
     private readonly billService: BillPaymentRecorder,
+    private readonly accounts: AccountMapper,
   ) {}
 
   async getPayments(): Promise<Payment[]> {
@@ -104,13 +101,13 @@ export class PaymentService {
 
     const lines: NewJournalLineInput[] = [
       {
-        accountId: AP_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('AP'),
         description: `Payment ${data.paymentNumber}`,
         debit: data.amount,
         credit: 0,
       },
       {
-        accountId: CASH_ACCOUNT_ID,
+        accountId: await this.accounts.getAccountId('CASH_AND_BANK'),
         description: `Payment ${data.paymentNumber}`,
         debit: 0,
         credit: data.amount,

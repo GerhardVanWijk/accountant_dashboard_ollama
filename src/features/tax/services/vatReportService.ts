@@ -1,9 +1,6 @@
 import type { Bill, CreditNote, ID, ISODateString, Invoice, TaxRate, VatTreatment } from '@/types';
 import type { JournalEntryService } from '@/features/accounting/services/journalEntryService';
-
-/** Same fixed account ids invoiceService.ts/billService.ts post against (src/mock-data/accounts.ts). */
-const VAT_OUTPUT_ACCOUNT_ID = 'acc_2100';
-const VAT_INPUT_ACCOUNT_ID = 'acc_2110';
+import type { AccountMapper } from '@/features/accounting/services';
 
 /** Half a rand — tolerance for floating-point rounding, not a real discrepancy. */
 const VAT_VARIANCE_EPSILON = 0.005;
@@ -184,13 +181,18 @@ export interface VatReconciliation {
  */
 export async function reconcileVatControlAccounts(
   journalEntryService: Pick<JournalEntryService, 'getAccountLedger'>,
+  accounts: AccountMapper,
   periodStart: Date,
   periodEnd: Date,
   report: VatReport,
 ): Promise<VatReconciliation> {
+  const [vatOutputAccountId, vatInputAccountId] = await Promise.all([
+    accounts.getAccountId('VAT_OUTPUT'),
+    accounts.getAccountId('VAT_INPUT'),
+  ]);
   const [outputRows, inputRows] = await Promise.all([
-    journalEntryService.getAccountLedger(VAT_OUTPUT_ACCOUNT_ID),
-    journalEntryService.getAccountLedger(VAT_INPUT_ACCOUNT_ID),
+    journalEntryService.getAccountLedger(vatOutputAccountId),
+    journalEntryService.getAccountLedger(vatInputAccountId),
   ]);
 
   const outputMovement = outputRows
@@ -206,14 +208,14 @@ export async function reconcileVatControlAccounts(
 
   return {
     outputVat: {
-      controlAccountId: VAT_OUTPUT_ACCOUNT_ID,
+      controlAccountId: vatOutputAccountId,
       controlAccountMovement: outputMovement,
       reportTotal: report.outputVat.total,
       variance: outputVariance,
       isReconciled: Math.abs(outputVariance) <= VAT_VARIANCE_EPSILON,
     },
     inputVat: {
-      controlAccountId: VAT_INPUT_ACCOUNT_ID,
+      controlAccountId: vatInputAccountId,
       controlAccountMovement: inputMovement,
       reportTotal: report.inputVat.total,
       variance: inputVariance,
