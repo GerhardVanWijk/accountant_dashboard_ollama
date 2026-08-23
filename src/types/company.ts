@@ -40,6 +40,17 @@ export type ReportingFramework =
 export type AccountingBasis = 'accrual' | 'cash';
 
 /**
+ * Whether the company's annual financial statements are prepared in-house
+ * ('internal') or by an independent accounting professional not employed
+ * by the company ('independent') — Companies Regulations, 2011, regulations
+ * 27-29 turn on this distinction for a company whose Public Interest Score
+ * (§3, `src/types/compliance.ts`) falls in specific bands. Manually set,
+ * same reason-optional-but-honest pattern as every other compilation-method
+ * field in this codebase — not derivable from any data this app has.
+ */
+export type FinancialStatementCompilation = 'internal' | 'independent';
+
+/**
  * How often a VAT-registered vendor files returns. SARS actually assigns
  * vendors to specific categories (A-E) with somewhat different rules per
  * category — simplified to the filing cadence here; the exact category
@@ -95,6 +106,15 @@ export interface Company extends BaseEntity {
   accountingBasis: AccountingBasis;
   functionalCurrency: CurrencyCode;
   presentationCurrency: CurrencyCode;
+  /**
+   * §116 Phase 11 (Compliance)/§3: feeds `publicInterestScoreService`'s
+   * audit-vs-independent-review and reporting-framework suggestions for a
+   * Public Interest Score in the 100-349 band, or below 100 (Companies
+   * Regulations 2011, reg 27-29). Optional/manually set — left unset, the
+   * calculation deliberately defaults to the stricter outcome rather than
+   * guessing (see `determineAssuranceLevel()`'s doc comment).
+   */
+  financialStatementsCompilation?: FinancialStatementCompilation;
   isVatRegistered: boolean;
   vatRegistrationNumber?: string;
   vatRegistrationDate?: ISODateString;
@@ -135,4 +155,14 @@ export interface Company extends BaseEntity {
   sbcEligibilitySetAt?: ISODateString;
   sbcEligibilityReason?: string;
   isActive: boolean;
+  /**
+   * Phase T (migration 0010) — informational only, surfaced on the
+   * Superuser Dashboard's tenant list. Optional here (rather than required
+   * like every sibling field) so the ~14 existing test/service files that
+   * construct a Company literal don't all need updating for a column
+   * nothing in core accounting logic reads; the DB column itself is
+   * NOT NULL DEFAULT 'free', so a real row always has one. Nothing in this
+   * app enforces tier-gated feature limits yet.
+   */
+  subscriptionTier?: string;
 }

@@ -629,10 +629,15 @@ item now has a real answer. 844/844 tests total, type-check/lint/build clean.
   is shared at `src/services/auditLogService.ts`, not admin-owned, since Accounting/
   Sales/Purchases/Banking all write to it — but the existing `AuditPage.tsx`
   placeholder is exactly where a UI reads from it.
-- [ ] Users & Roles (company setup, user management, permissions)
+- [x] Users & Roles (company setup, user management, permissions) — Phase T, 2026-08-23:
+  real Supabase auth, `src/features/admin/pages/UsersPage.tsx` (role change, suspend,
+  add-existing-user, custom roles), `src/features/admin/pages/SuperUserDashboardPage.tsx`.
+  See `docs/SUPABASE_MIGRATION_GUIDE.md`'s Phase T section.
 - [ ] Company Settings page (name, currency, tax IDs, fiscal year — service ready)
-- [ ] Audit Logs page (transaction history, user actions, GL posting audit trail —
-  `auditLogService.getAll()`/`getForRecord()` ready to consume)
+- [~] Audit Logs page — Phase T, 2026-08-23: the NEW `audit_logs_access` (who
+  accessed what, allowed/denied) is real (`AuditPage.tsx`). The transaction-history/
+  GL-posting business audit trail (`auditLogService.getAll()`/`getForRecord()`) is a
+  separate, still-unbuilt UI gap, not addressed by this pass.
 - [ ] Backup & Export
 
 ## Phase 3: Compliance & Reporting

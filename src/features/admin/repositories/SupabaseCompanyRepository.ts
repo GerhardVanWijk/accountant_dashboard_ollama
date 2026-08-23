@@ -35,6 +35,7 @@ interface CompanyRow {
   sbc_eligibility_set_at: string | null;
   sbc_eligibility_reason: string | null;
   is_active: boolean;
+  subscription_tier: string;
   created_at: string;
   updated_at: string;
 }
@@ -74,6 +75,7 @@ function rowToCompany(row: CompanyRow): Company {
     sbcEligibilitySetAt: row.sbc_eligibility_set_at ?? undefined,
     sbcEligibilityReason: row.sbc_eligibility_reason ?? undefined,
     isActive: row.is_active,
+    subscriptionTier: row.subscription_tier,
   };
 }
 
@@ -110,6 +112,7 @@ function companyToRow(entity: Partial<Company>): Record<string, unknown> {
   if (entity.sbcEligibilitySetAt !== undefined) row.sbc_eligibility_set_at = entity.sbcEligibilitySetAt;
   if (entity.sbcEligibilityReason !== undefined) row.sbc_eligibility_reason = entity.sbcEligibilityReason;
   if (entity.isActive !== undefined) row.is_active = entity.isActive;
+  if (entity.subscriptionTier !== undefined) row.subscription_tier = entity.subscriptionTier;
   return row;
 }
 
