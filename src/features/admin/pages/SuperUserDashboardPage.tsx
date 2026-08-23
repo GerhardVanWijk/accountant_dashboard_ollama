@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
 import { useAuthStore } from '@/stores/authStore';
 import type { AuditLogAccessEntry, Company, Profile, ProfileRole } from '@/types';
 import { companyService } from '@/features/admin/services';
@@ -207,6 +208,7 @@ function TenantDetail({ company, actorId }: { company: Company; actorId: string 
  */
 export function SuperUserDashboardPage() {
   const actorId = useAuthStore((s) => s.profile?.id);
+  const logout = useAuthStore((s) => s.logout);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selected, setSelected] = useState<Company | null>(null);
   const [search, setSearch] = useState('');
@@ -226,7 +228,13 @@ export function SuperUserDashboardPage() {
   return (
     <div className="flex min-h-screen bg-background text-text-primary">
       <aside className="w-72 shrink-0 border-r border-border p-md">
-        <h1 className="text-lg font-semibold">Superuser</h1>
+        <div className="flex items-start justify-between gap-sm">
+          <h1 className="text-lg font-semibold">Superuser</h1>
+          <Button variant="ghost" onClick={logout} className="shrink-0">
+            <Icon name="logout" size={16} />
+            Sign out
+          </Button>
+        </div>
         <p className="mt-xs text-sm text-text-secondary">All tenants — no financial data access.</p>
         <input
           type="search"
