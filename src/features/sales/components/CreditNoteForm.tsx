@@ -1,20 +1,22 @@
 import { useState } from 'react';
 import type { Customer, CreditNoteReason, Invoice } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Amount } from '@/components/app/figure';
 import type { CreateCreditNoteDTO } from '../services';
-import { LineItemsEditor } from './LineItemsEditor';
+import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const REASON_OPTIONS: { value: CreditNoteReason; label: string }[] = [
-  { value: 'return', label: 'Returned Goods' },
-  { value: 'pricing_error', label: 'Pricing Error' },
+  { value: 'return', label: 'Returned goods' },
+  { value: 'pricing_error', label: 'Pricing error' },
   { value: 'discount', label: 'Discount' },
   { value: 'other', label: 'Other' },
 ];
@@ -33,10 +35,10 @@ function today(): string {
 }
 
 /**
- * Credit Note create form. Only builds and validates the
- * CreateCreditNoteDTO payload — it stays in 'draft' until the Detail
- * view's "Issue Credit Note" action posts it via
- * creditNoteService.issueCreditNote().
+ * Credit Note create form — same fields/validation/submit shape as before
+ * the port. Only builds and validates the CreateCreditNoteDTO payload — it
+ * stays in 'draft' until the Detail view's "Issue credit note" action
+ * posts it via creditNoteService.issueCreditNote().
  */
 export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, onSubmit, onCancel }: CreditNoteFormProps) {
   const { taxRates } = useTaxRates();
@@ -94,26 +96,23 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
   }
 
   return (
-    <div className="flex flex-col gap-lg">
+    <div className="flex flex-col gap-6">
       {formError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {formError}
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Credit Note Number</span>
-          <input
-            className={`${inputClass} font-mono`}
-            value={creditNoteNumber}
-            onChange={(e) => setCreditNoteNumber(e.target.value)}
-          />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Customer</span>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="cn-number">Credit note number</FieldLabel>
+          <Input id="cn-number" className="figure" value={creditNoteNumber} onChange={(e) => setCreditNoteNumber(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="cn-customer">Customer</FieldLabel>
           <select
-            className={inputClass}
+            id="cn-customer"
+            className={selectClassName}
             value={customerId}
             onChange={(e) => {
               setCustomerId(e.target.value);
@@ -126,10 +125,10 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Against Invoice (optional)</span>
-          <select className={inputClass} value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)}>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="cn-invoice">Against invoice (optional)</FieldLabel>
+          <select id="cn-invoice" className={selectClassName} value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)}>
             <option value="">Standalone account credit</option>
             {customerInvoices.map((inv) => (
               <option key={inv.id} value={inv.id}>
@@ -137,51 +136,51 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Reason</span>
-          <select className={inputClass} value={reason} onChange={(e) => setReason(e.target.value as CreditNoteReason)}>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="cn-reason">Reason</FieldLabel>
+          <select id="cn-reason" className={selectClassName} value={reason} onChange={(e) => setReason(e.target.value as CreditNoteReason)}>
             {REASON_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Issue Date</span>
-          <input type="date" className={inputClass} value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
-        </label>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="cn-issue-date">Issue date</FieldLabel>
+          <Input id="cn-issue-date" type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+        </Field>
       </div>
 
-      <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} products={products} warehouses={warehouses} />
+      <SalesLineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} products={products} warehouses={warehouses} />
 
-      <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
+      <div className="grid grid-cols-3 gap-4 rounded-xl border border-border bg-muted/20 p-4 text-sm">
         <div>
-          <div className="text-xs text-text-muted">Subtotal</div>
-          <FinancialNumber value={subtotal} format={formatCurrency} className="text-base font-semibold" isInverted />
+          <div className="text-xs text-muted-foreground">Subtotal</div>
+          <Amount value={subtotal} className="text-base font-semibold" />
         </div>
         <div>
-          <div className="text-xs text-text-muted">Tax</div>
-          <FinancialNumber value={taxTotal} format={formatCurrency} className="text-base font-semibold" isInverted />
+          <div className="text-xs text-muted-foreground">Tax</div>
+          <Amount value={taxTotal} className="text-base font-semibold" />
         </div>
         <div>
-          <div className="text-xs text-text-muted">Total Credit</div>
-          <FinancialNumber value={total} format={formatCurrency} className="text-base font-semibold" isInverted />
+          <div className="text-xs text-muted-foreground">Total credit</div>
+          <Amount value={total} className="text-base font-semibold" />
         </div>
       </div>
 
-      <label className="flex flex-col gap-xs text-sm">
-        <span className="font-medium text-text-primary">Notes (optional)</span>
-        <textarea className={inputClass} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </label>
+      <Field>
+        <FieldLabel htmlFor="cn-notes">Notes (optional)</FieldLabel>
+        <Textarea id="cn-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      </Field>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button variant="outline" type="button" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
-          {isSubmitting ? 'Saving…' : 'Create Credit Note'}
+        <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
+          {isSubmitting ? 'Saving…' : 'Create credit note'}
         </Button>
       </div>
     </div>

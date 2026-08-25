@@ -1,23 +1,30 @@
 import { useState } from 'react';
+import { Loader2, Plus } from 'lucide-react';
 import type { Invoice } from '@/types';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { formatCurrency } from '@/lib/app/format';
 import { InvoiceList } from '@/features/sales/components/InvoiceList';
 import { InvoiceDetail } from '@/features/sales/components/InvoiceDetail';
-import { InvoiceForm } from '@/features/sales/components/InvoiceForm';
-import { CustomerReceiptForm } from '@/features/sales/components/CustomerReceiptForm';
-import { Modal } from '@/features/sales/components/Modal';
+import { InvoiceFormModal } from '@/features/sales/components/InvoiceFormModal';
+import { CustomerReceiptFormModal } from '@/features/sales/components/CustomerReceiptFormModal';
 import { useInvoices, useInvoice, useInvoiceMutations } from '@/features/sales/hooks/useInvoices';
 import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
 import { useCustomerReceipts } from '@/features/sales/hooks/useCustomerReceipts';
 import { useCustomerReceiptMutations } from '@/features/sales/hooks/useCustomerReceiptMutations';
 import { useCompany } from '@/features/admin/hooks/useCompany';
+import { invoiceService } from '@/services';
 import type { CreateInvoiceDTO } from '@/services/invoiceService';
 
 type View = { type: 'list' } | { type: 'detail'; invoiceId: string };
 type FormState = { mode: 'create' } | { mode: 'edit'; invoice: Invoice } | null;
 
 /**
- * Route target for /sales/invoices. Orchestrates the invoice module's
- * list/detail views and create/edit form.
+ * Route target for /sales/invoices — real useInvoices()/InvoiceService
+ * data throughout, v0 page shell (PageHeader/SectionCard/FigureBlock),
+ * list/detail views and create/edit modal in-page-state, matching every
+ * other module's convention (no dedicated /sales/invoices/:id route).
  */
 export function InvoicesPage() {
   const [view, setView] = useState<View>({ type: 'list' });
@@ -25,12 +32,10 @@ export function InvoicesPage() {
   const [dataVersion, setDataVersion] = useState(0);
 
   const { invoices, loading, error, refetch: refetchList } = useInvoices();
-  const { invoice: detailInvoice } = useInvoice(
-    view.type === 'detail' ? view.invoiceId : undefined,
-  );
+  const { invoice: detailInvoice } = useInvoice(view.type === 'detail' ? view.invoiceId : undefined);
   const { customers } = useCustomerMap();
   const { customers: customerList } = useCustomerList();
-  const { createInvoice, updateInvoice, markInvoiceAsSent, saving, error: saveError } = useInvoiceMutations();
+  const { createInvoice, updateInvoice, deleteInvoice, markInvoiceAsSent, saving, error: saveError } = useInvoiceMutations();
   const { company } = useCompany();
   const [actionError, setActionError] = useState<string | null>(null);
   const [showRecordPayment, setShowRecordPayment] = useState(false);
@@ -39,11 +44,17 @@ export function InvoicesPage() {
   const { recordReceipt } = useCustomerReceiptMutations();
   const nextReceiptNumber = `RCT-${new Date().getFullYear()}-${String(receipts.length + 1).padStart(4, '0')}`;
 
+  const outstandingInvoices = invoices.filter((inv) => inv.status !== 'void' && inv.total - inv.amountPaid > 0);
+  const outstandingTotal = outstandingInvoices.reduce((sum, inv) => sum + (inv.total - inv.amountPaid), 0);
+  const overdueInvoices = invoices.filter((inv) => invoiceService.isOverdue(inv));
+  const overdueTotal = overdueInvoices.reduce((sum, inv) => sum + (inv.total - inv.amountPaid), 0);
+  const paidTotal = invoices.filter((inv) => inv.status === 'paid').reduce((sum, inv) => sum + inv.amountPaid, 0);
+  const drafts = invoices.filter((inv) => inv.status === 'draft');
+
   /**
-   * Deliberately does NOT catch — CustomerReceiptForm's own onSubmit
-   * handler already wraps this in try/catch and shows the error inline
-   * in the modal (docs/DO_NOT_BREAK.md's component-state convention),
-   * same pattern CustomerReceiptsPage.handleCreate() uses.
+   * Deliberately does NOT catch — CustomerReceiptFormModal's own onSubmit
+   * handler already wraps this in try/catch and shows the error inline in
+   * the modal.
    */
   async function handleRecordPayment(data: Parameters<typeof recordReceipt>[0]): Promise<void> {
     await recordReceipt(data);
@@ -64,11 +75,22 @@ export function InvoicesPage() {
     }
   }
 
+  async function handleDelete(invoiceId: string): Promise<void> {
+    setActionError(null);
+    try {
+      await deleteInvoice(invoiceId);
+      setView({ type: 'list' });
+      refetchList();
+      setDataVersion((t) => t + 1);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not delete invoice.');
+    }
+  }
+
   async function handleFormSubmit(values: Partial<Invoice>): Promise<void> {
     if (formState?.mode === 'edit') {
       await updateInvoice(formState.invoice.id, values);
     } else {
-      // When creating, ensure all required fields are present
       const createData: CreateInvoiceDTO = {
         invoiceNumber: values.invoiceNumber || '',
         customerId: values.customerId || '',
@@ -90,60 +112,75 @@ export function InvoicesPage() {
     setDataVersion((t) => t + 1);
   }
 
-  const getCustomerName = (customerId: string): string => {
-    return customers.get(customerId) || 'Unknown Customer';
-  };
-
-  const customerMap = new Map(customerList.map((c) => [c.id, c.name]));
-
   return (
     <>
       {view.type === 'list' && (
-        <div className="space-y-4" key={dataVersion}>
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold">Sales Invoices</h1>
-            <button
-              onClick={() => setFormState({ mode: 'create' })}
-              className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90 transition-colors"
-            >
-              New Invoice
-            </button>
-          </div>
-
-          {error && (
-            <div className="p-4 bg-danger/10 border border-danger/30 rounded text-danger">{error}</div>
-          )}
-
-          <InvoiceList
-            invoices={invoices}
-            customers={customers}
-            onSelect={(id) => setView({ type: 'detail', invoiceId: id })}
-            isLoading={loading}
-            error={error || undefined}
+        <div className="flex flex-col gap-6" key={dataVersion}>
+          <PageHeader
+            title="Invoices"
+            description="Every invoice raised against your customers, with outstanding balances and payment status."
+            actions={
+              <Button size="sm" onClick={() => setFormState({ mode: 'create' })}>
+                <Plus data-icon="inline-start" />
+                New invoice
+              </Button>
+            }
           />
+
+          <SectionCard>
+            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+              <FigureBlock
+                label="Outstanding"
+                value={formatCurrency(outstandingTotal)}
+                hint={`${outstandingInvoices.length} invoices awaiting payment`}
+              />
+              <FigureBlock
+                label="Overdue"
+                value={formatCurrency(overdueTotal)}
+                hint={`${overdueInvoices.length} past their due date`}
+                tone="negative"
+              />
+              <FigureBlock label="Collected" value={formatCurrency(paidTotal)} hint="Fully settled invoices" tone="positive" />
+              <FigureBlock
+                label="In draft"
+                value={String(drafts.length)}
+                hint="Not yet sent to customers"
+                tone={drafts.length > 0 ? 'warning' : 'default'}
+              />
+            </div>
+          </SectionCard>
+
+          <InvoiceList invoices={invoices} customers={customers} onSelect={(id) => setView({ type: 'detail', invoiceId: id })} />
+        </div>
+      )}
+
+      {loading && view.type === 'list' && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading invoices…</p>
+        </div>
+      )}
+
+      {!loading && error && view.type === 'list' && (
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
         </div>
       )}
 
       {view.type === 'detail' && detailInvoice && (
-        <div className="space-y-4" key={`${view.invoiceId}-${dataVersion}`}>
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => setView({ type: 'list' })}
-              className="px-4 py-2 border border-border rounded hover:bg-panel transition-colors"
-            >
-              Back to List
-            </button>
-          </div>
-
+        <div className="flex flex-col gap-6" key={`${view.invoiceId}-${dataVersion}`}>
           {actionError && (
-            <div className="p-4 bg-danger/10 border border-danger/30 rounded text-danger">{actionError}</div>
+            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {actionError}
+            </div>
           )}
-
           <InvoiceDetail
             invoice={detailInvoice}
-            customerName={getCustomerName(detailInvoice.customerId)}
+            customerName={customers.get(detailInvoice.customerId) || 'Unknown Customer'}
             company={company}
+            onBack={() => setView({ type: 'list' })}
             onEdit={() => setFormState({ mode: 'edit', invoice: detailInvoice })}
+            onDelete={() => void handleDelete(detailInvoice.id)}
             onMarkAsSent={() => void handleMarkAsSent(detailInvoice.id)}
             onRecordPayment={() => setShowRecordPayment(true)}
           />
@@ -151,49 +188,30 @@ export function InvoicesPage() {
       )}
 
       {showRecordPayment && view.type === 'detail' && detailInvoice && (
-        <Modal title={`Record Payment — ${detailInvoice.invoiceNumber}`} onClose={() => setShowRecordPayment(false)} wide>
-          <CustomerReceiptForm
-            customers={customerList}
-            invoices={invoices}
-            defaultReceiptNumber={nextReceiptNumber}
-            presetInvoiceId={detailInvoice.id}
-            onSubmit={handleRecordPayment}
-            onCancel={() => setShowRecordPayment(false)}
-          />
-        </Modal>
+        <CustomerReceiptFormModal
+          title={`Record payment — ${detailInvoice.invoiceNumber}`}
+          customers={customerList}
+          invoices={invoices}
+          defaultReceiptNumber={nextReceiptNumber}
+          presetInvoiceId={detailInvoice.id}
+          onSubmit={handleRecordPayment}
+          onClose={() => setShowRecordPayment(false)}
+        />
       )}
 
       {formState && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-panel rounded-lg border border-border max-h-[90vh] overflow-y-auto max-w-2xl w-full">
-            <div className="p-6 border-b border-border flex justify-between items-center sticky top-0 bg-panel">
-              <h2 className="text-lg font-bold">
-                {formState.mode === 'create' ? 'New Invoice' : `Edit ${formState.invoice.invoiceNumber}`}
-              </h2>
-              <button
-                onClick={() => setFormState(null)}
-                className="text-text-muted hover:text-text transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6">
-              {saveError && (
-                <div className="mb-4 p-4 bg-danger/10 border border-danger/30 rounded text-danger">
-                  {saveError.message}
-                </div>
-              )}
-
-              <InvoiceForm
-                invoice={formState.mode === 'edit' ? formState.invoice : undefined}
-                customers={customerMap}
-                onSubmit={handleFormSubmit}
-                onCancel={() => setFormState(null)}
-                isLoading={saving}
-              />
-            </div>
-          </div>
+        <InvoiceFormModal
+          title={formState.mode === 'create' ? 'New invoice' : `Edit ${formState.invoice.invoiceNumber}`}
+          invoice={formState.mode === 'edit' ? formState.invoice : undefined}
+          customers={new Map(customerList.map((c) => [c.id, c.name]))}
+          onSubmit={handleFormSubmit}
+          onClose={() => setFormState(null)}
+          isLoading={saving}
+        />
+      )}
+      {formState && saveError && (
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {saveError.message}
         </div>
       )}
     </>

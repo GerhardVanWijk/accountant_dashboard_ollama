@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import type { Invoice } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Amount } from '@/components/app/figure';
+import { formatCurrency } from '@/lib/app/format';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface OpenInvoiceOption {
   invoice: Invoice;
@@ -24,15 +26,14 @@ export interface AllocationFormProps {
 /**
  * Shared "allocate against an open invoice" mini-form used by both
  * CreditNoteDetail (allocating a credit note's remaining value) and
- * CustomerReceiptDetail (applying a receipt's unallocated balance) — both
- * services expose an identical `allocateToInvoice(id, invoiceId, amount)`
- * shape, so one form covers both call sites.
+ * CustomerReceiptDetail (applying a receipt's unallocated balance) — same
+ * fields/validation as before the port, JSX re-skinned. Both services
+ * expose an identical `allocateToInvoice(id, invoiceId, amount)` shape, so
+ * one form covers both call sites.
  */
 export function AllocationForm({ openInvoices, maxAmount, onSubmit, onCancel }: AllocationFormProps) {
   const [invoiceId, setInvoiceId] = useState(openInvoices[0]?.invoice.id ?? '');
-  const [amount, setAmount] = useState<number>(
-    Math.min(maxAmount, openInvoices[0]?.outstanding ?? maxAmount),
-  );
+  const [amount, setAmount] = useState<number>(Math.min(maxAmount, openInvoices[0]?.outstanding ?? maxAmount));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -59,10 +60,10 @@ export function AllocationForm({ openInvoices, maxAmount, onSubmit, onCancel }: 
 
   if (openInvoices.length === 0) {
     return (
-      <div className="flex flex-col gap-md">
-        <p className="text-sm text-text-secondary">This customer has no open invoices to allocate against.</p>
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-muted-foreground">This customer has no open invoices to allocate against.</p>
         <div className="flex justify-end">
-          <Button variant="ghost" type="button" onClick={onCancel}>
+          <Button variant="outline" type="button" onClick={onCancel}>
             Close
           </Button>
         </div>
@@ -71,21 +72,22 @@ export function AllocationForm({ openInvoices, maxAmount, onSubmit, onCancel }: 
   }
 
   return (
-    <div className="flex flex-col gap-md">
+    <div className="flex flex-col gap-4">
       {formError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {formError}
         </p>
       )}
 
-      <div className="text-sm text-text-secondary">
-        Remaining to allocate: <FinancialNumber value={maxAmount} format={formatCurrency} className="font-semibold" />
+      <div className="text-sm text-muted-foreground">
+        Remaining to allocate: <Amount value={maxAmount} className="font-semibold text-foreground" />
       </div>
 
-      <label className="flex flex-col gap-xs text-sm">
-        <span className="font-medium text-text-primary">Invoice</span>
+      <Field>
+        <FieldLabel htmlFor="allocation-invoice">Invoice</FieldLabel>
         <select
-          className={inputClass}
+          id="allocation-invoice"
+          className={selectClassName}
           value={invoiceId}
           onChange={(e) => {
             setInvoiceId(e.target.value);
@@ -99,25 +101,25 @@ export function AllocationForm({ openInvoices, maxAmount, onSubmit, onCancel }: 
             </option>
           ))}
         </select>
-      </label>
+      </Field>
 
-      <label className="flex flex-col gap-xs text-sm">
-        <span className="font-medium text-text-primary">Amount to allocate</span>
-        <input
+      <Field>
+        <FieldLabel htmlFor="allocation-amount">Amount to allocate</FieldLabel>
+        <Input
+          id="allocation-amount"
           type="number"
           min="0"
           step="0.01"
-          className={inputClass}
           value={amount || ''}
           onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
         />
-      </label>
+      </Field>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button variant="outline" type="button" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
+        <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
           {isSubmitting ? 'Allocating…' : 'Allocate'}
         </Button>
       </div>

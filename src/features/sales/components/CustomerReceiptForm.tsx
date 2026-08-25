@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import type { Customer, Invoice, ReceiptAllocation, ReceiptMethod } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Amount } from '@/components/app/figure';
+import { formatCurrency } from '@/lib/app/format';
 import type { CreateCustomerReceiptDTO } from '../services';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const METHOD_OPTIONS: { value: ReceiptMethod; label: string }[] = [
   { value: 'eft', label: 'EFT' },
@@ -28,12 +31,11 @@ export interface CustomerReceiptFormProps {
   onSubmit: (data: CreateCustomerReceiptDTO) => Promise<void>;
   onCancel: () => void;
   /**
-   * "Record Payment" from InvoiceDetail (docs/KNOWN_ISSUES.md: the prop
-   * existed but was never wired) opens THIS form rather than a
+   * "Record payment" from InvoiceDetail opens THIS form rather than a
    * bespoke one-off — it's the real, GL-posting receipt flow, just
    * pre-aimed at one invoice: customer, amount (the outstanding balance),
    * and a single allocation row are all pre-filled, still fully editable
-   * (e.g. to record a partial payment) before the user submits.
+   * before the user submits.
    */
   presetInvoiceId?: string;
 }
@@ -43,11 +45,13 @@ function today(): string {
 }
 
 /**
- * Customer Receipt intake form. Recording a receipt IS posting it —
- * customerReceiptService.recordReceipt() posts the balanced journal entry
- * and applies every allocation row in one call, so this form must build a
- * fully-validated CreateCustomerReceiptDTO (amount = sum(allocations) +
- * unallocatedAmount) before submitting.
+ * Customer Receipt intake form — same fields/validation/submit shape as
+ * before the port, JSX re-skinned onto v0's Field/Input primitives.
+ * Recording a receipt IS posting it: customerReceiptService.recordReceipt()
+ * posts the balanced journal entry and applies every allocation row in one
+ * call, so this form must build a fully-validated
+ * CreateCustomerReceiptDTO (amount = sum(allocations) + unallocatedAmount)
+ * before submitting.
  */
 export function CustomerReceiptForm({
   customers,
@@ -136,22 +140,23 @@ export function CustomerReceiptForm({
   }
 
   return (
-    <div className="flex flex-col gap-lg">
+    <div className="flex flex-col gap-6">
       {formError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {formError}
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Receipt Number</span>
-          <input className={`${inputClass} font-mono`} value={receiptNumber} onChange={(e) => setReceiptNumber(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Customer</span>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="receipt-number">Receipt number</FieldLabel>
+          <Input id="receipt-number" className="figure" value={receiptNumber} onChange={(e) => setReceiptNumber(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="receipt-customer">Customer</FieldLabel>
           <select
-            className={inputClass}
+            id="receipt-customer"
+            className={selectClassName}
             value={customerId}
             onChange={(e) => {
               setCustomerId(e.target.value);
@@ -164,64 +169,65 @@ export function CustomerReceiptForm({
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Date Received</span>
-          <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Method</span>
-          <select className={inputClass} value={method} onChange={(e) => setMethod(e.target.value as ReceiptMethod)}>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="receipt-date">Date received</FieldLabel>
+          <Input id="receipt-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="receipt-method">Method</FieldLabel>
+          <select id="receipt-method" className={selectClassName} value={method} onChange={(e) => setMethod(e.target.value as ReceiptMethod)}>
             {METHOD_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Reference (optional)</span>
-          <input className={inputClass} value={reference} onChange={(e) => setReference(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Amount Received</span>
-          <input
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="receipt-reference">Reference (optional)</FieldLabel>
+          <Input id="receipt-reference" value={reference} onChange={(e) => setReference(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="receipt-amount">Amount received</FieldLabel>
+          <Input
+            id="receipt-amount"
             type="number"
             min="0"
             step="0.01"
-            className={inputClass}
             value={amount || ''}
             onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
           />
-        </label>
+        </Field>
       </div>
 
-      <div className="flex flex-col gap-sm">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-text-primary">Allocate to Invoices (optional)</span>
-          <Button variant="ghost" type="button" onClick={addAllocation} disabled={openInvoices.length === 0}>
-            <Icon name="add" size={14} />
-            Add Allocation
+          <span className="text-sm font-medium">Allocate to invoices (optional)</span>
+          <Button variant="outline" size="sm" type="button" onClick={addAllocation} disabled={openInvoices.length === 0}>
+            <Plus data-icon="inline-start" />
+            Add allocation
           </Button>
         </div>
 
         {allocations.length === 0 ? (
-          <div className="rounded-md border border-border px-sm py-md text-center text-sm text-text-muted">
+          <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
             No allocations — the full amount will be recorded on account.
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-md border border-border">
-            <div className="grid min-w-[480px] grid-cols-[1fr_120px_36px] gap-2 bg-primary/10 px-sm py-xs text-xs font-semibold">
-              <div>Invoice</div>
-              <div className="text-right">Amount</div>
-              <div />
+          <div className="flex flex-col gap-2">
+            <div className="hidden grid-cols-[1fr_140px_36px] gap-3 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase sm:grid">
+              <span>Invoice</span>
+              <span className="text-right">Amount</span>
+              <span />
             </div>
             {allocations.map((a, index) => (
-              <div key={index} className="grid min-w-[480px] grid-cols-[1fr_120px_36px] items-center gap-2 border-t border-border/50 px-sm py-xs">
+              <div key={index} className="grid grid-cols-1 items-center gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_140px_36px] sm:border-0 sm:p-0">
                 <select
-                  className={inputClass}
+                  className={selectClassName}
                   value={a.invoiceId}
                   onChange={(e) => updateAllocation(index, { invoiceId: e.target.value })}
+                  aria-label="Invoice"
                 >
                   <option value="">Select invoice</option>
                   {openInvoices.map((inv) => (
@@ -230,54 +236,57 @@ export function CustomerReceiptForm({
                     </option>
                   ))}
                 </select>
-                <input
+                <Input
                   type="number"
                   min="0"
                   step="0.01"
-                  className={`${inputClass} text-right`}
+                  className="text-right"
                   value={a.amount || ''}
                   onChange={(e) => updateAllocation(index, { amount: parseFloat(e.target.value) || 0 })}
+                  aria-label="Allocation amount"
                 />
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
                   type="button"
+                  className="justify-self-end text-muted-foreground hover:text-destructive"
                   onClick={() => removeAllocation(index)}
                   aria-label="Remove allocation"
-                  className="text-text-muted hover:text-danger"
                 >
-                  <Icon name="delete" size={14} />
-                </button>
+                  <Trash2 />
+                </Button>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
+      <div className="grid grid-cols-3 gap-4 rounded-xl border border-border bg-muted/20 p-4 text-sm">
         <div>
-          <div className="text-xs text-text-muted">Amount Received</div>
-          <FinancialNumber value={amount} format={formatCurrency} className="text-base font-semibold text-positive" />
+          <div className="text-xs text-muted-foreground">Amount received</div>
+          <Amount value={amount} className="text-base font-semibold text-positive" />
         </div>
         <div>
-          <div className="text-xs text-text-muted">Allocated</div>
-          <FinancialNumber value={allocatedTotal} format={formatCurrency} className="text-base font-semibold" />
+          <div className="text-xs text-muted-foreground">Allocated</div>
+          <Amount value={allocatedTotal} className="text-base font-semibold" />
         </div>
         <div>
-          <div className="text-xs text-text-muted">On Account</div>
-          <FinancialNumber value={unallocatedAmount} format={formatCurrency} className="text-base font-semibold" />
+          <div className="text-xs text-muted-foreground">On account</div>
+          <Amount value={unallocatedAmount} className="text-base font-semibold" />
         </div>
       </div>
 
-      <label className="flex flex-col gap-xs text-sm">
-        <span className="font-medium text-text-primary">Notes (optional)</span>
-        <textarea className={inputClass} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </label>
+      <Field>
+        <FieldLabel htmlFor="receipt-notes">Notes (optional)</FieldLabel>
+        <Textarea id="receipt-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      </Field>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button variant="outline" type="button" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
-          {isSubmitting ? 'Recording…' : 'Record Receipt'}
+        <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
+          {isSubmitting ? 'Recording…' : 'Record receipt'}
         </Button>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { FinancialNumber } from '@/components/ui/FinancialNumber';
 import { formatCurrency } from '@/utils/formatFinancial';
+import { computeLine } from '../utils/lineItemCalculations';
 
 const inputClass =
   'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
@@ -33,18 +34,6 @@ export interface LineItemsEditorProps {
    */
   warehouses?: Warehouse[];
   disabled?: boolean;
-}
-
-function computeLine(
-  quantity: number,
-  unitPrice: number,
-  taxRateId: string | undefined,
-  taxRates: TaxRate[],
-): { lineTotal: number; taxAmount: number } {
-  const lineTotal = quantity * unitPrice;
-  const rate = taxRates.find((r) => r.id === taxRateId);
-  const taxAmount = rate ? lineTotal * (rate.rate / 100) : 0;
-  return { lineTotal, taxAmount };
 }
 
 /**

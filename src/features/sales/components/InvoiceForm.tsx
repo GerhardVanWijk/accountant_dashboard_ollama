@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import type { Invoice } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Amount } from '@/components/app/figure';
 import type { CreateInvoiceDTO } from '@/services/invoiceService';
-import { LineItemsEditor } from './LineItemsEditor';
+import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 interface InvoiceFormProps {
   invoice?: Invoice;
@@ -29,22 +31,15 @@ function plusDays(days: number): string {
 }
 
 /**
- * Invoice create/edit form. Rebuilt to match every other Sales/Purchases
- * form's pattern (QuoteForm/SalesOrderForm/CreditNoteForm/
- * PurchaseOrderForm) — previously this had its own separate inline
- * line-item editor that hardcoded 15% VAT and never picked up the real
- * TaxRate engine, and had no way to tie a line to a real Product at all
- * (see docs/KNOWN_ISSUES.md: without a productId, Cost of Sales/inventory
- * posting can never fire for an invoice created through the UI). Now
- * shares `LineItemsEditor` with real `useTaxRates()`/`useProducts()`, same
- * as every sibling form.
- *
- * Status is deliberately NOT editable here — it used to be a raw dropdown
- * that let a caller jump an invoice straight to 'sent'/'paid' without ever
- * calling `invoiceService.postInvoice()`, bypassing GL posting/Cost of
- * Sales/stock reduction entirely. Status transitions belong to the
- * dedicated actions on `InvoiceDetail` (Mark as Sent, Record Payment) that
- * go through the real service methods.
+ * Invoice create/edit form — same fields/validation/submit shape as before
+ * the port, JSX re-skinned onto v0's Field/Input primitives and the new
+ * v0-styled `SalesLineItemsEditor`. Status is deliberately NOT editable
+ * here (unchanged from before the port) — a raw status dropdown would let
+ * a caller jump an invoice straight to 'sent'/'paid' without ever calling
+ * `invoiceService.postInvoice()`, bypassing GL posting/Cost of Sales/stock
+ * reduction entirely. Status transitions belong to the dedicated actions
+ * on InvoiceDetail (Mark as Sent, Record Payment) that go through the real
+ * service methods.
  */
 export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading = false }: InvoiceFormProps) => {
   const { taxRates } = useTaxRates();
@@ -93,62 +88,64 @@ export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading 
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-lg">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       {formError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {formError}
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Invoice Number</span>
-          <input
-            className={`${inputClass} font-mono`}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="invoice-number">Invoice number</FieldLabel>
+          <Input
+            id="invoice-number"
+            className="figure"
             value={invoiceNumber}
             onChange={(e) => setInvoiceNumber(e.target.value)}
             disabled={isLoading}
           />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Customer</span>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="invoice-customer">Customer</FieldLabel>
           <select
-            className={inputClass}
+            id="invoice-customer"
+            className={selectClassName}
             value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
             disabled={isLoading}
           >
-            <option value="">Select Customer</option>
+            <option value="">Select customer</option>
             {customerEntries.map(([id, name]) => (
               <option key={id} value={id}>
                 {name}
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Issue Date</span>
-          <input
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="invoice-issue-date">Issue date</FieldLabel>
+          <Input
+            id="invoice-issue-date"
             type="date"
-            className={inputClass}
             value={issueDate}
             onChange={(e) => setIssueDate(e.target.value)}
             disabled={isLoading}
           />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Due Date</span>
-          <input
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="invoice-due-date">Due date</FieldLabel>
+          <Input
+            id="invoice-due-date"
             type="date"
-            className={inputClass}
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             disabled={isLoading}
           />
-        </label>
+        </Field>
       </div>
 
-      <LineItemsEditor
+      <SalesLineItemsEditor
         lineItems={lineItems}
         onChange={setLineItems}
         taxRates={taxRates}
@@ -157,40 +154,34 @@ export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading 
         disabled={isLoading}
       />
 
-      <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
+      <div className="grid grid-cols-3 gap-4 rounded-xl border border-border bg-muted/20 p-4 text-sm">
         <div>
-          <div className="text-xs text-text-muted">Subtotal</div>
-          <FinancialNumber value={subtotal} format={formatCurrency} className="text-base font-semibold" />
+          <div className="text-xs text-muted-foreground">Subtotal</div>
+          <Amount value={subtotal} className="text-base font-semibold" />
         </div>
         <div>
-          <div className="text-xs text-text-muted">Tax</div>
-          <FinancialNumber value={taxTotal} format={formatCurrency} className="text-base font-semibold" />
+          <div className="text-xs text-muted-foreground">Tax</div>
+          <Amount value={taxTotal} className="text-base font-semibold" />
         </div>
         <div>
-          <div className="text-xs text-text-muted">Total</div>
-          <FinancialNumber value={total} format={formatCurrency} className="text-base font-semibold" />
+          <div className="text-xs text-muted-foreground">Total</div>
+          <Amount value={total} className="text-base font-semibold" />
         </div>
       </div>
 
-      <label className="flex flex-col gap-xs text-sm">
-        <span className="font-medium text-text-primary">Notes (optional)</span>
-        <textarea
-          className={inputClass}
-          rows={3}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          disabled={isLoading}
-        />
-      </label>
+      <Field>
+        <FieldLabel htmlFor="invoice-notes">Notes (optional)</FieldLabel>
+        <Textarea id="invoice-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={isLoading} />
+      </Field>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
         {onCancel && (
-          <Button variant="ghost" type="button" onClick={onCancel} disabled={isLoading}>
+          <Button variant="outline" type="button" onClick={onCancel} disabled={isLoading}>
             Cancel
           </Button>
         )}
-        <Button variant="primary" type="submit" disabled={isLoading}>
-          {isLoading ? 'Saving…' : invoice ? 'Save Invoice' : 'Create Invoice'}
+        <Button type="submit" disabled={isLoading}>
+          {isLoading ? 'Saving…' : invoice ? 'Save invoice' : 'Create invoice'}
         </Button>
       </div>
     </form>
