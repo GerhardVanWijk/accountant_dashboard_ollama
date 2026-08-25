@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { format } from 'date-fns';
+import { CheckCircle2, TriangleAlert } from 'lucide-react';
 import type { BankAccount } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Icon } from '@/components/ui/Icon';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
+import { SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { formatCurrency, formatDate } from '@/lib/app/format';
 import { useBankReconciliation } from '../hooks/useBankReconciliation';
-import { formatZAR } from '../utils/formatZAR';
-
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
 export interface ReconciliationWorkspaceProps {
   bankAccount: BankAccount;
@@ -17,14 +17,15 @@ export interface ReconciliationWorkspaceProps {
 }
 
 /**
- * Interactive bank reconciliation workspace: compares Bank Statement
- * Balance vs GL Cashbook Balance, lists outstanding/unpresented payments
- * and uncleared deposits, flags unallocated items, and shows a real-time
- * variance indicator. The Finalize button is disabled client-side whenever
- * variance ≠ 0 or an item still needs allocation — but the real
- * enforcement is in BankReconciliationService.finalizeReconciliation,
- * which independently re-derives the summary and throws before writing
- * anything (docs/HIVE_TASKS.md's Banking entry).
+ * Interactive bank reconciliation workspace — same
+ * useBankReconciliation()/BankReconciliationService wiring as before the
+ * port, JSX re-skinned onto v0's SectionCard/FigureBlock. Every figure
+ * (glCashbookBalance, adjustedBankBalance, variance, outstanding items)
+ * comes from `computeSummary()` — nothing is summed independently here.
+ * The Finalize button is disabled client-side whenever variance ≠ 0 or an
+ * item still needs allocation, but the real enforcement is in
+ * `BankReconciliationService.finalizeReconciliation()`, which
+ * independently re-derives the summary and throws before writing anything.
  */
 export function ReconciliationWorkspace({ bankAccount, onFinalized }: ReconciliationWorkspaceProps) {
   const {
@@ -62,73 +63,72 @@ export function ReconciliationWorkspace({ bankAccount, onFinalized }: Reconcilia
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <Card className="grid grid-cols-1 gap-md md:grid-cols-3">
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Statement Date</span>
-          <input
-            type="date"
-            className={inputClass}
-            value={statementDate}
-            onChange={(e) => setStatementDate(e.target.value)}
-          />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Bank Statement Closing Balance</span>
-          <input
-            type="number"
-            step="0.01"
-            className={inputClass}
-            value={statementBalance || ''}
-            onChange={(e) => setStatementBalance(parseFloat(e.target.value) || 0)}
-          />
-        </label>
-        <div className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">GL Cashbook Balance</span>
-          <div className={`${inputClass} bg-background`}>
-            {summary ? <FinancialNumber value={summary.glCashbookBalance} format={formatZAR} showFlash /> : '—'}
+    <div className="flex flex-col gap-6">
+      <SectionCard>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <Field>
+            <FieldLabel htmlFor="recon-statement-date">Statement date</FieldLabel>
+            <Input id="recon-statement-date" type="date" value={statementDate} onChange={(e) => setStatementDate(e.target.value)} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="recon-statement-balance">Bank statement closing balance</FieldLabel>
+            <Input
+              id="recon-statement-balance"
+              type="number"
+              step="0.01"
+              value={statementBalance || ''}
+              onChange={(e) => setStatementBalance(parseFloat(e.target.value) || 0)}
+            />
+          </Field>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium">GL cashbook balance</span>
+            <div className="figure flex h-8 items-center rounded-lg border border-input bg-muted/30 px-2.5 text-sm">
+              {summary ? <Amount value={summary.glCashbookBalance} plain /> : '—'}
+            </div>
           </div>
         </div>
-      </Card>
+      </SectionCard>
 
       {error && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error.message}
         </p>
       )}
 
-      {isLoading && <p className="text-sm text-text-secondary">Calculating…</p>}
+      {isLoading && <p className="text-sm text-muted-foreground">Calculating…</p>}
 
       {summary && (
-        <Card
-          className={`flex flex-col gap-sm border-2 ${
-            summary.isBalanced ? 'border-positive bg-positive/5' : 'border-negative bg-negative/5'
-          }`}
-        >
-          <div className="flex items-center gap-sm">
-            <Icon name={summary.isBalanced ? 'reconciliation' : 'error'} className={summary.isBalanced ? 'text-positive' : 'text-negative'} size={22} />
-            <span className={`text-lg font-semibold ${summary.isBalanced ? 'text-positive' : 'text-negative'}`}>
-              {summary.isBalanced ? 'Balanced — ready to finalize' : 'Out of balance'}
-            </span>
+        <SectionCard className={summary.isBalanced ? 'border-positive/40 bg-positive/5' : 'border-negative/40 bg-negative/5'}>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              {summary.isBalanced ? (
+                <CheckCircle2 className="size-5 text-positive" aria-hidden="true" />
+              ) : (
+                <TriangleAlert className="size-5 text-negative" aria-hidden="true" />
+              )}
+              <span className={summary.isBalanced ? 'text-lg font-semibold text-positive' : 'text-lg font-semibold text-negative'}>
+                {summary.isBalanced ? 'Balanced — ready to finalize' : 'Out of balance'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <FigureBlock label="Uncleared deposits" value={formatCurrency(summary.unclearedDepositsTotal)} hint={`${summary.unclearedDeposits.length} items`} />
+              <FigureBlock label="Unpresented payments" value={formatCurrency(-summary.unpresentedPaymentsTotal)} hint={`${summary.unpresentedPayments.length} items`} />
+              <FigureBlock label="Adjusted bank balance" value={formatCurrency(summary.adjustedBankBalance)} />
+              <FigureBlock label="Variance" value={formatCurrency(summary.variance)} tone={summary.isBalanced ? 'positive' : 'negative'} />
+            </div>
+            {summary.unallocatedItems.length > 0 && (
+              <p className="rounded-lg bg-warning/15 px-3 py-2 text-xs text-warning">
+                {summary.unallocatedItems.length} transaction(s) still need a GL allocation before they can be cleared —
+                allocate them from the Bank Transactions page first.
+              </p>
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-sm text-sm md:grid-cols-4">
-            <SummaryStat label="Uncleared Deposits" value={summary.unclearedDepositsTotal} count={summary.unclearedDeposits.length} />
-            <SummaryStat label="Unpresented Payments" value={-summary.unpresentedPaymentsTotal} count={summary.unpresentedPayments.length} />
-            <SummaryStat label="Adjusted Bank Balance" value={summary.adjustedBankBalance} />
-            <SummaryStat label="Variance" value={summary.variance} emphasize />
-          </div>
-          {summary.unallocatedItems.length > 0 && (
-            <p className="rounded-md bg-warning-financial/15 px-sm py-xs text-xs text-warning-financial">
-              {summary.unallocatedItems.length} transaction(s) still need a GL allocation before they can be cleared —
-              allocate them from the Bank Transactions page first.
-            </p>
-          )}
-        </Card>
+        </SectionCard>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="overflow-x-auto rounded-xl border border-border">
         <div className="min-w-[720px]">
-          <div className="grid grid-cols-[40px_100px_1.6fr_130px_120px_140px] gap-3 border-b border-border bg-background px-4 py-3 text-xs font-semibold text-text-secondary">
+          <div className="grid grid-cols-[40px_100px_1.6fr_130px_120px_140px] gap-3 border-b border-border bg-muted/40 px-4 py-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             <span>Clear</span>
             <span>Date</span>
             <span>Description</span>
@@ -140,91 +140,59 @@ export function ReconciliationWorkspace({ bankAccount, onFinalized }: Reconcilia
             const unallocated = txn.allocations.length === 0 && !txn.transferPairId;
             const signed = txn.direction === 'credit' ? -txn.amount : txn.amount;
             return (
-              <div
-                key={txn.id}
-                className="grid grid-cols-[40px_100px_1.6fr_130px_120px_140px] gap-3 border-b border-border/50 px-4 py-3 text-sm tabular-nums"
-              >
+              <div key={txn.id} className="grid grid-cols-[40px_100px_1.6fr_130px_120px_140px] gap-3 border-b border-border/50 px-4 py-3 text-sm tabular-nums">
                 <input
                   type="checkbox"
                   aria-label={`Mark ${txn.description} as cleared`}
                   checked={clearedIds.has(txn.id)}
                   disabled={unallocated}
                   onChange={() => toggleCleared(txn.id)}
-                  className="h-4 w-4"
+                  className="size-4 rounded border-input"
                 />
-                <span className="text-text-secondary">{format(new Date(txn.date), 'dd MMM yy')}</span>
-                <span className="text-text-primary">
+                <span className="text-muted-foreground">{formatDate(txn.date)}</span>
+                <span className="flex items-center gap-1.5">
                   {txn.description}
                   {unallocated && (
-                    <span className="ml-2 rounded-full bg-warning-financial/20 px-2 py-0.5 text-xs font-semibold text-warning-financial">
-                      Needs allocation
-                    </span>
+                    <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">Needs allocation</span>
                   )}
                 </span>
-                <span className="font-mono text-xs text-text-secondary">{txn.reference ?? '—'}</span>
+                <span className="figure text-xs text-muted-foreground">{txn.reference ?? '—'}</span>
                 <span className="text-right">
-                  <FinancialNumber value={signed} format={formatZAR} showFlash={false} />
+                  <Amount value={signed} plain />
                 </span>
-                <span className="text-text-secondary">{txn.direction === 'debit' ? 'Uncleared deposit' : 'Unpresented payment'}</span>
+                <span className="text-muted-foreground">{txn.direction === 'debit' ? 'Uncleared deposit' : 'Unpresented payment'}</span>
               </div>
             );
           })}
           {outstanding.length === 0 && (
-            <div className="px-4 py-6 text-center text-sm text-text-muted">
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
               No outstanding items up to this statement date — everything is already cleared.
             </div>
           )}
         </div>
       </div>
 
-      <Card className="flex flex-col gap-sm">
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Notes (optional)</span>
-          <textarea className={inputClass} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </label>
-        {finalizeError && (
-          <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
-            {finalizeError}
-          </p>
-        )}
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-text-secondary">
-            {canFinalize
-              ? `${clearedIds.size} transaction(s) will be marked reconciled.`
-              : 'Select cleared items and reach a zero variance to finalize.'}
-          </p>
-          <Button variant="primary" disabled={!canFinalize || isFinalizing} onClick={() => void handleFinalize()}>
-            {isFinalizing ? 'Finalizing…' : 'Finalize Reconciliation'}
-          </Button>
+      <SectionCard>
+        <div className="flex flex-col gap-3">
+          <Field>
+            <FieldLabel htmlFor="recon-notes">Notes (optional)</FieldLabel>
+            <Textarea id="recon-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </Field>
+          {finalizeError && (
+            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {finalizeError}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              {canFinalize ? `${clearedIds.size} transaction(s) will be marked reconciled.` : 'Select cleared items and reach a zero variance to finalize.'}
+            </p>
+            <Button disabled={!canFinalize || isFinalizing} onClick={() => void handleFinalize()}>
+              {isFinalizing ? 'Finalizing…' : 'Finalize reconciliation'}
+            </Button>
+          </div>
         </div>
-      </Card>
-    </div>
-  );
-}
-
-function SummaryStat({
-  label,
-  value,
-  count,
-  emphasize,
-}: {
-  label: string;
-  value: number;
-  count?: number;
-  emphasize?: boolean;
-}) {
-  return (
-    <div className="rounded-md border border-border bg-panel px-sm py-xs">
-      <div className="text-xs text-text-muted">
-        {label}
-        {count !== undefined ? ` (${count})` : ''}
-      </div>
-      <FinancialNumber
-        value={value}
-        format={formatZAR}
-        showFlash={false}
-        className={emphasize ? 'text-base font-semibold' : 'text-sm'}
-      />
+      </SectionCard>
     </div>
   );
 }

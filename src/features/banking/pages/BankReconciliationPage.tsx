@@ -1,21 +1,34 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import type { BankAccount } from '@/types';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/shadcn/select';
 import { useBankAccounts } from '../hooks/useBankAccounts';
 import { useBankReconciliation } from '../hooks/useBankReconciliation';
 import { ReconciliationWorkspace } from '../components/ReconciliationWorkspace';
 import { ReconciliationHistory } from '../components/ReconciliationHistory';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
-
 /**
- * Bank Reconciliation — compares Bank Statement Balance vs GL Cashbook
- * Balance for one account at a time, with a real-time variance indicator
- * and an immutable reconciliation-history list. Route
- * `/banking/reconciliation` (docs/ROUTES.md, wired by Queen Bee).
+ * Bank Reconciliation — route `/banking/reconciliation`. Real
+ * useBankAccounts()/useBankReconciliation()/BankReconciliationService
+ * data. v0's own reconciliation page shows every account's latest
+ * reconciliation as a flat list of cards with an "in-progress"/"balanced"/
+ * "not-started" status — but a `BankReconciliation` only ever exists as a
+ * finalized, immutable snapshot in the real domain (no persisted
+ * "in-progress" state; that's exactly what the live workspace below is).
+ * The real app already resolved this with a per-account Workspace/History
+ * split — kept unchanged, just re-skinned with v0's account-selector and
+ * card language, since replacing it with v0's flat multi-account view
+ * would mean inventing a reconciliation lifecycle state the backend
+ * doesn't have.
  */
 export function BankReconciliationPage() {
   const { bankAccounts, isLoading } = useBankAccounts();
@@ -27,46 +40,49 @@ export function BankReconciliationPage() {
     }
   }, [bankAccounts, selectedAccountId]);
 
-  const selectedAccount = useMemo(
-    () => bankAccounts.find((a) => a.id === selectedAccountId),
-    [bankAccounts, selectedAccountId],
-  );
+  const selectedAccount = useMemo(() => bankAccounts.find((a) => a.id === selectedAccountId), [bankAccounts, selectedAccountId]);
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Bank Reconciliation</h1>
-        <p className="mt-xs text-sm text-text-secondary">
-          Match the bank statement against the GL cashbook, clear outstanding items, and finalize once the variance
-          is zero.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Bank reconciliation"
+        description="Match the bank statement against the GL cashbook, clear outstanding items, and finalize once the variance is zero."
+      />
 
-      <Card className="flex flex-col gap-xs sm:flex-row sm:items-center sm:gap-md">
-        <label className="flex flex-1 flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Bank Account</span>
-          <select
-            aria-label="Select bank account to reconcile"
-            className={inputClass}
-            value={selectedAccountId}
-            onChange={(e) => setSelectedAccountId(e.target.value)}
-          >
-            {bankAccounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name} ({a.bankName})
-              </option>
-            ))}
-          </select>
-        </label>
-      </Card>
+      <SectionCard>
+        <Select
+          items={bankAccounts.map((a) => ({ value: a.id, label: `${a.name} (${a.bankName})` }))}
+          value={selectedAccountId}
+          onValueChange={(value) => setSelectedAccountId(String(value))}
+        >
+          <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-64" aria-label="Select bank account to reconcile">
+            <SelectValue placeholder="Select a bank account" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {bankAccounts.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.name} ({a.bankName})
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </SectionCard>
 
-      {isLoading && <Spinner label="Loading bank accounts…" />}
+      {isLoading && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading bank accounts…</p>
+        </div>
+      )}
 
       {!isLoading && bankAccounts.length === 0 && (
-        <EmptyState
-          title="No bank accounts yet"
-          message="Set up a bank account on the Cash & Bank Accounts page before reconciling."
-        />
+        <SectionCard>
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Set up a bank account on the Cash & Bank Accounts page before reconciling.
+          </p>
+        </SectionCard>
       )}
 
       {!isLoading && selectedAccount && <ReconciliationSection account={selectedAccount} />}
@@ -79,34 +95,18 @@ function ReconciliationSection({ account }: { account: BankAccount }) {
   const { history, refetchHistory } = useBankReconciliation(account.id);
 
   return (
-    <div className="flex flex-col gap-md">
-      <div className="flex gap-xs border-b border-border" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'workspace'}
-          onClick={() => setTab('workspace')}
-          className={`px-md py-sm text-sm font-medium ${
-            tab === 'workspace' ? 'border-b-2 border-primary text-text-primary' : 'text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          Reconcile {account.name}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'history'}
-          onClick={() => setTab('history')}
-          className={`px-md py-sm text-sm font-medium ${
-            tab === 'history' ? 'border-b-2 border-primary text-text-primary' : 'text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          History ({history.length})
-        </button>
-      </div>
+    <Tabs value={tab} onValueChange={(v) => setTab(v as 'workspace' | 'history')}>
+      <TabsList variant="line" className="w-full justify-start border-b border-border">
+        <TabsTrigger value="workspace">Reconcile {account.name}</TabsTrigger>
+        <TabsTrigger value="history">History ({history.length})</TabsTrigger>
+      </TabsList>
 
-      {tab === 'workspace' && <ReconciliationWorkspace bankAccount={account} onFinalized={() => void refetchHistory()} />}
-      {tab === 'history' && <ReconciliationHistory history={history} />}
-    </div>
+      <TabsContent value="workspace" className="pt-4">
+        <ReconciliationWorkspace bankAccount={account} onFinalized={() => void refetchHistory()} />
+      </TabsContent>
+      <TabsContent value="history" className="pt-4">
+        <ReconciliationHistory history={history} />
+      </TabsContent>
+    </Tabs>
   );
 }

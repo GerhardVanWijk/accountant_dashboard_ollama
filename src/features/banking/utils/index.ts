@@ -1,4 +1,5 @@
 export { formatZAR } from './formatZAR';
+export { buildGlAccountCodeMap } from './glAccountCodeMap';
 export { round2, computeAllocationTax, isTaxSeparatelyPosted } from './taxCalculations';
 export { findMatchCandidates } from './matching';
 export {
