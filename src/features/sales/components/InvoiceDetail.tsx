@@ -1,242 +1,209 @@
-import React from 'react';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
-import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 import type { Company, Invoice } from '@/types';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { StatusBadge } from '@/components/app/status-badge';
+import { Button } from '@/components/ui/shadcn/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/shadcn/alert-dialog';
+import { formatCurrency, formatDate } from '@/lib/app/format';
+import { invoiceService } from '@/services';
 
 interface InvoiceDetailProps {
   invoice: Invoice;
   customerName: string;
-  /**
-   * The issuing company, for SARS-required tax invoice fields (name, VAT
-   * registration number — SA_ACCOUNTING_MASTER_SPEC.md §13). Falls back to
-   * a placeholder only when no Company record is available yet.
-   */
+  /** The issuing company, for SARS-required tax invoice fields (name, VAT registration number — SA_ACCOUNTING_MASTER_SPEC.md §13). */
   company?: Pick<Company, 'name' | 'vatRegistrationNumber' | 'registrationNumber'>;
+  onBack?: () => void;
   onEdit?: () => void;
+  onDelete?: () => void;
   onMarkAsSent?: () => void;
   onRecordPayment?: () => void;
+  isBusy?: boolean;
 }
 
-export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({
+/**
+ * Invoice detail — re-skinned onto v0's PageHeader/SectionCard, same
+ * action gating as before the port (Mark as Sent only from draft; Record
+ * Payment only once sent/partially paid, never draft/paid/void). Adds a
+ * "Delete draft" action wired to the existing `deleteInvoice()` guard
+ * (draft-only) that the old detail page never surfaced despite the hook
+ * already supporting it — see the M4 report. There is no Void/Cancel
+ * action: InvoiceService has none for a posted invoice — its own
+ * `deleteInvoice()` error message says so directly: issue a Credit Note
+ * instead (the M4 report also flags this).
+ */
+export function InvoiceDetail({
   invoice,
   customerName,
   company,
+  onBack,
   onEdit,
+  onDelete,
   onMarkAsSent,
   onRecordPayment,
-}) => {
+  isBusy = false,
+}: InvoiceDetailProps) {
+  const outstanding = invoice.total - invoice.amountPaid;
+  const collectionPercent = invoice.total === 0 ? 0 : (invoice.amountPaid / invoice.total) * 100;
+  const overdue = invoiceService.isOverdue(invoice);
+  const navigate = useNavigate();
+
   return (
-    <div className="space-y-4">
-      {/* Action Buttons */}
-      {(onEdit || onMarkAsSent || onRecordPayment) && (
-        <div className="flex gap-2">
-          {onEdit && (
-            <button
-              onClick={onEdit}
-              className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90 transition-colors"
-            >
-              Edit
-            </button>
-          )}
-          {onMarkAsSent && invoice.status === 'draft' && (
-            <button
-              onClick={onMarkAsSent}
-              className="px-4 py-2 bg-info-financial text-white rounded hover:bg-info-financial/90 transition-colors"
-            >
-              Mark as Sent
-            </button>
-          )}
-          {onRecordPayment && invoice.status !== 'paid' && invoice.status !== 'draft' && invoice.status !== 'void' && (
-            <button
-              onClick={onRecordPayment}
-              className="px-4 py-2 bg-positive text-white rounded hover:bg-positive/90 transition-colors"
-            >
-              Record Payment
-            </button>
-          )}
+    <>
+      <PageHeader
+        title={invoice.invoiceNumber}
+        description={company?.name ? `${company.name} — Tax Invoice` : 'Tax Invoice'}
+        actions={
+          <>
+            {onBack && (
+              <Button variant="outline" size="sm" onClick={onBack}>
+                Back
+              </Button>
+            )}
+            {onEdit && invoice.status === 'draft' && (
+              <Button variant="outline" size="sm" onClick={onEdit}>
+                Edit
+              </Button>
+            )}
+            {onDelete && invoice.status === 'draft' && (
+              <AlertDialog>
+                <AlertDialogTrigger render={<Button variant="destructive" size="sm" disabled={isBusy} />}>
+                  Delete draft
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete {invoice.invoiceNumber}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This permanently removes the draft invoice. This cannot be undone. A posted invoice can never
+                      be deleted this way — issue a credit note instead.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive/10 text-destructive hover:bg-destructive/20"
+                      onClick={onDelete}
+                    >
+                      Delete draft
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            {onMarkAsSent && invoice.status === 'draft' && (
+              <Button size="sm" disabled={isBusy} onClick={onMarkAsSent}>
+                Mark as sent
+              </Button>
+            )}
+            {onRecordPayment && invoice.status !== 'paid' && invoice.status !== 'draft' && invoice.status !== 'void' && (
+              <Button size="sm" disabled={isBusy} onClick={onRecordPayment}>
+                Record payment
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge status={invoice.status} />
+        {overdue && invoice.status !== 'paid' && invoice.status !== 'void' && (
+          <span className="text-xs font-medium text-negative">Past due date</span>
+        )}
+      </div>
+
+      {invoice.status !== 'draft' && (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-muted-foreground">
+            This invoice has posted to the ledger, so its line items and amounts can no longer be edited here —
+            issue a credit note to adjust it.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => navigate('/sales/credit-notes')}>
+            Go to credit notes
+          </Button>
         </div>
       )}
 
-      {/* Invoice Document */}
-      <div className="max-w-4xl bg-panel p-8 rounded-lg border border-border">
-        {/* Header */}
-        <div className="flex justify-between items-start mb-8 pb-8 border-b border-border">
+      <SectionCard title="Bill to" description={customerName}>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div>
-            <div className="text-3xl font-bold mb-2">{company?.name ?? 'Your Company'}</div>
-            <div className="text-text-secondary">Tax Invoice</div>
-            {company?.vatRegistrationNumber && (
-              <div className="text-xs text-text-muted mt-1">VAT Reg. No: {company.vatRegistrationNumber}</div>
-            )}
-            {company?.registrationNumber && (
-              <div className="text-xs text-text-muted">Reg. No: {company.registrationNumber}</div>
-            )}
-          </div>
-          <div className="text-right">
-            <div className="font-mono text-xl font-semibold">{invoice.invoiceNumber}</div>
-            <div className="text-sm text-text-muted">{format(new Date(invoice.issueDate), 'dd MMMM yyyy')}</div>
-            <div className={`text-xs font-semibold mt-2 px-2 py-1 rounded ${getStatusClass(invoice.status)}`}>
-              {getStatusLabel(invoice.status)}
-            </div>
-          </div>
-        </div>
-
-        {/* Customer & Dates */}
-        <div className="grid grid-cols-2 gap-8 mb-8">
-          <div>
-            <div className="text-xs text-text-muted uppercase tracking-wide mb-2">Bill To</div>
-            <div className="font-semibold mb-1">{customerName}</div>
+            <div className="text-xs tracking-wide text-muted-foreground uppercase">Issue date</div>
+            <div className="text-sm font-medium">{formatDate(invoice.issueDate)}</div>
           </div>
           <div>
-            <div className="space-y-3">
-              <div>
-                <div className="text-xs text-text-muted uppercase tracking-wide">Invoice Date</div>
-                <div className="font-semibold">{format(new Date(invoice.issueDate), 'dd MMMM yyyy')}</div>
-              </div>
-              <div>
-                <div className="text-xs text-text-muted uppercase tracking-wide">Due Date</div>
-                <div className="font-semibold">{format(new Date(invoice.dueDate), 'dd MMMM yyyy')}</div>
-              </div>
-            </div>
+            <div className="text-xs tracking-wide text-muted-foreground uppercase">Due date</div>
+            <div className="text-sm font-medium">{formatDate(invoice.dueDate)}</div>
           </div>
         </div>
-
-        {/* Line Items Table */}
-        <div className="mb-8">
-          {/* Header */}
-          <div className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 bg-primary/10 border border-border border-b-0 font-semibold text-sm">
-            <FinancialTableCell type="label">Description</FinancialTableCell>
-            <FinancialTableCell type="number">Qty</FinancialTableCell>
-            <FinancialTableCell type="number">Unit Price</FinancialTableCell>
-            <FinancialTableCell type="number">Tax Amount</FinancialTableCell>
-            <FinancialTableCell type="number">Total</FinancialTableCell>
-          </div>
-
-          {/* Rows */}
-          {invoice.lineItems.map((item) => (
-            <div
-              key={item.id}
-              className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 border-b border-border text-sm"
-            >
-              <FinancialTableCell type="label">{item.description}</FinancialTableCell>
-              <FinancialTableCell type="number" className="text-text-secondary">
-                {item.quantity.toFixed(2)}
-              </FinancialTableCell>
-              <FinancialTableCell type="number">
-                <FinancialNumber value={item.unitPrice} format={formatCurrency} />
-              </FinancialTableCell>
-              <FinancialTableCell type="number">
-                <FinancialNumber value={item.taxAmount} format={formatCurrency} />
-              </FinancialTableCell>
-              <FinancialTableCell type="number" className="font-semibold">
-                <FinancialNumber value={item.lineTotal} format={formatCurrency} />
-              </FinancialTableCell>
-            </div>
-          ))}
-
-          {/* Subtotal */}
-          <div className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 bg-background border-t-2 border-border font-semibold">
-            <FinancialTableCell type="label"> </FinancialTableCell>
-            <FinancialTableCell type="number"> </FinancialTableCell>
-            <FinancialTableCell type="number"> </FinancialTableCell>
-            <FinancialTableCell type="number">Subtotal</FinancialTableCell>
-            <FinancialTableCell type="number">
-              <FinancialNumber value={invoice.subtotal} format={formatCurrency} />
-            </FinancialTableCell>
-          </div>
-
-          {/* Tax */}
-          <div className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 bg-background border-b border-border">
-            <FinancialTableCell type="label"> </FinancialTableCell>
-            <FinancialTableCell type="number"> </FinancialTableCell>
-            <FinancialTableCell type="number"> </FinancialTableCell>
-            <FinancialTableCell type="number">Tax/VAT</FinancialTableCell>
-            <FinancialTableCell type="number">
-              <FinancialNumber value={invoice.taxTotal} format={formatCurrency} />
-            </FinancialTableCell>
-          </div>
-
-          {/* Total Due */}
-          <div className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 bg-positive/10 border-b-2 border-border font-bold text-lg">
-            <FinancialTableCell type="label"> </FinancialTableCell>
-            <FinancialTableCell type="number"> </FinancialTableCell>
-            <FinancialTableCell type="number"> </FinancialTableCell>
-            <FinancialTableCell type="number">TOTAL DUE</FinancialTableCell>
-            <FinancialTableCell type="number" className="text-positive">
-              <FinancialNumber value={invoice.total} format={formatCurrency} />
-            </FinancialTableCell>
-          </div>
-        </div>
-
-        {/* Payment Status */}
-        <div className="mb-8 p-4 bg-panel border border-border rounded">
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">Amount Paid</div>
-              <FinancialNumber
-                value={invoice.amountPaid}
-                format={formatCurrency}
-                className="text-lg font-semibold text-positive"
-                minWidth={100}
-              />
-            </div>
-            <div>
-              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">Outstanding</div>
-              <FinancialNumber
-                value={invoice.total - invoice.amountPaid}
-                format={formatCurrency}
-                className="text-lg font-semibold"
-                minWidth={100}
-              />
-            </div>
-            <div>
-              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">Collection %</div>
-              <div className="text-lg font-semibold tabular-nums">
-                {((invoice.amountPaid / invoice.total) * 100).toFixed(1)}%
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Notes */}
-        {invoice.notes && (
-          <div className="mb-8">
-            <div className="text-xs text-text-muted uppercase tracking-wide mb-2">Notes</div>
-            <div className="text-sm text-text-secondary whitespace-pre-wrap">{invoice.notes}</div>
-          </div>
+        {company?.vatRegistrationNumber && (
+          <p className="mt-4 text-xs text-muted-foreground">VAT Reg. No: {company.vatRegistrationNumber}</p>
         )}
+        {company?.registrationNumber && <p className="text-xs text-muted-foreground">Reg. No: {company.registrationNumber}</p>}
+      </SectionCard>
 
-        {/* Footer */}
-        <div className="pt-8 border-t border-border text-xs text-text-muted">
-          <div>Thank you for your business!</div>
-          <div className="mt-4">Please make payment by {format(new Date(invoice.dueDate), 'dd MMMM yyyy')}</div>
+      <SectionCard title="Line items" bodyClassName="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Description</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Qty</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Unit price</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Tax</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoice.lineItems.map((item) => (
+                <tr key={item.id} className="border-b border-border last:border-0">
+                  <td className="px-4 py-2">{item.description}</td>
+                  <td className="px-4 py-2 text-right text-muted-foreground">{item.quantity.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(item.taxAmount)}</td>
+                  <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.lineTotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-border bg-muted/20">
+                <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
+                <td className="px-4 py-2 text-right font-medium">{formatCurrency(invoice.subtotal)}</td>
+              </tr>
+              <tr className="bg-muted/20">
+                <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">Tax/VAT</td>
+                <td className="px-4 py-2 text-right font-medium">{formatCurrency(invoice.taxTotal)}</td>
+              </tr>
+              <tr className="border-t border-border bg-positive/10">
+                <td colSpan={4} className="px-4 py-2 text-right text-sm font-semibold uppercase">Total due</td>
+                <td className="px-4 py-2 text-right text-base font-bold text-positive">{formatCurrency(invoice.total)}</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
-      </div>
-    </div>
+      </SectionCard>
+
+      <SectionCard title="Payment status">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <FigureBlock label="Amount paid" value={formatCurrency(invoice.amountPaid)} tone="positive" />
+          <FigureBlock label="Outstanding" value={formatCurrency(outstanding)} tone={outstanding > 0 ? 'warning' : 'default'} />
+          <FigureBlock label="Collection" value={`${collectionPercent.toFixed(1)}%`} />
+        </div>
+      </SectionCard>
+
+      {invoice.notes && (
+        <SectionCard title="Notes">
+          <p className="text-sm whitespace-pre-wrap text-muted-foreground">{invoice.notes}</p>
+        </SectionCard>
+      )}
+    </>
   );
-};
-
-function getStatusClass(status: string): string {
-  const classes: Record<string, string> = {
-    draft: 'bg-info-financial/20 text-info-financial',
-    sent: 'bg-warning-financial/20 text-warning-financial',
-    paid: 'bg-positive/20 text-positive',
-    partially_paid: 'bg-warning-financial/20 text-warning-financial',
-    overdue: 'bg-negative/20 text-negative',
-    void: 'bg-text-muted/20 text-text-muted',
-  };
-  return classes[status] || '';
-}
-
-function getStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    draft: 'Draft',
-    sent: 'Sent',
-    paid: 'Paid',
-    partially_paid: 'Partial',
-    overdue: 'Overdue',
-    void: 'Void',
-  };
-  return labels[status] || status;
 }

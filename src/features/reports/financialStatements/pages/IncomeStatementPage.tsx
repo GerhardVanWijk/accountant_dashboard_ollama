@@ -1,15 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Card } from '@/components/ui/Card';
-import { Icon } from '@/components/ui/Icon';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { Loader2 } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Button } from '@/components/ui/shadcn/button';
+import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { useFinancialStatementsData } from '../hooks/useFinancialStatementsData';
 import { calculateIncomeStatement } from '../services/calculateIncomeStatement';
 import { StatementRow, StatementSectionHeader } from '../components/StatementRow';
-import { fieldInput, fieldLabel } from '../components/formStyles';
 
-/** Income Statement (Profit & Loss) — proposed route `/reports/income-statement`. */
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+
+/**
+ * Income Statement (Profit & Loss) — route `/reports/income-statement`.
+ * Every figure comes from `calculateIncomeStatement()` — the real
+ * authoritative report service (SA_ACCOUNTING_MASTER_SPEC.md §42); this
+ * page only formats and lays it out. No comparative/prior-period column is
+ * offered: the underlying service computes one period at a time and has no
+ * built-in prior-period concept, so adding one here would mean inventing
+ * comparison logic in the UI rather than surfacing a real capability (M9).
+ * Re-skinned onto v0's PageHeader/SectionCard/Field (M9).
+ */
 export function IncomeStatementPage() {
   const { accounts, entries, financialYears, loading, error, refetch } = useFinancialStatementsData();
 
@@ -47,134 +58,111 @@ export function IncomeStatementPage() {
     return calculateIncomeStatement(entries, accounts, startDate, endDate);
   }, [entries, accounts, startDate, endDate]);
 
-  if (loading) {
-    return <Spinner label="Loading income statement…" />;
-  }
-  if (error) {
-    return <ErrorState message={error.message} onRetry={refetch} />;
-  }
-
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-sm">
-          <Icon name="reports" className="text-text-secondary" size={22} />
-          <div>
-            <h1 className="text-2xl font-semibold text-text-primary">Income Statement</h1>
-            <p className="mt-xs text-sm text-text-secondary">
-              Profit & Loss for a chosen period (SA_ACCOUNTING_MASTER_SPEC.md §42). /reports/income-statement
-            </p>
-          </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Income statement"
+        description="Profit and loss for a chosen period (SA_ACCOUNTING_MASTER_SPEC.md §42)."
+        actions={
+          sortedFinancialYears.length > 0 ? (
+            <div className="flex flex-wrap items-end gap-2">
+              <Field className="w-44">
+                <FieldLabel htmlFor="incomeStatementFinancialYear">Financial year</FieldLabel>
+                <select
+                  id="incomeStatementFinancialYear"
+                  className={selectClassName}
+                  value={selectedFinancialYearId ?? ''}
+                  onChange={(e) => handleFinancialYearChange(e.target.value)}
+                >
+                  {sortedFinancialYears.map((year) => (
+                    <option key={year.id} value={year.id}>
+                      {year.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field className="w-36">
+                <FieldLabel htmlFor="incomeStatementStartDate">Start date</FieldLabel>
+                <Input id="incomeStatementStartDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </Field>
+              <Field className="w-36">
+                <FieldLabel htmlFor="incomeStatementEndDate">End date</FieldLabel>
+                <Input id="incomeStatementEndDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </Field>
+            </div>
+          ) : undefined
+        }
+      />
+
+      {loading && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading income statement…</p>
         </div>
-
-        {sortedFinancialYears.length > 0 && (
-          <div className="flex flex-wrap items-end gap-sm">
-            <div>
-              <label className={fieldLabel} htmlFor="incomeStatementFinancialYear">
-                Financial Year
-              </label>
-              <select
-                id="incomeStatementFinancialYear"
-                className={fieldInput}
-                value={selectedFinancialYearId ?? ''}
-                onChange={(e) => handleFinancialYearChange(e.target.value)}
-              >
-                {sortedFinancialYears.map((year) => (
-                  <option key={year.id} value={year.id}>
-                    {year.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={fieldLabel} htmlFor="incomeStatementStartDate">
-                Start Date
-              </label>
-              <input
-                id="incomeStatementStartDate"
-                type="date"
-                className={fieldInput}
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={fieldLabel} htmlFor="incomeStatementEndDate">
-                End Date
-              </label>
-              <input
-                id="incomeStatementEndDate"
-                type="date"
-                className={fieldInput}
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {sortedFinancialYears.length === 0 && (
-        <EmptyState
-          title="No financial years yet"
-          message="A FinancialYear must exist before an Income Statement can be produced."
-        />
+      )}
+      {!loading && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
       )}
 
-      {statement && (
-        <Card>
+      {!loading && !error && sortedFinancialYears.length === 0 && (
+        <SectionCard>
+          <Empty>
+            <EmptyTitle>No financial years yet</EmptyTitle>
+            <EmptyDescription>A financial year must exist before an Income Statement can be produced.</EmptyDescription>
+          </Empty>
+        </SectionCard>
+      )}
+
+      {!loading && !error && statement && (
+        <SectionCard>
           <StatementSectionHeader label="Revenue" />
           {statement.revenueLines.length === 0 ? (
             <StatementRow label="No revenue posted in this period" amount={0} indent />
           ) : (
-            statement.revenueLines.map((line) => (
-              <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />
-            ))
+            statement.revenueLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />)
           )}
           <StatementRow label="Total Revenue" amount={statement.revenueTotal} isTotal />
 
           <StatementSectionHeader label="Cost of Goods Sold" />
           {statement.costOfGoodsSoldLines.length === 0 ? (
-            <StatementRow label="No cost of goods sold in this period" amount={0} indent isInverted />
+            <StatementRow label="No cost of goods sold in this period" amount={0} indent />
           ) : (
-            statement.costOfGoodsSoldLines.map((line) => (
-              <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent isInverted />
-            ))
+            statement.costOfGoodsSoldLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />)
           )}
-          <StatementRow label="Total Cost of Goods Sold" amount={statement.costOfGoodsSoldTotal} isTotal isInverted />
+          <StatementRow label="Total Cost of Goods Sold" amount={statement.costOfGoodsSoldTotal} isTotal />
 
           <StatementRow label="Gross Profit" amount={statement.grossProfit} isTotal />
 
           <StatementSectionHeader label="Operating Expenses" />
           {statement.operatingExpenseLines.length === 0 ? (
-            <StatementRow label="No operating expenses in this period" amount={0} indent isInverted />
+            <StatementRow label="No operating expenses in this period" amount={0} indent />
           ) : (
-            statement.operatingExpenseLines.map((line) => (
-              <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent isInverted />
-            ))
+            statement.operatingExpenseLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />)
           )}
-          <StatementRow label="Total Operating Expenses" amount={statement.operatingExpenseTotal} isTotal isInverted />
+          <StatementRow label="Total Operating Expenses" amount={statement.operatingExpenseTotal} isTotal />
 
           <StatementRow label="Profit Before Tax" amount={statement.profitBeforeTax} isTotal />
 
           <StatementSectionHeader label="Income Tax Expense" />
           {statement.incomeTaxExpenseLines.length === 0 ? (
-            <StatementRow label="No income tax expense posted in this period" amount={0} indent isInverted />
+            <StatementRow label="No income tax expense posted in this period" amount={0} indent />
           ) : (
-            statement.incomeTaxExpenseLines.map((line) => (
-              <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent isInverted />
-            ))
+            statement.incomeTaxExpenseLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />)
           )}
-          <StatementRow label="Total Income Tax Expense" amount={statement.incomeTaxExpenseTotal} isTotal isInverted />
+          <StatementRow label="Total Income Tax Expense" amount={statement.incomeTaxExpenseTotal} isTotal />
 
           <StatementRow label="Net Profit After Tax" amount={statement.netProfitAfterTax} isTotal />
-        </Card>
+        </SectionCard>
       )}
 
-      <p className="text-xs text-text-secondary">
-        Not built (out of scope for this pass): Notes to the Financial Statements (§43), Statement of Changes in
-        Equity, year-over-year/comparative columns, budget-vs-actual (no Budget entity exists in this app),
-        export/PDF/print.
+      <p className="text-xs text-muted-foreground">
+        Not built (out of scope): Notes to the Financial Statements (§43), Statement of Changes in Equity,
+        year-over-year/comparative columns, budget-vs-actual (no Budget entity exists in this app), export/PDF.
       </p>
     </div>
   );

@@ -1,11 +1,20 @@
-import React, { useState } from 'react';
-import { formatCurrency, formatPercentage } from '@/utils/formatFinancial';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
-import { format } from 'date-fns';
+import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { Amount } from '@/components/app/figure';
+import { StatusBadge } from '@/components/app/status-badge';
+import { formatDate, formatDueLabel } from '@/lib/app/format';
+import { invoiceService } from '@/services';
 import type { Invoice } from '@/types';
 
-interface InvoiceListProps {
+const STATUS_OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'partially_paid', label: 'Partially paid' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'void', label: 'Void' },
+];
+
+export interface InvoiceListProps {
   invoices: Invoice[];
   customers: Map<string, string>; // customerId -> customerName
   onSelect?: (id: string) => void;
@@ -13,252 +22,119 @@ interface InvoiceListProps {
   error?: string;
 }
 
-export const InvoiceList: React.FC<InvoiceListProps> = ({
-  invoices,
-  customers,
-  onSelect,
-  isLoading = false,
-  error,
-}) => {
-  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'customer'>('date');
-  const [filterStatus, setFilterStatus] = useState<string | null>(null);
-
+/**
+ * Invoice register, re-skinned onto v0's DataTable. `invoiceService.
+ * isOverdue()` (existing, real) drives the "overdue" note on the due-date
+ * cell — the persisted `status` field itself is never auto-flipped to
+ * 'overdue' by any service method, so a sent/partially-paid invoice past
+ * its due date still shows its real status plus this computed hint,
+ * rather than a status this app has no way to actually set. See the M4
+ * report.
+ */
+export function InvoiceList({ invoices, customers, onSelect, isLoading = false, error }: InvoiceListProps) {
   if (isLoading) {
-    return <div className="p-8 text-center text-text-muted">Loading invoices...</div>;
+    return (
+      <div role="status" className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+        Loading invoices…
+      </div>
+    );
   }
-
   if (error) {
-    return <div className="p-8 text-danger">{error}</div>;
+    return (
+      <div role="alert" className="flex min-h-[40vh] items-center justify-center text-sm text-destructive">
+        {error}
+      </div>
+    );
   }
 
-  // Filter by status if selected
-  let filtered = invoices;
-  if (filterStatus) {
-    filtered = invoices.filter((inv) => inv.status === filterStatus);
-  }
-
-  // Sort invoices
-  const sorted =
-    sortBy === 'date'
-      ? [...filtered].sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())
-      : sortBy === 'amount'
-        ? [...filtered].sort((a, b) => b.total - a.total)
-        : [...filtered].sort((a, b) => {
-            const nameA = customers.get(a.customerId) || 'Unknown';
-            const nameB = customers.get(b.customerId) || 'Unknown';
-            return nameA.localeCompare(nameB);
-          });
-
-  if (sorted.length === 0) {
-    return <div className="p-8 text-center text-text-muted">No invoices found</div>;
-  }
-
-  // Calculate totals
-  const totals = {
-    subtotal: sorted.reduce((sum, inv) => sum + inv.subtotal, 0),
-    tax: sorted.reduce((sum, inv) => sum + inv.taxTotal, 0),
-    total: sorted.reduce((sum, inv) => sum + inv.total, 0),
-    paid: sorted.reduce((sum, inv) => sum + inv.amountPaid, 0),
-    outstanding: sorted.reduce((sum, inv) => sum + (inv.total - inv.amountPaid), 0),
-  };
-
-  const percentPaid = totals.total > 0 ? (totals.paid / totals.total) * 100 : 0;
-
-  const statusOptions = ['draft', 'sent', 'partially_paid', 'paid', 'overdue', 'void'];
+  const columns: DataTableColumn<Invoice>[] = [
+    {
+      key: 'number',
+      header: 'Invoice',
+      sortValue: (inv) => inv.invoiceNumber,
+      cell: (inv) => (
+        <button
+          type="button"
+          onClick={() => onSelect?.(inv.id)}
+          className="figure text-sm font-medium underline-offset-4 hover:text-brand hover:underline"
+        >
+          {inv.invoiceNumber}
+        </button>
+      ),
+    },
+    {
+      key: 'customer',
+      header: 'Customer',
+      sortValue: (inv) => customers.get(inv.customerId) ?? '',
+      cell: (inv) => <span className="max-w-56 truncate text-sm">{customers.get(inv.customerId) ?? 'Unknown customer'}</span>,
+    },
+    {
+      key: 'issueDate',
+      header: 'Issued',
+      sortValue: (inv) => inv.issueDate,
+      hideBelowMd: true,
+      cell: (inv) => <span className="figure text-sm text-muted-foreground">{formatDate(inv.issueDate)}</span>,
+    },
+    {
+      key: 'dueDate',
+      header: 'Due',
+      sortValue: (inv) => inv.dueDate,
+      cell: (inv) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="figure text-sm">{formatDate(inv.dueDate)}</span>
+          {inv.status !== 'paid' && inv.status !== 'void' ? (
+            <span className={invoiceService.isOverdue(inv) ? 'text-xs text-negative' : 'text-xs text-muted-foreground'}>
+              {formatDueLabel(inv.dueDate)}
+            </span>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: 'total',
+      header: 'Total',
+      align: 'right',
+      sortValue: (inv) => inv.total,
+      cell: (inv) => <Amount value={inv.total} className="text-sm" />,
+    },
+    {
+      key: 'outstanding',
+      header: 'Outstanding',
+      align: 'right',
+      sortValue: (inv) => inv.total - inv.amountPaid,
+      cell: (inv) => {
+        const outstanding = inv.total - inv.amountPaid;
+        return <Amount value={outstanding} className={outstanding === 0 ? 'text-sm text-muted-foreground' : 'text-sm font-medium'} />;
+      },
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortValue: (inv) => inv.status,
+      cell: (inv) => <StatusBadge status={inv.status} />,
+    },
+  ];
 
   return (
-    <div className="space-y-4">
-      {/* Header Stats */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
-        <div className="bg-panel p-4 rounded-lg border border-border">
-          <div className="text-xs text-text-muted mb-2">Total Invoices</div>
-          <div className="text-2xl font-semibold">{sorted.length}</div>
-        </div>
-        <div className="bg-panel p-4 rounded-lg border border-border">
-          <div className="text-xs text-text-muted mb-2">Total Amount</div>
-          <FinancialNumber
-            value={totals.total}
-            format={formatCurrency}
-            className="text-lg font-semibold"
-            minWidth={100}
-          />
-        </div>
-        <div className="bg-panel p-4 rounded-lg border border-border">
-          <div className="text-xs text-text-muted mb-2">Amount Paid</div>
-          <FinancialNumber
-            value={totals.paid}
-            format={formatCurrency}
-            className="text-lg font-semibold text-positive"
-            minWidth={100}
-          />
-        </div>
-        <div className="bg-panel p-4 rounded-lg border border-border">
-          <div className="text-xs text-text-muted mb-2">Outstanding</div>
-          <FinancialNumber
-            value={totals.outstanding}
-            format={formatCurrency}
-            className="text-lg font-semibold text-negative"
-            minWidth={100}
-          />
-        </div>
-        <div className="bg-panel p-4 rounded-lg border border-border">
-          <div className="text-xs text-text-muted mb-2">Collection Rate</div>
-          <FinancialNumber
-            value={percentPaid}
-            format={formatPercentage}
-            className="text-lg font-semibold"
-            minWidth={80}
-          />
-        </div>
-      </div>
-
-      {/* Controls */}
-      <div className="flex gap-4 mb-4">
-        <div>
-          <label className="text-sm text-text-muted block mb-1">Sort By</label>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as 'date' | 'amount' | 'customer')}
-            className="px-3 py-2 rounded border border-border bg-panel text-text"
-          >
-            <option value="date">Date</option>
-            <option value="amount">Amount</option>
-            <option value="customer">Customer</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-sm text-text-muted block mb-1">Filter by Status</label>
-          <select
-            value={filterStatus || ''}
-            onChange={(e) => setFilterStatus(e.target.value || null)}
-            className="px-3 py-2 rounded border border-border bg-panel text-text"
-          >
-            <option value="">All Statuses</option>
-            {statusOptions.map((status) => (
-              <option key={status} value={status}>
-                {status.replace(/_/g, ' ')}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-panel rounded-lg border border-border overflow-hidden">
-        {/* Table Header */}
-        <div className="grid grid-cols-[100px_150px_150px_100px_100px_100px_100px_100px] gap-3 px-4 py-3 bg-primary/10 border-b border-border font-semibold text-sm sticky top-0">
-          <FinancialTableCell type="label">Date</FinancialTableCell>
-          <FinancialTableCell type="label">Invoice #</FinancialTableCell>
-          <FinancialTableCell type="label">Customer</FinancialTableCell>
-          <FinancialTableCell type="number">Subtotal</FinancialTableCell>
-          <FinancialTableCell type="number">Tax</FinancialTableCell>
-          <FinancialTableCell type="number">Total</FinancialTableCell>
-          <FinancialTableCell type="number">Paid</FinancialTableCell>
-          <FinancialTableCell type="status">Status</FinancialTableCell>
-        </div>
-
-        {/* Table Rows */}
-        {sorted.map((invoice) => (
-          <div
-            key={invoice.id}
-            className="grid grid-cols-[100px_150px_150px_100px_100px_100px_100px_100px] gap-3 px-4 py-3 border-b border-border/50 hover:bg-primary/5 cursor-pointer transition-colors"
-            onClick={() => onSelect?.(invoice.id)}
-          >
-            <FinancialTableCell type="label" className="text-text-secondary">
-              {format(new Date(invoice.issueDate), 'dd MMM yy')}
-            </FinancialTableCell>
-
-            <FinancialTableCell type="label" className="font-mono text-sm font-semibold">
-              {invoice.invoiceNumber}
-            </FinancialTableCell>
-
-            <FinancialTableCell type="label" className="text-text-secondary">
-              {customers.get(invoice.customerId) || 'Unknown'}
-            </FinancialTableCell>
-
-            <FinancialTableCell type="number">
-              <FinancialNumber
-                value={invoice.subtotal}
-                format={formatCurrency}
-                showFlash={false}
-              />
-            </FinancialTableCell>
-
-            <FinancialTableCell type="number">
-              <FinancialNumber
-                value={invoice.taxTotal}
-                format={formatCurrency}
-                showFlash={false}
-              />
-            </FinancialTableCell>
-
-            <FinancialTableCell type="number" className="font-semibold">
-              <FinancialNumber
-                value={invoice.total}
-                format={formatCurrency}
-                showFlash={false}
-              />
-            </FinancialTableCell>
-
-            <FinancialTableCell type="number">
-              <FinancialNumber
-                value={invoice.amountPaid}
-                format={formatCurrency}
-                showFlash={false}
-                className="text-positive"
-              />
-            </FinancialTableCell>
-
-            <FinancialTableCell type="status" className={getStatusClass(invoice.status)}>
-              {getStatusLabel(invoice.status)}
-            </FinancialTableCell>
-          </div>
-        ))}
-
-        {/* Table Footer — Totals */}
-        <div className="grid grid-cols-[100px_150px_150px_100px_100px_100px_100px_100px] gap-3 px-4 py-3 bg-panel border-t-2 border-border font-semibold">
-          <FinancialTableCell type="label"> </FinancialTableCell>
-          <FinancialTableCell type="label"> </FinancialTableCell>
-          <FinancialTableCell type="label">TOTAL</FinancialTableCell>
-          <FinancialTableCell type="number">
-            <FinancialNumber value={totals.subtotal} format={formatCurrency} />
-          </FinancialTableCell>
-          <FinancialTableCell type="number">
-            <FinancialNumber value={totals.tax} format={formatCurrency} />
-          </FinancialTableCell>
-          <FinancialTableCell type="number">
-            <FinancialNumber value={totals.total} format={formatCurrency} />
-          </FinancialTableCell>
-          <FinancialTableCell type="number">
-            <FinancialNumber value={totals.paid} format={formatCurrency} className="text-positive" />
-          </FinancialTableCell>
-          <FinancialTableCell type="status"> </FinancialTableCell>
-        </div>
-      </div>
-    </div>
+    <DataTable
+      rows={invoices}
+      columns={columns}
+      getRowKey={(inv) => inv.id}
+      searchable={(inv) => `${inv.invoiceNumber} ${customers.get(inv.customerId) ?? ''}`}
+      searchPlaceholder="Search invoice or customer"
+      filters={[
+        {
+          key: 'status',
+          label: 'All statuses',
+          options: STATUS_OPTIONS,
+          match: (inv, value) => inv.status === value,
+        },
+      ]}
+      initialSortKey="dueDate"
+      pageSize={10}
+      caption="Customer invoices"
+      emptyTitle="No invoices found"
+      emptyDescription="Adjust the search or status filter, or raise a new invoice."
+    />
   );
-};
-
-function getStatusClass(status: string): string {
-  const classes: Record<string, string> = {
-    draft: 'bg-info-financial/20 text-info-financial',
-    sent: 'bg-warning-financial/20 text-warning-financial',
-    paid: 'bg-positive/20 text-positive',
-    partially_paid: 'bg-warning-financial/20 text-warning-financial',
-    overdue: 'bg-negative/20 text-negative',
-    void: 'bg-text-muted/20 text-text-muted',
-  };
-  return classes[status] || '';
-}
-
-function getStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    draft: 'Draft',
-    sent: 'Sent',
-    paid: 'Paid',
-    partially_paid: 'Partial',
-    overdue: 'Overdue',
-    void: 'Void',
-  };
-  return labels[status] || status;
 }

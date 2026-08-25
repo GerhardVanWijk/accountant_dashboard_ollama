@@ -72,3 +72,148 @@
   --color-text-positive: rgb(134 239 172);
   --color-text-negative: rgb(252 165 165);
 }
+
+/* ==========================================================================
+   v0 design-system tokens (Phase M0 — see docs/V0_DESIGN_SYSTEM_PORT.md)
+
+   These are the ACTUAL values from accounting-v0-frontend/app/globals.css,
+   copied verbatim (bare shadcn names, not the --color- prefix above) so the
+   ported shell/shadcn components render exactly as approved. They are kept
+   deliberately separate from the --color-* tokens above:
+
+   - background/border/primary/secondary genuinely collide in NAME with the
+     existing --color-* Tailwind keys but mean different things. Rather than
+     overwrite those keys (which would silently reskin all 200+ existing
+     files that already use bg-primary/border-border/etc.), the v0 values
+     are scoped to .app-shell only, below.
+   - positive/negative/warning/info also collide with names already used by
+     this app's own financial-number colour system (different value format:
+     RGB channel triplets, not oklch — see --color-positive above). v0's
+     versions are exposed under distinct status-* Tailwind keys instead
+     (see tailwind.config.js) so the two systems never conflict.
+   - Every other name here (foreground, card, popover, muted, accent,
+     destructive, input, ring, sidebar*, chart-1..5, brand*) is new and does
+     not collide with anything, so it is used unprefixed, matching v0 and
+     shadcn's own convention (@/lib/utils' cn(), not the app's --color-*
+     one, is what the ported components use).
+   ========================================================================== */
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  --brand: oklch(0.76 0.15 166);
+  --brand-foreground: oklch(0.16 0.03 166);
+  --brand-muted: oklch(0.76 0.15 166 / 12%);
+  --panel: oklch(0.19 0.004 240);
+  --positive: oklch(0.76 0.15 166);
+  --negative: oklch(0.68 0.19 22);
+  --warning: oklch(0.79 0.14 78);
+  --info: oklch(0.72 0.1 234);
+}
+
+/* App shell surfaces: the authenticated product uses the same dark,
+   restrained sidebar/chart palette as the v0 marketing site, regardless of
+   the light/dark toggle — mirrors globals.css's ".dark, .app-shell" rule. */
+[data-theme='dark'],
+.app-shell {
+  --sidebar: oklch(0.168 0.004 240);
+  --sidebar-foreground: oklch(0.82 0.005 240);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--brand-foreground);
+  --sidebar-accent: oklch(0.235 0.005 240);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: var(--brand);
+  --chart-1: oklch(0.76 0.15 166);
+  --chart-2: oklch(0.72 0.1 234);
+  --chart-3: oklch(0.79 0.14 78);
+  --chart-4: oklch(0.68 0.19 22);
+  --chart-5: oklch(0.62 0.08 280);
+}
+
+[data-theme='dark'] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+}
+
+/* The brand green is the single primary action colour across the v0
+   marketing site, credential screens and workspace — wins over the
+   scaffold's neutral defaults everywhere, matching globals.css. */
+:root,
+[data-theme='dark'],
+.app-shell {
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --ring: var(--brand);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--brand-foreground);
+  --sidebar-ring: var(--brand);
+}
+
+/* Scopes the four genuinely-colliding keys (see comment above) to the
+   ported v0 shell only. Outside .app-shell, --color-background etc. keep
+   this app's existing pastel values untouched. */
+.app-shell {
+  --color-background: var(--background);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+}

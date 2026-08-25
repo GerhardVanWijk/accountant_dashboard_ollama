@@ -14,8 +14,13 @@ import { buildRecentActivity, type ActivityItem } from '../utils/buildRecentActi
 import { calculateMonthlyFinancials, trailingMonthKeys, type MonthlyFinancials } from '../utils/calculateMonthlyFinancials';
 import type { FleetAgingBuckets } from '../types/aging.types';
 
-/** Trailing 6 months, matching the window the dashboard has always shown. */
-const TRAILING_MONTHS = 6;
+/**
+ * Trailing 12 months. Widened from 6 (M1, docs/V0_DASHBOARD_INTEGRATION.md)
+ * so the ported v0 PerformanceChart's real 6/12-month toggle has genuine
+ * data behind both options — calculateMonthlyFinancials only sums a wider
+ * window of the same already-posted journal entries, no new calculation.
+ */
+const TRAILING_MONTHS = 12;
 
 export interface DashboardData {
   kpis: DashboardKpis;

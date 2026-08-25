@@ -3,9 +3,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, Link } from 'react-router-dom';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { Eye, EyeOff, Loader2, MailCheck } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
+import { Label } from '@/components/ui/shadcn/label';
 import { supabase } from '@/config/supabase';
+import { AuthShell } from '../components/AuthShell';
 
 const schema = z
   .object({
@@ -20,23 +23,23 @@ const schema = z
 
 type FormValues = z.infer<typeof schema>;
 
-const inputClasses =
-  'w-full rounded-md border border-border bg-background px-md py-sm text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
-
 /**
- * Real Supabase sign-up (Phase T). A `profiles` row is auto-created by a DB
- * trigger the moment `auth.users` gets the new row (docs/SUPABASE_MIGRATION_GUIDE.md
- * Phase A) — nothing here inserts one directly. Whether a session comes
- * back immediately depends on this Supabase project's "Confirm email"
- * auth setting (a dashboard toggle, not something any MCP tool exposes):
- * if it's off, `signUp()` returns a live session and this can route
- * straight into onboarding; if it's on, there is no session yet and the
- * user needs to confirm via email first.
+ * Real Supabase sign-up (Phase T; re-skinned M6 onto the v0 AuthShell
+ * design — docs/SUPABASE_MIGRATION_GUIDE.md). Behavior unchanged: a
+ * `profiles` row is auto-created by a DB trigger the moment `auth.users`
+ * gets the new row — nothing here inserts one directly. Whether a session
+ * comes back immediately depends on this Supabase project's "Confirm
+ * email" auth setting (a dashboard toggle, not something any MCP tool
+ * exposes, and M6 does not touch it): if it's off, `signUp()` returns a
+ * live session and this routes straight into onboarding; if it's on,
+ * there is no session yet and the user needs to confirm via email first.
  */
 export function SignUpPage() {
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
   const [confirmationSent, setConfirmationSent] = useState(false);
+  const [sentTo, setSentTo] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const {
     register,
     handleSubmit,
@@ -54,79 +57,110 @@ export function SignUpPage() {
       navigate('/', { replace: true });
       return;
     }
+    setSentTo(values.email);
     setConfirmationSent(true);
   };
 
+  if (confirmationSent) {
+    return (
+      <AuthShell title="Check your inbox" description="You'll set up or join a company once you've confirmed your email.">
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-brand-muted text-brand">
+              <MailCheck className="size-4.5" aria-hidden="true" />
+            </span>
+            <p className="text-sm font-medium">Confirm your email</p>
+            <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
+              We sent a confirmation link to <span className="font-medium text-foreground">{sentTo}</span>. Follow it, then sign in below.
+            </p>
+          </div>
+
+          <Button render={<Link to="/login" />} nativeButton={false} size="lg">
+            Continue to sign in
+          </Button>
+        </div>
+      </AuthShell>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-lg">
-      <Card className="w-full max-w-sm">
-        <h1 className="text-xl font-semibold text-text-primary">Create your account</h1>
-
-        {confirmationSent ? (
-          <p className="mt-lg text-sm text-text-secondary">
-            Check your email to confirm your account, then{' '}
-            <Link to="/login" className="font-medium text-primary hover:underline">
-              sign in
-            </Link>
-            .
-          </p>
-        ) : (
-          <>
-            <p className="mt-xs text-sm text-text-secondary">You'll set up or join a company next.</p>
-
-            <form className="mt-lg flex flex-col gap-md" onSubmit={handleSubmit(onSubmit)} noValidate>
-              <div>
-                <label htmlFor="email" className="mb-xs block text-sm font-medium text-text-primary">
-                  Email
-                </label>
-                <input id="email" type="email" autoComplete="email" className={inputClasses} {...register('email')} />
-                {errors.email && <p className="mt-xs text-sm text-danger">{errors.email.message}</p>}
-              </div>
-
-              <div>
-                <label htmlFor="password" className="mb-xs block text-sm font-medium text-text-primary">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete="new-password"
-                  className={inputClasses}
-                  {...register('password')}
-                />
-                {errors.password && <p className="mt-xs text-sm text-danger">{errors.password.message}</p>}
-              </div>
-
-              <div>
-                <label htmlFor="confirmPassword" className="mb-xs block text-sm font-medium text-text-primary">
-                  Confirm password
-                </label>
-                <input
-                  id="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  className={inputClasses}
-                  {...register('confirmPassword')}
-                />
-                {errors.confirmPassword && <p className="mt-xs text-sm text-danger">{errors.confirmPassword.message}</p>}
-              </div>
-
-              {serverError && <p className="text-sm text-danger">{serverError}</p>}
-
-              <Button type="submit" className="mt-sm w-full" disabled={isSubmitting}>
-                {isSubmitting ? 'Creating account…' : 'Create account'}
-              </Button>
-            </form>
-          </>
-        )}
-
-        <p className="mt-lg text-center text-sm text-text-secondary">
+    <AuthShell
+      title="Create your workspace"
+      description="You'll set up or join a company next."
+      footer={
+        <>
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link to="/login" className="font-medium text-brand underline-offset-4 hover:underline">
             Sign in
           </Link>
-        </p>
-      </Card>
-    </div>
+        </>
+      }
+    >
+      <form className="flex flex-col gap-5" onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="email">Work email</Label>
+          <Input id="email" type="email" autoComplete="email" placeholder="you@company.co.za" aria-invalid={errors.email ? true : undefined} {...register('email')} />
+          {errors.email && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.email.message}
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="password">Password</Label>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              className="pr-10"
+              aria-invalid={errors.password ? true : undefined}
+              {...register('password')}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
+          </div>
+          {errors.password && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.password.message}
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="confirmPassword">Confirm password</Label>
+          <Input id="confirmPassword" type="password" autoComplete="new-password" aria-invalid={errors.confirmPassword ? true : undefined} {...register('confirmPassword')} />
+          {errors.confirmPassword && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.confirmPassword.message}
+            </p>
+          )}
+        </div>
+
+        {serverError && (
+          <p role="alert" className="text-sm text-destructive">
+            {serverError}
+          </p>
+        )}
+
+        <Button type="submit" size="lg" disabled={isSubmitting}>
+          {isSubmitting ? (
+            <>
+              <Loader2 className="animate-spin" data-icon="inline-start" />
+              Creating account
+            </>
+          ) : (
+            'Create account'
+          )}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }

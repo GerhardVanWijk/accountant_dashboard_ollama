@@ -1,22 +1,22 @@
 import { useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { formatCurrency } from '@/lib/app/format';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
-import { formatCurrency } from '@/utils/formatFinancial';
 import { useBills } from '../hooks';
 import { calculateAllVendorAging, type VendorAgingRow } from '../utils/calculateVendorAging';
 
 type SortKey = 'supplier' | 'total';
 
 /**
- * Vendor Aging report: real Bill data (via useBills) bucketed by
- * calculateAllVendorAging() into Current / 1-30 / 31-60 / 90+ days overdue,
- * one row per supplier with an outstanding balance. Supplier names come
- * from the Suppliers module's own useSuppliers() hook — the same data
- * source src/features/suppliers already uses — rather than a second
- * supplier lookup being invented here. This supersedes Suppliers' own
- * (temporary, mock) per-supplier aging card on SupplierDetailPage now that
- * real Bill records with due dates exist (see docs/KNOWN_ISSUES.md).
+ * Vendor Aging report — route `/purchases/aging`. Real Bill data (via
+ * useBills) bucketed by `calculateAllVendorAging()` into Current/1-30/
+ * 31-60/90+ days overdue, one row per supplier with an outstanding
+ * balance — the same aging function unchanged from before the port.
+ * Re-skinned onto v0's PageHeader/SectionCard (M8); no aging math lives
+ * in this component.
  */
 export function VendorAgingPage() {
   const { bills, isLoading, error } = useBills();
@@ -25,7 +25,6 @@ export function VendorAgingPage() {
   const [sortDesc, setSortDesc] = useState(true);
 
   const suppliersMap = useMemo(() => Object.fromEntries(suppliers.map((s) => [s.id, s.name])), [suppliers]);
-
   const rows = useMemo(() => calculateAllVendorAging(bills), [bills]);
 
   const sortedRows = useMemo(() => {
@@ -62,134 +61,93 @@ export function VendorAgingPage() {
     }
   }
 
-  if (isLoading) {
-    return <div className="p-8 text-center text-text-muted">Loading vendor aging...</div>;
-  }
-
-  if (error) {
-    return <div className="p-8 text-danger">{error.message}</div>;
+  function SortIcon({ active }: { active: boolean }) {
+    if (!active) return null;
+    const Icon = sortDesc ? ArrowDown : ArrowUp;
+    return <Icon className="inline size-3.5" aria-hidden="true" />;
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Vendor Aging</h1>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Vendor Aging" description="Outstanding supplier balances bucketed by how overdue they are." />
 
-      {/* Header Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-panel p-4 rounded-lg border border-border">
-          <div className="text-xs text-text-muted mb-2">Suppliers with Balance</div>
-          <div className="text-2xl font-semibold">{sortedRows.length}</div>
+      {isLoading && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-2 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <span className="text-sm">Loading vendor aging…</span>
         </div>
-        <div className="bg-panel p-4 rounded-lg border border-border">
-          <div className="text-xs text-text-muted mb-2">Total Payable</div>
-          <FinancialNumber value={totals.total} format={formatCurrency} className="text-2xl font-semibold" />
-        </div>
-        <div className="bg-panel p-4 rounded-lg border border-border">
-          <div className="text-xs text-text-muted mb-2">Current</div>
-          <FinancialNumber
-            value={totals.current}
-            format={formatCurrency}
-            className="text-2xl font-semibold"
-            showFlash={false}
-          />
-        </div>
-        <div className="bg-panel p-4 rounded-lg border border-border">
-          <div className="text-xs text-text-muted mb-2">90+ Days Overdue</div>
-          <FinancialNumber
-            value={totals.days90Plus}
-            format={formatCurrency}
-            className="text-2xl font-semibold text-negative"
-            showFlash={false}
-          />
-        </div>
-      </div>
+      )}
+      {!isLoading && error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error.message}
+        </p>
+      )}
 
-      {sortedRows.length === 0 ? (
-        <div className="p-8 text-center text-text-muted bg-panel rounded-lg border border-border">
-          No outstanding supplier balances
-        </div>
-      ) : (
-        <div className="bg-panel rounded-lg border border-border overflow-hidden">
-          <div className="grid grid-cols-[2fr_120px_120px_120px_120px_120px] gap-3 px-4 py-3 bg-primary/10 border-b border-border font-semibold text-sm sticky top-0 tabular-nums">
-            <FinancialTableCell type="label">
-              <button onClick={() => toggleSort('supplier')} className="hover:text-primary">
-                Supplier {sortKey === 'supplier' && (sortDesc ? '↓' : '↑')}
-              </button>
-            </FinancialTableCell>
-            <FinancialTableCell type="number">Current</FinancialTableCell>
-            <FinancialTableCell type="number">1-30 Days</FinancialTableCell>
-            <FinancialTableCell type="number">31-60 Days</FinancialTableCell>
-            <FinancialTableCell type="number">90+ Days</FinancialTableCell>
-            <FinancialTableCell type="number">
-              <button onClick={() => toggleSort('total')} className="hover:text-primary">
-                Total {sortKey === 'total' && (sortDesc ? '↓' : '↑')}
-              </button>
-            </FinancialTableCell>
-          </div>
+      {!isLoading && !error && (
+        <>
+          <SectionCard>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              <FigureBlock label="Suppliers with balance" value={String(sortedRows.length)} />
+              <FigureBlock label="Total payable" value={formatCurrency(totals.total)} />
+              <FigureBlock label="Current" value={formatCurrency(totals.current)} />
+              <FigureBlock label="90+ days overdue" value={formatCurrency(totals.days90Plus)} tone={totals.days90Plus > 0 ? 'negative' : 'default'} />
+            </div>
+          </SectionCard>
 
-          {sortedRows.map((row: VendorAgingRow) => (
-            <div
-              key={row.supplierId}
-              className="grid grid-cols-[2fr_120px_120px_120px_120px_120px] gap-3 px-4 py-3 border-b border-border/50 tabular-nums"
-            >
-              <FinancialTableCell type="label" className="font-medium">
-                {suppliersMap[row.supplierId] || row.supplierId}
-              </FinancialTableCell>
-              <FinancialTableCell type="number">
-                <FinancialNumber value={row.buckets.current} format={formatCurrency} showFlash={false} />
-              </FinancialTableCell>
-              <FinancialTableCell type="number">
-                <FinancialNumber
-                  value={row.buckets.days30}
-                  format={formatCurrency}
-                  showFlash={false}
-                  className={row.buckets.days30 > 0 ? 'text-warning-financial' : undefined}
-                />
-              </FinancialTableCell>
-              <FinancialTableCell type="number">
-                <FinancialNumber
-                  value={row.buckets.days60}
-                  format={formatCurrency}
-                  showFlash={false}
-                  className={row.buckets.days60 > 0 ? 'text-warning-financial' : undefined}
-                />
-              </FinancialTableCell>
-              <FinancialTableCell type="number">
-                <FinancialNumber
-                  value={row.buckets.days90Plus}
-                  format={formatCurrency}
-                  showFlash={false}
-                  className={row.buckets.days90Plus > 0 ? 'text-negative' : undefined}
-                />
-              </FinancialTableCell>
-              <FinancialTableCell type="number" className="font-semibold">
-                <FinancialNumber value={row.buckets.total} format={formatCurrency} showFlash={false} />
-              </FinancialTableCell>
-            </div>
-          ))}
-
-          {/* Totals */}
-          <div className="grid grid-cols-[2fr_120px_120px_120px_120px_120px] gap-3 px-4 py-3 bg-background border-t-2 border-border font-bold tabular-nums">
-            <div className="px-2 py-2 text-sm text-left">TOTAL</div>
-            <div className="px-2 py-2 text-sm text-right">
-              <FinancialNumber value={totals.current} format={formatCurrency} />
-            </div>
-            <div className="px-2 py-2 text-sm text-right">
-              <FinancialNumber value={totals.days30} format={formatCurrency} />
-            </div>
-            <div className="px-2 py-2 text-sm text-right">
-              <FinancialNumber value={totals.days60} format={formatCurrency} />
-            </div>
-            <div className="px-2 py-2 text-sm text-right">
-              <FinancialNumber value={totals.days90Plus} format={formatCurrency} />
-            </div>
-            <div className="px-2 py-2 text-sm text-right">
-              <FinancialNumber value={totals.total} format={formatCurrency} />
-            </div>
-          </div>
-        </div>
+          <SectionCard>
+            {sortedRows.length === 0 ? (
+              <Empty>
+                <EmptyTitle>No outstanding supplier balances</EmptyTitle>
+                <EmptyDescription>Every posted bill has been paid in full.</EmptyDescription>
+              </Empty>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                  <thead className="bg-muted/40">
+                    <tr>
+                      <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground">
+                        <button type="button" onClick={() => toggleSort('supplier')} className="inline-flex items-center gap-1 hover:text-foreground">
+                          Supplier <SortIcon active={sortKey === 'supplier'} />
+                        </button>
+                      </th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Current</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">1-30 Days</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">31-60 Days</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">90+ Days</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">
+                        <button type="button" onClick={() => toggleSort('total')} className="inline-flex items-center gap-1 hover:text-foreground">
+                          Total <SortIcon active={sortKey === 'total'} />
+                        </button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedRows.map((row: VendorAgingRow) => (
+                      <tr key={row.supplierId} className="border-t border-border">
+                        <td className="whitespace-nowrap px-4 py-2.5 font-medium">{suppliersMap[row.supplierId] || row.supplierId}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(row.buckets.current)}</td>
+                        <td className={`whitespace-nowrap px-4 py-2.5 text-right tabular-nums ${row.buckets.days30 > 0 ? 'text-warning' : ''}`}>{formatCurrency(row.buckets.days30)}</td>
+                        <td className={`whitespace-nowrap px-4 py-2.5 text-right tabular-nums ${row.buckets.days60 > 0 ? 'text-warning' : ''}`}>{formatCurrency(row.buckets.days60)}</td>
+                        <td className={`whitespace-nowrap px-4 py-2.5 text-right tabular-nums ${row.buckets.days90Plus > 0 ? 'text-destructive' : ''}`}>{formatCurrency(row.buckets.days90Plus)}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums">{formatCurrency(row.buckets.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border font-semibold">
+                      <td className="whitespace-nowrap px-4 py-2.5">Total</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(totals.current)}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(totals.days30)}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(totals.days60)}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(totals.days90Plus)}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(totals.total)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </SectionCard>
+        </>
       )}
     </div>
   );

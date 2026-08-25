@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Bill, PaymentMethod, Supplier } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { FigureBlock } from '@/components/app/figure';
+import { formatCurrency, formatDate } from '@/lib/app/format';
 import type { CreatePaymentDTO } from '../services';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const PAYMENT_METHODS: PaymentMethod[] = ['eft', 'cash', 'card', 'cheque', 'other'];
 
@@ -18,12 +20,11 @@ export interface PaymentFormProps {
   onSubmit: (data: CreatePaymentDTO) => Promise<void>;
   onCancel: () => void;
   /**
-   * "Record Payment" from BillDetail (docs/KNOWN_ISSUES.md: the prop
-   * existed but was never wired) opens THIS form rather than a bespoke
-   * one-off — it's the real, GL-posting payment flow, just pre-aimed at
-   * one bill: supplier, amount (the outstanding balance), and that bill's
-   * allocation are all pre-filled, still fully editable (e.g. to record a
-   * partial payment) before the user submits.
+   * "Record Payment" from BillDetail opens THIS form rather than a
+   * bespoke one-off — it's the real, GL-posting payment flow, just
+   * pre-aimed at one bill: supplier, amount (the outstanding balance),
+   * and that bill's allocation are all pre-filled, still fully editable
+   * (e.g. to record a partial payment) before the user submits.
    */
   presetBillId?: string;
 }
@@ -34,20 +35,14 @@ function today(): string {
 
 /**
  * Records a supplier payment and allocates it across one or more of that
- * supplier's open bills — the allocation model PaymentService.createPayment()
- * actually expects (`PaymentAllocation[]`, amount capped per-bill, remainder
- * left as `unallocatedAmount`/on-account). Purpose-built rather than reusing
- * LineItemsEditor: a payment allocates against existing Bills, it doesn't
- * price new line items, so the qty/unit-price/tax shape doesn't fit.
+ * supplier's open bills — the allocation model
+ * PaymentService.createPayment() actually expects (`PaymentAllocation[]`,
+ * amount capped per-bill, remainder left as `unallocatedAmount`/on-account).
+ * Purpose-built rather than reusing LineItemsEditor: a payment allocates
+ * against existing Bills, it doesn't price new line items. Re-skinned
+ * onto v0's Field/Input (M8); allocation logic unchanged.
  */
-export function PaymentForm({
-  suppliers,
-  outstandingBills,
-  defaultPaymentNumber,
-  onSubmit,
-  onCancel,
-  presetBillId,
-}: PaymentFormProps) {
+export function PaymentForm({ suppliers, outstandingBills, defaultPaymentNumber, onSubmit, onCancel, presetBillId }: PaymentFormProps) {
   const presetBill = presetBillId ? outstandingBills.find((b) => b.id === presetBillId) : undefined;
   const presetOutstanding = presetBill ? Math.max(0, presetBill.total - presetBill.amountPaid) : 0;
 
@@ -58,14 +53,11 @@ export function PaymentForm({
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [amount, setAmount] = useState(presetOutstanding);
-  const [allocationAmounts, setAllocationAmounts] = useState<Record<string, number>>(
-    presetBill ? { [presetBill.id]: presetOutstanding } : {},
-  );
+  const [allocationAmounts, setAllocationAmounts] = useState<Record<string, number>>(presetBill ? { [presetBill.id]: presetOutstanding } : {});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Only re-applies if the preset bill itself changes — never overwrites
-  // what the user has since typed.
+  // Only re-applies if the preset bill itself changes — never overwrites what the user has since typed.
   useEffect(() => {
     if (!presetBill) return;
     setSupplierId(presetBill.supplierId);
@@ -74,10 +66,7 @@ export function PaymentForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presetBillId]);
 
-  const supplierBills = useMemo(
-    () => outstandingBills.filter((bill) => bill.supplierId === supplierId),
-    [outstandingBills, supplierId],
-  );
+  const supplierBills = useMemo(() => outstandingBills.filter((bill) => bill.supplierId === supplierId), [outstandingBills, supplierId]);
 
   const allocations = useMemo(
     () =>
@@ -106,9 +95,7 @@ export function PaymentForm({
     if (!supplierId) return setFormError('Select a supplier.');
     if (amount <= 0) return setFormError('Payment amount must be greater than zero.');
     if (allocatedTotal - amount > 0.01) {
-      return setFormError(
-        `Allocations total ${formatCurrency(allocatedTotal)} exceed the payment amount ${formatCurrency(amount)}.`,
-      );
+      return setFormError(`Allocations total ${formatCurrency(allocatedTotal)} exceed the payment amount ${formatCurrency(amount)}.`);
     }
 
     setIsSubmitting(true);
@@ -132,67 +119,56 @@ export function PaymentForm({
   }
 
   return (
-    <div className="flex flex-col gap-lg">
+    <div className="flex flex-col gap-6">
       {formError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+        <p role="alert" className="text-sm text-destructive">
           {formError}
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Payment Number</span>
-          <input
-            className={`${inputClass} font-mono`}
-            value={paymentNumber}
-            onChange={(e) => setPaymentNumber(e.target.value)}
-          />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Supplier</span>
-          <select className={inputClass} value={supplierId} onChange={(e) => handleSupplierChange(e.target.value)}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="payment-number">Payment Number</FieldLabel>
+          <Input id="payment-number" className="font-mono" value={paymentNumber} onChange={(e) => setPaymentNumber(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="payment-supplier">Supplier</FieldLabel>
+          <select id="payment-supplier" className={selectClassName} value={supplierId} onChange={(e) => handleSupplierChange(e.target.value)}>
             {suppliers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Date</span>
-          <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Method</span>
-          <select className={inputClass} value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="payment-date">Date</FieldLabel>
+          <Input id="payment-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="payment-method">Method</FieldLabel>
+          <select id="payment-method" className={selectClassName} value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
             {PAYMENT_METHODS.map((m) => (
               <option key={m} value={m}>
                 {m.toUpperCase()}
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Reference (optional)</span>
-          <input className={inputClass} value={reference} onChange={(e) => setReference(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Payment Amount</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            className={inputClass}
-            value={amount || ''}
-            onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-          />
-        </label>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="payment-reference">Reference (optional)</FieldLabel>
+          <Input id="payment-reference" value={reference} onChange={(e) => setReference(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="payment-amount">Payment Amount</FieldLabel>
+          <Input id="payment-amount" type="number" min="0" step="0.01" value={amount || ''} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} />
+        </Field>
       </div>
 
-      <div className="flex flex-col gap-sm">
-        <span className="text-sm font-medium text-text-primary">Allocate to Open Bills</span>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <div className="grid min-w-[560px] grid-cols-[1.5fr_100px_120px_140px] gap-2 bg-primary/10 px-sm py-xs text-xs font-semibold tabular-nums">
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium">Allocate to Open Bills</span>
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <div className="grid min-w-[560px] grid-cols-[1.5fr_100px_120px_140px] gap-2 bg-muted/40 px-3 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase tabular-nums">
             <div>Bill</div>
             <div className="text-right">Due Date</div>
             <div className="text-right">Outstanding</div>
@@ -201,65 +177,42 @@ export function PaymentForm({
           {supplierBills.map((bill) => {
             const outstanding = bill.total - bill.amountPaid;
             return (
-              <div
-                key={bill.id}
-                className="grid min-w-[560px] grid-cols-[1.5fr_100px_120px_140px] items-center gap-2 border-t border-border/50 px-sm py-xs tabular-nums"
-              >
+              <div key={bill.id} className="grid min-w-[560px] grid-cols-[1.5fr_100px_120px_140px] items-center gap-2 border-t border-border px-3 py-2 tabular-nums">
                 <div className="font-mono text-sm">{bill.billNumber}</div>
-                <div className="text-right text-sm text-text-secondary">{bill.dueDate}</div>
-                <div className="text-right text-sm">
-                  <FinancialNumber value={outstanding} format={formatCurrency} showFlash={false} />
-                </div>
-                <input
+                <div className="text-right text-sm text-muted-foreground">{formatDate(bill.dueDate)}</div>
+                <div className="text-right text-sm">{formatCurrency(outstanding)}</div>
+                <Input
                   type="number"
                   min="0"
                   max={outstanding}
                   step="0.01"
-                  className={`${inputClass} text-right`}
+                  className="text-right"
                   value={allocationAmounts[bill.id] || ''}
                   onChange={(e) => setAllocation(bill.id, outstanding, parseFloat(e.target.value) || 0)}
                 />
               </div>
             );
           })}
-          {supplierBills.length === 0 && (
-            <div className="px-sm py-md text-center text-sm text-text-muted">
-              No open bills for this supplier — the full amount will be recorded on-account.
-            </div>
-          )}
+          {supplierBills.length === 0 && <div className="px-3 py-4 text-center text-sm text-muted-foreground">No open bills for this supplier — the full amount will be recorded on-account.</div>}
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
-        <div>
-          <div className="text-xs text-text-muted">Payment Amount</div>
-          <FinancialNumber value={amount} format={formatCurrency} className="text-base font-semibold" />
-        </div>
-        <div>
-          <div className="text-xs text-text-muted">Allocated</div>
-          <FinancialNumber value={allocatedTotal} format={formatCurrency} className="text-base font-semibold" />
-        </div>
-        <div>
-          <div className="text-xs text-text-muted">Unallocated (on-account)</div>
-          <FinancialNumber
-            value={unallocatedAmount}
-            format={formatCurrency}
-            className="text-base font-semibold"
-            showFlash={false}
-          />
-        </div>
+      <div className="grid grid-cols-3 gap-4 rounded-lg border border-border bg-muted/30 p-4">
+        <FigureBlock label="Payment Amount" value={formatCurrency(amount)} className="text-base" />
+        <FigureBlock label="Allocated" value={formatCurrency(allocatedTotal)} className="text-base" />
+        <FigureBlock label="Unallocated (on-account)" value={formatCurrency(unallocatedAmount)} className="text-base" />
       </div>
 
-      <label className="flex flex-col gap-xs text-sm">
-        <span className="font-medium text-text-primary">Notes (optional)</span>
-        <textarea className={inputClass} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </label>
+      <Field>
+        <FieldLabel htmlFor="payment-notes">Notes (optional)</FieldLabel>
+        <Textarea id="payment-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      </Field>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
+        <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
           {isSubmitting ? 'Recording…' : 'Record Payment'}
         </Button>
       </div>

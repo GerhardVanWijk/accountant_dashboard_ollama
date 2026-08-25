@@ -1,5 +1,7 @@
 import type { RelatedParty } from '@/types/relatedParty';
-import { cn } from '@/utils/cn';
+import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { StatusBadge } from '@/components/app/status-badge';
+import { Button } from '@/components/ui/shadcn/button';
 import { RELATIONSHIP_TYPE_LABELS } from '../constants';
 
 export interface RelatedPartiesTableProps {
@@ -9,65 +11,67 @@ export interface RelatedPartiesTableProps {
   onDelete: (relatedParty: RelatedParty) => void;
 }
 
-/** Related Party Register table — mirrors src/features/assets/components/AssetsTable.tsx's shape. */
+/** Related Party Register, re-skinned onto v0's DataTable (M13) — mirrors AssetsTable.tsx's shape. */
 export function RelatedPartiesTable({ relatedParties, transactionCountByPartyId, onEdit, onDelete }: RelatedPartiesTableProps) {
+  const columns: DataTableColumn<RelatedParty>[] = [
+    { key: 'name', header: 'Name', sortValue: (p) => p.name, cell: (p) => <span className="font-medium text-foreground">{p.name}</span> },
+    { key: 'type', header: 'Relationship type', sortValue: (p) => p.relationshipType, cell: (p) => <span className="text-xs">{RELATIONSHIP_TYPE_LABELS[p.relationshipType]}</span> },
+    { key: 'detail', header: 'Detail', hideBelowMd: true, cell: (p) => <span className="max-w-xs truncate text-xs text-muted-foreground">{p.relationshipDetail ?? '—'}</span> },
+    {
+      key: 'transactions',
+      header: 'Transactions',
+      align: 'right',
+      sortValue: (p) => transactionCountByPartyId.get(p.id) ?? 0,
+      cell: (p) => <span className="figure text-sm tabular-nums">{transactionCountByPartyId.get(p.id) ?? 0}</span>,
+    },
+    { key: 'status', header: 'Status', sortValue: (p) => (p.isActive ? 'active' : 'inactive'), cell: (p) => <StatusBadge status={p.isActive ? 'active' : 'inactive'} /> },
+    {
+      key: 'actions',
+      header: '',
+      cell: (p) => {
+        const transactionCount = transactionCountByPartyId.get(p.id) ?? 0;
+        return (
+          <div className="flex justify-end gap-1">
+            <Button variant="ghost" size="sm" onClick={() => onEdit(p)}>
+              Edit
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              disabled={transactionCount > 0}
+              title={transactionCount > 0 ? 'Referenced by an existing related-party transaction — remove those first.' : undefined}
+              onClick={() => onDelete(p)}
+            >
+              Delete
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-        <thead className="bg-background">
-          <tr>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Name</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Relationship Type</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Detail</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Transactions</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Status</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary" />
-          </tr>
-        </thead>
-        <tbody>
-          {relatedParties.map((relatedParty) => {
-            const transactionCount = transactionCountByPartyId.get(relatedParty.id) ?? 0;
-            return (
-              <tr key={relatedParty.id} className="border-t border-border hover:bg-background">
-                <td className="whitespace-nowrap px-md py-sm text-text-primary">{relatedParty.name}</td>
-                <td className="whitespace-nowrap px-md py-sm text-text-primary">{RELATIONSHIP_TYPE_LABELS[relatedParty.relationshipType]}</td>
-                <td className="max-w-xs truncate px-md py-sm text-text-secondary">{relatedParty.relationshipDetail ?? '—'}</td>
-                <td className="whitespace-nowrap px-md py-sm text-right tabular-nums text-text-primary">{transactionCount}</td>
-                <td className="whitespace-nowrap px-md py-sm">
-                  <span
-                    className={cn(
-                      'inline-flex items-center rounded-full px-sm py-0.5 text-xs font-medium',
-                      relatedParty.isActive ? 'bg-positive/10 text-positive' : 'bg-text-muted/10 text-text-muted',
-                    )}
-                  >
-                    {relatedParty.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </td>
-                <td className="whitespace-nowrap px-md py-sm">
-                  <div className="flex justify-end gap-sm">
-                    <button
-                      type="button"
-                      onClick={() => onEdit(relatedParty)}
-                      className="rounded-md px-sm py-xs text-xs font-medium text-primary hover:underline"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(relatedParty)}
-                      disabled={transactionCount > 0}
-                      title={transactionCount > 0 ? 'Referenced by an existing related-party transaction — remove those first.' : undefined}
-                      className="rounded-md px-sm py-xs text-xs font-medium text-danger hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:no-underline"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      rows={relatedParties}
+      columns={columns}
+      getRowKey={(p) => p.id}
+      searchable={(p) => [p.name, RELATIONSHIP_TYPE_LABELS[p.relationshipType], p.relationshipDetail ?? ''].join(' ')}
+      searchPlaceholder="Search by name or relationship"
+      initialSortKey="name"
+      filters={[
+        {
+          key: 'status',
+          label: 'All statuses',
+          options: [
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+          ],
+          match: (p, value) => (p.isActive ? 'active' : 'inactive') === value,
+        },
+      ]}
+      emptyTitle="No related parties yet"
+      emptyDescription="Add a director, shareholder, subsidiary, associate, or other related entity to start the register."
+    />
   );
 }

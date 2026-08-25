@@ -1,75 +1,81 @@
-import type { PayrollRun, PayrollRunStatus } from '@/types';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { cn } from '@/utils/cn';
-import { PAYROLL_RUN_STATUS_LABELS } from '../constants';
-
-const STATUS_STYLES: Record<PayrollRunStatus, string> = {
-  draft: 'bg-text-muted/10 text-text-secondary',
-  posted: 'bg-positive/10 text-positive',
-};
+import type { PayrollRun } from '@/types';
+import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { Amount } from '@/components/app/figure';
+import { StatusBadge } from '@/components/app/status-badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { formatDate } from '@/lib/app/format';
 
 export interface PayrollRunsTableProps {
   runs: PayrollRun[];
   onView: (run: PayrollRun) => void;
-  onDelete: (run: PayrollRun) => void;
+  /** Omit (gated by payroll:delete) to hide the Delete row action entirely. */
+  onDelete?: (run: PayrollRun) => void;
 }
 
+/** Payroll run register, re-skinned onto v0's DataTable (M13) — net pay is read off the already-computed PayrollRun record, no payroll math performed here. */
 export function PayrollRunsTable({ runs, onView, onDelete }: PayrollRunsTableProps) {
+  const columns: DataTableColumn<PayrollRun>[] = [
+    { key: 'number', header: 'Run', sortValue: (r) => r.runNumber, cell: (r) => <span className="figure font-mono text-sm font-medium">{r.runNumber}</span> },
+    {
+      key: 'period',
+      header: 'Pay period',
+      sortValue: (r) => r.payPeriodStart,
+      cell: (r) => (
+        <span className="text-sm text-muted-foreground">
+          {formatDate(r.payPeriodStart)} – {formatDate(r.payPeriodEnd)}
+        </span>
+      ),
+    },
+    { key: 'payDate', header: 'Pay date', sortValue: (r) => r.payDate, cell: (r) => formatDate(r.payDate) },
+    { key: 'employees', header: 'Employees', align: 'right', hideBelowMd: true, sortValue: (r) => r.payslips.length, cell: (r) => <span className="figure tabular-nums">{r.payslips.length}</span> },
+    {
+      key: 'netPay',
+      header: 'Net pay',
+      align: 'right',
+      sortValue: (r) => r.payslips.reduce((sum, p) => sum + p.netPay, 0),
+      cell: (r) => <Amount value={r.payslips.reduce((sum, p) => sum + p.netPay, 0)} className="text-sm font-medium" />,
+    },
+    { key: 'status', header: 'Status', sortValue: (r) => r.status, cell: (r) => <StatusBadge status={r.status} /> },
+    {
+      key: 'actions',
+      header: '',
+      cell: (r) => (
+        <div className="flex justify-end gap-1">
+          <Button variant="ghost" size="sm" onClick={() => onView(r)}>
+            {r.status === 'draft' ? 'Review' : 'View'}
+          </Button>
+          {r.status === 'draft' && onDelete && (
+            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(r)}>
+              Delete
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[780px] border-collapse text-left text-sm">
-        <thead className="bg-background">
-          <tr>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Run #</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Pay Period</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Pay Date</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Employees</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Net Pay</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Status</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary" />
-          </tr>
-        </thead>
-        <tbody>
-          {runs.map((run) => {
-            const netPay = run.payslips.reduce((sum, p) => sum + p.netPay, 0);
-            return (
-              <tr key={run.id} className="border-t border-border hover:bg-background">
-                <td className="whitespace-nowrap px-md py-sm font-mono text-text-primary">{run.runNumber}</td>
-                <td className="whitespace-nowrap px-md py-sm text-text-primary">
-                  {run.payPeriodStart} – {run.payPeriodEnd}
-                </td>
-                <td className="whitespace-nowrap px-md py-sm text-text-primary">{run.payDate}</td>
-                <td className="whitespace-nowrap px-md py-sm text-right tabular-nums text-text-primary">{run.payslips.length}</td>
-                <td className="whitespace-nowrap px-md py-sm text-right tabular-nums font-semibold">
-                  <FinancialNumber value={netPay} format={formatCurrency} showFlash={false} />
-                </td>
-                <td className="whitespace-nowrap px-md py-sm">
-                  <span className={cn('inline-flex items-center rounded-full px-sm py-0.5 text-xs font-medium', STATUS_STYLES[run.status])}>
-                    {PAYROLL_RUN_STATUS_LABELS[run.status]}
-                  </span>
-                </td>
-                <td className="whitespace-nowrap px-md py-sm">
-                  <div className="flex justify-end gap-sm">
-                    <button type="button" onClick={() => onView(run)} className="rounded-md px-sm py-xs text-xs font-medium text-primary hover:underline">
-                      {run.status === 'draft' ? 'Review' : 'View'}
-                    </button>
-                    {run.status === 'draft' && (
-                      <button
-                        type="button"
-                        onClick={() => onDelete(run)}
-                        className="rounded-md px-sm py-xs text-xs font-medium text-danger hover:underline"
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      rows={runs}
+      columns={columns}
+      getRowKey={(r) => r.id}
+      searchable={(r) => [r.runNumber, r.payDate].join(' ')}
+      searchPlaceholder="Search by run number"
+      initialSortKey="payDate"
+      initialSortDirection="desc"
+      filters={[
+        {
+          key: 'status',
+          label: 'All statuses',
+          options: [
+            { value: 'draft', label: 'Draft' },
+            { value: 'posted', label: 'Posted' },
+          ],
+          match: (r, value) => r.status === value,
+        },
+      ]}
+      emptyTitle="No payroll runs yet"
+      emptyDescription="Create a payroll run to pay your employees."
+    />
   );
 }

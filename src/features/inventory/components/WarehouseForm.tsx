@@ -1,10 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { Warehouse } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { fieldError, fieldInput, fieldLabel } from './formStyles';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import type { CreateWarehouseDTO, UpdateWarehouseDTO } from '../services/warehouseService';
+
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const warehouseSchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
@@ -38,11 +42,12 @@ function toDefaultValues(warehouse?: Warehouse): WarehouseFormValues {
   };
 }
 
-/** Create/edit form for warehouses (react-hook-form + zod), used by WarehousesPage. */
+/** Create/edit form for warehouses (react-hook-form + zod), used by WarehousesPage. Re-skinned onto v0's Field/Input/Checkbox (M8). */
 export function WarehouseForm({ warehouse, onSubmit, onCancel }: WarehouseFormProps) {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<WarehouseFormValues>({
     resolver: zodResolver(warehouseSchema),
@@ -68,72 +73,62 @@ export function WarehouseForm({ warehouse, onSubmit, onCancel }: WarehouseFormPr
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-md" noValidate>
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="wh-name">
-            Name
-          </label>
-          <input id="wh-name" className={fieldInput} {...register('name')} />
-          {errors.name && <p className={fieldError}>{errors.name.message}</p>}
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="wh-code">
-            Code
-          </label>
-          <input id="wh-code" className={fieldInput} {...register('code')} />
-          {errors.code && <p className={fieldError}>{errors.code.message}</p>}
-        </div>
+    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="wh-name">Name</FieldLabel>
+          <Input id="wh-name" {...register('name')} />
+          <FieldError errors={[errors.name]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="wh-code">Code</FieldLabel>
+          <Input id="wh-code" {...register('code')} />
+          <FieldError errors={[errors.code]} />
+        </Field>
       </div>
 
-      <div>
-        <label className={fieldLabel} htmlFor="wh-line1">
-          Address Line 1
-        </label>
-        <input id="wh-line1" className={fieldInput} {...register('line1')} />
+      <Field>
+        <FieldLabel htmlFor="wh-line1">Address Line 1</FieldLabel>
+        <Input id="wh-line1" {...register('line1')} />
+      </Field>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Field>
+          <FieldLabel htmlFor="wh-city">City</FieldLabel>
+          <Input id="wh-city" {...register('city')} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="wh-postal">Postal Code</FieldLabel>
+          <Input id="wh-postal" {...register('postalCode')} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="wh-country">Country</FieldLabel>
+          <Input id="wh-country" {...register('country')} />
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-3">
-        <div>
-          <label className={fieldLabel} htmlFor="wh-city">
-            City
-          </label>
-          <input id="wh-city" className={fieldInput} {...register('city')} />
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="wh-postal">
-            Postal Code
-          </label>
-          <input id="wh-postal" className={fieldInput} {...register('postalCode')} />
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="wh-country">
-            Country
-          </label>
-          <input id="wh-country" className={fieldInput} {...register('country')} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div className="flex items-center gap-sm pt-lg">
-          <input id="wh-default" type="checkbox" className="h-4 w-4" {...register('isDefault')} />
-          <label className="text-sm font-medium text-text-primary" htmlFor="wh-default">
-            Default warehouse
-          </label>
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="wh-status">
-            Status
-          </label>
-          <select id="wh-status" className={fieldInput} {...register('status')}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Controller
+          control={control}
+          name="isDefault"
+          render={({ field }) => (
+            <Field orientation="horizontal">
+              <Checkbox id="wh-default" checked={field.value} onCheckedChange={(value) => field.onChange(value === true)} />
+              <FieldLabel htmlFor="wh-default">Default warehouse</FieldLabel>
+            </Field>
+          )}
+        />
+        <Field>
+          <FieldLabel htmlFor="wh-status">Status</FieldLabel>
+          <select id="wh-status" className={selectClassName} {...register('status')}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
-        </div>
+        </Field>
       </div>
 
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>

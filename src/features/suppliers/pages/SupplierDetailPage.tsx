@@ -1,14 +1,30 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Address, CurrencyCode } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Icon } from '@/components/ui/Icon';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { ArrowLeft, CreditCard, Loader2, ReceiptText } from 'lucide-react';
+import type { Address } from '@/types';
 import { formatCurrency } from '@/utils/formatCurrency';
-import { cn } from '@/utils/cn';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/shadcn/empty';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/shadcn/alert-dialog';
 import type { UseSuppliersResult } from '../hooks/useSuppliers';
 import { StatusBadge } from '../components/StatusBadge';
 import { calculateAging, billsToOpenBills } from '../utils/calculateAging';
@@ -22,17 +38,42 @@ export interface SupplierDetailPageProps {
   onEdit: () => void;
 }
 
-type DetailTab = 'overview' | 'history' | 'remittance';
+function InfoRow({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border py-2 text-sm last:border-b-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground">{value || '—'}</span>
+    </div>
+  );
+}
+
+function AddressBlock({ address, fallback = 'Not provided' }: { address?: Address; fallback?: string }) {
+  if (!address) return <p className="text-sm text-muted-foreground">{fallback}</p>;
+  return (
+    <address className="text-sm text-muted-foreground not-italic">
+      {address.line1}
+      {address.line2 ? (
+        <>
+          <br />
+          {address.line2}
+        </>
+      ) : null}
+      <br />
+      {[address.city, address.state, address.postalCode].filter(Boolean).join(', ')}
+      <br />
+      {address.country}
+    </address>
+  );
+}
 
 /**
- * Supplier Detail Hub: financial summary cards, aging breakdown,
- * contact/address/banking overview, Transaction History (empty — no
- * real PO/bill data yet) and Remittance & Statements (date-range stub,
- * export disabled rather than faked).
+ * Supplier Detail Hub, re-skinned onto v0's SectionCard/Tabs/FigureBlock.
+ * All figures come unchanged from the real accounts-payable layer —
+ * calculateFinancialSummary/calculateAging (suppliers-bee), fed real Bill
+ * records via useBills(), same as the pre-v0 page did.
  */
 export function SupplierDetailPage({ supplierId, suppliersState, onBack, onEdit }: SupplierDetailPageProps) {
   const { suppliers, loading, error, refetch, setOnHold, setStatus, deleteSupplier } = suppliersState;
-  const [tab, setTab] = useState<DetailTab>('overview');
   const [actionError, setActionError] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -48,19 +89,39 @@ export function SupplierDetailPage({ supplierId, suppliersState, onBack, onEdit 
     [supplierId, supplierBills],
   );
 
-  if (loading) return <Spinner label="Loading supplier…" />;
-  if (error) return <ErrorState message={error.message} onRetry={refetch} />;
+  if (loading) {
+    return (
+      <div role="status" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+        <p className="text-sm">Loading supplier…</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div role="alert" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
+        <p className="text-sm text-destructive">{error.message}</p>
+        <Button variant="outline" size="sm" onClick={refetch}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
   if (!supplier || !summary) {
     return (
-      <EmptyState
-        title="Supplier not found"
-        message="This supplier may have been removed."
-        action={
-          <Button variant="ghost" onClick={onBack}>
-            Back to Suppliers
+      <SectionCard>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Supplier not found</EmptyTitle>
+            <EmptyDescription>This supplier may have been removed.</EmptyDescription>
+          </EmptyHeader>
+          <Button variant="outline" size="sm" onClick={onBack}>
+            Back to suppliers
           </Button>
-        }
-      />
+        </Empty>
+      </SectionCard>
     );
   }
 
@@ -75,258 +136,194 @@ export function SupplierDetailPage({ supplierId, suppliersState, onBack, onEdit 
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <Button variant="ghost" className="px-0 py-0 text-xs" onClick={onBack}>
-            <Icon name="chevronDown" size={14} className="rotate-90" />
-            Back to Suppliers
-          </Button>
-          <div className="mt-xs flex flex-wrap items-center gap-sm">
-            <h1 className="text-2xl font-semibold text-text-primary">{supplier.name}</h1>
-            <StatusBadge status={supplier.status} onHold={supplier.onHold} />
-          </div>
-          <p className="text-sm text-text-secondary">{supplier.supplierNumber}</p>
-        </div>
-        <div className="flex flex-wrap gap-sm">
-          <Button variant="ghost" onClick={() => navigate('/purchases/bills')}>
-            <Icon name="bills" size={16} />
-            View Bills
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              void setOnHold(supplier.id, !supplier.onHold);
-            }}
-          >
-            {supplier.onHold ? 'Release Hold' : 'Put On Hold'}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              void setStatus(supplier.id, supplier.status === 'active' ? 'inactive' : 'active');
-            }}
-          >
-            {supplier.status === 'active' ? 'Deactivate' : 'Activate'}
-          </Button>
-          <Button variant="primary" onClick={onEdit}>
-            Edit
-          </Button>
-        </div>
+    <>
+      <PageHeader
+        title={supplier.name}
+        description={supplier.supplierNumber}
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={onBack}>
+              <ArrowLeft data-icon="inline-start" />
+              Back
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/purchases/bills')}>
+              <ReceiptText data-icon="inline-start" />
+              View bills
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void setOnHold(supplier.id, !supplier.onHold);
+              }}
+            >
+              {supplier.onHold ? 'Release hold' : 'Put on hold'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void setStatus(supplier.id, supplier.status === 'active' ? 'inactive' : 'active');
+              }}
+            >
+              {supplier.status === 'active' ? 'Deactivate' : 'Activate'}
+            </Button>
+            <Button size="sm" onClick={onEdit}>
+              Edit
+            </Button>
+          </>
+        }
+      />
+
+      <div className="flex items-center gap-2">
+        <StatusBadge status={supplier.status} onHold={supplier.onHold} />
       </div>
 
-      {actionError && <ErrorState title="Action failed" message={actionError} />}
-
-      <div className="grid grid-cols-1 gap-md sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard label="Total Payable" value={formatCurrency(summary.totalPayable, supplier.currency)} />
-        <SummaryCard
-          label="Overdue Balance"
-          value={formatCurrency(summary.overdueBalance, supplier.currency)}
-          tone={summary.overdueBalance > 0 ? 'danger' : undefined}
-        />
-        <SummaryCard label="YTD Purchases" value={formatCurrency(summary.ytdPurchases, supplier.currency)} />
-        <SummaryCard label="Available Credit" value={formatCurrency(summary.creditBalance, supplier.currency)} />
-      </div>
-
-      <Card>
-        <h2 className="text-sm font-semibold text-text-primary">Accounts Payable Aging</h2>
-        <div className="mt-md grid grid-cols-2 gap-md sm:grid-cols-4">
-          <AgingCell label="Current" value={aging.current} currency={supplier.currency} />
-          <AgingCell label="30 Days" value={aging.days30} currency={supplier.currency} />
-          <AgingCell label="60 Days" value={aging.days60} currency={supplier.currency} />
-          <AgingCell label="90+ Days" value={aging.days90Plus} currency={supplier.currency} tone="danger" />
+      {actionError && (
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {actionError}
         </div>
-      </Card>
+      )}
 
-      <div className="flex flex-wrap gap-xs border-b border-border" role="tablist">
-        <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>
-          Overview
-        </TabButton>
-        <TabButton active={tab === 'history'} onClick={() => setTab('history')}>
-          Transaction History
-        </TabButton>
-        <TabButton active={tab === 'remittance'} onClick={() => setTab('remittance')}>
-          Remittance & Statements
-        </TabButton>
-      </div>
+      <section aria-label="Supplier financial summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <SectionCard bodyClassName="p-5">
+          <FigureBlock label="Total payable" value={formatCurrency(summary.totalPayable, supplier.currency)} />
+        </SectionCard>
+        <SectionCard bodyClassName="p-5">
+          <FigureBlock
+            label="Overdue balance"
+            value={formatCurrency(summary.overdueBalance, supplier.currency)}
+            tone={summary.overdueBalance > 0 ? 'negative' : 'default'}
+          />
+        </SectionCard>
+        <SectionCard bodyClassName="p-5">
+          <FigureBlock label="YTD purchases" value={formatCurrency(summary.ytdPurchases, supplier.currency)} />
+        </SectionCard>
+        <SectionCard bodyClassName="p-5">
+          <FigureBlock label="Available credit" value={formatCurrency(summary.creditBalance, supplier.currency)} />
+        </SectionCard>
+      </section>
 
-      {tab === 'overview' && (
-        <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-          <Card>
-            <h3 className="text-sm font-semibold text-text-primary">Contact</h3>
-            <dl className="mt-sm flex flex-col gap-xs text-sm text-text-secondary">
-              <Row label="Contact Person" value={supplier.contactPerson} />
-              <Row label="Email" value={supplier.email} />
-              <Row label="Phone" value={supplier.phone} />
-              <Row label="Category" value={supplier.category} />
-            </dl>
-          </Card>
-          <Card>
-            <h3 className="text-sm font-semibold text-text-primary">Financial & Tax</h3>
-            <dl className="mt-sm flex flex-col gap-xs text-sm text-text-secondary">
-              <Row label="Tax / VAT Number" value={supplier.taxNumber} />
-              <Row label="Payment Terms" value={supplier.paymentTerms} />
-              <Row label="Payment Method" value={supplier.paymentMethod} />
-              <Row
-                label="Settlement Discount"
+      <SectionCard title="Accounts payable ageing">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <FigureBlock label="Current" value={formatCurrency(aging.current, supplier.currency)} />
+          <FigureBlock label="30 days" value={formatCurrency(aging.days30, supplier.currency)} />
+          <FigureBlock label="60 days" value={formatCurrency(aging.days60, supplier.currency)} />
+          <FigureBlock
+            label="90+ days"
+            value={formatCurrency(aging.days90Plus, supplier.currency)}
+            tone={aging.days90Plus > 0 ? 'negative' : 'default'}
+          />
+        </div>
+      </SectionCard>
+
+      <Tabs defaultValue="overview">
+        <TabsList variant="line" className="w-full justify-start border-b border-border">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="history">Transaction history</TabsTrigger>
+          <TabsTrigger value="remittance">Remittance &amp; statements</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="pt-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <SectionCard title="Contact">
+              <InfoRow label="Contact person" value={supplier.contactPerson} />
+              <InfoRow label="Email" value={supplier.email} />
+              <InfoRow label="Phone" value={supplier.phone} />
+              <InfoRow label="Category" value={supplier.category} />
+            </SectionCard>
+            <SectionCard title="Financial &amp; tax">
+              <InfoRow label="Tax/VAT number" value={supplier.taxNumber} />
+              <InfoRow label="Payment terms" value={supplier.paymentTerms} />
+              <InfoRow label="Payment method" value={supplier.paymentMethod} />
+              <InfoRow
+                label="Settlement discount"
                 value={supplier.settlementDiscountPercent != null ? `${supplier.settlementDiscountPercent}%` : undefined}
               />
-              <Row
-                label="Credit Limit"
+              <InfoRow
+                label="Credit limit"
                 value={supplier.creditLimit != null ? formatCurrency(supplier.creditLimit, supplier.currency) : undefined}
               />
-            </dl>
-          </Card>
-          <Card>
-            <h3 className="text-sm font-semibold text-text-primary">Physical Address</h3>
-            <AddressBlock address={supplier.address} />
-          </Card>
-          <Card>
-            <h3 className="text-sm font-semibold text-text-primary">Remittance Address</h3>
-            <AddressBlock address={supplier.remittanceAddress} fallback="Same as physical address" />
-          </Card>
-          {supplier.bankDetails && (
-            <Card className="md:col-span-2">
-              <h3 className="text-sm font-semibold text-text-primary">Banking Details</h3>
-              <dl className="mt-sm flex flex-col gap-xs text-sm text-text-secondary">
-                <Row label="Bank" value={supplier.bankDetails.bankName} />
-                <Row label="Branch Code" value={supplier.bankDetails.branchCode} />
-                <Row label="Account Number" value={supplier.bankDetails.accountNumber} />
-              </dl>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {tab === 'history' && (
-        <EmptyState
-          title="No transaction history yet"
-          message="Purchase orders, bills, supplier credits, payments, and journal entries will appear here once the Purchases module ships real data."
-        />
-      )}
-
-      {tab === 'remittance' && (
-        <Card className="flex flex-col gap-md">
-          <h3 className="text-sm font-semibold text-text-primary">Remittance & Statements</h3>
-          <div className="flex flex-wrap items-end gap-md">
-            <label className="flex flex-col gap-xs text-sm">
-              <span className="text-text-secondary">From</span>
-              <input
-                type="date"
-                className="rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary"
-              />
-            </label>
-            <label className="flex flex-col gap-xs text-sm">
-              <span className="text-text-secondary">To</span>
-              <input
-                type="date"
-                className="rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary"
-              />
-            </label>
-            <Button
-              variant="ghost"
-              disabled
-              title="PDF export ships once the Purchases module provides real statement data"
-            >
-              Export PDF (Coming Soon)
-            </Button>
+            </SectionCard>
+            <SectionCard title="Physical address">
+              <AddressBlock address={supplier.address} />
+            </SectionCard>
+            <SectionCard title="Remittance address">
+              <AddressBlock address={supplier.remittanceAddress} fallback="Same as physical address" />
+            </SectionCard>
+            {supplier.bankDetails ? (
+              <SectionCard title="Banking details" className="md:col-span-2">
+                <InfoRow label="Bank" value={supplier.bankDetails.bankName} />
+                <InfoRow label="Branch code" value={supplier.bankDetails.branchCode} />
+                <InfoRow label="Account number" value={supplier.bankDetails.accountNumber} />
+              </SectionCard>
+            ) : null}
           </div>
-          <EmptyState
-            title="No statements yet"
-            message="Remittance advices and statements are generated from real bill/payment data, which isn't available until the Purchases module ships."
-          />
-        </Card>
-      )}
+        </TabsContent>
 
-      <Card className="border-danger">
-        <h3 className="text-sm font-semibold text-text-primary">Danger Zone</h3>
-        <p className="mt-xs text-sm text-text-secondary">
+        <TabsContent value="history" className="pt-4">
+          <SectionCard>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <ReceiptText />
+                </EmptyMedia>
+                <EmptyTitle>No transaction history yet</EmptyTitle>
+                <EmptyDescription>
+                  Purchase orders, bills, supplier credits, payments, and journal entries will appear here once
+                  posted.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          </SectionCard>
+        </TabsContent>
+
+        <TabsContent value="remittance" className="pt-4">
+          <SectionCard>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <CreditCard />
+                </EmptyMedia>
+                <EmptyTitle>No statements yet</EmptyTitle>
+                <EmptyDescription>
+                  Remittance advices and statements are generated from real bill/payment data.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          </SectionCard>
+        </TabsContent>
+      </Tabs>
+
+      <SectionCard title="Danger zone" className="border-destructive/30">
+        <p className="text-sm text-muted-foreground">
           Permanently deleting a supplier is only allowed when it has no linked bills, payments, or ledger
           transactions. Otherwise, inactivate the supplier or place it on hold instead.
         </p>
-        <Button variant="danger" className="mt-sm" onClick={handleDelete}>
-          Delete Supplier
-        </Button>
-      </Card>
-    </div>
-  );
-}
-
-function SummaryCard({ label, value, tone }: { label: string; value: string; tone?: 'danger' }) {
-  return (
-    <Card>
-      <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">{label}</p>
-      <p className={cn('mt-xs text-xl font-semibold', tone === 'danger' ? 'text-danger' : 'text-text-primary')}>
-        {value}
-      </p>
-    </Card>
-  );
-}
-
-function AgingCell({
-  label,
-  value,
-  currency,
-  tone,
-}: {
-  label: string;
-  value: number;
-  currency: CurrencyCode;
-  tone?: 'danger';
-}) {
-  return (
-    <div className="flex flex-col gap-xs rounded-md border border-border p-sm">
-      <span className="text-xs text-text-secondary">{label}</span>
-      <span className={cn('text-sm font-semibold', tone && value > 0 ? 'text-danger' : 'text-text-primary')}>
-        {formatCurrency(value, currency)}
-      </span>
-    </div>
-  );
-}
-
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className={cn(
-        'rounded-t-md px-md py-sm text-sm font-medium transition-colors',
-        active ? 'border-b-2 border-primary text-text-primary' : 'text-text-secondary hover:text-text-primary',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Row({ label, value }: { label: string; value?: string }) {
-  return (
-    <div className="flex justify-between gap-md">
-      <dt className="text-text-secondary">{label}</dt>
-      <dd className="text-right text-text-primary">{value || '—'}</dd>
-    </div>
-  );
-}
-
-function AddressBlock({ address, fallback = 'Not provided' }: { address?: Address; fallback?: string }) {
-  if (!address) {
-    return <p className="mt-sm text-sm text-text-secondary">{fallback}</p>;
-  }
-  return (
-    <address className="mt-sm not-italic text-sm text-text-secondary">
-      {address.line1}
-      {address.line2 && (
-        <>
-          <br />
-          {address.line2}
-        </>
-      )}
-      <br />
-      {[address.city, address.state, address.postalCode].filter(Boolean).join(', ')}
-      <br />
-      {address.country}
-    </address>
+        <AlertDialog>
+          <AlertDialogTrigger render={<Button variant="destructive" size="sm" className="mt-3" />}>
+            Delete supplier
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {supplier.name}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently removes the supplier record. This cannot be undone. If this supplier has any
+                linked bills, payments, or ledger transactions, the deletion will be blocked automatically.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive/10 text-destructive hover:bg-destructive/20"
+                onClick={() => void handleDelete()}
+              >
+                Delete supplier
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </SectionCard>
+    </>
   );
 }

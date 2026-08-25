@@ -1,176 +1,177 @@
-import React from 'react';
-import { format } from 'date-fns';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
-import { Button } from '@/components/ui/Button';
 import type { SalesOrder } from '@/types';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { StatusBadge } from '@/components/app/status-badge';
+import { Button } from '@/components/ui/shadcn/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/shadcn/alert-dialog';
+import { formatCurrency, formatDate } from '@/lib/app/format';
 
 interface SalesOrderDetailProps {
   salesOrder: SalesOrder;
   customerName: string;
   quoteNumber?: string;
-  onClose?: () => void;
+  onBack?: () => void;
   onEdit?: () => void;
+  onDelete?: () => void;
   onConfirmOrder?: (id: string) => void;
   onCancelOrder?: (id: string) => void;
   onConvertToInvoice?: (id: string) => void;
   isBusy?: boolean;
 }
 
-export const SalesOrderDetail: React.FC<SalesOrderDetailProps> = ({
+/**
+ * Sales Order detail — re-skinned onto v0's PageHeader/SectionCard (M13),
+ * mirrors InvoiceDetail.tsx/QuoteDetail.tsx's shape. Action gating
+ * unchanged from before the port: Confirm only from pending; Cancel unless
+ * already fulfilled/cancelled; Convert to Invoice unless already
+ * cancelled/fulfilled. Adds a "Delete draft" action wired to the existing
+ * salesOrderService.deleteSalesOrder() guard (pending-only, already
+ * supported by the service but never surfaced by the old detail page),
+ * matching InvoiceDetail's/QuoteDetail's equivalent action.
+ */
+export function SalesOrderDetail({
   salesOrder,
   customerName,
   quoteNumber,
-  onClose,
+  onBack,
   onEdit,
+  onDelete,
   onConfirmOrder,
   onCancelOrder,
   onConvertToInvoice,
   isBusy = false,
-}) => {
+}: SalesOrderDetailProps) {
   const canConfirm = salesOrder.status === 'pending';
   const canCancel = salesOrder.status !== 'fulfilled' && salesOrder.status !== 'cancelled';
   const canConvert = salesOrder.status !== 'cancelled' && salesOrder.status !== 'fulfilled';
 
   return (
-    <div className="max-w-4xl mx-auto bg-panel p-8 rounded-lg border border-border">
-      <div className="flex justify-between items-start mb-8 pb-8 border-b border-border">
-        <div>
-          <div className="text-3xl font-bold mb-2">Sales Order</div>
-          <div className="text-text-secondary">{customerName}</div>
-          {quoteNumber && <div className="text-xs text-text-muted mt-1">Converted from quote {quoteNumber}</div>}
-        </div>
-        <div className="text-right">
-          <div className="font-mono text-xl font-semibold">{salesOrder.orderNumber}</div>
-          <div className="text-sm text-text-muted">{format(new Date(salesOrder.orderDate), 'dd MMMM yyyy')}</div>
-          <div className={`text-xs font-semibold mt-2 px-2 py-1 rounded inline-block ${getStatusClass(salesOrder.status)}`}>
-            {getStatusLabel(salesOrder.status)}
-          </div>
-        </div>
+    <>
+      <PageHeader
+        title={salesOrder.orderNumber}
+        description={quoteNumber ? `${customerName} — Sales Order (from quote ${quoteNumber})` : `${customerName} — Sales Order`}
+        actions={
+          <>
+            {onBack && (
+              <Button variant="outline" size="sm" onClick={onBack}>
+                Back
+              </Button>
+            )}
+            {onEdit && salesOrder.status === 'pending' && (
+              <Button variant="outline" size="sm" onClick={onEdit}>
+                Edit
+              </Button>
+            )}
+            {onDelete && salesOrder.status === 'pending' && (
+              <AlertDialog>
+                <AlertDialogTrigger render={<Button variant="destructive" size="sm" disabled={isBusy} />}>
+                  Delete draft
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete {salesOrder.orderNumber}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This permanently removes the pending sales order. This cannot be undone. Once confirmed or
+                      fulfilled, it is a real business commitment and must be cancelled instead of deleted.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive/10 text-destructive hover:bg-destructive/20"
+                      onClick={onDelete}
+                    >
+                      Delete draft
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            {onCancelOrder && canCancel && (
+              <Button variant="destructive" size="sm" disabled={isBusy} onClick={() => onCancelOrder(salesOrder.id)}>
+                Cancel order
+              </Button>
+            )}
+            {onConfirmOrder && canConfirm && (
+              <Button size="sm" disabled={isBusy} onClick={() => onConfirmOrder(salesOrder.id)}>
+                Confirm order
+              </Button>
+            )}
+            {onConvertToInvoice && canConvert && (
+              <Button size="sm" disabled={isBusy} onClick={() => onConvertToInvoice(salesOrder.id)}>
+                Convert to invoice
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge status={salesOrder.status} />
       </div>
 
-      <div className="grid grid-cols-2 gap-8 mb-8">
+      <SectionCard title="Ordered by" description={customerName}>
         <div>
-          <div className="text-xs text-text-muted uppercase tracking-wide mb-2">Order From</div>
-          <div className="font-semibold mb-1">{customerName}</div>
+          <div className="text-xs tracking-wide text-muted-foreground uppercase">Order date</div>
+          <div className="text-sm font-medium">{formatDate(salesOrder.orderDate)}</div>
         </div>
-        <div>
-          <div className="text-xs text-text-muted uppercase tracking-wide">Order Date</div>
-          <div className="font-semibold">{format(new Date(salesOrder.orderDate), 'dd MMMM yyyy')}</div>
-        </div>
-      </div>
+      </SectionCard>
 
-      <div className="mb-8">
-        <div className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 bg-primary/10 border border-border border-b-0 font-semibold text-sm">
-          <FinancialTableCell type="label">Description</FinancialTableCell>
-          <FinancialTableCell type="number">Qty</FinancialTableCell>
-          <FinancialTableCell type="number">Unit Price</FinancialTableCell>
-          <FinancialTableCell type="number">Tax</FinancialTableCell>
-          <FinancialTableCell type="number">Total</FinancialTableCell>
+      <SectionCard title="Line items" bodyClassName="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Description</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Qty</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Unit price</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Tax</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {salesOrder.lineItems.map((item) => (
+                <tr key={item.id} className="border-b border-border last:border-0">
+                  <td className="px-4 py-2">{item.description}</td>
+                  <td className="px-4 py-2 text-right text-muted-foreground">{item.quantity.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(item.taxAmount)}</td>
+                  <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.lineTotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-border bg-muted/20">
+                <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
+                <td className="px-4 py-2 text-right font-medium">{formatCurrency(salesOrder.subtotal)}</td>
+              </tr>
+              <tr className="bg-muted/20">
+                <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">Tax/VAT</td>
+                <td className="px-4 py-2 text-right font-medium">{formatCurrency(salesOrder.taxTotal)}</td>
+              </tr>
+              <tr className="border-t border-border bg-positive/10">
+                <td colSpan={4} className="px-4 py-2 text-right text-sm font-semibold uppercase">Total</td>
+                <td className="px-4 py-2 text-right text-base font-bold text-positive">{formatCurrency(salesOrder.total)}</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
-
-        {salesOrder.lineItems.map((item) => (
-          <div key={item.id} className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 border-b border-border text-sm">
-            <FinancialTableCell type="label">{item.description}</FinancialTableCell>
-            <FinancialTableCell type="number" className="text-text-secondary">
-              {item.quantity.toFixed(2)}
-            </FinancialTableCell>
-            <FinancialTableCell type="number">
-              <FinancialNumber value={item.unitPrice} format={formatCurrency} />
-            </FinancialTableCell>
-            <FinancialTableCell type="number">
-              <FinancialNumber value={item.taxAmount} format={formatCurrency} />
-            </FinancialTableCell>
-            <FinancialTableCell type="number" className="font-semibold">
-              <FinancialNumber value={item.lineTotal} format={formatCurrency} />
-            </FinancialTableCell>
-          </div>
-        ))}
-
-        <div className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 bg-background border-t-2 border-border font-semibold">
-          <div></div>
-          <div></div>
-          <div></div>
-          <div className="px-2 py-2 text-sm text-right">Subtotal</div>
-          <div className="px-2 py-2 text-sm text-right">
-            <FinancialNumber value={salesOrder.subtotal} format={formatCurrency} />
-          </div>
-        </div>
-        <div className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 bg-background border-b border-border">
-          <div></div>
-          <div></div>
-          <div></div>
-          <div className="px-2 py-2 text-sm text-right">Tax/VAT</div>
-          <div className="px-2 py-2 text-sm text-right">
-            <FinancialNumber value={salesOrder.taxTotal} format={formatCurrency} />
-          </div>
-        </div>
-        <div className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 bg-positive/10 border-b-2 border-border font-bold text-lg">
-          <div></div>
-          <div></div>
-          <div></div>
-          <div className="px-2 py-2 text-sm text-right">TOTAL</div>
-          <div className="px-2 py-2 text-sm text-right text-positive">
-            <FinancialNumber value={salesOrder.total} format={formatCurrency} />
-          </div>
-        </div>
-      </div>
+      </SectionCard>
 
       {salesOrder.notes && (
-        <div className="mb-8">
-          <div className="text-xs text-text-muted uppercase tracking-wide mb-2">Notes</div>
-          <div className="text-sm text-text-secondary whitespace-pre-wrap">{salesOrder.notes}</div>
-        </div>
+        <SectionCard title="Notes">
+          <p className="text-sm whitespace-pre-wrap text-muted-foreground">{salesOrder.notes}</p>
+        </SectionCard>
       )}
-
-      <div className="flex flex-wrap gap-3 justify-end pt-8 border-t border-border">
-        {onClose && (
-          <Button variant="ghost" onClick={onClose}>
-            Close
-          </Button>
-        )}
-        {onEdit && salesOrder.status === 'pending' && (
-          <Button variant="secondary" onClick={onEdit}>
-            Edit
-          </Button>
-        )}
-        {onCancelOrder && canCancel && (
-          <Button variant="danger" disabled={isBusy} onClick={() => onCancelOrder(salesOrder.id)}>
-            Cancel Order
-          </Button>
-        )}
-        {onConfirmOrder && canConfirm && (
-          <Button variant="secondary" disabled={isBusy} onClick={() => onConfirmOrder(salesOrder.id)}>
-            Confirm Order
-          </Button>
-        )}
-        {onConvertToInvoice && canConvert && (
-          <Button variant="primary" disabled={isBusy} onClick={() => onConvertToInvoice(salesOrder.id)}>
-            Convert to Invoice
-          </Button>
-        )}
-      </div>
-    </div>
+    </>
   );
-};
-
-function getStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    pending: 'Pending',
-    confirmed: 'Confirmed',
-    fulfilled: 'Fulfilled',
-    cancelled: 'Cancelled',
-  };
-  return labels[status] || status;
-}
-
-function getStatusClass(status: string): string {
-  const classes: Record<string, string> = {
-    pending: 'bg-info-financial/20 text-info-financial',
-    confirmed: 'bg-warning-financial/20 text-warning-financial',
-    fulfilled: 'bg-positive/20 text-positive',
-    cancelled: 'bg-text-muted/20 text-text-muted',
-  };
-  return classes[status] || '';
 }

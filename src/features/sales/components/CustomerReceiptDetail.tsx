@@ -1,108 +1,108 @@
-import React from 'react';
-import { format } from 'date-fns';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { Button } from '@/components/ui/Button';
 import type { CustomerReceipt } from '@/types';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { StatusBadge } from '@/components/app/status-badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { formatCurrency, formatDate } from '@/lib/app/format';
+import { receiptAllocationState } from '../utils/receiptAllocationState';
+
+const METHOD_LABELS: Record<string, string> = {
+  eft: 'EFT',
+  cash: 'Cash',
+  card: 'Card',
+  cheque: 'Cheque',
+  other: 'Other',
+};
 
 interface CustomerReceiptDetailProps {
   receipt: CustomerReceipt;
   customerName: string;
   /** invoiceId -> invoice number, for rendering allocation history. */
   invoiceNumbers: Map<string, string>;
-  onClose?: () => void;
+  onBack?: () => void;
   onAllocate?: () => void;
   isBusy?: boolean;
 }
 
-export const CustomerReceiptDetail: React.FC<CustomerReceiptDetailProps> = ({
-  receipt,
-  customerName,
-  invoiceNumbers,
-  onClose,
-  onAllocate,
-  isBusy = false,
-}) => {
+/**
+ * Customer receipt detail — re-skinned onto v0's PageHeader/SectionCard,
+ * same action gating as before the port: Allocate only while there is an
+ * unallocated balance. There is no delete/void/reverse action here —
+ * CustomerReceiptService has no such method (recording a receipt posts it
+ * immediately; see the M4 report).
+ */
+export function CustomerReceiptDetail({ receipt, customerName, invoiceNumbers, onBack, onAllocate, isBusy = false }: CustomerReceiptDetailProps) {
   const canAllocate = receipt.unallocatedAmount > 0.01;
+  const allocated = receipt.amount - receipt.unallocatedAmount;
 
   return (
-    <div className="max-w-4xl mx-auto bg-panel p-8 rounded-lg border border-border">
-      <div className="flex justify-between items-start mb-8 pb-8 border-b border-border">
-        <div>
-          <div className="text-3xl font-bold mb-2">Customer Receipt</div>
-          <div className="text-text-secondary">{customerName}</div>
-        </div>
-        <div className="text-right">
-          <div className="font-mono text-xl font-semibold">{receipt.receiptNumber}</div>
-          <div className="text-sm text-text-muted">{format(new Date(receipt.date), 'dd MMMM yyyy')}</div>
-          <div className="text-xs font-semibold mt-2 px-2 py-1 rounded inline-block bg-info-financial/20 text-info-financial uppercase">
-            {receipt.method}
+    <>
+      <PageHeader
+        title={receipt.receiptNumber}
+        description={`${customerName} · ${METHOD_LABELS[receipt.method] ?? receipt.method}`}
+        actions={
+          <>
+            {onBack && (
+              <Button variant="outline" size="sm" onClick={onBack}>
+                Back
+              </Button>
+            )}
+            {onAllocate && canAllocate && (
+              <Button size="sm" disabled={isBusy} onClick={onAllocate}>
+                Allocate to invoice
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      <div className="flex items-center gap-2">
+        <StatusBadge status={receiptAllocationState(receipt)} />
+      </div>
+
+      <SectionCard title="Received from" description={customerName}>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div>
+            <div className="text-xs tracking-wide text-muted-foreground uppercase">Date received</div>
+            <div className="text-sm font-medium">{formatDate(receipt.date)}</div>
           </div>
+          {receipt.reference && (
+            <div>
+              <div className="text-xs tracking-wide text-muted-foreground uppercase">Reference</div>
+              <div className="text-sm font-medium">{receipt.reference}</div>
+            </div>
+          )}
         </div>
-      </div>
+      </SectionCard>
 
-      <div className="grid grid-cols-2 gap-8 mb-8">
-        <div>
-          <div className="text-xs text-text-muted uppercase tracking-wide mb-2">Received From</div>
-          <div className="font-semibold mb-1">{customerName}</div>
-          {receipt.reference && <div className="text-sm text-text-secondary">Reference: {receipt.reference}</div>}
+      <SectionCard title="Amounts">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <FigureBlock label="Amount received" value={formatCurrency(receipt.amount)} tone="positive" />
+          <FigureBlock label="Allocated" value={formatCurrency(allocated)} />
+          <FigureBlock label="On account" value={formatCurrency(receipt.unallocatedAmount)} tone={receipt.unallocatedAmount > 0 ? 'warning' : 'default'} />
         </div>
-        <div>
-          <div className="text-xs text-text-muted uppercase tracking-wide">Date Received</div>
-          <div className="font-semibold">{format(new Date(receipt.date), 'dd MMMM yyyy')}</div>
-        </div>
-      </div>
+      </SectionCard>
 
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        <div className="bg-panel p-4 rounded-lg border border-border">
-          <div className="text-xs text-text-muted mb-2">Amount Received</div>
-          <FinancialNumber value={receipt.amount} format={formatCurrency} className="text-xl font-semibold text-positive" />
-        </div>
-        <div className="bg-panel p-4 rounded-lg border border-border">
-          <div className="text-xs text-text-muted mb-2">Allocated</div>
-          <FinancialNumber value={receipt.amount - receipt.unallocatedAmount} format={formatCurrency} className="text-xl font-semibold" />
-        </div>
-        <div className="bg-panel p-4 rounded-lg border border-border">
-          <div className="text-xs text-text-muted mb-2">On Account</div>
-          <FinancialNumber value={receipt.unallocatedAmount} format={formatCurrency} className="text-xl font-semibold" />
-        </div>
-      </div>
-
-      <div className="mb-8">
-        <div className="text-xs text-text-muted uppercase tracking-wide mb-2">Allocations</div>
+      <SectionCard title="Allocations">
         {receipt.allocations.length === 0 ? (
-          <div className="text-sm text-text-secondary">No allocations yet — this receipt is entirely on account.</div>
+          <p className="text-sm text-muted-foreground">No allocations yet — this receipt is entirely on account.</p>
         ) : (
-          <div className="space-y-1">
+          <div className="flex flex-col gap-1">
             {receipt.allocations.map((a, i) => (
-              <div key={i} className="flex justify-between text-sm border-b border-border/50 py-1">
-                <span className="text-text-secondary">{invoiceNumbers.get(a.invoiceId) || a.invoiceId}</span>
-                <FinancialNumber value={a.amount} format={formatCurrency} />
+              <div key={i} className="flex justify-between border-b border-border/50 py-1 text-sm">
+                <span className="text-muted-foreground">{invoiceNumbers.get(a.invoiceId) || a.invoiceId}</span>
+                <span>{formatCurrency(a.amount)}</span>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </SectionCard>
 
       {receipt.notes && (
-        <div className="mb-8">
-          <div className="text-xs text-text-muted uppercase tracking-wide mb-2">Notes</div>
-          <div className="text-sm text-text-secondary whitespace-pre-wrap">{receipt.notes}</div>
-        </div>
+        <SectionCard title="Notes">
+          <p className="text-sm whitespace-pre-wrap text-muted-foreground">{receipt.notes}</p>
+        </SectionCard>
       )}
-
-      <div className="flex flex-wrap gap-3 justify-end pt-8 border-t border-border">
-        {onClose && (
-          <Button variant="ghost" onClick={onClose}>
-            Close
-          </Button>
-        )}
-        {onAllocate && canAllocate && (
-          <Button variant="primary" disabled={isBusy} onClick={onAllocate}>
-            Allocate to Invoice
-          </Button>
-        )}
-      </div>
-    </div>
+    </>
   );
-};
+}

@@ -1,8 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Button } from '@/components/ui/Button';
-import { fieldError, fieldHint, fieldInput, fieldLabel } from './formStyles';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
 import type { CreateDividendDeclarationInput } from '../services';
 
 function isPositiveNumber(value: string): boolean {
@@ -38,12 +40,12 @@ export interface DividendDeclarationFormProps {
 }
 
 /**
- * Create form for a new draft dividend declaration
- * (SA_ACCOUNTING_MASTER_SPEC.md §56). No shareholder allocation field —
- * see DividendDeclaration's doc comment for why (no shareholder
- * register exists in this app). `exemptPortion` + `exemptionReason` are
- * a manual override the preparer enters, never a computed eligibility
- * check.
+ * Create form for a new draft dividend declaration. No shareholder
+ * allocation field — this app has no shareholder register, so amounts are
+ * gross/company-wide only. `exemptPortion` + `exemptionReason` are a
+ * manual override the preparer enters, never a computed eligibility
+ * check. Re-skinned onto v0's Field/Input/Textarea (M7); validation
+ * schema and submit wiring unchanged.
  */
 export function DividendDeclarationForm({ onSubmit, onCancel }: DividendDeclarationFormProps) {
   const {
@@ -76,56 +78,45 @@ export function DividendDeclarationForm({ onSubmit, onCancel }: DividendDeclarat
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-md" noValidate>
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="declarationDate">
-            Declaration Date
-          </label>
-          <input id="declarationDate" type="date" className={fieldInput} {...register('declarationDate')} />
-          {errors.declarationDate && <p className={fieldError}>{errors.declarationDate.message}</p>}
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="totalAmount">
-            Total Amount (ZAR, gross)
-          </label>
-          <input id="totalAmount" type="number" step="0.01" className={fieldInput} {...register('totalAmount')} />
-          {errors.totalAmount && <p className={fieldError}>{errors.totalAmount.message}</p>}
-        </div>
+    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="declarationDate">Declaration Date</FieldLabel>
+          <Input id="declarationDate" type="date" {...register('declarationDate')} />
+          <FieldError errors={[errors.declarationDate]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="totalAmount">Total Amount (ZAR, gross)</FieldLabel>
+          <Input id="totalAmount" type="number" step="0.01" {...register('totalAmount')} />
+          <FieldError errors={[errors.totalAmount]} />
+        </Field>
       </div>
 
-      <div>
-        <label className={fieldLabel} htmlFor="exemptPortion">
-          Exempt Portion (ZAR, optional)
-        </label>
-        <input id="exemptPortion" type="number" step="0.01" className={fieldInput} {...register('exemptPortion')} />
-        {errors.exemptPortion && <p className={fieldError}>{errors.exemptPortion.message}</p>}
-        <p className={fieldHint}>
-          A manual override amount exempt from Dividends Tax withholding (e.g. a shareholder that is an SA resident
-          company under s64F). This app has no shareholder register, so eligibility is not computed — enter the
-          amount and reason yourself, and confirm with a tax practitioner (§110/§111).
-        </p>
-      </div>
+      <Field>
+        <FieldLabel htmlFor="exemptPortion">Exempt Portion (ZAR, optional)</FieldLabel>
+        <Input id="exemptPortion" type="number" step="0.01" {...register('exemptPortion')} />
+        <FieldError errors={[errors.exemptPortion]} />
+        <FieldDescription>
+          A manual override amount exempt from Dividends Tax withholding (e.g. a shareholder that is an SA resident company under s64F). This app has no shareholder register, so
+          eligibility is not computed — enter the amount and reason yourself, and confirm with a tax practitioner.
+        </FieldDescription>
+      </Field>
 
       {showExemptionReason && (
-        <div>
-          <label className={fieldLabel} htmlFor="exemptionReason">
-            Exemption Reason
-          </label>
-          <textarea id="exemptionReason" rows={2} className={fieldInput} {...register('exemptionReason')} />
-          {errors.exemptionReason && <p className={fieldError}>{errors.exemptionReason.message}</p>}
-        </div>
+        <Field>
+          <FieldLabel htmlFor="exemptionReason">Exemption Reason</FieldLabel>
+          <Textarea id="exemptionReason" rows={2} {...register('exemptionReason')} />
+          <FieldError errors={[errors.exemptionReason]} />
+        </Field>
       )}
 
-      <div>
-        <label className={fieldLabel} htmlFor="notes">
-          Notes (optional)
-        </label>
-        <textarea id="notes" rows={2} className={fieldInput} {...register('notes')} />
-      </div>
+      <Field>
+        <FieldLabel htmlFor="notes">Notes (optional)</FieldLabel>
+        <Textarea id="notes" rows={2} {...register('notes')} />
+      </Field>
 
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>

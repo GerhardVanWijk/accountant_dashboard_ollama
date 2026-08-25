@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import type { PayrollRun } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { fieldInput } from './formStyles';
+import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
+import { Amount } from '@/components/app/figure';
 
 export interface PayslipLinesTableProps {
   run: PayrollRun;
@@ -15,7 +14,11 @@ export interface PayslipLinesTableProps {
  * still 'draft' and onOverrideChange is supplied, overtime/bonus are
  * editable inline — each edit recomputes that one line through
  * payrollRunService.updatePayslipOverride() (the same computePayslipLine()
- * path the run was originally created with), never hand-edited.
+ * path the run was originally created with), never hand-edited. Kept as a
+ * purpose-built table rather than the generic DataTable — a footer totals
+ * row and inline per-cell editing don't fit that shared abstraction. Every
+ * figure is read straight off the PayrollRun record; no payroll math is
+ * performed in this component. Re-skinned onto v0's visual language (M13).
  */
 export function PayslipLinesTable({ run, onOverrideChange }: PayslipLinesTableProps) {
   const editable = run.status === 'draft' && !!onOverrideChange;
@@ -57,104 +60,86 @@ export function PayslipLinesTable({ run, onOverrideChange }: PayslipLinesTablePr
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full min-w-[980px] border-collapse text-left text-sm">
-        <thead className="bg-background">
+        <thead className="bg-muted/40">
           <tr>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Employee</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Basic</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Overtime</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Bonus</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Allowances</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Gross Pay</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">PAYE</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">UIF (Emp)</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">UIF (Er)</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">SDL</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Deductions</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Net Pay</th>
-            {editable && <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary" />}
+            <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground">Employee</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Basic</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Overtime</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Bonus</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Allowances</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Gross Pay</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">PAYE</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">UIF (Emp)</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">UIF (Er)</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">SDL</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Deductions</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Net Pay</th>
+            {editable && <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground" />}
           </tr>
         </thead>
         <tbody>
           {run.payslips.map((line) => (
-            <tr key={line.employeeId} className="border-t border-border hover:bg-background">
-              <td className="whitespace-nowrap px-md py-sm text-text-primary">
-                <div className="font-medium">{line.employeeName}</div>
-                <div className="font-mono text-xs text-text-secondary">{line.employeeNumber}</div>
+            <tr key={line.employeeId} className="border-t border-border">
+              <td className="whitespace-nowrap px-4 py-2.5">
+                <div className="font-medium text-foreground">{line.employeeName}</div>
+                <div className="figure text-xs text-muted-foreground">{line.employeeNumber}</div>
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={line.basicSalary} format={formatCurrency} showFlash={false} />
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={line.basicSalary} plain className="text-sm" />
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
                 {editable && editingId === line.employeeId ? (
-                  <input
-                    aria-label="Overtime"
-                    type="number"
-                    step="0.01"
-                    className={fieldInput}
-                    value={overtimeDraft}
-                    onChange={(e) => setOvertimeDraft(e.target.value)}
-                  />
+                  <Input aria-label="Overtime" type="number" step="0.01" className="text-right" value={overtimeDraft} onChange={(e) => setOvertimeDraft(e.target.value)} />
                 ) : (
-                  <FinancialNumber value={line.overtime} format={formatCurrency} showFlash={false} />
+                  <Amount value={line.overtime} plain className="text-sm" />
                 )}
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
                 {editable && editingId === line.employeeId ? (
-                  <input
-                    aria-label="Bonus"
-                    type="number"
-                    step="0.01"
-                    className={fieldInput}
-                    value={bonusDraft}
-                    onChange={(e) => setBonusDraft(e.target.value)}
-                  />
+                  <Input aria-label="Bonus" type="number" step="0.01" className="text-right" value={bonusDraft} onChange={(e) => setBonusDraft(e.target.value)} />
                 ) : (
-                  <FinancialNumber value={line.bonus} format={formatCurrency} showFlash={false} />
+                  <Amount value={line.bonus} plain className="text-sm" />
                 )}
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={line.allowancesTotal} format={formatCurrency} showFlash={false} />
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={line.allowancesTotal} plain className="text-sm" />
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums font-semibold">
-                <FinancialNumber value={line.grossPay} format={formatCurrency} showFlash={false} />
+              <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums">
+                <Amount value={line.grossPay} plain className="text-sm font-semibold" />
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={line.paye} format={formatCurrency} showFlash={false} isInverted />
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={-line.paye} plain className="text-sm" />
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={line.uifEmployee} format={formatCurrency} showFlash={false} isInverted />
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={-line.uifEmployee} plain className="text-sm" />
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={line.uifEmployer} format={formatCurrency} showFlash={false} isInverted />
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={-line.uifEmployer} plain className="text-sm" />
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={line.sdlEmployer} format={formatCurrency} showFlash={false} isInverted />
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={-line.sdlEmployer} plain className="text-sm" />
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={line.deductionsTotal} format={formatCurrency} showFlash={false} isInverted />
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={-line.deductionsTotal} plain className="text-sm" />
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums font-semibold">
-                <FinancialNumber value={line.netPay} format={formatCurrency} showFlash={false} />
+              <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums">
+                <Amount value={line.netPay} className="text-sm font-semibold" />
               </td>
               {editable && (
-                <td className="whitespace-nowrap px-md py-sm">
+                <td className="whitespace-nowrap px-4 py-2.5">
                   {editingId === line.employeeId ? (
-                    <div className="flex gap-xs">
-                      <Button type="button" onClick={() => save(line.employeeId)} disabled={saving}>
+                    <div className="flex gap-1">
+                      <Button type="button" size="sm" disabled={saving} onClick={() => void save(line.employeeId)}>
                         Save
                       </Button>
-                      <Button type="button" variant="ghost" onClick={() => setEditingId(null)} disabled={saving}>
+                      <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={() => setEditingId(null)}>
                         Cancel
                       </Button>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => startEdit(line.employeeId, line.overtime, line.bonus)}
-                      className="rounded-md px-sm py-xs text-xs font-medium text-primary hover:underline"
-                    >
+                    <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(line.employeeId, line.overtime, line.bonus)}>
                       Edit
-                    </button>
+                    </Button>
                   )}
                 </td>
               )}
@@ -162,30 +147,30 @@ export function PayslipLinesTable({ run, onOverrideChange }: PayslipLinesTablePr
           ))}
         </tbody>
         <tfoot>
-          <tr className="border-t-2 border-border bg-background font-semibold">
-            <td className="whitespace-nowrap px-md py-sm" colSpan={5}>
+          <tr className="border-t-2 border-border bg-muted/30 font-semibold">
+            <td className="whitespace-nowrap px-4 py-2.5" colSpan={5}>
               Totals
             </td>
-            <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-              <FinancialNumber value={totals.grossPay} format={formatCurrency} showFlash={false} />
+            <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+              <Amount value={totals.grossPay} plain className="text-sm font-semibold" />
             </td>
-            <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-              <FinancialNumber value={totals.paye} format={formatCurrency} showFlash={false} isInverted />
+            <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+              <Amount value={-totals.paye} plain className="text-sm font-semibold" />
             </td>
-            <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-              <FinancialNumber value={totals.uifEmployee} format={formatCurrency} showFlash={false} isInverted />
+            <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+              <Amount value={-totals.uifEmployee} plain className="text-sm font-semibold" />
             </td>
-            <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-              <FinancialNumber value={totals.uifEmployer} format={formatCurrency} showFlash={false} isInverted />
+            <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+              <Amount value={-totals.uifEmployer} plain className="text-sm font-semibold" />
             </td>
-            <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-              <FinancialNumber value={totals.sdlEmployer} format={formatCurrency} showFlash={false} isInverted />
+            <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+              <Amount value={-totals.sdlEmployer} plain className="text-sm font-semibold" />
             </td>
-            <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-              <FinancialNumber value={totals.deductionsTotal} format={formatCurrency} showFlash={false} isInverted />
+            <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+              <Amount value={-totals.deductionsTotal} plain className="text-sm font-semibold" />
             </td>
-            <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-              <FinancialNumber value={totals.netPay} format={formatCurrency} showFlash={false} />
+            <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+              <Amount value={totals.netPay} className="text-sm font-semibold" />
             </td>
             {editable && <td />}
           </tr>

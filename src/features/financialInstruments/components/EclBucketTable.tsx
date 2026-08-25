@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
-import { Button } from '@/components/ui/Button';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Amount } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
 import type { AgingBucketKey, EclBucketLine } from '@/types';
 import { recalculateBucketLine } from '../services/eclCalculations';
-import { fieldInput } from './formStyles';
 
 const BUCKET_LABELS: Record<AgingBucketKey, string> = {
   current: 'Current (not yet due)',
@@ -22,14 +20,17 @@ export interface EclBucketTableProps {
 }
 
 /**
- * The four fixed aging-bucket rows feeding an EclComputation
- * (SA_ACCOUNTING_MASTER_SPEC.md §46). Unlike AdjustmentsTable/
- * TemporaryDifferencesTable, rows are NOT addable/removable — the bucket
- * set is fixed (it matches the Customer Aging Report's own four buckets),
- * only `lossRatePercent` per bucket is ever user-entered.
- * `grossReceivable` is shown read-only even while editable — it's real
- * posted data, not something to hand-edit here (recompute a fresh draft to
- * pull in newer figures).
+ * The four fixed aging-bucket rows feeding an EclComputation. Unlike
+ * AdjustmentsTable/TemporaryDifferencesTable, rows are NOT
+ * addable/removable — the bucket set is fixed (it matches the Customer
+ * Aging Report's own four buckets), only `lossRatePercent` per bucket is
+ * ever user-entered. `grossReceivable` is shown read-only even while
+ * editable — it's real posted data, not something to hand-edit here
+ * (recompute a fresh draft to pull in newer figures). Kept as a
+ * purpose-built matrix (not the generic DataTable) — a fixed row set with
+ * a totals footer doesn't need that abstraction. Re-skinned onto v0's
+ * visual language (M13); `recalculateBucketLine()` remains the sole
+ * source of the recomputed provision figure.
  */
 export function EclBucketTable({ buckets, editable, onSave }: EclBucketTableProps) {
   const [rows, setRows] = useState<EclBucketLine[]>(buckets);
@@ -56,61 +57,56 @@ export function EclBucketTable({ buckets, editable, onSave }: EclBucketTableProp
   const totalEcl = rows.reduce((sum, r) => sum + r.expectedCreditLoss, 0);
 
   return (
-    <div className="flex flex-col gap-sm">
-      <div className="tabular-nums" role="table" aria-label="Expected credit loss provision matrix">
-        <div className="grid grid-cols-[1.5fr_130px_110px_130px] gap-xs border-b border-border pb-xs text-xs font-medium text-text-secondary">
-          <FinancialTableCell type="label" className="font-medium">Aging Bucket</FinancialTableCell>
-          <FinancialTableCell type="number" className="font-medium">Gross Receivable</FinancialTableCell>
-          <FinancialTableCell type="number" className="font-medium">Loss Rate %</FinancialTableCell>
-          <FinancialTableCell type="number" className="font-medium">Expected Credit Loss</FinancialTableCell>
-        </div>
-
-        {rows.map((row) => (
-          <div key={row.bucket} className="grid grid-cols-[1.5fr_130px_110px_130px] items-center gap-xs border-b border-border/50 py-xs">
-            <FinancialTableCell type="label">
-              <span className="text-sm text-text-primary">{BUCKET_LABELS[row.bucket]}</span>
-            </FinancialTableCell>
-            <FinancialTableCell type="number">
-              <FinancialNumber value={row.grossReceivable} format={formatCurrency} showFlash={false} minWidth={80} />
-            </FinancialTableCell>
-            <FinancialTableCell type="number">
-              {editable ? (
-                <input
-                  aria-label={`${BUCKET_LABELS[row.bucket]} loss rate percent`}
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.1"
-                  className={`${fieldInput} text-right tabular-nums`}
-                  value={row.lossRatePercent}
-                  onChange={(e) => updateRate(row.bucket, Number(e.target.value) || 0)}
-                />
-              ) : (
-                <span className="text-sm text-text-primary">{row.lossRatePercent}%</span>
-              )}
-            </FinancialTableCell>
-            <FinancialTableCell type="number">
-              <FinancialNumber value={row.expectedCreditLoss} format={formatCurrency} showFlash={false} minWidth={80} />
-            </FinancialTableCell>
-          </div>
-        ))}
-
-        <div className="grid grid-cols-[1.5fr_130px_110px_130px] items-center gap-xs pt-xs">
-          <FinancialTableCell type="label" className="font-semibold">Total</FinancialTableCell>
-          <FinancialTableCell type="number" className="font-semibold">
-            <FinancialNumber value={totalGross} format={formatCurrency} showFlash={false} minWidth={80} />
-          </FinancialTableCell>
-          <FinancialTableCell type="number">{null}</FinancialTableCell>
-          <FinancialTableCell type="number" className="font-semibold">
-            <FinancialNumber value={totalEcl} format={formatCurrency} showFlash={false} minWidth={80} />
-          </FinancialTableCell>
-        </div>
+    <div className="flex flex-col gap-3">
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+          <thead className="bg-muted/40">
+            <tr>
+              <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground">Aging bucket</th>
+              <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Gross receivable</th>
+              <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Loss rate %</th>
+              <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Expected credit loss</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.bucket} className="border-t border-border">
+                <td className="whitespace-nowrap px-4 py-2.5">{BUCKET_LABELS[row.bucket]}</td>
+                <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                  <Amount value={row.grossReceivable} plain className="text-sm" />
+                </td>
+                <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                  {editable ? (
+                    <Input aria-label={`${BUCKET_LABELS[row.bucket]} loss rate percent`} type="number" min={0} max={100} step="0.1" className="text-right" value={row.lossRatePercent} onChange={(e) => updateRate(row.bucket, Number(e.target.value) || 0)} />
+                  ) : (
+                    <span>{row.lossRatePercent}%</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                  <Amount value={row.expectedCreditLoss} plain className="text-sm" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-border font-semibold">
+              <td className="whitespace-nowrap px-4 py-2.5">Total</td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={totalGross} plain className="text-sm font-semibold" />
+              </td>
+              <td />
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={totalEcl} plain className="text-sm font-semibold" />
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
 
       {editable && (
-        <div className="flex items-center justify-end gap-sm pt-sm">
-          {saveError && <span className="text-xs text-danger">{saveError}</span>}
-          <Button type="button" onClick={handleSave} disabled={saving}>
+        <div className="flex items-center justify-end gap-3">
+          {saveError && <span className="text-xs text-destructive">{saveError}</span>}
+          <Button type="button" size="sm" disabled={saving} onClick={() => void handleSave()}>
             Save Loss Rates
           </Button>
         </div>

@@ -1,23 +1,22 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
+import { Loader2, Plus } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import type { TaxRate } from '@/types';
 import { useTaxRateManagement } from '../hooks/useTaxRateManagement';
 import { TaxRateTable } from '../components/TaxRateTable';
 import { TaxRateForm } from '../components/TaxRateForm';
 import { SupersedeTaxRateForm } from '../components/SupersedeTaxRateForm';
-import { Modal } from '../components/Modal';
 
 type DialogState = { mode: 'create' } | { mode: 'supersede'; rate: TaxRate } | null;
 
 /**
- * Tax Rates settings — create/version/deactivate VAT tax codes
- * (SA_ACCOUNTING_MASTER_SPEC.md §9/§12/§82/§113). Route `/tax/rates`
- * (docs/ROUTES.md). Every rate is effective-dated; changing one creates a
- * new version instead of editing the existing rate — see
- * TaxRateService.supersede()'s doc comment.
+ * Tax Rates settings — create/version/deactivate VAT tax codes. Route
+ * `/tax/rates` (docs/ROUTES.md). Every rate is effective-dated; changing
+ * one creates a new version instead of editing the existing rate — see
+ * TaxRateService.supersede()'s doc comment. Re-skinned onto v0's
+ * PageHeader/SectionCard/Dialog (M7); data/mutation wiring unchanged.
  */
 export function TaxRatesPage() {
   const { taxRates, loading, error, createTaxRate, supersede, deactivate } = useTaxRateManagement();
@@ -62,53 +61,60 @@ export function TaxRatesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Tax Rates</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            VAT tax codes used across Sales, Purchases, and Banking. Every rate is effective-dated — changing one
-            creates a new version rather than editing history.
-          </p>
-        </div>
-        <Button variant="primary" onClick={() => setDialog({ mode: 'create' })}>
-          <Icon name="add" size={16} />
-          New Tax Code
-        </Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Tax Rates"
+        description="VAT tax codes used across Sales, Purchases, and Banking. Every rate is effective-dated — changing one creates a new version rather than editing history."
+        actions={
+          <Button onClick={() => setDialog({ mode: 'create' })}>
+            <Plus />
+            New Tax Code
+          </Button>
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
           {actionError}
         </p>
       )}
 
-      {loading && <Spinner label="Loading tax rates…" />}
-      {!loading && error && <ErrorState message={error.message} />}
+      {loading && (
+        <div role="status" className="flex min-h-[30vh] items-center justify-center gap-2 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <span className="text-sm">Loading tax rates…</span>
+        </div>
+      )}
+      {!loading && error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error.message}
+        </p>
+      )}
       {!loading && !error && (
-        <TaxRateTable
-          taxRates={taxRates}
-          onSupersede={(rate) => setDialog({ mode: 'supersede', rate })}
-          onDeactivate={(rate) => void handleDeactivate(rate)}
-        />
+        <SectionCard>
+          <TaxRateTable taxRates={taxRates} onSupersede={(rate) => setDialog({ mode: 'supersede', rate })} onDeactivate={(rate) => void handleDeactivate(rate)} />
+        </SectionCard>
       )}
 
-      {dialog?.mode === 'create' && (
-        <Modal title="New Tax Code" onClose={() => setDialog(null)} wide>
+      <Dialog open={dialog?.mode === 'create'} onOpenChange={(open) => { if (!open) setDialog(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>New Tax Code</DialogTitle>
+          </DialogHeader>
           <TaxRateForm onSubmit={handleCreate} onCancel={() => setDialog(null)} isLoading={isSaving} />
-        </Modal>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {dialog?.mode === 'supersede' && (
-        <Modal title={`Supersede ${dialog.rate.code}`} onClose={() => setDialog(null)} wide>
-          <SupersedeTaxRateForm
-            currentVersion={dialog.rate}
-            onSubmit={handleSupersede}
-            onCancel={() => setDialog(null)}
-            isLoading={isSaving}
-          />
-        </Modal>
-      )}
+      <Dialog open={dialog?.mode === 'supersede'} onOpenChange={(open) => { if (!open) setDialog(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Supersede {dialog?.mode === 'supersede' ? dialog.rate.code : ''}</DialogTitle>
+          </DialogHeader>
+          {dialog?.mode === 'supersede' && (
+            <SupersedeTaxRateForm currentVersion={dialog.rate} onSubmit={handleSupersede} onCancel={() => setDialog(null)} isLoading={isSaving} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

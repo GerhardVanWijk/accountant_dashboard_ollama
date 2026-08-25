@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { DividendDeclaration } from '@/types';
 import { DividendsTaxPage } from './DividendsTaxPage';
 import { dividendDeclarationService } from '../services';
+import { formatDate } from '@/lib/app/format';
 
 vi.mock('../services', () => ({
   dividendDeclarationService: {
@@ -67,7 +68,7 @@ describe('DividendsTaxPage', () => {
   it('renders a declaration row once data loads', async () => {
     mockedGetDeclarations.mockResolvedValue([makeDeclaration()]);
     render(<DividendsTaxPage />);
-    expect(await screen.findByText('2026-03-01')).toBeInTheDocument();
+    expect(await screen.findByText(formatDate('2026-03-01'))).toBeInTheDocument();
     expect(screen.getByText('Draft')).toBeInTheDocument();
   });
 
@@ -93,7 +94,7 @@ describe('DividendsTaxPage', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(<DividendsTaxPage />);
-    await screen.findByText('2026-03-01');
+    await screen.findByText(formatDate('2026-03-01'));
 
     fireEvent.click(screen.getByRole('button', { name: /^declare$/i }));
     await waitFor(() => expect(mockedDeclare).toHaveBeenCalledWith('divd_1'));

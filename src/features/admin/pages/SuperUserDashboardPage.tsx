@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
+import { LogOutIcon, SearchIcon } from 'lucide-react';
+import { SectionCard } from '@/components/app/page-header';
+import { StatusBadge } from '@/components/app/status-badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
 import { useAuthStore } from '@/stores/authStore';
 import type { AuditLogAccessEntry, Company, Profile, ProfileRole } from '@/types';
 import { companyService } from '@/features/admin/services';
@@ -9,8 +11,8 @@ import { profileService, auditLogAccessService } from '@/features/auth/services'
 
 const PROFILE_ROLES: ProfileRole[] = ['admin', 'accountant', 'manager', 'operator', 'viewer'];
 
-const inputClasses =
-  'rounded-md border border-border bg-background px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName =
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function TenantDetail({ company, actorId }: { company: Company; actorId: string }) {
   const [users, setUsers] = useState<Profile[]>([]);
@@ -73,49 +75,54 @@ function TenantDetail({ company, actorId }: { company: Company; actorId: string 
   };
 
   return (
-    <div className="flex flex-col gap-lg">
-      <Card>
+    <div className="flex flex-col gap-6">
+      <SectionCard>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-text-primary">{company.name}</h2>
-            <p className="text-sm text-text-secondary">
+            <h2 className="text-lg font-semibold">{company.name}</h2>
+            <p className="text-sm text-muted-foreground">
               {company.legalEntityType} · {company.subscriptionTier ?? 'free'} tier
             </p>
           </div>
-          <Button variant="danger" disabled={busyId === '__bulk__' || users.every((u) => !u.isActive)} onClick={suspendAll}>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={busyId === '__bulk__' || users.every((u) => !u.isActive)}
+            onClick={() => void suspendAll()}
+          >
             Suspend all users
           </Button>
         </div>
-      </Card>
+      </SectionCard>
 
-      <Card>
-        <h3 className="text-base font-semibold text-text-primary">Users</h3>
-        <p className="mt-xs text-sm text-text-secondary">
-          No financial data (invoices, GL, customers) is visible here — support access only.
-        </p>
+      <SectionCard
+        title="Users"
+        description="No financial data (invoices, GL, customers) is visible here — support access only."
+        bodyClassName="p-0"
+      >
         {loading ? (
-          <p className="mt-md text-sm text-text-secondary">Loading…</p>
+          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
         ) : (
-          <div className="mt-md overflow-x-auto">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-border text-text-secondary">
-                  <th className="py-xs pr-md font-medium">Email</th>
-                  <th className="py-xs pr-md font-medium">Access level</th>
-                  <th className="py-xs pr-md font-medium">Status</th>
-                  <th className="py-xs pr-md font-medium" />
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Email</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Access level</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Status</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase" />
                 </tr>
               </thead>
               <tbody>
                 {users.map((user) => (
                   <tr key={user.id} className="border-b border-border last:border-0">
-                    <td className="py-sm pr-md text-text-primary">{user.email ?? '—'}</td>
-                    <td className="py-sm pr-md">
+                    <td className="px-4 py-2">{user.email ?? '—'}</td>
+                    <td className="px-4 py-2">
                       <select
-                        className={inputClasses}
+                        className={selectClassName}
                         value={user.role}
                         disabled={busyId === user.id}
-                        onChange={(e) => changeRole(user.id, e.target.value as ProfileRole)}
+                        onChange={(e) => void changeRole(user.id, e.target.value as ProfileRole)}
                       >
                         {PROFILE_ROLES.map((role) => (
                           <option key={role} value={role}>
@@ -124,13 +131,11 @@ function TenantDetail({ company, actorId }: { company: Company; actorId: string 
                         ))}
                       </select>
                     </td>
-                    <td className="py-sm pr-md">
-                      <span className={user.isActive ? 'text-positive' : 'text-danger'}>
-                        {user.isActive ? 'Active' : 'Suspended'}
-                      </span>
+                    <td className="px-4 py-2">
+                      <StatusBadge status={user.isActive ? 'active' : 'suspended'} />
                     </td>
-                    <td className="py-sm pr-md">
-                      <Button variant="ghost" disabled={busyId === user.id} onClick={() => toggleActive(user)}>
+                    <td className="px-4 py-2">
+                      <Button variant="ghost" size="sm" disabled={busyId === user.id} onClick={() => void toggleActive(user)}>
                         {user.isActive ? 'Suspend' : 'Reactivate'}
                       </Button>
                     </td>
@@ -138,7 +143,7 @@ function TenantDetail({ company, actorId }: { company: Company; actorId: string 
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-md text-center text-text-secondary">
+                    <td colSpan={4} className="px-4 py-4 text-center text-muted-foreground">
                       No users yet.
                     </td>
                   </tr>
@@ -147,34 +152,33 @@ function TenantDetail({ company, actorId }: { company: Company; actorId: string 
             </table>
           </div>
         )}
-      </Card>
+      </SectionCard>
 
-      <Card>
-        <h3 className="text-base font-semibold text-text-primary">Audit logs</h3>
-        <div className="mt-md overflow-x-auto">
-          <table className="w-full text-left text-sm">
+      <SectionCard title="Audit logs" bodyClassName="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-border text-text-secondary">
-                <th className="py-xs pr-md font-medium">When</th>
-                <th className="py-xs pr-md font-medium">Action</th>
-                <th className="py-xs pr-md font-medium">Table</th>
-                <th className="py-xs pr-md font-medium">Result</th>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">When</th>
+                <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Action</th>
+                <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Table</th>
+                <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Result</th>
               </tr>
             </thead>
             <tbody>
               {logs.map((entry) => (
                 <tr key={entry.id} className="border-b border-border last:border-0">
-                  <td className="py-sm pr-md text-text-secondary">{new Date(entry.occurredAt).toLocaleString()}</td>
-                  <td className="py-sm pr-md text-text-primary">{entry.action}</td>
-                  <td className="py-sm pr-md text-text-primary">{entry.tableName}</td>
-                  <td className="py-sm pr-md">
-                    <span className={entry.result === 'allowed' ? 'text-positive' : 'text-danger'}>{entry.result}</span>
+                  <td className="px-4 py-2 text-muted-foreground">{new Date(entry.occurredAt).toLocaleString()}</td>
+                  <td className="px-4 py-2">{entry.action}</td>
+                  <td className="px-4 py-2">{entry.tableName}</td>
+                  <td className="px-4 py-2">
+                    <span className={entry.result === 'allowed' ? 'text-positive' : 'text-negative'}>{entry.result}</span>
                   </td>
                 </tr>
               ))}
               {logs.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-md text-center text-text-secondary">
+                  <td colSpan={4} className="px-4 py-4 text-center text-muted-foreground">
                     No access log entries yet.
                   </td>
                 </tr>
@@ -182,29 +186,34 @@ function TenantDetail({ company, actorId }: { company: Company; actorId: string 
             </tbody>
           </table>
         </div>
-      </Card>
+      </SectionCard>
 
-      <Card>
-        <h3 className="text-base font-semibold text-text-primary">Usage</h3>
-        <p className="mt-xs text-sm text-text-secondary">
+      <SectionCard title="Usage">
+        <p className="text-sm text-muted-foreground">
           Storage/egress/API-call metering is platform-level Supabase data this app has no access to (no MCP tool or
           client API exposes it) — deliberately not fabricated. Real, derivable numbers only:
         </p>
-        <p className="mt-sm text-sm text-text-primary">{users.length} user(s) provisioned.</p>
-      </Card>
+        <p className="mt-2 text-sm">{users.length} user(s) provisioned.</p>
+      </SectionCard>
     </div>
   );
 }
 
 /**
- * Superuser Dashboard (Phase T). Placed under src/features/admin/pages/
- * rather than the brief's literal src/pages/admin/ — this codebase has no
- * src/pages/ directory anywhere; every page lives under a feature folder
- * (docs/ARCHITECTURE.md), and admin-owned pages already live in
- * src/features/admin/pages/ (UsersPage.tsx, AuditPage.tsx). Deliberately
- * self-contained: does NOT reuse AppLayout/Topbar/navigation.ts — those are
- * the tenant-facing accounting nav, irrelevant and actively misleading for
- * an account with no company and no access to any of it.
+ * Superuser Dashboard (Phase T; presentation re-skinned onto v0/shadcn in
+ * M14). Placed under src/features/admin/pages/ rather than the brief's
+ * literal src/pages/admin/ — this codebase has no src/pages/ directory
+ * anywhere; every page lives under a feature folder (docs/ARCHITECTURE.md),
+ * and admin-owned pages already live in src/features/admin/pages/
+ * (UsersPage.tsx, AuditPage.tsx). Deliberately self-contained: does NOT
+ * reuse AppLayout/the sidebar/navigation.ts — those are the tenant-facing
+ * accounting nav, irrelevant and actively misleading for an account with no
+ * company and no access to any of it. `PageHeader`/`SectionCard` are
+ * layout-agnostic (no AppLayout dependency), so this page can use v0's
+ * visual language for its own two-pane shell without adopting the tenant
+ * app chrome. No behavior/authorization/data-access change from the
+ * pre-M14 version — same services, same guards (RouteGuard confines a
+ * `role === 'superuser'` profile to exactly this route), same actions.
  */
 export function SuperUserDashboardPage() {
   const actorId = useAuthStore((s) => s.profile?.id);
@@ -226,50 +235,53 @@ export function SuperUserDashboardPage() {
   const filtered = companies.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="flex min-h-screen bg-background text-text-primary">
-      <aside className="w-72 shrink-0 border-r border-border p-md">
-        <div className="flex items-start justify-between gap-sm">
+    <div className="flex min-h-screen bg-background text-foreground">
+      <aside className="w-72 shrink-0 border-r border-border p-4">
+        <div className="flex items-start justify-between gap-2">
           <h1 className="text-lg font-semibold">Superuser</h1>
-          <Button variant="ghost" onClick={logout} className="shrink-0">
-            <Icon name="logout" size={16} />
+          <Button variant="ghost" size="sm" onClick={logout} className="shrink-0">
+            <LogOutIcon data-icon="inline-start" />
             Sign out
           </Button>
         </div>
-        <p className="mt-xs text-sm text-text-secondary">All tenants — no financial data access.</p>
-        <input
-          type="search"
-          placeholder="Search companies…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className={`${inputClasses} mt-md w-full`}
-        />
+        <p className="mt-1 text-sm text-muted-foreground">All tenants — no financial data access.</p>
+        <div className="relative mt-4">
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Search companies…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
         {loading ? (
-          <p className="mt-md text-sm text-text-secondary">Loading…</p>
+          <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
         ) : (
-          <ul className="mt-md flex flex-col gap-xs">
+          <ul className="mt-4 flex flex-col gap-1">
             {filtered.map((company) => (
               <li key={company.id}>
                 <button
                   type="button"
                   onClick={() => setSelected(company)}
-                  className={`w-full rounded-md px-sm py-sm text-left text-sm ${
-                    selected?.id === company.id ? 'bg-primary text-on-accent' : 'hover:bg-panel'
+                  className={`w-full rounded-lg px-3 py-2 text-left text-sm ${
+                    selected?.id === company.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
                   }`}
                 >
                   {company.name}
                 </button>
               </li>
             ))}
-            {filtered.length === 0 && <li className="text-sm text-text-secondary">No companies found.</li>}
+            {filtered.length === 0 && <li className="text-sm text-muted-foreground">No companies found.</li>}
           </ul>
         )}
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-lg">
+      <main className="flex-1 overflow-y-auto p-6">
         {selected ? (
           <TenantDetail company={selected} actorId={actorId} />
         ) : (
-          <p className="text-sm text-text-secondary">Select a company from the list.</p>
+          <p className="text-sm text-muted-foreground">Select a company from the list.</p>
         )}
       </main>
     </div>

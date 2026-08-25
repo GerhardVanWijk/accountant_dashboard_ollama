@@ -1,11 +1,10 @@
 import { Link } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import type { ReportingFramework } from '@/types';
-import { Card } from '@/components/ui/Card';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { cn } from '@/utils/cn';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { formatCurrency } from '@/lib/app/format';
+import { cn } from '@/lib/utils';
 import { useComplianceDashboard } from '../hooks/useComplianceDashboard';
 
 const FRAMEWORK_LABELS: Record<ReportingFramework, string> = {
@@ -18,142 +17,122 @@ const FRAMEWORK_LABELS: Record<ReportingFramework, string> = {
 
 function StatusPill({ ok, okLabel, badLabel }: { ok: boolean; okLabel: string; badLabel: string }) {
   return (
-    <span className={cn('rounded-full px-sm py-0.5 text-xs font-semibold', ok ? 'bg-positive/10 text-positive' : 'bg-warning/10 text-warning-financial')}>
-      {ok ? okLabel : badLabel}
-    </span>
-  );
-}
-
-function CardHeader({ title, linkTo, linkLabel }: { title: string; linkTo: string; linkLabel: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
-      <Link to={linkTo} className="text-xs font-medium text-primary no-underline hover:underline">
-        {linkLabel} →
-      </Link>
-    </div>
+    <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', ok ? 'bg-positive/15 text-positive' : 'bg-warning/15 text-warning')}>{ok ? okLabel : badLabel}</span>
   );
 }
 
 /**
- * Compliance Dashboard — route `/compliance/dashboard`
- * (SA_ACCOUNTING_MASTER_SPEC.md §108, §116 Phase 11). Aggregates real
- * status from every module already built (VAT §5, Income Tax/Provisional
- * Tax §9, Payroll §8, the Fixed Asset register §7, AR/AP subledger
- * reconciliation §2/3, Accounting Periods §1, and the new Public Interest
- * Score §3) into one screen, per §108's own section list. Each figure is
- * re-computed live from real posted data by the same functions their own
- * dedicated pages use — this page performs no calculation of its own
- * (docs/DO_NOT_BREAK.md).
+ * Compliance Dashboard — route `/compliance/dashboard`. Aggregates real
+ * status from every module already built (VAT, Income Tax/Provisional
+ * Tax, Payroll, the Fixed Asset register, AR/AP subledger reconciliation,
+ * Accounting Periods, Public Interest Score) into one screen. Each figure
+ * is re-computed live from real posted data by the same functions their
+ * own dedicated pages use — this page performs no calculation of its own.
  *
- * Two §108 bullets are deliberately absent rather than faked: "certificates"
+ * Two things are deliberately absent rather than faked: "certificates"
  * (no IRP5/tax-certificate generation exists anywhere in this app) and
- * "annual return support" / a suspense account (neither is modeled in this
- * codebase — see docs/SA_SPEC_GAP_ANALYSIS.md's Phase 11 section). Flagged
- * here instead of silently omitted.
+ * "annual return support" / a suspense account (neither is modeled in
+ * this codebase). Re-skinned onto v0's PageHeader/SectionCard (M7); data
+ * wiring unchanged.
  */
 export function ComplianceDashboardPage() {
   const { data, loading, error, refetch } = useComplianceDashboard();
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Compliance Dashboard</h1>
-        <p className="mt-xs text-sm text-text-secondary">
-          Live status across VAT, Income Tax, Payroll, Company compliance, and Accounting. /compliance/dashboard
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Compliance Dashboard" description="Live status across VAT, Income Tax, Payroll, Company compliance, and Accounting." />
 
-      {loading && <Spinner label="Loading compliance status…" />}
-      {!loading && error && <ErrorState message={error.message} onRetry={refetch} />}
+      {loading && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-2 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <span className="text-sm">Loading compliance status…</span>
+        </div>
+      )}
+      {!loading && error && (
+        <SectionCard>
+          <p role="alert" className="text-sm text-destructive">
+            {error.message}
+          </p>
+          <Button variant="outline" className="mt-3" onClick={refetch}>
+            Retry
+          </Button>
+        </SectionCard>
+      )}
 
       {!loading && !error && data && (
-        <div className="grid grid-cols-1 gap-md lg:grid-cols-2">
-          <Card className="flex flex-col gap-sm">
-            <CardHeader title="Company" linkTo="/compliance/public-interest-score" linkLabel="Public Interest Score" />
-            <dl className="grid grid-cols-2 gap-sm text-sm">
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Reporting Framework</dt>
-                <dd className="mt-xs text-text-primary">{data.company ? FRAMEWORK_LABELS[data.company.reportingFramework] : '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Public Interest Score</dt>
-                <dd className="mt-xs text-text-primary">{data.latestPiScore ? data.latestPiScore.totalScore : 'Not yet calculated'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Assurance Requirement</dt>
-                <dd className="mt-xs text-text-primary">
-                  {data.latestPiScore
-                    ? data.latestPiScore.suggestedAssuranceLevel === 'audit_required'
-                      ? 'Audit required'
-                      : 'Independent review required'
-                    : '—'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Financial Statements</dt>
-                <dd className="mt-xs text-text-primary">
-                  <Link to="/reports/income-statement" className="text-primary no-underline hover:underline">
-                    Income Statement
-                  </Link>
-                  {' · '}
-                  <Link to="/reports/balance-sheet" className="text-primary no-underline hover:underline">
-                    Balance Sheet
-                  </Link>
-                </dd>
-              </div>
-            </dl>
-            {data.latestPiScore?.frameworkDiffersFromCurrent && (
-              <p role="alert" className="rounded-md border border-warning bg-warning/10 px-sm py-xs text-xs text-warning-financial">
-                Suggested reporting framework differs from the current one — review on the Public Interest Score page.
-              </p>
-            )}
-            <p className="text-xs text-text-muted">Annual return support and audit/review sign-off tracking are not modeled in this system.</p>
-          </Card>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <SectionCard title="Company" actions={<Link to="/compliance/public-interest-score" className="text-xs font-medium text-brand hover:underline">Public Interest Score →</Link>}>
+            <div className="flex flex-col gap-3">
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Reporting Framework</dt>
+                  <dd className="mt-1">{data.company ? FRAMEWORK_LABELS[data.company.reportingFramework] : '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Public Interest Score</dt>
+                  <dd className="mt-1">{data.latestPiScore ? data.latestPiScore.totalScore : 'Not yet calculated'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Assurance Requirement</dt>
+                  <dd className="mt-1">{data.latestPiScore ? (data.latestPiScore.suggestedAssuranceLevel === 'audit_required' ? 'Audit required' : 'Independent review required') : '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Financial Statements</dt>
+                  <dd className="mt-1">
+                    <Link to="/reports/income-statement" className="text-brand hover:underline">
+                      Income Statement
+                    </Link>
+                    {' · '}
+                    <Link to="/reports/balance-sheet" className="text-brand hover:underline">
+                      Balance Sheet
+                    </Link>
+                  </dd>
+                </div>
+              </dl>
+              {data.latestPiScore?.frameworkDiffersFromCurrent && (
+                <p role="alert" className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                  Suggested reporting framework differs from the current one — review on the Public Interest Score page.
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">Annual return support and audit/review sign-off tracking are not modeled in this system.</p>
+            </div>
+          </SectionCard>
 
-          <Card className="flex flex-col gap-sm">
-            <CardHeader title="VAT" linkTo="/tax/vat-return" linkLabel="VAT Return" />
-            <dl className="grid grid-cols-2 gap-sm text-sm">
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Registration</dt>
-                <dd className="mt-xs text-text-primary">
-                  {data.company?.isVatRegistered ? data.company.vatRegistrationNumber ?? 'Registered' : 'Not registered'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">This Month</dt>
-                <dd className="mt-xs font-mono tabular-nums text-text-primary">
-                  {data.vatReport ? (
-                    <FinancialNumber value={Math.abs(data.vatReport.netVatPayable)} format={formatCurrency} showFlash={false} />
-                  ) : (
-                    '—'
-                  )}
-                  <span className="ml-xs text-xs text-text-muted">
-                    {data.vatReport && data.vatReport.netVatPayable >= 0 ? 'payable' : 'refundable'}
-                  </span>
-                </dd>
-              </div>
-            </dl>
-            {data.vatReconciliation && (
-              <div className="flex gap-sm">
-                <StatusPill ok={data.vatReconciliation.outputVat.isReconciled} okLabel="Output reconciled" badLabel="Output variance" />
-                <StatusPill ok={data.vatReconciliation.inputVat.isReconciled} okLabel="Input reconciled" badLabel="Input variance" />
-              </div>
-            )}
-          </Card>
+          <SectionCard title="VAT" actions={<Link to="/tax/vat-return" className="text-xs font-medium text-brand hover:underline">VAT Return →</Link>}>
+            <div className="flex flex-col gap-3">
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Registration</dt>
+                  <dd className="mt-1">{data.company?.isVatRegistered ? (data.company.vatRegistrationNumber ?? 'Registered') : 'Not registered'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">This Month</dt>
+                  <dd className="mt-1 font-mono tabular-nums">
+                    {data.vatReport ? formatCurrency(Math.abs(data.vatReport.netVatPayable)) : '—'}
+                    <span className="ml-1 text-xs text-muted-foreground">{data.vatReport && data.vatReport.netVatPayable >= 0 ? 'payable' : 'refundable'}</span>
+                  </dd>
+                </div>
+              </dl>
+              {data.vatReconciliation && (
+                <div className="flex gap-2">
+                  <StatusPill ok={data.vatReconciliation.outputVat.isReconciled} okLabel="Output reconciled" badLabel="Output variance" />
+                  <StatusPill ok={data.vatReconciliation.inputVat.isReconciled} okLabel="Input reconciled" badLabel="Input variance" />
+                </div>
+              )}
+            </div>
+          </SectionCard>
 
-          <Card className="flex flex-col gap-sm">
-            <CardHeader title="Income Tax" linkTo="/tax/income-tax" linkLabel="Income Tax" />
-            <dl className="grid grid-cols-2 gap-sm text-sm">
+          <SectionCard title="Income Tax" actions={<Link to="/tax/income-tax" className="text-xs font-medium text-brand hover:underline">Income Tax →</Link>}>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Financial Year</dt>
-                <dd className="mt-xs text-text-primary">{data.openFinancialYearName ?? '—'}</dd>
+                <dt className="text-xs tracking-wide text-muted-foreground uppercase">Financial Year</dt>
+                <dd className="mt-1">{data.openFinancialYearName ?? '—'}</dd>
               </div>
               <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Provisional Tax</dt>
-                <dd className="mt-xs text-text-primary">
+                <dt className="text-xs tracking-wide text-muted-foreground uppercase">Provisional Tax</dt>
+                <dd className="mt-1">
                   {data.provisionalTaxPeriod ? (
-                    <Link to="/tax/provisional-tax" className="text-primary no-underline hover:underline">
+                    <Link to="/tax/provisional-tax" className="text-brand hover:underline">
                       In progress
                     </Link>
                   ) : (
@@ -162,102 +141,94 @@ export function ComplianceDashboardPage() {
                 </dd>
               </div>
               <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Estimated Liability</dt>
-                <dd className="mt-xs font-mono tabular-nums text-text-primary">
-                  {data.latestTaxComputation ? (
-                    <FinancialNumber value={data.latestTaxComputation.taxLiability} format={formatCurrency} showFlash={false} />
-                  ) : (
-                    'Not yet computed'
-                  )}
-                </dd>
+                <dt className="text-xs tracking-wide text-muted-foreground uppercase">Estimated Liability</dt>
+                <dd className="mt-1 font-mono tabular-nums">{data.latestTaxComputation ? formatCurrency(data.latestTaxComputation.taxLiability) : 'Not yet computed'}</dd>
               </div>
               <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Status</dt>
-                <dd className="mt-xs text-text-primary">{data.latestTaxComputation?.status ?? '—'}</dd>
+                <dt className="text-xs tracking-wide text-muted-foreground uppercase">Status</dt>
+                <dd className="mt-1">{data.latestTaxComputation?.status ?? '—'}</dd>
               </div>
             </dl>
-          </Card>
+          </SectionCard>
 
-          <Card className="flex flex-col gap-sm">
-            <CardHeader title="Payroll" linkTo="/payroll/emp201" linkLabel="EMP201" />
-            <dl className="grid grid-cols-3 gap-sm text-sm">
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">PAYE (month)</dt>
-                <dd className="mt-xs font-mono tabular-nums text-text-primary">
-                  {data.emp201 ? <FinancialNumber value={data.emp201.paye} format={formatCurrency} showFlash={false} /> : '—'}
-                </dd>
+          <SectionCard title="Payroll" actions={<Link to="/payroll/emp201" className="text-xs font-medium text-brand hover:underline">EMP201 →</Link>}>
+            <div className="flex flex-col gap-3">
+              <dl className="grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">PAYE (month)</dt>
+                  <dd className="mt-1 font-mono tabular-nums">{data.emp201 ? formatCurrency(data.emp201.paye) : '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">UIF (month)</dt>
+                  <dd className="mt-1 font-mono tabular-nums">{data.emp201 ? formatCurrency(data.emp201.totalUif) : '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">SDL (month)</dt>
+                  <dd className="mt-1 font-mono tabular-nums">{data.emp201 ? formatCurrency(data.emp201.sdl) : '—'}</dd>
+                </div>
+              </dl>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {data.activeEmployeeCount} active employee{data.activeEmployeeCount === 1 ? '' : 's'}
+                </span>
+                {data.emp201Reconciliation && (
+                  <StatusPill
+                    ok={
+                      data.emp201Reconciliation.paye.isReconciled &&
+                      data.emp201Reconciliation.uifEmployee.isReconciled &&
+                      data.emp201Reconciliation.uifEmployer.isReconciled &&
+                      data.emp201Reconciliation.sdl.isReconciled
+                    }
+                    okLabel="Reconciled"
+                    badLabel="Variance detected"
+                  />
+                )}
               </div>
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">UIF (month)</dt>
-                <dd className="mt-xs font-mono tabular-nums text-text-primary">
-                  {data.emp201 ? <FinancialNumber value={data.emp201.totalUif} format={formatCurrency} showFlash={false} /> : '—'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">SDL (month)</dt>
-                <dd className="mt-xs font-mono tabular-nums text-text-primary">
-                  {data.emp201 ? <FinancialNumber value={data.emp201.sdl} format={formatCurrency} showFlash={false} /> : '—'}
-                </dd>
-              </div>
-            </dl>
-            <div className="flex flex-wrap items-center gap-sm">
-              <span className="text-xs text-text-muted">{data.activeEmployeeCount} active employee{data.activeEmployeeCount === 1 ? '' : 's'}</span>
-              {data.emp201Reconciliation && (
-                <StatusPill
-                  ok={
-                    data.emp201Reconciliation.paye.isReconciled &&
-                    data.emp201Reconciliation.uifEmployee.isReconciled &&
-                    data.emp201Reconciliation.uifEmployer.isReconciled &&
-                    data.emp201Reconciliation.sdl.isReconciled
-                  }
-                  okLabel="Reconciled"
-                  badLabel="Variance detected"
-                />
-              )}
+              <p className="text-xs text-muted-foreground">
+                EMP501, and IRP5/tax-certificate generation, are not summarized here — see the{' '}
+                <Link to="/payroll/emp501" className="text-brand hover:underline">
+                  EMP501 Reconciliation
+                </Link>{' '}
+                page (this app has no document-generation capability for certificates).
+              </p>
             </div>
-            <p className="text-xs text-text-muted">
-              EMP501, and IRP5/tax-certificate generation, are not summarized here — see the{' '}
-              <Link to="/payroll/emp501" className="text-primary no-underline hover:underline">
-                EMP501 Reconciliation
-              </Link>{' '}
-              page (this app has no document-generation capability for certificates).
-            </p>
-          </Card>
+          </SectionCard>
 
-          <Card className="flex flex-col gap-sm lg:col-span-2">
-            <CardHeader title="Accounting" linkTo="/accounting/trial-balance" linkLabel="Trial Balance" />
-            <dl className="grid grid-cols-2 gap-sm text-sm sm:grid-cols-4">
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Open Periods</dt>
-                <dd className="mt-xs text-text-primary">{data.accountingPeriods.filter((p) => p.status === 'open').length}</dd>
+          <SectionCard title="Accounting" actions={<Link to="/accounting/trial-balance" className="text-xs font-medium text-brand hover:underline">Trial Balance →</Link>} className="lg:col-span-2">
+            <div className="flex flex-col gap-3">
+              <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Open Periods</dt>
+                  <dd className="mt-1">{data.accountingPeriods.filter((p) => p.status === 'open').length}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Closed/Locked Periods</dt>
+                  <dd className="mt-1">{data.accountingPeriods.filter((p) => p.status !== 'open').length}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Active Fixed Assets</dt>
+                  <dd className="mt-1">{data.fixedAssets.filter((a) => a.status === 'active').length}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Suspense Account</dt>
+                  <dd className="mt-1 text-muted-foreground">Not modeled</dd>
+                </div>
+              </dl>
+              <div className="flex flex-wrap gap-2">
+                {data.arReconciliation && <StatusPill ok={data.arReconciliation.isReconciled} okLabel="Debtors reconciled" badLabel="Debtors variance" />}
+                {data.apReconciliation && <StatusPill ok={data.apReconciliation.isReconciled} okLabel="Creditors reconciled" badLabel="Creditors variance" />}
+                <Link to="/banking/reconciliation" className="text-xs font-medium text-brand hover:underline">
+                  Bank Reconciliation →
+                </Link>
+                <Link to="/inventory/products" className="text-xs font-medium text-brand hover:underline">
+                  Inventory →
+                </Link>
+                <Link to="/assets/register" className="text-xs font-medium text-brand hover:underline">
+                  Fixed Assets →
+                </Link>
               </div>
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Closed/Locked Periods</dt>
-                <dd className="mt-xs text-text-primary">{data.accountingPeriods.filter((p) => p.status !== 'open').length}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Active Fixed Assets</dt>
-                <dd className="mt-xs text-text-primary">{data.fixedAssets.filter((a) => a.status === 'active').length}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Suspense Account</dt>
-                <dd className="mt-xs text-text-muted">Not modeled</dd>
-              </div>
-            </dl>
-            <div className="flex flex-wrap gap-sm">
-              {data.arReconciliation && <StatusPill ok={data.arReconciliation.isReconciled} okLabel="Debtors reconciled" badLabel="Debtors variance" />}
-              {data.apReconciliation && <StatusPill ok={data.apReconciliation.isReconciled} okLabel="Creditors reconciled" badLabel="Creditors variance" />}
-              <Link to="/banking/reconciliation" className="text-xs font-medium text-primary no-underline hover:underline">
-                Bank Reconciliation →
-              </Link>
-              <Link to="/inventory/products" className="text-xs font-medium text-primary no-underline hover:underline">
-                Inventory →
-              </Link>
-              <Link to="/assets/register" className="text-xs font-medium text-primary no-underline hover:underline">
-                Fixed Assets →
-              </Link>
             </div>
-          </Card>
+          </SectionCard>
         </div>
       )}
     </div>

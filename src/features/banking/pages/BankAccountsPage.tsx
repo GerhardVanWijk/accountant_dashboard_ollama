@@ -1,32 +1,60 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Loader2, Plus, Search } from 'lucide-react';
 import type { BankAccount } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Icon } from '@/components/ui/Icon';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/shadcn/input-group';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/shadcn/select';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/shadcn/empty';
+import { formatCurrency } from '@/lib/app/format';
 import { useBankAccounts } from '../hooks/useBankAccounts';
 import { useBankAccountMutations } from '../hooks/useBankAccountMutations';
 import { useGlAccounts } from '../hooks/useGlAccounts';
 import { BankAccountTable } from '../components/BankAccountTable';
-import { BankAccountForm } from '../components/BankAccountForm';
-import { Modal } from '../components/Modal';
+import { BankAccountFormModal } from '../components/BankAccountFormModal';
+import { bankReconciliationService } from '../services';
 import { BANK_ACCOUNT_TYPE_LABELS } from '../constants';
+import { buildGlAccountCodeMap } from '../utils/glAccountCodeMap';
 import type { BankAccountFormSchema } from '../utils/bankAccountFormSchema';
 
 type DialogState = { mode: 'create' } | { mode: 'edit'; account: BankAccount } | null;
-type StatusFilter = 'all' | 'active' | 'inactive';
-type TypeFilter = 'all' | BankAccount['accountType'];
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const TYPE_FILTER_ITEMS = [
+  { value: 'all', label: 'All types' },
+  ...Object.entries(BANK_ACCOUNT_TYPE_LABELS).map(([value, label]) => ({ value, label })),
+];
+
+const STATUS_FILTER_ITEMS = [
+  { value: 'all', label: 'Active and inactive' },
+  { value: 'active', label: 'Active only' },
+  { value: 'inactive', label: 'Inactive only' },
+];
 
 /**
- * Cash & Bank Accounts — setup/list/edit for Current/Savings/Credit Card/
- * Petty Cash/Money Market/Foreign Currency accounts, SA banking metadata,
- * and the required Chart of Accounts GL link. Route `/banking/accounts`
- * (docs/ROUTES.md, wired by Queen Bee — not edited here).
+ * Cash & Bank Accounts — route `/banking/accounts`. Real
+ * useBankAccounts()/BankAccountService data; v0's own Banking page has no
+ * dedicated accounts CRUD screen (it only renders read-only account
+ * cards inline), so this page keeps the real, necessary create/edit/
+ * deactivate workflow, styled onto v0's account-card visual language.
  */
 export function BankAccountsPage() {
   const { bankAccounts, isLoading, error, refetch } = useBankAccounts();
@@ -34,10 +62,33 @@ export function BankAccountsPage() {
   const { accounts: glAccounts } = useGlAccounts();
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | BankAccount['accountType']>('all');
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [lastReconciledDates, setLastReconciledDates] = useState<Map<string, string>>(new Map());
+
+  const glAccountCodes = useMemo(() => buildGlAccountCodeMap(glAccounts), [glAccounts]);
+
+  // Most recent finalized reconciliation per account, via the real
+  // bankReconciliationService.getHistory() — not a stored field on
+  // BankAccount, and never computed independently here.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(
+      bankAccounts.map(async (a) => {
+        const history = await bankReconciliationService.getHistory(a.id);
+        return [a.id, history[0]?.finalizedAt] as const;
+      }),
+    ).then((entries) => {
+      if (cancelled) return;
+      setLastReconciledDates(new Map(entries.filter((e): e is [string, string] => Boolean(e[1]))));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bankAccounts]);
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -58,6 +109,7 @@ export function BankAccountsPage() {
 
   async function handleSubmit(values: BankAccountFormSchema): Promise<void> {
     setFormError(null);
+    setSubmitting(true);
     try {
       const payload = {
         name: values.name,
@@ -80,12 +132,14 @@ export function BankAccountsPage() {
       refetch();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not save bank account.');
+    } finally {
+      setSubmitting(false);
     }
   }
 
   async function handleToggleActive(account: BankAccount): Promise<void> {
     if (account.status === 'active') {
-      await deleteBankAccount(account.id);
+      await deleteBankAccount(account.id); // deactivates if it has transaction history, else hard-deletes — see BankAccountService.deleteBankAccount
     } else {
       await updateBankAccount(account.id, { status: 'active' });
     }
@@ -93,106 +147,144 @@ export function BankAccountsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Cash &amp; Bank Accounts</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Bank accounts, petty cash, and credit cards — each linked to a Chart of Accounts GL account.
-          </p>
-        </div>
-        <Button
-          variant="primary"
-          onClick={() => {
-            setFormError(null);
-            setDialog({ mode: 'create' });
-          }}
-        >
-          <Icon name="add" size={16} />
-          New Bank Account
-        </Button>
-      </div>
+    <>
+      <PageHeader
+        title="Cash & bank accounts"
+        description="Bank accounts, petty cash, and credit cards — each linked to a Chart of Accounts GL account."
+        actions={
+          <Button
+            size="sm"
+            onClick={() => {
+              setFormError(null);
+              setDialog({ mode: 'create' });
+            }}
+          >
+            <Plus data-icon="inline-start" />
+            New bank account
+          </Button>
+        }
+      />
 
-      <Card className="flex flex-wrap items-center gap-sm">
-        <div className="text-sm text-text-secondary">
-          <span className="font-semibold text-text-primary">{bankAccounts.length}</span> account
-          {bankAccounts.length === 1 ? '' : 's'} · Total active ZAR balance:{' '}
-          <span className="font-semibold text-text-primary tabular-nums">
-            {new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(totalBalance)}
-          </span>
-        </div>
-      </Card>
-
-      <Card className="flex flex-col gap-sm md:flex-row md:items-center">
-        <label className="flex flex-1 flex-col gap-xs text-sm">
-          <span className="sr-only">Search bank accounts</span>
-          <input
-            aria-label="Search bank accounts"
-            className={inputClass}
-            placeholder="Search by name, bank, or account number…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+      <SectionCard>
+        <div className="grid gap-6 sm:grid-cols-2">
+          <FigureBlock
+            label="Total active ZAR balance"
+            value={formatCurrency(totalBalance)}
+            hint={`${bankAccounts.length} account${bankAccounts.length === 1 ? '' : 's'}`}
           />
-        </label>
-        <select
-          aria-label="Filter by account type"
-          className={inputClass}
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-        >
-          <option value="all">All Types</option>
-          {Object.entries(BANK_ACCOUNT_TYPE_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Filter by status"
-          className={inputClass}
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-        >
-          <option value="all">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
-      </Card>
+          <FigureBlock
+            label="Active accounts"
+            value={String(bankAccounts.filter((a) => a.status === 'active').length)}
+            hint="Currently postable"
+          />
+        </div>
+      </SectionCard>
 
-      {isLoading && <Spinner label="Loading bank accounts…" />}
+      <SectionCard bodyClassName="p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <InputGroup className="w-full sm:max-w-72">
+            <InputGroupAddon>
+              <Search />
+            </InputGroupAddon>
+            <InputGroupInput
+              value={search}
+              placeholder="Search by name, bank, or account number…"
+              aria-label="Search bank accounts"
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </InputGroup>
 
-      {!isLoading && error && <ErrorState message={error.message} onRetry={refetch} />}
+          <Select
+            items={TYPE_FILTER_ITEMS}
+            value={typeFilter}
+            onValueChange={(value) => setTypeFilter(value as typeof typeFilter)}
+          >
+            <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-44" aria-label="Filter by account type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {TYPE_FILTER_ITEMS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+
+          <Select
+            items={STATUS_FILTER_ITEMS}
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
+          >
+            <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-40" aria-label="Filter by status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {STATUS_FILTER_ITEMS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+      </SectionCard>
+
+      {isLoading && (
+        <div role="status" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading bank accounts…</p>
+        </div>
+      )}
+
+      {!isLoading && error && (
+        <div role="alert" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
+          <p className="text-sm text-destructive">{error.message}</p>
+          <Button variant="outline" size="sm" onClick={refetch}>
+            Try again
+          </Button>
+        </div>
+      )}
 
       {!isLoading && !error && bankAccounts.length === 0 && (
-        <EmptyState
-          title="No bank accounts yet"
-          message="Add your first bank account, petty cash tin, or credit card to start recording transactions."
-          action={<Button onClick={() => setDialog({ mode: 'create' })}>New Bank Account</Button>}
-        />
+        <SectionCard>
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No bank accounts yet</EmptyTitle>
+              <EmptyDescription>Add your first bank account, petty cash tin, or credit card to start recording transactions.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+                New bank account
+              </Button>
+            </EmptyContent>
+          </Empty>
+        </SectionCard>
       )}
 
       {!isLoading && !error && bankAccounts.length > 0 && filtered.length === 0 && (
-        <EmptyState
-          title="No matching accounts"
-          message="Try a different search term or clear the filters."
-          action={
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setSearch('');
-                setStatusFilter('all');
-                setTypeFilter('all');
-              }}
-            >
-              Clear filters
-            </Button>
-          }
-        />
+        <SectionCard>
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Search />
+              </EmptyMedia>
+              <EmptyTitle>No matching accounts</EmptyTitle>
+              <EmptyDescription>Adjust the search or filters to widen the view.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </SectionCard>
       )}
 
       {!isLoading && !error && filtered.length > 0 && (
         <BankAccountTable
           accounts={filtered}
+          glAccountCodes={glAccountCodes}
+          lastReconciledDates={lastReconciledDates}
           onEdit={(account) => {
             setFormError(null);
             setDialog({ mode: 'edit', account });
@@ -202,24 +294,17 @@ export function BankAccountsPage() {
       )}
 
       {dialog && (
-        <Modal
-          title={dialog.mode === 'edit' ? `Edit ${dialog.account.name}` : 'New Bank Account'}
+        <BankAccountFormModal
+          title={dialog.mode === 'edit' ? `Edit ${dialog.account.name}` : 'New bank account'}
+          initialValues={dialog.mode === 'edit' ? dialog.account : undefined}
+          glAccounts={glAccounts}
+          submitLabel={dialog.mode === 'edit' ? 'Save changes' : 'Create bank account'}
+          submitting={submitting}
+          submitError={formError}
           onClose={() => setDialog(null)}
-        >
-          {formError && (
-            <p role="alert" className="mb-md rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
-              {formError}
-            </p>
-          )}
-          <BankAccountForm
-            initialValues={dialog.mode === 'edit' ? dialog.account : undefined}
-            glAccounts={glAccounts}
-            submitLabel={dialog.mode === 'edit' ? 'Save Changes' : 'Create Bank Account'}
-            onCancel={() => setDialog(null)}
-            onSubmit={handleSubmit}
-          />
-        </Modal>
+          onSubmit={handleSubmit}
+        />
       )}
-    </div>
+    </>
   );
 }

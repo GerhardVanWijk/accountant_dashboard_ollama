@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import type { Account, BankAccount, TaxRate } from '@/types';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import type { AllocationInput, CreateDirectTransactionInput, CreateTransferInput } from '../services';
 import { AllocationRows } from './AllocationRows';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 type Mode = 'receipt' | 'payment' | 'transfer';
 
@@ -24,11 +27,12 @@ function today(): string {
 }
 
 /**
- * Direct Payment / Direct Receipt / Inter-Account Transfer entry form.
- * Receipts and payments share the split-allocation editor with per-line
- * VAT; a transfer has no allocation at all — it's a direct move between
- * two bank accounts (debit destination / credit source), never a
- * revenue/expense line, per this dispatch's brief.
+ * Direct Payment / Direct Receipt / Inter-Account Transfer entry form —
+ * same fields/validation/submit shape as before the port, JSX re-skinned
+ * onto v0's Tabs/Field/Input primitives. Receipts and payments share the
+ * split-allocation editor with per-line VAT; a transfer has no allocation
+ * at all — it's a direct move between two bank accounts (debit
+ * destination / credit source), never a revenue/expense line.
  */
 export function TransactionForm({
   bankAccounts,
@@ -86,136 +90,122 @@ export function TransactionForm({
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex gap-xs border-b border-border" role="tablist">
-        {(['receipt', 'payment', 'transfer'] as Mode[]).map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="tab"
-            aria-selected={mode === m}
-            onClick={() => setMode(m)}
-            className={`px-md py-sm text-sm font-medium transition-colors ${
-              mode === m ? 'border-b-2 border-primary text-text-primary' : 'text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            {m === 'receipt' ? 'Direct Receipt' : m === 'payment' ? 'Direct Payment' : 'Inter-Account Transfer'}
-          </button>
-        ))}
-      </div>
+    <div className="flex flex-col gap-6">
+      <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
+        <TabsList variant="line" className="w-full justify-start border-b border-border">
+          <TabsTrigger value="receipt">Direct receipt</TabsTrigger>
+          <TabsTrigger value="payment">Direct payment</TabsTrigger>
+          <TabsTrigger value="transfer">Inter-account transfer</TabsTrigger>
+        </TabsList>
 
-      {formError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
-          {formError}
-        </p>
-      )}
+        {formError && (
+          <p role="alert" className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {formError}
+          </p>
+        )}
 
-      {mode !== 'transfer' && (
-        <div className="flex flex-col gap-md">
-          <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-            <label className="flex flex-col gap-xs text-sm">
-              <span className="font-medium text-text-primary">Bank Account</span>
-              <select className={inputClass} value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
+        {/* Receipt and payment share this exact body (only the labels/direction differ) — rendered
+            manually rather than as two near-duplicate TabsContent panels, since TabsContent's
+            per-tab matching isn't meant to serve two distinct tab values from one panel. */}
+        {mode !== 'transfer' && (
+          <div className="flex flex-col gap-4 pt-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="txn-account">Bank account</FieldLabel>
+              <select id="txn-account" className={selectClassName} value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
                 {bankAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="flex flex-col gap-xs text-sm">
-              <span className="font-medium text-text-primary">Date</span>
-              <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
-            </label>
-            <label className="flex flex-col gap-xs text-sm">
-              <span className="font-medium text-text-primary">Description</span>
-              <input
-                className={inputClass}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="txn-date">Date</FieldLabel>
+              <Input id="txn-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="txn-description">Description</FieldLabel>
+              <Input
+                id="txn-description"
                 placeholder={mode === 'receipt' ? 'e.g. Customer payment' : 'e.g. Supplier payment, bank charges'}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
-            </label>
-            <label className="flex flex-col gap-xs text-sm">
-              <span className="font-medium text-text-primary">Reference</span>
-              <input className={`${inputClass} font-mono`} value={reference} onChange={(e) => setReference(e.target.value)} />
-            </label>
-            <label className="flex flex-col gap-xs text-sm">
-              <span className="font-medium text-text-primary">
-                Gross Amount {mode === 'receipt' ? '(money in)' : '(money out)'}
-              </span>
-              <input
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="txn-reference">Reference</FieldLabel>
+              <Input id="txn-reference" className="figure" value={reference} onChange={(e) => setReference(e.target.value)} />
+            </Field>
+            <Field className="sm:col-span-2">
+              <FieldLabel htmlFor="txn-amount">Gross amount {mode === 'receipt' ? '(money in)' : '(money out)'}</FieldLabel>
+              <Input
+                id="txn-amount"
                 type="number"
                 step="0.01"
-                className={inputClass}
                 value={amount || ''}
                 onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
               />
-            </label>
+            </Field>
           </div>
 
-          <AllocationRows
-            allocations={allocations}
-            onChange={setAllocations}
-            glAccounts={glAccounts}
-            taxRates={taxRates}
-            grossAmount={amount}
-          />
-        </div>
-      )}
+          <AllocationRows allocations={allocations} onChange={setAllocations} glAccounts={glAccounts} taxRates={taxRates} grossAmount={amount} />
+          </div>
+        )}
 
-      {mode === 'transfer' && (
-        <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-          <label className="flex flex-col gap-xs text-sm">
-            <span className="font-medium text-text-primary">From Account (source — credited)</span>
-            <select className={inputClass} value={fromAccountId} onChange={(e) => setFromAccountId(e.target.value)}>
-              {bankAccounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-xs text-sm">
-            <span className="font-medium text-text-primary">To Account (destination — debited)</span>
-            <select className={inputClass} value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
-              {bankAccounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-xs text-sm">
-            <span className="font-medium text-text-primary">Date</span>
-            <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-xs text-sm">
-            <span className="font-medium text-text-primary">Amount</span>
-            <input
-              type="number"
-              step="0.01"
-              className={inputClass}
-              value={transferAmount || ''}
-              onChange={(e) => setTransferAmount(parseFloat(e.target.value) || 0)}
-            />
-          </label>
-          <label className="flex flex-col gap-xs text-sm md:col-span-2">
-            <span className="font-medium text-text-primary">Description (optional)</span>
-            <input className={inputClass} value={description} onChange={(e) => setDescription(e.target.value)} />
-          </label>
-          {fromAccountId && toAccountId && fromAccountId === toAccountId && (
-            <p className="text-xs text-danger md:col-span-2">Source and destination accounts must be different.</p>
-          )}
-        </div>
-      )}
+        <TabsContent value="transfer" className="flex flex-col gap-4 pt-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="txn-from">From account (source — credited)</FieldLabel>
+              <select id="txn-from" className={selectClassName} value={fromAccountId} onChange={(e) => setFromAccountId(e.target.value)}>
+                {bankAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="txn-to">To account (destination — debited)</FieldLabel>
+              <select id="txn-to" className={selectClassName} value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
+                {bankAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="txn-transfer-date">Date</FieldLabel>
+              <Input id="txn-transfer-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="txn-transfer-amount">Amount</FieldLabel>
+              <Input
+                id="txn-transfer-amount"
+                type="number"
+                step="0.01"
+                value={transferAmount || ''}
+                onChange={(e) => setTransferAmount(parseFloat(e.target.value) || 0)}
+              />
+            </Field>
+            <Field className="sm:col-span-2">
+              <FieldLabel htmlFor="txn-transfer-description">Description (optional)</FieldLabel>
+              <Input id="txn-transfer-description" value={description} onChange={(e) => setDescription(e.target.value)} />
+            </Field>
+            {fromAccountId && toAccountId && fromAccountId === toAccountId && (
+              <p className="text-xs text-destructive sm:col-span-2">Source and destination accounts must be different.</p>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button variant="outline" type="button" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
-          {isSubmitting ? 'Saving…' : mode === 'transfer' ? 'Record Transfer' : 'Record Transaction'}
+        <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
+          {isSubmitting ? 'Saving…' : mode === 'transfer' ? 'Record transfer' : 'Record transaction'}
         </Button>
       </div>
     </div>

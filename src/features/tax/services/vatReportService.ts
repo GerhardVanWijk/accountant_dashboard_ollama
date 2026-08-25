@@ -154,6 +154,99 @@ export function computeVatReport(
   };
 }
 
+/** One real posted document's contribution to a VAT period — for the "which transactions make up this figure" traceability view (M7). Reuses the exact same per-line classification `computeVatReport()` already does; this is a different SHAPE of the same output (per-document, not aggregated by treatment), not a second calculation. */
+export interface VatTransactionRow {
+  id: ID;
+  documentType: 'invoice' | 'credit_note' | 'bill';
+  documentNumber: string;
+  date: ISODateString;
+  direction: 'output' | 'input';
+  /** Undefined when none of the document's lines resolved to a known TaxRate. */
+  treatment: VatTreatment | undefined;
+  taxBase: number;
+  vatAmount: number;
+}
+
+function dominantTreatment(lines: LineLike[], allTaxRates: TaxRate[]): VatTreatment | undefined {
+  for (const line of lines) {
+    if (!line.taxRateId) continue;
+    const rate = allTaxRates.find((r) => r.id === line.taxRateId);
+    if (rate) return rate.treatment;
+  }
+  return undefined;
+}
+
+/**
+ * Real posted Invoices/Credit Notes/Bills that fed into a period's VAT
+ * figures, one row per document (not per line — matches the granularity a
+ * user cross-checks against the Sales/Purchases screens by document
+ * number). Same period/status filtering as `computeVatReport()`; a
+ * document with more than one tax treatment across its lines is labelled
+ * with its first resolvable line's treatment (the per-treatment split for
+ * that case is already exact in the breakdown tables above — this list is
+ * for traceability, not a second source of the totals).
+ */
+export function listVatTransactions(
+  periodStart: Date,
+  periodEnd: Date,
+  invoices: Invoice[],
+  creditNotes: CreditNote[],
+  bills: Bill[],
+  allTaxRates: TaxRate[],
+): VatTransactionRow[] {
+  const rows: VatTransactionRow[] = [];
+
+  for (const invoice of invoices) {
+    if (invoice.status === 'draft' || invoice.status === 'void') continue;
+    if (!inPeriod(invoice.issueDate, periodStart, periodEnd)) continue;
+    if (invoice.taxTotal === 0) continue;
+    rows.push({
+      id: invoice.id,
+      documentType: 'invoice',
+      documentNumber: invoice.invoiceNumber,
+      date: invoice.issueDate,
+      direction: 'output',
+      treatment: dominantTreatment(invoice.lineItems, allTaxRates),
+      taxBase: invoice.subtotal,
+      vatAmount: invoice.taxTotal,
+    });
+  }
+
+  for (const creditNote of creditNotes) {
+    if (creditNote.status === 'draft' || creditNote.status === 'void') continue;
+    if (!inPeriod(creditNote.issueDate, periodStart, periodEnd)) continue;
+    if (creditNote.taxTotal === 0) continue;
+    rows.push({
+      id: creditNote.id,
+      documentType: 'credit_note',
+      documentNumber: creditNote.creditNoteNumber,
+      date: creditNote.issueDate,
+      direction: 'output',
+      treatment: dominantTreatment(creditNote.lineItems, allTaxRates),
+      taxBase: -creditNote.subtotal,
+      vatAmount: -creditNote.taxTotal,
+    });
+  }
+
+  for (const bill of bills) {
+    if (bill.status === 'draft' || bill.status === 'void') continue;
+    if (!inPeriod(bill.issueDate, periodStart, periodEnd)) continue;
+    if (bill.taxTotal === 0) continue;
+    rows.push({
+      id: bill.id,
+      documentType: 'bill',
+      documentNumber: bill.billNumber,
+      date: bill.issueDate,
+      direction: 'input',
+      treatment: dominantTreatment(bill.lineItems, allTaxRates),
+      taxBase: bill.subtotal,
+      vatAmount: bill.taxTotal,
+    });
+  }
+
+  return rows.sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export interface VatControlAccountCheck {
   controlAccountId: ID;
   /** Net amount actually posted to this control account during the period (not its all-time running balance). */

@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
+import { Loader2, Plus } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { formatCurrency } from '@/lib/app/format';
 import { CreditNoteList } from '@/features/sales/components/CreditNoteList';
 import { CreditNoteDetail } from '@/features/sales/components/CreditNoteDetail';
-import { CreditNoteForm } from '@/features/sales/components/CreditNoteForm';
-import { AllocationForm, type OpenInvoiceOption } from '@/features/sales/components/AllocationForm';
-import { Modal } from '@/features/sales/components/Modal';
+import { CreditNoteFormModal } from '@/features/sales/components/CreditNoteFormModal';
+import { AllocationFormModal, type OpenInvoiceOption } from '@/features/sales/components/AllocationFormModal';
 import { useCreditNotes } from '@/features/sales/hooks/useCreditNotes';
 import { useCreditNoteMutations } from '@/features/sales/hooks/useCreditNoteMutations';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
@@ -18,8 +20,9 @@ type View = { type: 'list' } | { type: 'detail'; id: string };
 const EPSILON = 0.01;
 
 /**
- * Route target for /sales/credit-notes. Assembles the Credit Note
- * list/detail views, the create form, and the "Allocate to Invoice" flow.
+ * Route target for /sales/credit-notes — real useCreditNotes()/
+ * CreditNoteService data, v0 page shell, list/detail views and the create
+ * form + "Allocate to Invoice" flow in-page-state.
  */
 export function CreditNotesPage() {
   const [view, setView] = useState<View>({ type: 'list' });
@@ -40,11 +43,14 @@ export function CreditNotesPage() {
     voidCreditNote,
     isLoading: isMutating,
     error: mutationError,
-  } = useCreditNoteMutations({
-    onSuccess: () => refetch(),
-  });
+  } = useCreditNoteMutations({ onSuccess: () => refetch() });
 
   const nextCreditNoteNumber = `CN-${new Date().getFullYear()}-${String(creditNotes.length + 1).padStart(4, '0')}`;
+
+  const applied = creditNotes.filter((cn) => cn.status === 'allocated');
+  const drafts = creditNotes.filter((cn) => cn.status === 'draft');
+  const credited = applied.reduce((sum, cn) => sum + cn.total, 0);
+  const vatReversed = applied.reduce((sum, cn) => sum + cn.taxTotal, 0);
 
   const linkedInvoiceNumber = detailCreditNote?.invoiceId
     ? invoices.find((inv) => inv.id === detailCreditNote.invoiceId)?.invoiceNumber
@@ -80,75 +86,115 @@ export function CreditNotesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Credit Notes</h1>
-        {view.type === 'list' && (
-          <Button variant="primary" onClick={() => setShowForm(true)}>
-            <Icon name="add" size={16} />
-            New Credit Note
-          </Button>
-        )}
-      </div>
-
-      {notice && (
-        <p className="rounded-md border border-positive bg-positive/10 px-sm py-xs text-sm text-positive">{notice}</p>
-      )}
-      {mutationError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
-          {mutationError.message}
-        </p>
-      )}
-
+    <>
       {view.type === 'list' && (
-        <CreditNoteList
-          creditNotes={creditNotes}
-          customers={customerMap}
-          onSelect={(id) => {
-            setNotice(null);
-            setView({ type: 'detail', id });
-          }}
-          isLoading={isLoading}
-          error={error?.message}
-        />
+        <div className="flex flex-col gap-6">
+          <PageHeader
+            title="Credit notes"
+            description="Credits raised against issued invoices. Applied notes reduce the customer balance and reverse the output VAT."
+            actions={
+              <Button size="sm" onClick={() => setShowForm(true)}>
+                <Plus data-icon="inline-start" />
+                New credit note
+              </Button>
+            }
+          />
+
+          <SectionCard>
+            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+              <FigureBlock label="Credited" value={formatCurrency(credited)} hint={`${applied.length} allocated notes`} />
+              <FigureBlock
+                label="Output VAT reversed"
+                value={formatCurrency(vatReversed)}
+                hint="Recovered on the VAT201 return"
+                tone="positive"
+              />
+              <FigureBlock
+                label="In draft"
+                value={String(drafts.length)}
+                hint="Not yet issued"
+                tone={drafts.length > 0 ? 'warning' : 'default'}
+              />
+              <FigureBlock label="Average credit" value={formatCurrency(applied.length > 0 ? credited / applied.length : 0)} hint="Per allocated note" />
+            </div>
+          </SectionCard>
+
+          {notice && (
+            <p className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{notice}</p>
+          )}
+          {mutationError && (
+            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {mutationError.message}
+            </p>
+          )}
+
+          {isLoading && (
+            <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+              <p className="text-sm">Loading credit notes…</p>
+            </div>
+          )}
+          {!isLoading && error && (
+            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error.message}
+            </div>
+          )}
+          {!isLoading && !error && (
+            <CreditNoteList
+              creditNotes={creditNotes}
+              customers={customerMap}
+              onSelect={(id) => {
+                setNotice(null);
+                setView({ type: 'detail', id });
+              }}
+            />
+          )}
+        </div>
       )}
 
       {view.type === 'detail' && detailCreditNote && (
-        <CreditNoteDetail
-          creditNote={detailCreditNote}
-          customerName={customerMap.get(detailCreditNote.customerId) || 'Unknown Customer'}
-          linkedInvoiceNumber={linkedInvoiceNumber}
-          company={company}
-          onClose={() => setView({ type: 'list' })}
-          isBusy={isMutating}
-          onIssue={(id) => void handleIssue(id)}
-          onVoid={(id) => void handleVoid(id)}
-          onAllocate={() => setShowAllocate(true)}
-        />
+        <div className="flex flex-col gap-6">
+          {notice && (
+            <p className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{notice}</p>
+          )}
+          {mutationError && (
+            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {mutationError.message}
+            </p>
+          )}
+          <CreditNoteDetail
+            creditNote={detailCreditNote}
+            customerName={customerMap.get(detailCreditNote.customerId) || 'Unknown Customer'}
+            linkedInvoiceNumber={linkedInvoiceNumber}
+            company={company}
+            onBack={() => setView({ type: 'list' })}
+            isBusy={isMutating}
+            onIssue={(id) => void handleIssue(id)}
+            onVoid={(id) => void handleVoid(id)}
+            onAllocate={() => setShowAllocate(true)}
+          />
+        </div>
       )}
 
       {showForm && (
-        <Modal title="New Credit Note" onClose={() => setShowForm(false)} wide>
-          <CreditNoteForm
-            customers={customerList}
-            invoices={invoices}
-            defaultCreditNoteNumber={nextCreditNoteNumber}
-            onSubmit={handleCreate}
-            onCancel={() => setShowForm(false)}
-          />
-        </Modal>
+        <CreditNoteFormModal
+          customers={customerList}
+          invoices={invoices}
+          defaultCreditNoteNumber={nextCreditNoteNumber}
+          onSubmit={handleCreate}
+          onClose={() => setShowForm(false)}
+        />
       )}
 
       {showAllocate && detailCreditNote && (
-        <Modal title={`Allocate ${detailCreditNote.creditNoteNumber}`} onClose={() => setShowAllocate(false)}>
-          <AllocationForm
-            openInvoices={openInvoiceOptions}
-            maxAmount={detailCreditNote.total - detailCreditNote.amountAllocated}
-            onSubmit={handleAllocate}
-            onCancel={() => setShowAllocate(false)}
-          />
-        </Modal>
+        <AllocationFormModal
+          title={`Allocate ${detailCreditNote.creditNoteNumber}`}
+          openInvoices={openInvoiceOptions}
+          maxAmount={detailCreditNote.total - detailCreditNote.amountAllocated}
+          onSubmit={handleAllocate}
+          onClose={() => setShowAllocate(false)}
+        />
       )}
-    </div>
+    </>
   );
 }

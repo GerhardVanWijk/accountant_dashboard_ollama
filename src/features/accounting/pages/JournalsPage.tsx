@@ -1,44 +1,38 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import { Loader2, Plus } from 'lucide-react';
 import type { ID, JournalEntry } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Icon } from '@/components/ui/Icon';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { formatCurrency } from '@/lib/app/format';
 import { useAccounts } from '../hooks/useAccounts';
+import { useAccountingPeriods } from '../hooks/useAccountingPeriods';
 import { useJournalEntries } from '../hooks/useJournalEntries';
-import { JournalEntryForm } from '../components/JournalEntryForm';
-import { JournalEntryList } from '../components/JournalEntryList';
-import { Modal } from '../components/Modal';
-import { defaultJournalEntryFilters, type JournalEntryFilters } from '../types/journalEntry.types';
+import { JournalsTable } from '../components/JournalsTable';
+import { JournalEntryFormModal } from '../components/JournalEntryFormModal';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
-
-/** General Journals — manual entry workspace, route `/accounting/journals` (docs/ROUTES.md). */
+/**
+ * General Journals — manual entry workspace, route `/accounting/journals`
+ * (docs/ROUTES.md). Real useJournalEntries()/JournalEntryService data;
+ * posting and reversal both go through the same service methods as before
+ * the port — this page never decides balance or period-open rules itself.
+ * v0's mock journals assume a draft/awaiting-review approval workflow;
+ * the real engine posts immediately and only knows draft/posted/reversed,
+ * so those summary tiles are replaced with ones the real data supports —
+ * see the M3 report.
+ */
 export function JournalsPage() {
   const { accounts } = useAccounts();
+  const { periods } = useAccountingPeriods();
   const { entries, reversedByEntryId, loading, error, refetch, validateLines, postJournalEntry, reverseJournalEntry } =
     useJournalEntries();
-  const [filters, setFilters] = useState<JournalEntryFilters>(defaultJournalEntryFilters);
   const [showForm, setShowForm] = useState(false);
   const [reversingEntryId, setReversingEntryId] = useState<ID | null>(null);
   const [reverseError, setReverseError] = useState<string | null>(null);
 
-  const sources = useMemo(() => Array.from(new Set(entries.map((e) => e.source))).sort(), [entries]);
-
-  const filtered = useMemo(() => {
-    const search = filters.search.trim().toLowerCase();
-    return entries.filter((entry) => {
-      if (search) {
-        const haystack = `${entry.entryNumber} ${entry.memo ?? ''}`.toLowerCase();
-        if (!haystack.includes(search)) return false;
-      }
-      if (filters.source !== 'all' && entry.source !== filters.source) return false;
-      return true;
-    });
-  }, [entries, filters]);
+  const posted = entries.filter((e) => e.status === 'posted' && !reversedByEntryId.has(e.id));
+  const reversed = entries.filter((e) => reversedByEntryId.has(e.id));
+  const postedValue = posted.reduce((sum, e) => sum + e.lines.reduce((s, l) => s + l.debit, 0), 0);
 
   async function handleReverse(entry: JournalEntry): Promise<void> {
     setReverseError(null);
@@ -53,76 +47,54 @@ export function JournalsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">General Journals</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Post manual, balanced double-entry journal entries directly to the general ledger.
-          </p>
-        </div>
-        <Button variant="primary" onClick={() => setShowForm(true)}>
-          <Icon name="add" size={16} />
-          New Journal Entry
-        </Button>
-      </div>
+    <>
+      <PageHeader
+        title="Journal entries"
+        description="Manual adjustments to the ledger. Every entry carries equal debits and credits and posts to the ledger immediately."
+        actions={
+          <Button size="sm" onClick={() => setShowForm(true)}>
+            <Plus data-icon="inline-start" />
+            New journal entry
+          </Button>
+        }
+      />
 
-      <Card className="flex flex-col gap-sm md:flex-row md:items-center">
-        <label className="flex flex-1 flex-col gap-xs text-sm">
-          <span className="sr-only">Search journal entries</span>
-          <input
-            aria-label="Search journal entries"
-            className={inputClass}
-            placeholder="Search by entry number or memo…"
-            value={filters.search}
-            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-          />
-        </label>
-        <select
-          aria-label="Filter by source"
-          className={inputClass}
-          value={filters.source}
-          onChange={(e) => setFilters((f) => ({ ...f, source: e.target.value }))}
-        >
-          <option value="all">All Sources</option>
-          {sources.map((source) => (
-            <option key={source} value={source}>
-              {source}
-            </option>
-          ))}
-        </select>
-      </Card>
+      <SectionCard>
+        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+          <FigureBlock label="Posted value" value={formatCurrency(postedValue)} hint={`${posted.length} entries in the ledger`} />
+          <FigureBlock label="Reversals" value={String(reversed.length)} hint="Corrected by a reversing entry" />
+          <FigureBlock label="Total entries" value={String(entries.length)} hint="Across every posted period" />
+          <FigureBlock label="Accounts in use" value={String(accounts.filter((a) => a.isActive).length)} hint="Active, postable accounts" />
+        </div>
+      </SectionCard>
 
       {reverseError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {reverseError}
         </p>
       )}
 
-      {loading && <Spinner label="Loading journal entries…" />}
-
-      {!loading && error && <ErrorState message={error.message} onRetry={refetch} />}
-
-      {!loading && !error && entries.length === 0 && (
-        <EmptyState
-          title="No journal entries yet"
-          message="Post your first manual journal entry to start the general ledger."
-          action={
-            <Button variant="primary" onClick={() => setShowForm(true)}>
-              New Journal Entry
-            </Button>
-          }
-        />
+      {loading && (
+        <div role="status" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading journal entries…</p>
+        </div>
       )}
 
-      {!loading && !error && entries.length > 0 && filtered.length === 0 && (
-        <EmptyState title="No matching journal entries" message="Try adjusting your search or filters." />
+      {!loading && error && (
+        <div role="alert" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
+          <p className="text-sm text-destructive">{error.message}</p>
+          <Button variant="outline" size="sm" onClick={refetch}>
+            Try again
+          </Button>
+        </div>
       )}
 
-      {!loading && !error && filtered.length > 0 && (
-        <JournalEntryList
-          entries={filtered}
+      {!loading && !error && (
+        <JournalsTable
+          entries={entries}
           accounts={accounts}
+          periods={periods}
           reversedByEntryId={reversedByEntryId}
           onReverse={handleReverse}
           reversingEntryId={reversingEntryId}
@@ -130,18 +102,16 @@ export function JournalsPage() {
       )}
 
       {showForm && (
-        <Modal title="New Journal Entry" onClose={() => setShowForm(false)} wide>
-          <JournalEntryForm
-            accounts={accounts}
-            validateLines={validateLines}
-            onCancel={() => setShowForm(false)}
-            onSubmit={async (input) => {
-              await postJournalEntry(input);
-              setShowForm(false);
-            }}
-          />
-        </Modal>
+        <JournalEntryFormModal
+          accounts={accounts}
+          validateLines={validateLines}
+          onClose={() => setShowForm(false)}
+          onSubmit={async (input) => {
+            await postJournalEntry(input);
+            setShowForm(false);
+          }}
+        />
       )}
-    </div>
+    </>
   );
 }

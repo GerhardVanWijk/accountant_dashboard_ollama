@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
 import type { TaxRate } from '@/types';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { formatDate } from '@/lib/app/format';
 import type { SupersedeTaxRateInput } from '../services';
-
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
 export interface SupersedeTaxRateFormProps {
   currentVersion: TaxRate;
@@ -22,10 +23,10 @@ function tomorrow(): string {
 /**
  * Changes a rate code's rate/treatment going forward WITHOUT touching the
  * currently-open version — TaxRateService.supersede() closes it and
- * creates a new one (SA_ACCOUNTING_MASTER_SPEC.md §83: a past transaction
- * must keep using the rate that was in effect when it was posted). A
- * reason is mandatory, matching every other reason-required override in
- * this codebase (e.g. CompanyService.setReportingFramework()).
+ * creates a new one. A reason is mandatory, matching every other
+ * reason-required override in this codebase (e.g.
+ * CompanyService.setReportingFramework()). Re-skinned onto v0's
+ * Field/Input/Textarea (M7); validation logic unchanged.
  */
 export function SupersedeTaxRateForm({ currentVersion, onSubmit, onCancel, isLoading = false }: SupersedeTaxRateFormProps) {
   const [rate, setRate] = useState(currentVersion.rate);
@@ -56,60 +57,44 @@ export function SupersedeTaxRateForm({ currentVersion, onSubmit, onCancel, isLoa
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-md">
-      <p className="rounded-md border border-border bg-background px-sm py-xs text-xs text-text-secondary">
-        Current version: <span className="font-mono">{currentVersion.code}</span> at {currentVersion.rate}%, effective
-        from {new Date(currentVersion.effectiveFrom).toLocaleDateString()}. This will NOT be edited — it stays exactly
-        as posted; a new version starts on the date below.
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        Current version: <span className="font-mono">{currentVersion.code}</span> at {currentVersion.rate}%, effective from {formatDate(currentVersion.effectiveFrom)}. This will NOT be
+        edited — it stays exactly as posted; a new version starts on the date below.
       </p>
 
-      {error && <p className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">New Rate (%)</span>
-          <input
-            type="number"
-            min="0"
-            max="100"
-            step="0.01"
-            className={`${inputClass} text-right`}
-            value={rate}
-            onChange={(e) => setRate(parseFloat(e.target.value) || 0)}
-          />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Effective From</span>
-          <input type="date" className={inputClass} value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
-        </label>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="supersede-rate">New Rate (%)</FieldLabel>
+          <Input id="supersede-rate" type="number" min="0" max="100" step="0.01" className="text-right" value={rate} onChange={(e) => setRate(parseFloat(e.target.value) || 0)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="supersede-effective-from">Effective From</FieldLabel>
+          <Input id="supersede-effective-from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+        </Field>
       </div>
 
-      <label className="flex flex-col gap-xs text-sm">
-        <span className="font-medium text-text-primary">Source Reference</span>
-        <input
-          className={inputClass}
-          placeholder="e.g. VAT Act amendment — pending professional verification"
-          value={sourceReference}
-          onChange={(e) => setSourceReference(e.target.value)}
-        />
-      </label>
+      <Field>
+        <FieldLabel htmlFor="supersede-source">Source Reference</FieldLabel>
+        <Input id="supersede-source" placeholder="e.g. VAT Act amendment — pending professional verification" value={sourceReference} onChange={(e) => setSourceReference(e.target.value)} />
+      </Field>
 
-      <label className="flex flex-col gap-xs text-sm">
-        <span className="font-medium text-text-primary">Reason for Change</span>
-        <textarea
-          className={inputClass}
-          rows={2}
-          placeholder="Required — recorded on the audit trail"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-      </label>
+      <Field>
+        <FieldLabel htmlFor="supersede-reason">Reason for Change</FieldLabel>
+        <Textarea id="supersede-reason" rows={2} placeholder="Required — recorded on the audit trail" value={reason} onChange={(e) => setReason(e.target.value)} />
+      </Field>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" type="submit" disabled={isLoading}>
+        <Button type="submit" disabled={isLoading}>
           {isLoading ? 'Saving…' : 'Supersede Rate'}
         </Button>
       </div>

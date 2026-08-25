@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { Employee, EmployeeAllowance, EmployeeDeduction } from '@/types';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { EMPLOYMENT_TYPE_LABELS, EMPLOYEE_STATUS_LABELS, PAY_FREQUENCY_LABELS, PAYROLL_CURRENCY } from '../constants';
-import { fieldError, fieldHint, fieldInput, fieldLabel } from './formStyles';
 import type { CreateEmployeeDTO, UpdateEmployeeDTO } from '../services';
+
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function isNonNegativeNumber(value: string): boolean {
   return value.trim() !== '' && !Number.isNaN(Number(value)) && Number(value) >= 0;
@@ -66,10 +70,11 @@ function newId(prefix: string): string {
 
 /**
  * Create/edit form for Employee master data (react-hook-form + zod for the
- * scalar fields, mirroring src/features/assets/components/AssetForm.tsx).
- * Recurring allowances/deductions are a plain local-state repeatable list
- * — every payroll run recomputes from these standard amounts, plus a
- * one-off overtime/bonus override per run (see PayrollRunDetail).
+ * scalar fields). Recurring allowances/deductions are a plain local-state
+ * repeatable list — every payroll run recomputes from these standard
+ * amounts, plus a one-off overtime/bonus override per run (see
+ * PayslipLinesTable). Re-skinned onto v0's Field/Input/Checkbox (M13);
+ * validation schema, DTO shape and payroll calculation inputs unchanged.
  */
 export function EmployeeForm({ employee, onSubmit, onCancel }: EmployeeFormProps) {
   const [allowances, setAllowances] = useState<EmployeeAllowance[]>(employee?.standardAllowances ?? []);
@@ -78,6 +83,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel }: EmployeeFormProps
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeSchema),
@@ -109,242 +115,192 @@ export function EmployeeForm({ employee, onSubmit, onCancel }: EmployeeFormProps
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-md" noValidate>
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="employeeNumber">
-            Employee Number
-          </label>
-          <input id="employeeNumber" className={fieldInput} {...register('employeeNumber')} />
-          {errors.employeeNumber && <p className={fieldError}>{errors.employeeNumber.message}</p>}
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="status">
-            Status
-          </label>
-          <select id="status" className={fieldInput} {...register('status')}>
+    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="employeeNumber">Employee Number</FieldLabel>
+          <Input id="employeeNumber" className="font-mono" {...register('employeeNumber')} />
+          <FieldError errors={[errors.employeeNumber]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="status">Status</FieldLabel>
+          <select id="status" className={selectClassName} {...register('status')}>
             {Object.entries(EMPLOYEE_STATUS_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </select>
-        </div>
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="firstName">
-            First Name
-          </label>
-          <input id="firstName" className={fieldInput} {...register('firstName')} />
-          {errors.firstName && <p className={fieldError}>{errors.firstName.message}</p>}
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="lastName">
-            Last Name
-          </label>
-          <input id="lastName" className={fieldInput} {...register('lastName')} />
-          {errors.lastName && <p className={fieldError}>{errors.lastName.message}</p>}
-        </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="firstName">First Name</FieldLabel>
+          <Input id="firstName" {...register('firstName')} />
+          <FieldError errors={[errors.firstName]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="lastName">Last Name</FieldLabel>
+          <Input id="lastName" {...register('lastName')} />
+          <FieldError errors={[errors.lastName]} />
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-3">
-        <div>
-          <label className={fieldLabel} htmlFor="idNumber">
-            SA ID Number
-          </label>
-          <input id="idNumber" className={fieldInput} {...register('idNumber')} />
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="taxNumber">
-            Tax Number (SARS)
-          </label>
-          <input id="taxNumber" className={fieldInput} {...register('taxNumber')} />
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="dateOfBirth">
-            Date of Birth
-          </label>
-          <input id="dateOfBirth" type="date" className={fieldInput} {...register('dateOfBirth')} />
-          <p className={fieldHint}>Drives the 65+/75+ PAYE rebate tier.</p>
-        </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Field>
+          <FieldLabel htmlFor="idNumber">SA ID Number</FieldLabel>
+          <Input id="idNumber" {...register('idNumber')} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="taxNumber">Tax Number (SARS)</FieldLabel>
+          <Input id="taxNumber" {...register('taxNumber')} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="dateOfBirth">Date of Birth</FieldLabel>
+          <Input id="dateOfBirth" type="date" {...register('dateOfBirth')} />
+          <FieldDescription>Drives the 65+/75+ PAYE rebate tier.</FieldDescription>
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="email">
-            Email
-          </label>
-          <input id="email" type="email" className={fieldInput} {...register('email')} />
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="phone">
-            Phone
-          </label>
-          <input id="phone" className={fieldInput} {...register('phone')} />
-        </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <Input id="email" type="email" {...register('email')} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="phone">Phone</FieldLabel>
+          <Input id="phone" {...register('phone')} />
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-3">
-        <div>
-          <label className={fieldLabel} htmlFor="employmentType">
-            Employment Type
-          </label>
-          <select id="employmentType" className={fieldInput} {...register('employmentType')}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Field>
+          <FieldLabel htmlFor="employmentType">Employment Type</FieldLabel>
+          <select id="employmentType" className={selectClassName} {...register('employmentType')}>
             {Object.entries(EMPLOYMENT_TYPE_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="payFrequency">
-            Pay Frequency
-          </label>
-          <select id="payFrequency" className={fieldInput} {...register('payFrequency')}>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="payFrequency">Pay Frequency</FieldLabel>
+          <select id="payFrequency" className={selectClassName} {...register('payFrequency')}>
             {Object.entries(PAY_FREQUENCY_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="startDate">
-            Start Date
-          </label>
-          <input id="startDate" type="date" className={fieldInput} {...register('startDate')} />
-          {errors.startDate && <p className={fieldError}>{errors.startDate.message}</p>}
-        </div>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="startDate">Start Date</FieldLabel>
+          <Input id="startDate" type="date" {...register('startDate')} />
+          <FieldError errors={[errors.startDate]} />
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="basicSalary">
-            Basic Salary per Pay Period ({PAYROLL_CURRENCY})
-          </label>
-          <input id="basicSalary" type="number" step="0.01" className={fieldInput} {...register('basicSalary')} />
-          {errors.basicSalary && <p className={fieldError}>{errors.basicSalary.message}</p>}
-        </div>
-        <div className="flex items-end pb-xs">
-          <label className="flex items-center gap-sm text-sm text-text-primary">
-            <input type="checkbox" {...register('uifExempt')} />
-            UIF exempt
-          </label>
-        </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="basicSalary">Basic Salary per Pay Period ({PAYROLL_CURRENCY})</FieldLabel>
+          <Input id="basicSalary" type="number" step="0.01" {...register('basicSalary')} />
+          <FieldError errors={[errors.basicSalary]} />
+        </Field>
+        <Controller
+          control={control}
+          name="uifExempt"
+          render={({ field }) => (
+            <Field orientation="horizontal" className="items-center pt-6">
+              <Checkbox id="uifExempt" checked={field.value} onCheckedChange={(value) => field.onChange(value === true)} />
+              <FieldLabel htmlFor="uifExempt">UIF exempt</FieldLabel>
+            </Field>
+          )}
+        />
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="bankName">
-            Bank Name
-          </label>
-          <input id="bankName" className={fieldInput} {...register('bankName')} />
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="bankAccountNumber">
-            Bank Account Number
-          </label>
-          <input id="bankAccountNumber" className={fieldInput} {...register('bankAccountNumber')} />
-        </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="bankName">Bank Name</FieldLabel>
+          <Input id="bankName" {...register('bankName')} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="bankAccountNumber">Bank Account Number</FieldLabel>
+          <Input id="bankAccountNumber" {...register('bankAccountNumber')} />
+        </Field>
       </div>
 
-      <fieldset className="rounded-md border border-border p-md">
-        <legend className="px-xs text-sm font-medium text-text-primary">Standard Allowances</legend>
-        <div className="flex flex-col gap-sm">
+      <fieldset className="rounded-lg border border-border p-4">
+        <legend className="px-1.5 text-sm font-medium">Standard Allowances</legend>
+        <div className="flex flex-col gap-3">
           {allowances.map((allowance, index) => (
-            <div key={allowance.id} className="flex flex-col gap-sm sm:flex-row sm:items-center">
-              <input
+            <div key={allowance.id} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Input
                 aria-label="Allowance label"
-                className={fieldInput}
                 placeholder="e.g. Travel Allowance"
                 value={allowance.label}
                 onChange={(e) => setAllowances((prev) => prev.map((a, i) => (i === index ? { ...a, label: e.target.value } : a)))}
               />
-              <input
+              <Input
                 aria-label="Allowance amount"
                 type="number"
                 step="0.01"
-                className={fieldInput}
                 placeholder="Amount"
                 value={allowance.amount}
-                onChange={(e) =>
-                  setAllowances((prev) => prev.map((a, i) => (i === index ? { ...a, amount: Number(e.target.value) } : a)))
-                }
+                onChange={(e) => setAllowances((prev) => prev.map((a, i) => (i === index ? { ...a, amount: Number(e.target.value) } : a)))}
               />
-              <label className="flex items-center gap-xs whitespace-nowrap text-sm">
-                <input
-                  type="checkbox"
-                  checked={allowance.taxable}
-                  onChange={(e) => setAllowances((prev) => prev.map((a, i) => (i === index ? { ...a, taxable: e.target.checked } : a)))}
-                />
+              <label className="flex items-center gap-1.5 whitespace-nowrap text-sm">
+                <Checkbox checked={allowance.taxable} onCheckedChange={(value) => setAllowances((prev) => prev.map((a, i) => (i === index ? { ...a, taxable: value === true } : a)))} />
                 Taxable
               </label>
-              <Button type="button" variant="ghost" onClick={() => setAllowances((prev) => prev.filter((_, i) => i !== index))}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setAllowances((prev) => prev.filter((_, i) => i !== index))}>
                 Remove
               </Button>
             </div>
           ))}
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setAllowances((prev) => [...prev, { id: newId('allow'), label: '', amount: 0, taxable: true }])}
-          >
+          <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => setAllowances((prev) => [...prev, { id: newId('allow'), label: '', amount: 0, taxable: true }])}>
             + Add Allowance
           </Button>
         </div>
       </fieldset>
 
-      <fieldset className="rounded-md border border-border p-md">
-        <legend className="px-xs text-sm font-medium text-text-primary">Standard Deductions</legend>
-        <div className="flex flex-col gap-sm">
+      <fieldset className="rounded-lg border border-border p-4">
+        <legend className="px-1.5 text-sm font-medium">Standard Deductions</legend>
+        <div className="flex flex-col gap-3">
           {deductions.map((deduction, index) => (
-            <div key={deduction.id} className="flex flex-col gap-sm sm:flex-row sm:items-center">
-              <input
+            <div key={deduction.id} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Input
                 aria-label="Deduction label"
-                className={fieldInput}
                 placeholder="e.g. Pension Fund"
                 value={deduction.label}
                 onChange={(e) => setDeductions((prev) => prev.map((d, i) => (i === index ? { ...d, label: e.target.value } : d)))}
               />
-              <input
+              <Input
                 aria-label="Deduction amount"
                 type="number"
                 step="0.01"
-                className={fieldInput}
                 placeholder="Amount"
                 value={deduction.amount}
-                onChange={(e) =>
-                  setDeductions((prev) => prev.map((d, i) => (i === index ? { ...d, amount: Number(e.target.value) } : d)))
-                }
+                onChange={(e) => setDeductions((prev) => prev.map((d, i) => (i === index ? { ...d, amount: Number(e.target.value) } : d)))}
               />
-              <label className="flex items-center gap-xs whitespace-nowrap text-sm">
-                <input
-                  type="checkbox"
-                  checked={deduction.preTax}
-                  onChange={(e) => setDeductions((prev) => prev.map((d, i) => (i === index ? { ...d, preTax: e.target.checked } : d)))}
-                />
+              <label className="flex items-center gap-1.5 whitespace-nowrap text-sm">
+                <Checkbox checked={deduction.preTax} onCheckedChange={(value) => setDeductions((prev) => prev.map((d, i) => (i === index ? { ...d, preTax: value === true } : d)))} />
                 Pre-tax
               </label>
-              <Button type="button" variant="ghost" onClick={() => setDeductions((prev) => prev.filter((_, i) => i !== index))}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setDeductions((prev) => prev.filter((_, i) => i !== index))}>
                 Remove
               </Button>
             </div>
           ))}
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setDeductions((prev) => [...prev, { id: newId('ded'), label: '', amount: 0, preTax: false }])}
-          >
+          <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => setDeductions((prev) => [...prev, { id: newId('ded'), label: '', amount: 0, preTax: false }])}>
             + Add Deduction
           </Button>
         </div>
       </fieldset>
 
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>

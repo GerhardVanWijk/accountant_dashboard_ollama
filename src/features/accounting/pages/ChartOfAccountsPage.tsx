@@ -1,29 +1,63 @@
 import { useMemo, useState } from 'react';
+import { ListTree, Loader2, Plus, Search } from 'lucide-react';
 import type { Account } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Icon } from '@/components/ui/Icon';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/shadcn/input-group';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/shadcn/select';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/shadcn/empty';
 import { useAccounts } from '../hooks/useAccounts';
 import { AccountTable } from '../components/AccountTable';
-import { AccountForm } from '../components/AccountForm';
-import { Modal } from '../components/Modal';
+import { AccountFormModal } from '../components/AccountFormModal';
 import { ACCOUNT_TYPES, defaultAccountFilters, type AccountFilters } from '../types/account.types';
 import { mapFormValuesToAccountPatch, type AccountFormSchema } from '../utils/accountFormSchema';
 
 type DialogState = { mode: 'create' } | { mode: 'edit'; account: Account } | null;
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const TYPE_FILTER_ITEMS = [
+  { value: 'all', label: 'All types' },
+  ...ACCOUNT_TYPES.map((t) => ({ value: t.value, label: t.label })),
+];
 
-/** Chart of Accounts — route `/accounting/coa` (docs/ROUTES.md). */
+const STATUS_FILTER_ITEMS = [
+  { value: 'all', label: 'Active and inactive' },
+  { value: 'active', label: 'Active only' },
+  { value: 'inactive', label: 'Inactive only' },
+];
+
+/**
+ * Chart of Accounts — route `/accounting/coa` (docs/ROUTES.md). Real
+ * useAccounts()/AccountService data, v0 page shell (PageHeader/SectionCard)
+ * and controls, hierarchy table unchanged underneath (see AccountTable.tsx).
+ * v0's own Chart of Accounts mock additionally shows a per-category balance
+ * strip and a "Cost of Sales" category — the real domain has neither (no
+ * stored/computed per-account balance, and only the 5 SA-GAAP master types)
+ * so both are omitted here rather than invented; see the M3 report.
+ */
 export function ChartOfAccountsPage() {
   const { accounts, postedAccountIds, loading, error, refetch, createAccount, updateAccount, deleteAccount } =
     useAccounts();
   const [filters, setFilters] = useState<AccountFilters>(defaultAccountFilters);
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -42,6 +76,7 @@ export function ChartOfAccountsPage() {
 
   async function handleSubmit(values: AccountFormSchema): Promise<void> {
     setFormError(null);
+    setSubmitting(true);
     try {
       if (dialog?.mode === 'edit') {
         await updateAccount(dialog.account.id, mapFormValuesToAccountPatch(values));
@@ -51,6 +86,8 @@ export function ChartOfAccountsPage() {
       setDialog(null);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not save account.');
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -63,80 +100,126 @@ export function ChartOfAccountsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Chart of Accounts</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            The general ledger's account structure — Assets, Liabilities, Equity, Revenue, and Expenses.
-          </p>
+    <>
+      <PageHeader
+        title="Chart of accounts"
+        description="The general ledger's account structure — Assets, Liabilities, Equity, Revenue, and Expenses, in SA GAAP order."
+        actions={
+          <Button
+            size="sm"
+            onClick={() => {
+              setFormError(null);
+              setDialog({ mode: 'create' });
+            }}
+          >
+            <Plus data-icon="inline-start" />
+            New account
+          </Button>
+        }
+      />
+
+      <SectionCard bodyClassName="p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <InputGroup className="w-full sm:max-w-72">
+            <InputGroupAddon>
+              <Search />
+            </InputGroupAddon>
+            <InputGroupInput
+              value={filters.search}
+              placeholder="Search by code or name…"
+              aria-label="Search accounts"
+              onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+            />
+          </InputGroup>
+
+          <Select
+            items={TYPE_FILTER_ITEMS}
+            value={filters.type}
+            onValueChange={(value) => setFilters((f) => ({ ...f, type: value as AccountFilters['type'] }))}
+          >
+            <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-40" aria-label="Filter by master type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {TYPE_FILTER_ITEMS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+
+          <Select
+            items={STATUS_FILTER_ITEMS}
+            value={filters.status}
+            onValueChange={(value) => setFilters((f) => ({ ...f, status: value as AccountFilters['status'] }))}
+          >
+            <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-40" aria-label="Filter by status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {STATUS_FILTER_ITEMS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => {
-            setFormError(null);
-            setDialog({ mode: 'create' });
-          }}
-        >
-          <Icon name="add" size={16} />
-          New Account
-        </Button>
-      </div>
+      </SectionCard>
 
-      <Card className="flex flex-col gap-sm md:flex-row md:items-center">
-        <label className="flex flex-1 flex-col gap-xs text-sm">
-          <span className="sr-only">Search accounts</span>
-          <input
-            aria-label="Search accounts"
-            className={inputClass}
-            placeholder="Search by code or name…"
-            value={filters.search}
-            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-          />
-        </label>
-        <select
-          aria-label="Filter by master type"
-          className={inputClass}
-          value={filters.type}
-          onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value as AccountFilters['type'] }))}
-        >
-          <option value="all">All Types</option>
-          {ACCOUNT_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Filter by status"
-          className={inputClass}
-          value={filters.status}
-          onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value as AccountFilters['status'] }))}
-        >
-          <option value="all">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
-      </Card>
+      {loading && (
+        <div role="status" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading chart of accounts…</p>
+        </div>
+      )}
 
-      {loading && <Spinner label="Loading chart of accounts…" />}
-
-      {!loading && error && <ErrorState message={error.message} onRetry={refetch} />}
+      {!loading && error && (
+        <div role="alert" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
+          <p className="text-sm text-destructive">{error.message}</p>
+          <Button variant="outline" size="sm" onClick={refetch}>
+            Try again
+          </Button>
+        </div>
+      )}
 
       {!loading && !error && accounts.length === 0 && (
-        <EmptyState
-          title="No accounts yet"
-          message="Add your first ledger account to start building the chart."
-          action={
-            <Button variant="primary" onClick={() => setDialog({ mode: 'create' })}>
-              New Account
-            </Button>
-          }
-        />
+        <SectionCard>
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <ListTree />
+              </EmptyMedia>
+              <EmptyTitle>No accounts yet</EmptyTitle>
+              <EmptyDescription>Add your first ledger account to start building the chart.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+                <Plus data-icon="inline-start" />
+                New account
+              </Button>
+            </EmptyContent>
+          </Empty>
+        </SectionCard>
       )}
 
       {!loading && !error && accounts.length > 0 && filtered.length === 0 && (
-        <EmptyState title="No matching accounts" message="Try adjusting your search or filters." />
+        <SectionCard>
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Search />
+              </EmptyMedia>
+              <EmptyTitle>No matching accounts</EmptyTitle>
+              <EmptyDescription>Adjust the search or filters to widen the view.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </SectionCard>
       )}
 
       {!loading && !error && filtered.length > 0 && (
@@ -154,22 +237,18 @@ export function ChartOfAccountsPage() {
       )}
 
       {dialog && (
-        <Modal title={dialog.mode === 'edit' ? `Edit ${dialog.account.name}` : 'New Account'} onClose={() => setDialog(null)}>
-          {formError && (
-            <p role="alert" className="mb-md rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
-              {formError}
-            </p>
-          )}
-          <AccountForm
-            initialValues={dialog.mode === 'edit' ? dialog.account : undefined}
-            accounts={accounts}
-            hasPostings={dialog.mode === 'edit' ? postedAccountIds.has(dialog.account.id) : false}
-            submitLabel={dialog.mode === 'edit' ? 'Save Changes' : 'Create Account'}
-            onCancel={() => setDialog(null)}
-            onSubmit={handleSubmit}
-          />
-        </Modal>
+        <AccountFormModal
+          title={dialog.mode === 'edit' ? `Edit ${dialog.account.name}` : 'New account'}
+          initialValues={dialog.mode === 'edit' ? dialog.account : undefined}
+          accounts={accounts}
+          hasPostings={dialog.mode === 'edit' ? postedAccountIds.has(dialog.account.id) : false}
+          submitLabel={dialog.mode === 'edit' ? 'Save changes' : 'Create account'}
+          submitting={submitting}
+          submitError={formError}
+          onClose={() => setDialog(null)}
+          onSubmit={handleSubmit}
+        />
       )}
-    </div>
+    </>
   );
 }

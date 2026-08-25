@@ -1,22 +1,29 @@
 import { useState } from 'react';
+import { Loader2, Plus } from 'lucide-react';
 import type { Product } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useProducts } from '../hooks/useProducts';
 import { ProductsTable } from '../components/ProductsTable';
 import { ProductForm } from '../components/ProductForm';
-import { Modal } from '../components/Modal';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 type DialogState = { mode: 'create' } | { mode: 'edit'; product: Product } | null;
 
-/** Products & Services directory — route `/inventory/products` (docs/ROUTES.md). */
+/**
+ * Products & Services directory — route `/inventory/products`. Real
+ * useProducts()/productService data throughout. Re-skinned onto v0's
+ * PageHeader/SectionCard/DataTable/Dialog (M8), matching
+ * accounting-v0-frontend's Inventory page shape.
+ */
 export function ProductsPage() {
   const { products, loading, error, refetch, createProduct, updateProduct, deleteProduct } = useProducts();
   const [dialog, setDialog] = useState<DialogState>(null);
+  const canCreate = useCanAccess('inventory', 'create');
+  const canUpdate = useCanAccess('inventory', 'update');
+  const canDelete = useCanAccess('inventory', 'delete');
 
   const handleSubmit = async (data: CreateProductDTO | UpdateProductDTO) => {
     if (dialog?.mode === 'edit') {
@@ -34,45 +41,53 @@ export function ProductsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Products & Services</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Item catalog — SKUs, pricing, tax, and stock status. /inventory/products
-          </p>
-        </div>
-        <Button onClick={() => setDialog({ mode: 'create' })}>New Product</Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Products & services"
+        description="Item catalogue — SKUs, pricing, tax and stock status."
+        actions={
+          canCreate ? (
+            <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+              <Plus data-icon="inline-start" />
+              New product
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <Card>
-        {loading && <Spinner label="Loading products…" />}
-        {!loading && error && <ErrorState message={error.message} onRetry={refetch} />}
-        {!loading && !error && products.length === 0 && (
-          <EmptyState
-            title="No products yet"
-            message="Add your first product or service to start tracking stock."
-            action={<Button onClick={() => setDialog({ mode: 'create' })}>New Product</Button>}
-          />
-        )}
-        {!loading && !error && products.length > 0 && (
+      {loading && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading products…</p>
+        </div>
+      )}
+      {!loading && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {!loading && !error && (
+        <SectionCard title="Stock on hand" description="Quantities, unit cost and the value carried for each line.">
           <ProductsTable
             products={products}
-            onEdit={(product) => setDialog({ mode: 'edit', product })}
-            onDelete={handleDelete}
+            onEdit={canUpdate ? (product) => setDialog({ mode: 'edit', product }) : undefined}
+            onDelete={canDelete ? (product) => void handleDelete(product) : undefined}
           />
-        )}
-      </Card>
-
-      {dialog && (
-        <Modal title={dialog.mode === 'edit' ? 'Edit Product' : 'New Product'} onClose={() => setDialog(null)}>
-          <ProductForm
-            product={dialog.mode === 'edit' ? dialog.product : undefined}
-            onSubmit={handleSubmit}
-            onCancel={() => setDialog(null)}
-          />
-        </Modal>
+        </SectionCard>
       )}
+
+      <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{dialog?.mode === 'edit' ? 'Edit Product' : 'New Product'}</DialogTitle>
+          </DialogHeader>
+          {dialog && <ProductForm product={dialog.mode === 'edit' ? dialog.product : undefined} onSubmit={handleSubmit} onCancel={() => setDialog(null)} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

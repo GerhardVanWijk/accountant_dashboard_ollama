@@ -2,9 +2,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { RelatedParty, RelatedPartyTransaction } from '@/types/relatedParty';
-import { Button } from '@/components/ui/Button';
-import { fieldError, fieldInput, fieldLabel } from './formStyles';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
 import type { CreateRelatedPartyTransactionDTO, UpdateRelatedPartyTransactionDTO } from '../services';
+
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function isValidNumber(value: string): boolean {
   return value.trim() !== '' && !Number.isNaN(Number(value));
@@ -42,7 +46,8 @@ function toDefaultValues(transaction?: RelatedPartyTransaction, relatedParties: 
 /**
  * Create/edit form for a Related Party Transaction (react-hook-form +
  * zod), mirroring RelatedPartyForm.tsx's shape. `natureOfTransaction` is
- * free text (no fixed enum, §110 — see relatedParty.ts's doc comment).
+ * free text (no fixed enum). Re-skinned onto v0's Field/Input/Textarea
+ * (M13); validation and submit wiring unchanged.
  */
 export function RelatedPartyTransactionForm({ transaction, relatedParties, onSubmit, onCancel }: RelatedPartyTransactionFormProps) {
   const {
@@ -66,12 +71,10 @@ export function RelatedPartyTransactionForm({ transaction, relatedParties, onSub
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-md" noValidate>
-      <div>
-        <label className={fieldLabel} htmlFor="relatedPartyId">
-          Related Party
-        </label>
-        <select id="relatedPartyId" className={fieldInput} {...register('relatedPartyId')}>
+    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+      <Field>
+        <FieldLabel htmlFor="relatedPartyId">Related Party</FieldLabel>
+        <select id="relatedPartyId" className={selectClassName} {...register('relatedPartyId')}>
           {relatedParties.length === 0 && <option value="">No related parties yet</option>}
           {relatedParties.map((party) => (
             <option key={party.id} value={party.id}>
@@ -79,60 +82,40 @@ export function RelatedPartyTransactionForm({ transaction, relatedParties, onSub
             </option>
           ))}
         </select>
-        {errors.relatedPartyId && <p className={fieldError}>{errors.relatedPartyId.message}</p>}
+        <FieldError errors={[errors.relatedPartyId]} />
+      </Field>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="transactionDate">Transaction Date</FieldLabel>
+          <Input id="transactionDate" type="date" {...register('transactionDate')} />
+          <FieldError errors={[errors.transactionDate]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="amount">Amount</FieldLabel>
+          <Input id="amount" type="number" step="0.01" {...register('amount')} />
+          <FieldError errors={[errors.amount]} />
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="transactionDate">
-            Transaction Date
-          </label>
-          <input id="transactionDate" type="date" className={fieldInput} {...register('transactionDate')} />
-          {errors.transactionDate && <p className={fieldError}>{errors.transactionDate.message}</p>}
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="amount">
-            Amount
-          </label>
-          <input id="amount" type="number" step="0.01" className={fieldInput} {...register('amount')} />
-          {errors.amount && <p className={fieldError}>{errors.amount.message}</p>}
-        </div>
-      </div>
+      <Field>
+        <FieldLabel htmlFor="natureOfTransaction">Nature of Transaction</FieldLabel>
+        <Input id="natureOfTransaction" placeholder='e.g. "Loan advanced", "Consulting fee", "Rental of premises"' {...register('natureOfTransaction')} />
+        <FieldError errors={[errors.natureOfTransaction]} />
+      </Field>
 
-      <div>
-        <label className={fieldLabel} htmlFor="natureOfTransaction">
-          Nature of Transaction
-        </label>
-        <input
-          id="natureOfTransaction"
-          className={fieldInput}
-          placeholder='e.g. "Loan advanced", "Consulting fee", "Rental of premises"'
-          {...register('natureOfTransaction')}
-        />
-        {errors.natureOfTransaction && <p className={fieldError}>{errors.natureOfTransaction.message}</p>}
-      </div>
+      <Field>
+        <FieldLabel htmlFor="description">Description</FieldLabel>
+        <Textarea id="description" rows={2} {...register('description')} />
+      </Field>
 
-      <div>
-        <label className={fieldLabel} htmlFor="description">
-          Description
-        </label>
-        <textarea id="description" rows={2} className={fieldInput} {...register('description')} />
-      </div>
+      <Field>
+        <FieldLabel htmlFor="sourceReference">Source Reference (optional)</FieldLabel>
+        <Input id="sourceReference" placeholder="e.g. an Invoice or Bill number, for cross-checking only" {...register('sourceReference')} />
+      </Field>
 
-      <div>
-        <label className={fieldLabel} htmlFor="sourceReference">
-          Source Reference (optional)
-        </label>
-        <input
-          id="sourceReference"
-          className={fieldInput}
-          placeholder="e.g. an Invoice or Bill number, for cross-checking only"
-          {...register('sourceReference')}
-        />
-      </div>
-
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting || relatedParties.length === 0}>

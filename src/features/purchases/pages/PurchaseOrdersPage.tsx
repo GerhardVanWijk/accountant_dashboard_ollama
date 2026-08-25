@@ -1,21 +1,29 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Loader2, Plus } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { formatCurrency } from '@/lib/app/format';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { usePurchaseOrders, usePurchaseOrderMutations, useBillMutations } from '../hooks';
-import { PurchaseOrderList, PurchaseOrderDetail, PurchaseOrderForm, Modal } from '../components';
+import { PurchaseOrderList } from '../components/PurchaseOrderList';
+import { PurchaseOrderDetail } from '../components/PurchaseOrderDetail';
+import { PurchaseOrderForm } from '../components/PurchaseOrderForm';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 import type { CreatePurchaseOrderDTO } from '../services';
 
+type View = { type: 'list' } | { type: 'detail'; id: string };
+
 /**
- * Purchase Orders page: list/detail toggle + create modal, following
- * BillsPage's shape. "Convert to Bill" composes two already-built
- * capabilities rather than adding new business logic here:
- * purchaseOrderService.convertToBill() (via usePurchaseOrderMutations)
- * builds the Bill draft, then billService.createBill()/postBill() (via
- * useBillMutations) persists it and posts the real GL entry — postBill()
- * only accepts a 'draft' bill, so the draft's status is forced to 'draft'
- * before it's created, guaranteeing the real GL validation in
- * BillService.postBill() always runs (never bypassed).
+ * Purchase Orders — route `/purchases/orders`. Re-skinned onto v0's
+ * PageHeader/SectionCard/Dialog (M8), following BillsPage's shape.
+ * "Convert to Bill" composes two already-built capabilities rather than
+ * adding new business logic here: purchaseOrderService.convertToBill()
+ * builds the Bill draft, then billService.createBill()/postBill()
+ * persists it and posts the real GL entry — unchanged from before the
+ * port.
  */
 export function PurchaseOrdersPage() {
   const { purchaseOrders, isLoading, error, refetch } = usePurchaseOrders();
@@ -24,17 +32,16 @@ export function PurchaseOrdersPage() {
   const billMutations = useBillMutations();
   const navigate = useNavigate();
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [view, setView] = useState<View>({ type: 'list' });
+  const [showCreate, setShowCreate] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const selectedPurchaseOrder = purchaseOrders.find((po) => po.id === selectedId);
-  const suppliersMap = useMemo(
-    () => Object.fromEntries(suppliers.map((s) => [s.id, s.name])),
-    [suppliers],
-  );
+  const detailPo = view.type === 'detail' ? purchaseOrders.find((po) => po.id === view.id) : undefined;
+  const suppliersMap = useMemo(() => Object.fromEntries(suppliers.map((s) => [s.id, s.name])), [suppliers]);
 
   const isBusy = poMutations.isLoading || billMutations.isLoading;
+  const openOrders = purchaseOrders.filter((po) => po.status !== 'received' && po.status !== 'cancelled');
+  const totalValue = purchaseOrders.reduce((sum, po) => sum + po.total, 0);
 
   async function runAction(action: () => Promise<unknown>) {
     setActionError(null);
@@ -62,73 +69,81 @@ export function PurchaseOrdersPage() {
   async function handleCreate(data: CreatePurchaseOrderDTO) {
     await poMutations.createPurchaseOrder(data);
     await refetch();
-    setShowCreateModal(false);
-  }
-
-  if (selectedPurchaseOrder) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setSelectedId(null)}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-secondary text-text-primary hover:bg-secondary/80 transition-colors"
-          >
-            ← Back to Purchase Orders
-          </button>
-          <h1 className="text-2xl font-bold">Purchase Order Details</h1>
-        </div>
-        {actionError && (
-          <p role="alert" className="rounded-md border border-danger bg-danger/10 px-4 py-2 text-sm text-danger">
-            {actionError}
-          </p>
-        )}
-        <PurchaseOrderDetail
-          purchaseOrder={selectedPurchaseOrder}
-          suppliersMap={suppliersMap}
-          onClose={() => setSelectedId(null)}
-          onSend={(id) => void runAction(() => poMutations.sendPurchaseOrder(id))}
-          onRecordReceipt={(id) => void runAction(() => poMutations.recordReceipt(id))}
-          onCancel={(id) => void runAction(() => poMutations.updatePurchaseOrder(id, { status: 'cancelled' }))}
-          onConvertToBill={(id) => void handleConvertToBill(id)}
-          isBusy={isBusy}
-        />
-      </div>
-    );
+    setShowCreate(false);
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Purchase Orders</h1>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 text-sm font-medium rounded-lg bg-primary text-text-on-primary hover:bg-primary/90 transition-colors"
-        >
-          + New Purchase Order
-        </button>
-      </div>
-      {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-4 py-2 text-sm text-danger">
-          {actionError}
-        </p>
-      )}
-      <PurchaseOrderList
-        purchaseOrders={purchaseOrders}
-        onSelect={setSelectedId}
-        isLoading={isLoading}
-        error={error?.message}
-      />
-
-      {showCreateModal && (
-        <Modal title="New Purchase Order" onClose={() => setShowCreateModal(false)} wide>
-          <PurchaseOrderForm
-            suppliers={suppliers}
-            defaultPoNumber={nextDocumentNumber(purchaseOrders.map((po) => po.poNumber), 'PO')}
-            onSubmit={handleCreate}
-            onCancel={() => setShowCreateModal(false)}
+    <>
+      {view.type === 'list' && (
+        <div className="flex flex-col gap-6">
+          <PageHeader
+            title="Purchase Orders"
+            description="Orders placed with suppliers, from draft through to a converted bill."
+            actions={
+              <Button size="sm" onClick={() => setShowCreate(true)}>
+                <Plus data-icon="inline-start" />
+                New purchase order
+              </Button>
+            }
           />
-        </Modal>
+
+          <SectionCard>
+            <div className="grid gap-6 sm:grid-cols-3">
+              <FigureBlock label="Total orders" value={String(purchaseOrders.length)} />
+              <FigureBlock label="Total value" value={formatCurrency(totalValue)} hint="All orders" />
+              <FigureBlock label="Open" value={String(openOrders.length)} hint="Not yet received or cancelled" tone={openOrders.length > 0 ? 'warning' : 'default'} />
+            </div>
+          </SectionCard>
+
+          {actionError && (
+            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {actionError}
+            </p>
+          )}
+
+          {isLoading && (
+            <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+              <p className="text-sm">Loading purchase orders…</p>
+            </div>
+          )}
+          {!isLoading && error && (
+            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error.message}
+            </div>
+          )}
+          {!isLoading && !error && <PurchaseOrderList purchaseOrders={purchaseOrders} suppliersMap={suppliersMap} onSelect={(id) => setView({ type: 'detail', id })} />}
+        </div>
       )}
-    </div>
+
+      {view.type === 'detail' && detailPo && (
+        <div className="flex flex-col gap-6">
+          {actionError && (
+            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {actionError}
+            </p>
+          )}
+          <PurchaseOrderDetail
+            purchaseOrder={detailPo}
+            suppliersMap={suppliersMap}
+            onClose={() => setView({ type: 'list' })}
+            onSend={(id) => void runAction(() => poMutations.sendPurchaseOrder(id))}
+            onRecordReceipt={(id) => void runAction(() => poMutations.recordReceipt(id))}
+            onCancel={(id) => void runAction(() => poMutations.updatePurchaseOrder(id, { status: 'cancelled' }))}
+            onConvertToBill={(id) => void handleConvertToBill(id)}
+            isBusy={isBusy}
+          />
+        </div>
+      )}
+
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>New Purchase Order</DialogTitle>
+          </DialogHeader>
+          <PurchaseOrderForm suppliers={suppliers} defaultPoNumber={nextDocumentNumber(purchaseOrders.map((po) => po.poNumber), 'PO')} onSubmit={handleCreate} onCancel={() => setShowCreate(false)} />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

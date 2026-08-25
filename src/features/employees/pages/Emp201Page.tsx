@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { cn } from '@/utils/cn';
+import { Loader2 } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock, Amount } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { formatCurrency } from '@/lib/app/format';
+import { cn } from '@/lib/utils';
 import { useEmp201Report } from '../hooks/useEmp201Report';
 import type { PayrollControlAccountCheck } from '../services';
 
@@ -23,49 +22,48 @@ function endOfMonth(year: number, month: number): Date {
 
 function ReconciliationCard({ label, check }: { label: string; check: PayrollControlAccountCheck }) {
   return (
-    <Card className="flex flex-col gap-sm">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-text-primary">{label}</h3>
-        <span
-          className={cn(
-            'rounded-full px-sm py-0.5 text-xs font-semibold',
-            check.isReconciled ? 'bg-positive/10 text-positive' : 'bg-danger/10 text-danger',
-          )}
-        >
+    <SectionCard
+      title={label}
+      actions={
+        <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', check.isReconciled ? 'bg-positive/15 text-positive' : 'bg-destructive/15 text-destructive')}>
           {check.isReconciled ? 'Reconciled' : 'Variance detected'}
         </span>
-      </div>
-      <dl className="grid grid-cols-3 gap-sm text-sm">
+      }
+    >
+      <dl className="grid grid-cols-3 gap-4 text-sm">
         <div>
-          <dt className="text-xs text-text-muted uppercase tracking-wide">GL Posted This Period</dt>
-          <dd className="mt-xs font-mono tabular-nums">
-            <FinancialNumber value={check.controlAccountMovement} format={formatCurrency} showFlash={false} />
+          <dt className="text-xs tracking-wide text-muted-foreground uppercase">GL Posted This Period</dt>
+          <dd className="mt-1">
+            <Amount value={check.controlAccountMovement} plain className="text-sm" />
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-text-muted uppercase tracking-wide">Return Total</dt>
-          <dd className="mt-xs font-mono tabular-nums">
-            <FinancialNumber value={check.reportTotal} format={formatCurrency} showFlash={false} />
+          <dt className="text-xs tracking-wide text-muted-foreground uppercase">Return Total</dt>
+          <dd className="mt-1">
+            <Amount value={check.reportTotal} plain className="text-sm" />
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-text-muted uppercase tracking-wide">Variance</dt>
-          <dd className={cn('mt-xs font-mono tabular-nums', !check.isReconciled && 'text-danger font-semibold')}>
-            <FinancialNumber value={check.variance} format={formatCurrency} showFlash={false} />
+          <dt className="text-xs tracking-wide text-muted-foreground uppercase">Variance</dt>
+          <dd className="mt-1">
+            <Amount value={check.variance} plain className={cn('text-sm', !check.isReconciled && 'font-semibold text-destructive')} />
           </dd>
         </div>
       </dl>
-    </Card>
+    </SectionCard>
   );
 }
 
 /**
- * Monthly EMP201-shaped statutory payroll return for a chosen month — PAYE,
- * UIF (employee + employer), and SDL from real posted payroll runs, plus a
- * reconciliation against what was actually posted to each of the four
- * payroll liability control accounts. Deliberately NOT labelled with
- * official SARS EMP201 field numbers — see emp201Service.ts's doc comment.
- * Route `/payroll/emp201` (docs/ROUTES.md).
+ * Monthly EMP201-shaped statutory payroll return for a chosen month — real
+ * `useEmp201Report()`/`emp201Service` output: PAYE, UIF (employee +
+ * employer), and SDL from real posted payroll runs, plus a reconciliation
+ * against what was actually posted to each of the four payroll liability
+ * control accounts. Deliberately NOT labelled with official SARS EMP201
+ * field numbers, and does not submit anything to SARS — see
+ * `emp201Service.ts`'s doc comment. Route `/payroll/emp201`. Re-skinned
+ * onto v0's PageHeader/SectionCard/FigureBlock (M13); no PAYE/UIF/SDL math
+ * performed here.
  */
 export function Emp201Page() {
   const now = new Date();
@@ -85,96 +83,92 @@ export function Emp201Page() {
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">EMP201 Monthly Return</h1>
-          <p className="mt-xs text-sm text-text-secondary">PAYE/UIF/SDL summary for the selected period, from real posted payroll runs.</p>
-        </div>
-        <div className="flex items-center gap-sm">
-          <label className="flex flex-col gap-xs text-sm">
-            <span className="sr-only">Period</span>
-            <input
-              type="month"
-              aria-label="EMP201 period"
-              className="rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              value={monthInputValue(periodStart)}
-              onChange={(e) => handleMonthChange(e.target.value)}
-            />
-          </label>
-          <Button variant="ghost" onClick={refetch}>
-            Refresh
-          </Button>
-        </div>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="EMP201 monthly return"
+        description="PAYE/UIF/SDL summary for the selected period, from real posted payroll runs."
+        actions={
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm">
+              <span className="sr-only">Period</span>
+              <input
+                type="month"
+                aria-label="EMP201 period"
+                value={monthInputValue(periodStart)}
+                onChange={(e) => handleMonthChange(e.target.value)}
+                className="h-9 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              />
+            </label>
+            <Button variant="outline" onClick={refetch}>
+              Refresh
+            </Button>
+          </div>
+        }
+      />
 
-      {loading && <Spinner label="Computing EMP201 return…" />}
-      {!loading && error && <ErrorState message={error.message} onRetry={refetch} />}
+      {loading && (
+        <div role="status" className="flex min-h-[30vh] items-center justify-center gap-2 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <span className="text-sm">Computing EMP201 return…</span>
+        </div>
+      )}
+      {!loading && error && (
+        <SectionCard>
+          <p role="alert" className="text-sm text-destructive">
+            {error.message}
+          </p>
+          <Button variant="outline" className="mt-3" onClick={refetch}>
+            Retry
+          </Button>
+        </SectionCard>
+      )}
 
       {!loading && !error && report && (
         <>
-          <div className="grid grid-cols-1 gap-md sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">PAYE</p>
-              <p className="mt-xs text-xl font-semibold tabular-nums">
-                <FinancialNumber value={report.paye} format={formatCurrency} showFlash={false} />
-              </p>
-            </Card>
-            <Card>
-              <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">UIF (Employee + Employer)</p>
-              <p className="mt-xs text-xl font-semibold tabular-nums">
-                <FinancialNumber value={report.totalUif} format={formatCurrency} showFlash={false} />
-              </p>
-            </Card>
-            <Card>
-              <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">SDL</p>
-              <p className="mt-xs text-xl font-semibold tabular-nums">
-                <FinancialNumber value={report.sdl} format={formatCurrency} showFlash={false} />
-              </p>
-            </Card>
-            <Card>
-              <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">Statutory Liability Due</p>
-              <p className="mt-xs text-xl font-semibold tabular-nums">
-                <FinancialNumber value={report.statutoryLiability} format={formatCurrency} showFlash={false} />
-              </p>
-            </Card>
-          </div>
+          <SectionCard>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              <FigureBlock label="PAYE" value={formatCurrency(report.paye)} />
+              <FigureBlock label="UIF (Employee + Employer)" value={formatCurrency(report.totalUif)} />
+              <FigureBlock label="SDL" value={formatCurrency(report.sdl)} />
+              <FigureBlock label="Statutory Liability Due" value={formatCurrency(report.statutoryLiability)} tone="warning" />
+            </div>
+          </SectionCard>
 
-          <Card>
-            <h3 className="mb-sm text-sm font-semibold text-text-primary">Detail</h3>
-            <dl className="grid grid-cols-2 gap-md text-sm sm:grid-cols-3">
+          <SectionCard title="Detail">
+            <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
               <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">UIF - Employee</dt>
-                <dd className="mt-xs font-mono tabular-nums">
-                  <FinancialNumber value={report.uifEmployee} format={formatCurrency} showFlash={false} />
+                <dt className="text-xs tracking-wide text-muted-foreground uppercase">UIF - Employee</dt>
+                <dd className="mt-1">
+                  <Amount value={report.uifEmployee} plain className="text-sm" />
                 </dd>
               </div>
               <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">UIF - Employer</dt>
-                <dd className="mt-xs font-mono tabular-nums">
-                  <FinancialNumber value={report.uifEmployer} format={formatCurrency} showFlash={false} />
+                <dt className="text-xs tracking-wide text-muted-foreground uppercase">UIF - Employer</dt>
+                <dd className="mt-1">
+                  <Amount value={report.uifEmployer} plain className="text-sm" />
                 </dd>
               </div>
               <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Employees Paid</dt>
-                <dd className="mt-xs font-mono tabular-nums">{report.employeeCount}</dd>
+                <dt className="text-xs tracking-wide text-muted-foreground uppercase">Employees Paid</dt>
+                <dd className="figure mt-1 text-sm tabular-nums">{report.employeeCount}</dd>
               </div>
               <div>
-                <dt className="text-xs text-text-muted uppercase tracking-wide">Payroll Runs Posted</dt>
-                <dd className="mt-xs font-mono tabular-nums">{report.runCount}</dd>
+                <dt className="text-xs tracking-wide text-muted-foreground uppercase">Payroll Runs Posted</dt>
+                <dd className="figure mt-1 text-sm tabular-nums">{report.runCount}</dd>
               </div>
             </dl>
-          </Card>
+          </SectionCard>
 
           {reconciliation && (
-            <div>
-              <h2 className="mb-sm text-lg font-semibold text-text-primary">GL Reconciliation</h2>
-              <p className="mb-md text-sm text-text-secondary">
-                Confirms what was actually posted to the PAYE/UIF/SDL control accounts this period matches this
-                return (SA_ACCOUNTING_MASTER_SPEC.md §58/§60 — each statutory type reconciled separately, never
-                combined).
-              </p>
-              <div className="grid grid-cols-1 gap-md md:grid-cols-2">
+            <div className="flex flex-col gap-3">
+              <div>
+                <h2 className="text-base font-semibold">GL Reconciliation</h2>
+                <p className="text-sm text-muted-foreground">
+                  Confirms what was actually posted to the PAYE/UIF/SDL control accounts this period matches this
+                  return (each statutory type reconciled separately, never combined).
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <ReconciliationCard label="PAYE" check={reconciliation.paye} />
                 <ReconciliationCard label="UIF - Employee" check={reconciliation.uifEmployee} />
                 <ReconciliationCard label="UIF - Employer" check={reconciliation.uifEmployer} />

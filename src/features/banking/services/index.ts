@@ -3,7 +3,7 @@ import { BankTransactionService } from './bankTransactionService';
 import { BankReconciliationService } from './bankReconciliationService';
 import { SupabaseBankAccountRepository } from '../repositories/SupabaseBankAccountRepository';
 import { SupabaseBankTransactionRepository } from '../repositories/SupabaseBankTransactionRepository';
-import { MockBankReconciliationRepository } from '../repositories/MockBankReconciliationRepository';
+import { SupabaseBankReconciliationRepository } from '../repositories/SupabaseBankReconciliationRepository';
 import { journalEntryService } from '@/features/accounting/services';
 import { auditLogService } from '@/services/auditLogService';
 import { supabase } from '@/config/supabase';
@@ -32,16 +32,14 @@ export { BankReconciliationService } from './bankReconciliationService';
  * anything under src/features/accounting, per this dispatch's scope
  * boundary.
  *
- * `bankAccountRepository` (master data, Phase D) and `bankTransactionRepository`
- * (transactional, Phase E) are both Supabase-backed now
- * (docs/SUPABASE_MIGRATION_GUIDE.md). `bankReconciliationRepository` stays
- * Mock — reconciliations weren't in this phase's scope (see the Phase E
- * migration's note on `bank_transactions.reconciliation_id` having no FK
- * target yet).
+ * `bankAccountRepository` (master data, Phase D), `bankTransactionRepository`
+ * (transactional, Phase E), and `bankReconciliationRepository`
+ * (reconciliation persistence — `reconciliations` table, RLS append-only,
+ * see docs/SUPABASE_MIGRATION_GUIDE.md) are all Supabase-backed.
  */
 const bankAccountRepository = new SupabaseBankAccountRepository(supabase);
 const bankTransactionRepository = new SupabaseBankTransactionRepository(supabase);
-const bankReconciliationRepository = new MockBankReconciliationRepository();
+const bankReconciliationRepository = new SupabaseBankReconciliationRepository(supabase);
 
 export const bankAccountService = new BankAccountService(bankAccountRepository, bankTransactionRepository);
 export const bankTransactionService = new BankTransactionService(

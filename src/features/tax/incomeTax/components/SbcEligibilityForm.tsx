@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { fieldError, fieldHint, fieldInput, fieldLabel } from './formStyles';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface SbcEligibilityFormProps {
   currentValue: boolean;
@@ -10,10 +13,12 @@ export interface SbcEligibilityFormProps {
 
 /**
  * Sets Company.isSbcEligible via CompanyService.setSbcEligibility() — a
- * manual, reason-required override (§53), mirroring
- * setReportingFramework()'s "no automatic determination" pattern exactly.
- * This form does NOT attempt to determine eligibility itself; it only
- * records that an accountant/admin confirmed it and why.
+ * manual, reason-required override, mirroring setReportingFramework()'s
+ * "no automatic determination" pattern exactly. This form does NOT
+ * attempt to determine eligibility itself; it only records that an
+ * accountant/admin confirmed it and why. Re-skinned onto v0's
+ * Field/Textarea (M7); the audited-service call site and required-reason
+ * validation are unchanged.
  */
 export function SbcEligibilityForm({ currentValue, onSubmit, onCancel }: SbcEligibilityFormProps) {
   const [isEligible, setIsEligible] = useState(currentValue);
@@ -36,43 +41,36 @@ export function SbcEligibilityForm({ currentValue, onSubmit, onCancel }: SbcElig
   };
 
   return (
-    <div className="flex flex-col gap-md">
-      <p className="text-sm text-text-secondary">
-        SBC (Small Business Corporation) eligibility legislatively depends on shareholder composition, whether this
-        is a personal service company, and restrictions on holding shares in other companies (§53) — none of which
-        this app models. Confirm eligibility yourself before setting this flag; it is never auto-determined.
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        SBC (Small Business Corporation) eligibility legislatively depends on shareholder composition, whether this is a personal service company, and restrictions on holding shares in
+        other companies — none of which this app models. Confirm eligibility yourself before setting this flag; it is never auto-determined.
       </p>
-      <div>
-        <label className={fieldLabel} htmlFor="sbcEligible">
-          Is SBC-eligible?
-        </label>
-        <select
-          id="sbcEligible"
-          className={fieldInput}
-          value={isEligible ? 'yes' : 'no'}
-          onChange={(e) => setIsEligible(e.target.value === 'yes')}
-        >
+      <Field>
+        <FieldLabel htmlFor="sbcEligible">Is SBC-eligible?</FieldLabel>
+        <select id="sbcEligible" className={selectClassName} value={isEligible ? 'yes' : 'no'} onChange={(e) => setIsEligible(e.target.value === 'yes')}>
           <option value="no">No — standard corporate rate applies</option>
           <option value="yes">Yes — SBC brackets apply</option>
         </select>
-      </div>
-      <div>
-        <label className={fieldLabel} htmlFor="sbcReason">
-          Reason (required)
-        </label>
-        <textarea
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="sbcReason">Reason (required)</FieldLabel>
+        <Textarea
           id="sbcReason"
-          className={fieldInput}
           rows={3}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="e.g. Confirmed shareholder register: all natural persons, no other company holdings, gross income below threshold."
         />
-        {validationError && <p className={fieldError}>{validationError}</p>}
-        <p className={fieldHint}>Recorded to the audit trail together with this change.</p>
-      </div>
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+        {validationError && (
+          <p role="alert" className="text-sm text-destructive">
+            {validationError}
+          </p>
+        )}
+        <FieldDescription>Recorded to the audit trail together with this change.</FieldDescription>
+      </Field>
+      <div className="flex justify-end gap-2 pt-1">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" onClick={submit} disabled={submitting}>

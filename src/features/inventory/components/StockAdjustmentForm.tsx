@@ -2,9 +2,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { Product, Warehouse } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { fieldError, fieldHint, fieldInput, fieldLabel } from './formStyles';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
 import type { AdjustStockInput, OpeningStockInput } from '../services/stockService';
+
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const REASON_PRESETS = ['Write-off', 'Damage', 'Shrinkage', 'Stock take variance', 'Other'] as const;
 
@@ -35,6 +39,8 @@ export interface StockAdjustmentFormProps {
  * (write-off/damage/shrinkage/count variance/other), and both paths go
  * through stockService (via useStockMovements), which is the only place
  * quantities are written (docs/DO_NOT_BREAK.md § Inventory & Stock).
+ * Re-skinned onto v0's Field/Input/Textarea (M8); validation and submit
+ * wiring unchanged.
  */
 export function StockAdjustmentForm({
   products,
@@ -88,23 +94,19 @@ export function StockAdjustmentForm({
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-md" noValidate>
-      <div>
-        <label className={fieldLabel} htmlFor="adj-kind">
-          Movement Type
-        </label>
-        <select id="adj-kind" className={fieldInput} {...register('movementKind')}>
+    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+      <Field>
+        <FieldLabel htmlFor="adj-kind">Movement Type</FieldLabel>
+        <select id="adj-kind" className={selectClassName} {...register('movementKind')}>
           <option value="adjustment">Adjustment (write-off / damage / shrinkage / count variance)</option>
           <option value="opening">Opening Stock</option>
         </select>
-      </div>
+      </Field>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="adj-product">
-            Product
-          </label>
-          <select id="adj-product" className={fieldInput} {...register('productId')}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="adj-product">Product</FieldLabel>
+          <select id="adj-product" className={selectClassName} {...register('productId')}>
             <option value="">Select a product…</option>
             {trackedProducts.map((p) => (
               <option key={p.id} value={p.id}>
@@ -112,13 +114,11 @@ export function StockAdjustmentForm({
               </option>
             ))}
           </select>
-          {errors.productId && <p className={fieldError}>{errors.productId.message}</p>}
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="adj-warehouse">
-            Warehouse
-          </label>
-          <select id="adj-warehouse" className={fieldInput} {...register('warehouseId')}>
+          <FieldError errors={[errors.productId]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="adj-warehouse">Warehouse</FieldLabel>
+          <select id="adj-warehouse" className={selectClassName} {...register('warehouseId')}>
             <option value="">Select…</option>
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>
@@ -126,68 +126,58 @@ export function StockAdjustmentForm({
               </option>
             ))}
           </select>
-          {errors.warehouseId && <p className={fieldError}>{errors.warehouseId.message}</p>}
-        </div>
+          <FieldError errors={[errors.warehouseId]} />
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {movementKind === 'adjustment' && (
-          <div>
-            <label className={fieldLabel} htmlFor="adj-direction">
-              Direction
-            </label>
-            <select id="adj-direction" className={fieldInput} {...register('direction')}>
+          <Field>
+            <FieldLabel htmlFor="adj-direction">Direction</FieldLabel>
+            <select id="adj-direction" className={selectClassName} {...register('direction')}>
               <option value="decrease">Decrease stock</option>
               <option value="increase">Increase stock</option>
             </select>
-          </div>
+          </Field>
         )}
-        <div>
-          <label className={fieldLabel} htmlFor="adj-qty">
-            Quantity
-          </label>
-          <input id="adj-qty" type="number" min={1} className={fieldInput} {...register('quantity')} />
-          {errors.quantity && <p className={fieldError}>{errors.quantity.message}</p>}
-        </div>
+        <Field>
+          <FieldLabel htmlFor="adj-qty">Quantity</FieldLabel>
+          <Input id="adj-qty" type="number" min={1} {...register('quantity')} />
+          <FieldError errors={[errors.quantity]} />
+        </Field>
       </div>
 
       {movementKind === 'adjustment' && (
-        <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-          <div>
-            <label className={fieldLabel} htmlFor="adj-reason-preset">
-              Reason
-            </label>
-            <select id="adj-reason-preset" className={fieldInput} {...register('reasonPreset')}>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="adj-reason-preset">Reason</FieldLabel>
+            <select id="adj-reason-preset" className={selectClassName} {...register('reasonPreset')}>
               {REASON_PRESETS.map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className={fieldLabel} htmlFor="adj-ref">
-              Reference
-            </label>
-            <input id="adj-ref" className={fieldInput} placeholder="e.g. ADJ-4021" {...register('reference')} />
-          </div>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="adj-ref">Reference</FieldLabel>
+            <Input id="adj-ref" placeholder="e.g. ADJ-4021" {...register('reference')} />
+          </Field>
         </div>
       )}
 
-      <div>
-        <label className={fieldLabel} htmlFor="adj-notes">
-          {movementKind === 'adjustment' ? 'Reason detail (required context)' : 'Notes'}
-        </label>
-        <textarea id="adj-notes" rows={2} className={fieldInput} {...register('reason')} />
-        <p className={fieldHint}>
+      <Field>
+        <FieldLabel htmlFor="adj-notes">{movementKind === 'adjustment' ? 'Reason detail (required context)' : 'Notes'}</FieldLabel>
+        <Textarea id="adj-notes" rows={2} {...register('reason')} />
+        <FieldDescription>
           {movementKind === 'adjustment'
             ? 'Explain what happened — a bare quantity change is never recorded without this.'
             : 'Optional context for this opening balance.'}
-        </p>
-      </div>
+        </FieldDescription>
+      </Field>
 
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>

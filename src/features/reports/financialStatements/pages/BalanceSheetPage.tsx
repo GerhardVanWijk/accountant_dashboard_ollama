@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Loader2, TriangleAlert } from 'lucide-react';
 import type { FinancialYear } from '@/types';
-import { Card } from '@/components/ui/Card';
-import { Icon } from '@/components/ui/Icon';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Button } from '@/components/ui/shadcn/button';
+import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { cn } from '@/lib/utils';
 import { useFinancialStatementsData } from '../hooks/useFinancialStatementsData';
 import { calculateBalanceSheet } from '../services/calculateBalanceSheet';
 import { StatementRow, StatementSectionHeader } from '../components/StatementRow';
-import { fieldInput, fieldLabel } from '../components/formStyles';
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -24,18 +25,25 @@ function todayISO(): string {
  */
 function findFinancialYearForDate(financialYears: FinancialYear[], asOfDate: string): FinancialYear | undefined {
   const asOf = asOfDate.slice(0, 10);
-  const containing = financialYears.find(
-    (y) => y.startDate.slice(0, 10) <= asOf && y.endDate.slice(0, 10) >= asOf,
-  );
+  const containing = financialYears.find((y) => y.startDate.slice(0, 10) <= asOf && y.endDate.slice(0, 10) >= asOf);
   if (containing) return containing;
 
-  const startedOnOrBefore = financialYears
-    .filter((y) => y.startDate.slice(0, 10) <= asOf)
-    .sort((a, b) => b.startDate.localeCompare(a.startDate));
+  const startedOnOrBefore = financialYears.filter((y) => y.startDate.slice(0, 10) <= asOf).sort((a, b) => b.startDate.localeCompare(a.startDate));
   return startedOnOrBefore[0];
 }
 
-/** Balance Sheet (Statement of Financial Position) — proposed route `/reports/balance-sheet`. */
+/**
+ * Balance Sheet (Statement of Financial Position) — route
+ * `/reports/balance-sheet`. Every figure comes from
+ * `calculateBalanceSheet()` — the real authoritative report service
+ * (SA_ACCOUNTING_MASTER_SPEC.md §42); current/non-current classification is
+ * not offered because the real Chart of Accounts subType field does not
+ * carry it beyond `contra_asset` (already respected below) — inventing a
+ * current/non-current split from account codes would be exactly the kind
+ * of frontend-invented classification M9 forbids. No comparative/prior-date
+ * column either, for the same reason as the Income Statement page.
+ * Re-skinned onto v0's PageHeader/SectionCard/Field (M9).
+ */
 export function BalanceSheetPage() {
   const { accounts, entries, financialYears, loading, error, refetch } = useFinancialStatementsData();
   const [asOfDate, setAsOfDate] = useState('');
@@ -44,99 +52,77 @@ export function BalanceSheetPage() {
     if (!asOfDate) setAsOfDate(todayISO());
   }, [asOfDate]);
 
-  const relevantFinancialYear = useMemo(
-    () => (asOfDate ? findFinancialYearForDate(financialYears, asOfDate) : undefined),
-    [financialYears, asOfDate],
-  );
+  const relevantFinancialYear = useMemo(() => (asOfDate ? findFinancialYearForDate(financialYears, asOfDate) : undefined), [financialYears, asOfDate]);
 
   const balanceSheet = useMemo(() => {
     if (!asOfDate) return null;
-    // No FinancialYear starts on/before asOfDate: there is no "current
-    // year" to speak of yet, so Current Year Earnings is correctly zero
-    // (the period collapses to a single day with itself as both ends).
     const financialYearStartDate = relevantFinancialYear?.startDate.slice(0, 10) ?? asOfDate;
     return calculateBalanceSheet(entries, accounts, asOfDate, financialYearStartDate);
   }, [entries, accounts, asOfDate, relevantFinancialYear]);
 
-  if (loading) {
-    return <Spinner label="Loading balance sheet…" />;
-  }
-  if (error) {
-    return <ErrorState message={error.message} onRetry={refetch} />;
-  }
-
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-sm">
-          <Icon name="reports" className="text-text-secondary" size={22} />
-          <div>
-            <h1 className="text-2xl font-semibold text-text-primary">Balance Sheet</h1>
-            <p className="mt-xs text-sm text-text-secondary">
-              Statement of Financial Position as of a chosen date (SA_ACCOUNTING_MASTER_SPEC.md §42).
-              /reports/balance-sheet
-            </p>
-          </div>
-        </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Balance sheet"
+        description="Statement of financial position as of a chosen date (SA_ACCOUNTING_MASTER_SPEC.md §42)."
+        actions={
+          <Field className="w-40">
+            <FieldLabel htmlFor="balanceSheetAsOfDate">As of date</FieldLabel>
+            <Input id="balanceSheetAsOfDate" type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
+          </Field>
+        }
+      />
 
-        <div>
-          <label className={fieldLabel} htmlFor="balanceSheetAsOfDate">
-            As Of Date
-          </label>
-          <input
-            id="balanceSheetAsOfDate"
-            type="date"
-            className={fieldInput}
-            value={asOfDate}
-            onChange={(e) => setAsOfDate(e.target.value)}
-          />
+      {loading && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading balance sheet…</p>
         </div>
-      </div>
-
-      {financialYears.length === 0 && (
-        <EmptyState
-          title="No financial years yet"
-          message="Current Year Earnings will show as zero until a FinancialYear exists to define the current period."
-        />
+      )}
+      {!loading && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
       )}
 
-      {balanceSheet && (
+      {!loading && !error && financialYears.length === 0 && (
+        <SectionCard>
+          <Empty>
+            <EmptyTitle>No financial years yet</EmptyTitle>
+            <EmptyDescription>Current Year Earnings will show as zero until a financial year exists to define the current period.</EmptyDescription>
+          </Empty>
+        </SectionCard>
+      )}
+
+      {!loading && !error && balanceSheet && (
         <>
-          <Card>
-            <StatementSectionHeader label="Assets" />
+          <SectionCard title="Assets">
             {balanceSheet.assetLines.length === 0 ? (
               <StatementRow label="No asset balances as of this date" amount={0} indent />
             ) : (
-              balanceSheet.assetLines.map((line) => (
-                <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />
-              ))
+              balanceSheet.assetLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />)
             )}
             {balanceSheet.contraAssetLines.map((line) => (
-              <StatementRow
-                key={line.accountId}
-                label={`Less: ${line.code} — ${line.name}`}
-                amount={line.amount}
-                indent
-                isInverted
-              />
+              <StatementRow key={line.accountId} label={`Less: ${line.code} — ${line.name}`} amount={-line.amount} indent />
             ))}
             <StatementRow label="Total Assets" amount={balanceSheet.totalAssets} isTotal />
-          </Card>
+          </SectionCard>
 
-          <Card>
+          <SectionCard title="Liabilities & Equity">
             <StatementSectionHeader label="Liabilities" />
             {balanceSheet.liabilityLines.length === 0 ? (
               <StatementRow label="No liability balances as of this date" amount={0} indent />
             ) : (
-              balanceSheet.liabilityLines.map((line) => (
-                <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />
-              ))
+              balanceSheet.liabilityLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />)
             )}
             <StatementRow label="Total Liabilities" amount={balanceSheet.totalLiabilities} isTotal />
 
             <StatementSectionHeader label="Equity" />
-            <StatementRow label="acc_3000 — Owner's Equity" amount={balanceSheet.ownersEquity} indent />
-            <StatementRow label="acc_3900 — Retained Earnings" amount={balanceSheet.retainedEarnings} indent />
+            <StatementRow label="Owner's Equity" amount={balanceSheet.ownersEquity} indent />
+            <StatementRow label="Retained Earnings" amount={balanceSheet.retainedEarnings} indent />
             <StatementRow
               label={`Current Year Earnings${relevantFinancialYear ? ` (${relevantFinancialYear.name} to date)` : ''}`}
               amount={balanceSheet.currentYearEarnings}
@@ -145,30 +131,36 @@ export function BalanceSheetPage() {
             <StatementRow label="Total Equity" amount={balanceSheet.totalEquity} isTotal />
 
             <StatementRow label="Total Liabilities + Equity" amount={balanceSheet.totalLiabilitiesAndEquity} isTotal />
-          </Card>
+          </SectionCard>
 
-          <Card className={balanceSheet.isBalanced ? 'border-positive' : 'border-danger'}>
-            <div className="flex flex-wrap items-center justify-between gap-sm">
-              <span className="text-sm font-semibold text-text-primary">
+          <SectionCard>
+            <div
+              role="status"
+              className={cn(
+                'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-3',
+                balanceSheet.isBalanced ? 'border-positive/30 bg-positive/10' : 'border-destructive/30 bg-destructive/10',
+              )}
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                {balanceSheet.isBalanced ? (
+                  <CheckCircle2 className="size-4 text-positive" aria-hidden="true" />
+                ) : (
+                  <TriangleAlert className="size-4 text-destructive" aria-hidden="true" />
+                )}
                 Assets = Liabilities + Equity check
               </span>
-              <span
-                className={`text-sm font-semibold ${balanceSheet.isBalanced ? 'text-positive' : 'text-danger'}`}
-                role="status"
-              >
-                {balanceSheet.isBalanced
-                  ? 'Balanced'
-                  : `Out of balance by ${balanceSheet.difference.toFixed(2)} — this indicates a data or calculation bug.`}
+              <span className={cn('text-sm font-semibold', balanceSheet.isBalanced ? 'text-positive' : 'text-destructive')}>
+                {balanceSheet.isBalanced ? 'Balanced' : `Out of balance by ${balanceSheet.difference.toFixed(2)} — this indicates a data or calculation bug.`}
               </span>
             </div>
-          </Card>
+          </SectionCard>
         </>
       )}
 
-      <p className="text-xs text-text-secondary">
-        Not built (out of scope for this pass): Notes to the Financial Statements (§43), Statement of Changes in
-        Equity, year-over-year/comparative columns, budget-vs-actual (no Budget entity exists in this app),
-        export/PDF/print.
+      <p className="text-xs text-muted-foreground">
+        Not built (out of scope): Notes to the Financial Statements (§43), Statement of Changes in Equity,
+        year-over-year/comparative columns, current/non-current classification (not carried by the Chart of
+        Accounts), budget-vs-actual, export/PDF.
       </p>
     </div>
   );

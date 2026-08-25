@@ -5,6 +5,5 @@ export { PurchaseOrderList } from './PurchaseOrderList';
 export { PurchaseOrderDetail } from './PurchaseOrderDetail';
 export { PurchaseOrderForm } from './PurchaseOrderForm';
 export { LineItemsEditor } from './LineItemsEditor';
-export { Modal } from './Modal';
 export { PaymentList } from './PaymentList';
 export { PaymentForm } from './PaymentForm';

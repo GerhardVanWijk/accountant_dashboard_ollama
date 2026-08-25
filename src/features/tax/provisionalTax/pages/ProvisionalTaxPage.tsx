@@ -1,29 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Loader2, CalendarClock } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { formatCurrency } from '@/lib/app/format';
 import type { ProvisionalTaxReconciliation } from '@/types/provisionalTax';
 import { useProvisionalTax } from '../hooks/useProvisionalTax';
 import { PaymentSlotCard } from '../components/PaymentSlotCard';
-import { fieldInput, fieldLabel } from '../components/formStyles';
 
-/** Provisional Tax — route `/tax/provisional-tax` (§54). */
+const selectClassName = 'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+
+/** Provisional Tax — route `/tax/provisional-tax`. Re-skinned onto v0's PageHeader/SectionCard (M7); data/mutation wiring unchanged. */
 export function ProvisionalTaxPage() {
-  const {
-    financialYears,
-    periods,
-    loading,
-    error,
-    refetch,
-    getOrCreatePeriod,
-    recordEstimate,
-    payProvisionalTax,
-    getReconciliation,
-  } = useProvisionalTax();
+  const { financialYears, periods, loading, error, refetch, getOrCreatePeriod, recordEstimate, payProvisionalTax, getReconciliation } = useProvisionalTax();
 
   const [selectedFinancialYearId, setSelectedFinancialYearId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -31,10 +21,7 @@ export function ProvisionalTaxPage() {
   const [busy, setBusy] = useState(false);
   const [reconciliation, setReconciliation] = useState<ProvisionalTaxReconciliation | undefined>(undefined);
 
-  const sortedFinancialYears = useMemo(
-    () => [...financialYears].sort((a, b) => b.endDate.localeCompare(a.endDate)),
-    [financialYears],
-  );
+  const sortedFinancialYears = useMemo(() => [...financialYears].sort((a, b) => b.endDate.localeCompare(a.endDate)), [financialYears]);
 
   const activeFinancialYearId = selectedFinancialYearId ?? sortedFinancialYears[0]?.id ?? null;
   const selectedFinancialYear = sortedFinancialYears.find((y) => y.id === activeFinancialYearId);
@@ -70,83 +57,91 @@ export function ProvisionalTaxPage() {
   };
 
   if (loading) {
-    return <Spinner label="Loading provisional tax data…" />;
+    return (
+      <div role="status" className="flex min-h-[40vh] items-center justify-center gap-2 text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+        <span className="text-sm">Loading provisional tax data…</span>
+      </div>
+    );
   }
   if (error) {
-    return <ErrorState message={error.message} onRetry={refetch} />;
+    return (
+      <SectionCard>
+        <p role="alert" className="text-sm text-destructive">
+          {error.message}
+        </p>
+        <Button variant="outline" className="mt-3" onClick={refetch}>
+          Retry
+        </Button>
+      </SectionCard>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Provisional Tax</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            First, second, and voluntary top-up provisional tax payments, estimates, and reconciliation against the
-            final Income Tax computation (§54). /tax/provisional-tax
-          </p>
-        </div>
-        {sortedFinancialYears.length > 0 && (
-          <div>
-            <label className={fieldLabel} htmlFor="financialYearSelect">
-              Financial Year
-            </label>
-            <select
-              id="financialYearSelect"
-              className={fieldInput}
-              value={activeFinancialYearId ?? ''}
-              onChange={(e) => setSelectedFinancialYearId(e.target.value)}
-            >
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Provisional Tax"
+        description="First, second, and voluntary top-up provisional tax payments, estimates, and reconciliation against the final Income Tax computation."
+        actions={
+          sortedFinancialYears.length > 0 ? (
+            <select aria-label="Financial Year" className={selectClassName} value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
               {sortedFinancialYears.map((year) => (
                 <option key={year.id} value={year.id}>
                   {year.name}
                 </option>
               ))}
             </select>
-          </div>
-        )}
-      </div>
+          ) : undefined
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
           {actionError}
         </p>
       )}
       {statusMessage && (
-        <p role="status" className="rounded-md border border-border bg-positive/10 px-md py-sm text-sm text-positive">
+        <p role="status" className="rounded-lg border border-positive/40 bg-positive/10 px-4 py-2.5 text-sm text-positive">
           {statusMessage}
         </p>
       )}
 
       {sortedFinancialYears.length === 0 && (
-        <EmptyState title="No financial years yet" message="A FinancialYear must exist before provisional tax can be tracked." />
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <CalendarClock />
+            </EmptyMedia>
+            <EmptyTitle>No financial years yet</EmptyTitle>
+            <EmptyDescription>A FinancialYear must exist before provisional tax can be tracked.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
 
       {selectedFinancialYear && !period && (
-        <Card>
-          <EmptyState
-            title={`No provisional tax period yet for ${selectedFinancialYear.name}`}
-            message="Create one to see the first, second, and top-up due dates for this financial year."
-            action={
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  runAction(async () => {
-                    await getOrCreatePeriod(selectedFinancialYear.id);
-                  }, `Created a provisional tax period for ${selectedFinancialYear.name}.`)
-                }
-              >
-                Create Provisional Tax Period
-              </Button>
-            }
-          />
-        </Card>
+        <SectionCard>
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No provisional tax period yet for {selectedFinancialYear.name}</EmptyTitle>
+              <EmptyDescription>Create one to see the first, second, and top-up due dates for this financial year.</EmptyDescription>
+            </EmptyHeader>
+            <Button
+              disabled={busy}
+              onClick={() =>
+                runAction(async () => {
+                  await getOrCreatePeriod(selectedFinancialYear.id);
+                }, `Created a provisional tax period for ${selectedFinancialYear.name}.`)
+              }
+            >
+              Create Provisional Tax Period
+            </Button>
+          </Empty>
+        </SectionCard>
       )}
 
       {period && (
         <>
-          <div className="grid grid-cols-1 gap-md md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <PaymentSlotCard
               title="First Payment"
               description="Due 6 months after the financial year start."
@@ -197,40 +192,28 @@ export function ProvisionalTaxPage() {
             />
           </div>
 
-          <Card>
-            <h2 className="mb-sm text-sm font-semibold text-text-primary">Reconciliation</h2>
+          <SectionCard title="Reconciliation">
             {reconciliation?.finalTaxLiability !== undefined ? (
-              <div className="grid grid-cols-2 gap-md tabular-nums md:grid-cols-3">
-                <div>
-                  <p className="text-xs text-text-secondary">Total Paid</p>
-                  <FinancialNumber value={reconciliation.totalPaid} format={formatCurrency} className="text-lg" />
-                </div>
-                <div>
-                  <p className="text-xs text-text-secondary">Final Tax Liability</p>
-                  <FinancialNumber value={reconciliation.finalTaxLiability} format={formatCurrency} isInverted className="text-lg" />
-                </div>
-                <div>
-                  <p className="text-xs text-text-secondary">
-                    {(reconciliation.variance ?? 0) >= 0 ? 'Still Owed' : 'Overpaid / Refund'}
-                  </p>
-                  <FinancialNumber value={reconciliation.variance ?? 0} format={formatCurrency} isInverted className="text-lg" />
-                </div>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                <FigureBlock label="Total Paid" value={formatCurrency(reconciliation.totalPaid)} />
+                <FigureBlock label="Final Tax Liability" value={formatCurrency(reconciliation.finalTaxLiability)} tone="warning" />
+                <FigureBlock
+                  label={(reconciliation.variance ?? 0) >= 0 ? 'Still Owed' : 'Overpaid / Refund'}
+                  value={formatCurrency(reconciliation.variance ?? 0)}
+                  tone={(reconciliation.variance ?? 0) >= 0 ? 'warning' : 'positive'}
+                />
               </div>
             ) : (
-              <p className="text-sm text-text-secondary">
-                Total paid so far:{' '}
-                <FinancialNumber value={reconciliation?.totalPaid ?? 0} format={formatCurrency} className="text-sm" />. The
-                reconciliation against the final tax liability appears once the Income Tax computation for this
+              <p className="text-sm text-muted-foreground">
+                Total paid so far: {formatCurrency(reconciliation?.totalPaid ?? 0)}. The reconciliation against the final tax liability appears once the Income Tax computation for this
                 financial year is posted (see /tax/income-tax).
               </p>
             )}
-            <p className="mt-sm text-xs text-text-secondary">
-              Underpayment interest/penalties are not calculated here — SARS&apos;s provisional-tax underpayment
-              interest rate floats with the prevailing repo rate rather than being a fixed statutory figure, so it
-              requires the current SARS-published rate to compute (out of scope for this module — see §111
-              professional review).
+            <p className="mt-3 text-xs text-muted-foreground">
+              Underpayment interest/penalties are not calculated here — SARS&apos;s provisional-tax underpayment interest rate floats with the prevailing repo rate rather than being a
+              fixed statutory figure, so it requires the current SARS-published rate to compute (out of scope for this module — pending professional review).
             </p>
-          </Card>
+          </SectionCard>
         </>
       )}
     </div>

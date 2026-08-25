@@ -3,6 +3,8 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { RouteGuard } from './RouteGuard';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { SignUpPage } from '@/features/auth/pages/SignUpPage';
+import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage';
 import { OnboardingPage } from '@/features/auth/pages/OnboardingPage';
 import { SuperUserDashboardPage } from '@/features/admin/pages/SuperUserDashboardPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
@@ -10,6 +12,8 @@ import { ChartOfAccountsPage } from '@/features/accounting/pages/ChartOfAccounts
 import { JournalsPage } from '@/features/accounting/pages/JournalsPage';
 import { LedgerPage } from '@/features/accounting/pages/LedgerPage';
 import { TrialBalancePage } from '@/features/accounting/pages/TrialBalancePage';
+import { FinancialPeriodsPage } from '@/features/accounting/pages/FinancialPeriodsPage';
+import { CompanyPage } from '@/features/admin/pages/CompanyPage';
 import { CustomersPage } from '@/features/sales/pages/CustomersPage';
 import { QuotesPage } from '@/features/sales/pages/QuotesPage';
 import { SalesOrdersPage } from '@/features/sales/pages/SalesOrdersPage';
@@ -59,13 +63,19 @@ import { LeaseRegisterPage } from '@/features/leases/pages/LeaseRegisterPage';
 import { LeaseAmortizationPage } from '@/features/leases/pages/LeaseAmortizationPage';
 import { UsersPage } from '@/features/admin/pages/UsersPage';
 import { AuditPage } from '@/features/admin/pages/AuditPage';
+import { AuditTrailPage } from '@/features/admin/pages/AuditTrailPage';
+import { PermissionRoute } from '@/features/auth/components/PermissionRoute';
+import { SettingsPage } from '@/features/settings/pages/SettingsPage';
+import { AccountingSettingsPage } from '@/features/settings/pages/AccountingSettingsPage';
+import { HelpPage } from '@/features/help/pages/HelpPage';
 import { NotFoundPage } from '@/features/admin/pages/NotFoundPage';
 
 /**
  * Route tree. Paths mirror docs/ROUTES.md exactly — that file is
  * authoritative, not the illustrative /app/* example in
  * docs/ARCHITECTURE.md. Every route here has a matching entry in
- * src/config/navigation.ts.
+ * src/lib/app/navigation.ts (src/config/navigation.ts, the pre-v0
+ * navigation model this replaced, was deleted in M12).
  *
  * All routes below the root element are wrapped by <RouteGuard />,
  * which is the protected route tree referred to as "/app/*" in
@@ -86,6 +96,14 @@ export const routes: RouteObject[] = [
     element: <SignUpPage />,
   },
   {
+    path: '/forgot-password',
+    element: <ForgotPasswordPage />,
+  },
+  {
+    path: '/reset-password',
+    element: <ResetPasswordPage />,
+  },
+  {
     path: '/',
     element: <RouteGuard />,
     children: [
@@ -94,18 +112,20 @@ export const routes: RouteObject[] = [
       {
         element: <AppLayout />,
         children: [
-          { index: true, element: <DashboardPage /> },
-          { path: 'accounting/coa', element: <ChartOfAccountsPage /> },
-          { path: 'accounting/journals', element: <JournalsPage /> },
-          { path: 'accounting/ledger', element: <LedgerPage /> },
-          { path: 'accounting/trial-balance', element: <TrialBalancePage /> },
-          { path: 'sales/customers', element: <CustomersPage /> },
+          { index: true, element: <PermissionRoute feature="dashboard" action="read"><DashboardPage /></PermissionRoute> },
+          { path: 'companies', element: <CompanyPage /> },
+          { path: 'accounting/coa', element: <PermissionRoute feature="gl" action="read"><ChartOfAccountsPage /></PermissionRoute> },
+          { path: 'accounting/journals', element: <PermissionRoute feature="gl" action="read"><JournalsPage /></PermissionRoute> },
+          { path: 'accounting/ledger', element: <PermissionRoute feature="gl" action="read"><LedgerPage /></PermissionRoute> },
+          { path: 'accounting/trial-balance', element: <PermissionRoute feature="gl" action="read"><TrialBalancePage /></PermissionRoute> },
+          { path: 'financial-periods', element: <FinancialPeriodsPage /> },
+          { path: 'sales/customers', element: <PermissionRoute feature="customer_management" action="read"><CustomersPage /></PermissionRoute> },
           { path: 'sales/quotes', element: <QuotesPage /> },
           { path: 'sales/orders', element: <SalesOrdersPage /> },
-          { path: 'sales/invoices', element: <InvoicesPage /> },
+          { path: 'sales/invoices', element: <PermissionRoute feature="invoicing" action="read"><InvoicesPage /></PermissionRoute> },
           { path: 'sales/credit-notes', element: <CreditNotesPage /> },
           { path: 'sales/receipts', element: <CustomerReceiptsPage /> },
-          { path: 'purchases/vendors', element: <VendorsPage /> },
+          { path: 'purchases/vendors', element: <PermissionRoute feature="supplier_management" action="read"><VendorsPage /></PermissionRoute> },
           { path: 'purchases/orders', element: <PurchaseOrdersPage /> },
           { path: 'purchases/bills', element: <BillsPage /> },
           { path: 'purchases/payments', element: <PaymentsPage /> },
@@ -113,16 +133,16 @@ export const routes: RouteObject[] = [
           { path: 'banking/accounts', element: <BankAccountsPage /> },
           { path: 'banking/transactions', element: <BankTransactionsPage /> },
           { path: 'banking/reconciliation', element: <BankReconciliationPage /> },
-          { path: 'inventory/products', element: <ProductsPage /> },
-          { path: 'inventory/warehouses', element: <WarehousesPage /> },
+          { path: 'inventory/products', element: <PermissionRoute feature="inventory" action="read"><ProductsPage /></PermissionRoute> },
+          { path: 'inventory/warehouses', element: <PermissionRoute feature="inventory" action="read"><WarehousesPage /></PermissionRoute> },
           { path: 'assets/register', element: <AssetRegisterPage /> },
           { path: 'assets/depreciation', element: <DepreciationPage /> },
           { path: 'assets/disposals', element: <DisposalsPage /> },
           { path: 'assets/tax-register', element: <TaxRegisterPage /> },
-          { path: 'payroll/employees', element: <EmployeesPage /> },
-          { path: 'payroll/runs', element: <PayrollRunsPage /> },
-          { path: 'payroll/emp201', element: <Emp201Page /> },
-          { path: 'payroll/emp501', element: <Emp501Page /> },
+          { path: 'payroll/employees', element: <PermissionRoute feature="payroll" action="read"><EmployeesPage /></PermissionRoute> },
+          { path: 'payroll/runs', element: <PermissionRoute feature="payroll" action="read"><PayrollRunsPage /></PermissionRoute> },
+          { path: 'payroll/emp201', element: <PermissionRoute feature="payroll" action="read"><Emp201Page /></PermissionRoute> },
+          { path: 'payroll/emp501', element: <PermissionRoute feature="payroll" action="read"><Emp501Page /></PermissionRoute> },
           { path: 'tax/rates', element: <TaxRatesPage /> },
           { path: 'tax/vat-return', element: <VatReturnPage /> },
           { path: 'tax/income-tax', element: <IncomeTaxPage /> },
@@ -131,12 +151,12 @@ export const routes: RouteObject[] = [
           { path: 'tax/provisional-tax', element: <ProvisionalTaxPage /> },
           { path: 'tax/deferred-tax', element: <DeferredTaxPage /> },
           { path: 'tax/expected-credit-losses', element: <EclProvisionPage /> },
-          { path: 'reports', element: <ReportsPage /> },
-          { path: 'reports/income-statement', element: <IncomeStatementPage /> },
-          { path: 'reports/balance-sheet', element: <BalanceSheetPage /> },
-          { path: 'reports/cash-flow', element: <CashFlowStatementPage /> },
-          { path: 'reports/customer-aging', element: <CustomerAgingPage /> },
-          { path: 'reports/supplier-aging', element: <SupplierAgingPage /> },
+          { path: 'reports', element: <PermissionRoute feature="reports" action="read"><ReportsPage /></PermissionRoute> },
+          { path: 'reports/income-statement', element: <PermissionRoute feature="reports" action="read"><IncomeStatementPage /></PermissionRoute> },
+          { path: 'reports/balance-sheet', element: <PermissionRoute feature="reports" action="read"><BalanceSheetPage /></PermissionRoute> },
+          { path: 'reports/cash-flow', element: <PermissionRoute feature="reports" action="read"><CashFlowStatementPage /></PermissionRoute> },
+          { path: 'reports/customer-aging', element: <PermissionRoute feature="reports" action="read"><CustomerAgingPage /></PermissionRoute> },
+          { path: 'reports/supplier-aging', element: <PermissionRoute feature="reports" action="read"><SupplierAgingPage /></PermissionRoute> },
           { path: 'compliance/dashboard', element: <ComplianceDashboardPage /> },
           { path: 'compliance/public-interest-score', element: <PublicInterestScorePage /> },
           { path: 'compliance/reporting-standards', element: <ReportingStandardsPage /> },
@@ -146,8 +166,12 @@ export const routes: RouteObject[] = [
           { path: 'foreign-exchange/calculator', element: <FxCalculatorPage /> },
           { path: 'leases/register', element: <LeaseRegisterPage /> },
           { path: 'leases/amortization', element: <LeaseAmortizationPage /> },
-          { path: 'admin/users', element: <UsersPage /> },
+          { path: 'admin/users', element: <PermissionRoute feature="user_management" action="read"><UsersPage /></PermissionRoute> },
           { path: 'admin/audit', element: <AuditPage /> },
+          { path: 'admin/audit-trail', element: <AuditTrailPage /> },
+          { path: 'settings', element: <SettingsPage /> },
+          { path: 'settings/accounting', element: <AccountingSettingsPage /> },
+          { path: 'help', element: <HelpPage /> },
           { path: '*', element: <NotFoundPage /> },
         ],
       },

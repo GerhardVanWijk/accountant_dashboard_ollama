@@ -1,5 +1,5 @@
 import type { ActiveStatus } from '@/types';
-import { cn } from '@/utils/cn';
+import { StatusBadge as V0StatusBadge } from '@/components/app/status-badge';
 
 export interface StatusBadgeProps {
   status: ActiveStatus;
@@ -7,27 +7,12 @@ export interface StatusBadgeProps {
 }
 
 /**
- * Small pill badge for a supplier's account standing. On-hold takes
- * visual precedence over active/inactive since it's the more urgent
- * signal for accounts-payable staff scanning the list.
+ * Supplier account-standing badge, built on the shared v0 StatusBadge
+ * (src/components/app/status-badge.tsx). On-hold takes visual precedence
+ * over active/inactive since it's the more urgent signal for
+ * accounts-payable staff scanning the list — same precedence the old
+ * design-system version of this component used.
  */
 export function StatusBadge({ status, onHold }: StatusBadgeProps) {
-  if (onHold) {
-    return (
-      <span className="inline-flex items-center rounded-full bg-warning px-sm py-xs text-xs font-medium text-on-accent">
-        On Hold
-      </span>
-    );
-  }
-
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full px-sm py-xs text-xs font-medium text-on-accent',
-        status === 'active' ? 'bg-success' : 'bg-border text-text-secondary',
-      )}
-    >
-      {status === 'active' ? 'Active' : 'Inactive'}
-    </span>
-  );
+  return <V0StatusBadge status={onHold ? 'on-hold' : status} />;
 }

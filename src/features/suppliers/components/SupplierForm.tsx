@@ -1,9 +1,13 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Supplier } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { cn } from '@/utils/cn';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import { cn } from '@/lib/utils';
 import { SUPPLIER_CATEGORIES } from '../types/supplier.types';
 import { supplierFormSchema, type SupplierFormSchema } from '../utils/supplierFormSchema';
 
@@ -12,16 +16,13 @@ type TabKey = 'general' | 'contacts' | 'addresses' | 'financial';
 const TABS: { key: TabKey; label: string; fields: (keyof SupplierFormSchema)[] }[] = [
   { key: 'general', label: 'General Info', fields: ['supplierNumber', 'name', 'category', 'status', 'onHold', 'currency', 'balance'] },
   { key: 'contacts', label: 'Primary Contacts', fields: ['email', 'phone', 'contactPerson'] },
-  { key: 'addresses', label: 'Physical & Remittance Addresses', fields: ['address', 'remittanceAddress'] },
+  { key: 'addresses', label: 'Addresses', fields: ['address', 'remittanceAddress'] },
   {
     key: 'financial',
-    label: 'Financial & Tax Settings',
+    label: 'Financial & Tax',
     fields: ['taxNumber', 'creditLimit', 'paymentTerms', 'paymentMethod', 'settlementDiscountPercent', 'bankDetails', 'notes'],
   },
 ];
-
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
 function toDefaultValues(supplier?: Supplier): SupplierFormSchema {
   return {
@@ -78,9 +79,10 @@ function tabHasError(fields: (keyof SupplierFormSchema)[], errors: FieldErrors<S
 
 /**
  * Multi-tab supplier onboarding/edit form (General Info / Primary
- * Contacts / Physical & Remittance Addresses / Financial & Tax
- * Settings) backed by react-hook-form + zod. Business validation lives
- * in supplierFormSchema.ts, not inline in this component.
+ * Contacts / Addresses / Financial & Tax), backed by react-hook-form +
+ * zod — the exact same supplierFormSchema.ts every other SupplierForm
+ * implementation used, unchanged. Only the JSX is re-skinned onto v0's
+ * Field/Input/Select/Tabs primitives.
  */
 export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 'Save Supplier' }: SupplierFormProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('general');
@@ -98,157 +100,180 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
       onSubmit={handleSubmit(async (values) => {
         await onSubmit(values);
       })}
-      className="flex flex-col gap-lg"
+      className="flex flex-col gap-6"
     >
-      <div className="flex flex-wrap gap-xs border-b border-border" role="tablist">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={cn(
-              'flex items-center gap-xs rounded-t-md px-md py-sm text-sm font-medium transition-colors',
-              activeTab === tab.key
-                ? 'border-b-2 border-primary text-text-primary'
-                : 'text-text-secondary hover:text-text-primary',
-            )}
-          >
-            {tab.label}
-            {tabHasError(tab.fields, errors) && <span className="h-1.5 w-1.5 rounded-full bg-danger" aria-hidden="true" />}
-          </button>
-        ))}
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+        <TabsList variant="line" className="w-full justify-start border-b border-border">
+          {TABS.map((tab) => (
+            <TabsTrigger key={tab.key} value={tab.key} className="gap-1.5">
+              {tab.label}
+              {tabHasError(tab.fields, errors) && (
+                <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" />
+              )}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {activeTab === 'general' && (
-        <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-          <Field label="Supplier Number" error={errors.supplierNumber?.message}>
-            <input className={inputClass} {...register('supplierNumber')} />
-          </Field>
-          <Field label="Supplier Name" error={errors.name?.message}>
-            <input className={inputClass} {...register('name')} />
-          </Field>
-          <Field label="Category">
-            <select
-              className={inputClass}
-              {...register('category', { setValueAs: (v) => (v === '' ? undefined : v) })}
-            >
-              <option value="">Unassigned</option>
-              {SUPPLIER_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Currency" error={errors.currency?.message}>
-            <input className={inputClass} {...register('currency')} />
-          </Field>
-          <Field label="Status">
-            <select className={inputClass} {...register('status')}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </Field>
-          <Field label="Opening Balance" error={errors.balance?.message}>
-            <input type="number" step="0.01" className={inputClass} {...register('balance', { valueAsNumber: true })} />
-          </Field>
-          <Field label="Account Standing">
-            <label className="flex items-center gap-sm text-sm text-text-primary">
-              <input type="checkbox" {...register('onHold')} className="h-4 w-4 rounded border-border" />
-              Place this supplier on hold
-            </label>
-          </Field>
-        </div>
-      )}
+        <TabsContent value="general" className="pt-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="supplier-number">Supplier number</FieldLabel>
+              <Input id="supplier-number" {...register('supplierNumber')} />
+              <FieldError errors={[errors.supplierNumber]} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="supplier-name">Supplier name</FieldLabel>
+              <Input id="supplier-name" {...register('name')} />
+              <FieldError errors={[errors.name]} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="supplier-category">Category</FieldLabel>
+              <select
+                id="supplier-category"
+                className={cn(
+                  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+                )}
+                {...register('category', { setValueAs: (v) => (v === '' ? undefined : v) })}
+              >
+                <option value="">Unassigned</option>
+                {SUPPLIER_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="supplier-currency">Currency</FieldLabel>
+              <Input id="supplier-currency" {...register('currency')} />
+              <FieldError errors={[errors.currency]} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="supplier-status">Status</FieldLabel>
+              <select
+                id="supplier-status"
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                {...register('status')}
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="supplier-balance">Opening balance</FieldLabel>
+              <Input id="supplier-balance" type="number" step="0.01" {...register('balance', { valueAsNumber: true })} />
+              <FieldError errors={[errors.balance]} />
+            </Field>
+            <Field orientation="horizontal">
+              <input type="checkbox" id="supplier-on-hold" className="size-4 rounded border-input" {...register('onHold')} />
+              <FieldLabel htmlFor="supplier-on-hold" className="font-normal">
+                Place this supplier on hold
+              </FieldLabel>
+            </Field>
+          </div>
+        </TabsContent>
 
-      {activeTab === 'contacts' && (
-        <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-          <Field label="Contact Person">
-            <input className={inputClass} {...register('contactPerson')} />
-          </Field>
-          <Field label="Email" error={errors.email?.message}>
-            <input type="email" className={inputClass} {...register('email')} />
-          </Field>
-          <Field label="Phone">
-            <input className={inputClass} {...register('phone')} />
-          </Field>
-        </div>
-      )}
+        <TabsContent value="contacts" className="pt-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="supplier-contact-person">Contact person</FieldLabel>
+              <Input id="supplier-contact-person" {...register('contactPerson')} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="supplier-email">Email</FieldLabel>
+              <Input id="supplier-email" type="email" {...register('email')} />
+              <FieldError errors={[errors.email]} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="supplier-phone">Phone</FieldLabel>
+              <Input id="supplier-phone" {...register('phone')} />
+            </Field>
+          </div>
+        </TabsContent>
 
-      {activeTab === 'addresses' && (
-        <div className="flex flex-col gap-lg">
-          <fieldset className="flex flex-col gap-md">
-            <legend className="text-sm font-semibold text-text-primary">Physical Address</legend>
-            <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-              <Field label="Address Line 1">
-                <input className={inputClass} {...register('address.line1')} />
+        <TabsContent value="addresses" className="flex flex-col gap-6 pt-4">
+          <fieldset className="flex flex-col gap-4">
+            <legend className="text-sm font-semibold">Physical address</legend>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="supplier-address-line1">Address line 1</FieldLabel>
+                <Input id="supplier-address-line1" {...register('address.line1')} />
               </Field>
-              <Field label="Address Line 2">
-                <input className={inputClass} {...register('address.line2')} />
+              <Field>
+                <FieldLabel htmlFor="supplier-address-line2">Address line 2</FieldLabel>
+                <Input id="supplier-address-line2" {...register('address.line2')} />
               </Field>
-              <Field label="City">
-                <input className={inputClass} {...register('address.city')} />
+              <Field>
+                <FieldLabel htmlFor="supplier-address-city">City</FieldLabel>
+                <Input id="supplier-address-city" {...register('address.city')} />
               </Field>
-              <Field label="Province/State">
-                <input className={inputClass} {...register('address.state')} />
+              <Field>
+                <FieldLabel htmlFor="supplier-address-state">Province/State</FieldLabel>
+                <Input id="supplier-address-state" {...register('address.state')} />
               </Field>
-              <Field label="Postal Code">
-                <input className={inputClass} {...register('address.postalCode')} />
+              <Field>
+                <FieldLabel htmlFor="supplier-address-postal">Postal code</FieldLabel>
+                <Input id="supplier-address-postal" {...register('address.postalCode')} />
               </Field>
-              <Field label="Country">
-                <input className={inputClass} {...register('address.country')} />
+              <Field>
+                <FieldLabel htmlFor="supplier-address-country">Country</FieldLabel>
+                <Input id="supplier-address-country" {...register('address.country')} />
               </Field>
             </div>
           </fieldset>
 
-          <fieldset className="flex flex-col gap-md">
-            <legend className="text-sm font-semibold text-text-primary">Remittance Address (if different)</legend>
-            <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-              <Field label="Address Line 1">
-                <input className={inputClass} {...register('remittanceAddress.line1')} />
+          <fieldset className="flex flex-col gap-4">
+            <legend className="text-sm font-semibold">Remittance address (if different)</legend>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="supplier-remit-line1">Address line 1</FieldLabel>
+                <Input id="supplier-remit-line1" {...register('remittanceAddress.line1')} />
               </Field>
-              <Field label="Address Line 2">
-                <input className={inputClass} {...register('remittanceAddress.line2')} />
+              <Field>
+                <FieldLabel htmlFor="supplier-remit-line2">Address line 2</FieldLabel>
+                <Input id="supplier-remit-line2" {...register('remittanceAddress.line2')} />
               </Field>
-              <Field label="City">
-                <input className={inputClass} {...register('remittanceAddress.city')} />
+              <Field>
+                <FieldLabel htmlFor="supplier-remit-city">City</FieldLabel>
+                <Input id="supplier-remit-city" {...register('remittanceAddress.city')} />
               </Field>
-              <Field label="Province/State">
-                <input className={inputClass} {...register('remittanceAddress.state')} />
+              <Field>
+                <FieldLabel htmlFor="supplier-remit-state">Province/State</FieldLabel>
+                <Input id="supplier-remit-state" {...register('remittanceAddress.state')} />
               </Field>
-              <Field label="Postal Code">
-                <input className={inputClass} {...register('remittanceAddress.postalCode')} />
+              <Field>
+                <FieldLabel htmlFor="supplier-remit-postal">Postal code</FieldLabel>
+                <Input id="supplier-remit-postal" {...register('remittanceAddress.postalCode')} />
               </Field>
-              <Field label="Country">
-                <input className={inputClass} {...register('remittanceAddress.country')} />
+              <Field>
+                <FieldLabel htmlFor="supplier-remit-country">Country</FieldLabel>
+                <Input id="supplier-remit-country" {...register('remittanceAddress.country')} />
               </Field>
             </div>
           </fieldset>
-        </div>
-      )}
+        </TabsContent>
 
-      {activeTab === 'financial' && (
-        <div className="flex flex-col gap-lg">
-          <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-            <Field label="Tax / VAT Registration Number">
-              <input className={inputClass} {...register('taxNumber')} />
+        <TabsContent value="financial" className="flex flex-col gap-6 pt-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="supplier-tax-number">Tax/VAT registration number</FieldLabel>
+              <Input id="supplier-tax-number" {...register('taxNumber')} />
             </Field>
-            <Field label="Default Tax Type">
-              <input className={inputClass} value="Input VAT" disabled />
-            </Field>
-            <Field label="Credit Limit" error={errors.creditLimit?.message}>
-              <input
+            <Field>
+              <FieldLabel htmlFor="supplier-credit-limit">Credit limit</FieldLabel>
+              <Input
+                id="supplier-credit-limit"
                 type="number"
                 step="0.01"
-                className={inputClass}
                 {...register('creditLimit', { setValueAs: (v) => (v === '' ? undefined : Number(v)) })}
               />
+              <FieldError errors={[errors.creditLimit]} />
             </Field>
-            <Field label="Payment Terms">
+            <Field>
+              <FieldLabel htmlFor="supplier-payment-terms">Payment terms</FieldLabel>
               <select
-                className={inputClass}
+                id="supplier-payment-terms"
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 {...register('paymentTerms', { setValueAs: (v) => (v === '' ? undefined : v) })}
               >
                 <option value="">Unassigned</option>
@@ -257,9 +282,11 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
                 <option value="EOM">EOM</option>
               </select>
             </Field>
-            <Field label="Payment Method">
+            <Field>
+              <FieldLabel htmlFor="supplier-payment-method">Payment method</FieldLabel>
               <select
-                className={inputClass}
+                id="supplier-payment-method"
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 {...register('paymentMethod', { setValueAs: (v) => (v === '' ? undefined : v) })}
               >
                 <option value="">Unassigned</option>
@@ -268,55 +295,51 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
                 <option value="Credit Card">Credit Card</option>
               </select>
             </Field>
-            <Field label="Settlement Discount (%)" error={errors.settlementDiscountPercent?.message}>
-              <input
+            <Field>
+              <FieldLabel htmlFor="supplier-settlement-discount">Settlement discount (%)</FieldLabel>
+              <Input
+                id="supplier-settlement-discount"
                 type="number"
                 step="0.1"
-                className={inputClass}
                 {...register('settlementDiscountPercent', { setValueAs: (v) => (v === '' ? undefined : Number(v)) })}
               />
+              <FieldError errors={[errors.settlementDiscountPercent]} />
             </Field>
           </div>
 
-          <fieldset className="flex flex-col gap-md">
-            <legend className="text-sm font-semibold text-text-primary">Banking Details</legend>
-            <div className="grid grid-cols-1 gap-md md:grid-cols-3">
-              <Field label="Bank Name">
-                <input className={inputClass} {...register('bankDetails.bankName')} />
+          <fieldset className="flex flex-col gap-4">
+            <legend className="text-sm font-semibold">Banking details</legend>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Field>
+                <FieldLabel htmlFor="supplier-bank-name">Bank name</FieldLabel>
+                <Input id="supplier-bank-name" {...register('bankDetails.bankName')} />
               </Field>
-              <Field label="Branch Code">
-                <input className={inputClass} {...register('bankDetails.branchCode')} />
+              <Field>
+                <FieldLabel htmlFor="supplier-bank-branch">Branch code</FieldLabel>
+                <Input id="supplier-bank-branch" {...register('bankDetails.branchCode')} />
               </Field>
-              <Field label="Account Number">
-                <input className={inputClass} {...register('bankDetails.accountNumber')} />
+              <Field>
+                <FieldLabel htmlFor="supplier-bank-account">Account number</FieldLabel>
+                <Input id="supplier-bank-account" {...register('bankDetails.accountNumber')} />
               </Field>
             </div>
           </fieldset>
 
-          <Field label="Notes">
-            <textarea className={inputClass} rows={3} {...register('notes')} />
+          <Field>
+            <FieldLabel htmlFor="supplier-notes">Notes</FieldLabel>
+            <Textarea id="supplier-notes" rows={3} {...register('notes')} />
           </Field>
-        </div>
-      )}
+        </TabsContent>
+      </Tabs>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button variant="outline" type="button" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Saving…' : submitLabel}
         </Button>
       </div>
     </form>
-  );
-}
-
-function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
-  return (
-    <label className="flex flex-col gap-xs text-sm">
-      <span className="font-medium text-text-primary">{label}</span>
-      {children}
-      {error && <span className="text-xs text-danger">{error}</span>}
-    </label>
   );
 }

@@ -105,6 +105,119 @@ describe('InvoiceService', () => {
     expect(created.status).toBe('draft');
   });
 
+  describe('updateInvoice (accounting-integrity guard)', () => {
+    async function createAndPostInvoice(service: ReturnType<typeof setup>['service']) {
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-2026-GUARD-1',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [{ id: 'li_1', description: 'Widget', quantity: 2, unitPrice: 500, taxAmount: 150, lineTotal: 1000 }],
+        subtotal: 1000,
+        taxTotal: 150,
+        total: 1150,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      return service.postInvoice(draft.id);
+    }
+
+    it('allows freely editing a draft invoice, including line items and totals', async () => {
+      const { service } = setup([]);
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-2026-DRAFT-EDIT',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [],
+        subtotal: 0,
+        taxTotal: 0,
+        total: 0,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const updated = await service.updateInvoice(draft.id, {
+        invoiceNumber: 'INV-2026-DRAFT-EDIT-RENUMBERED',
+        lineItems: [{ id: 'li_1', description: 'Consulting', quantity: 1, unitPrice: 800, taxAmount: 120, lineTotal: 800 }],
+        subtotal: 800,
+        taxTotal: 120,
+        total: 920,
+      });
+
+      expect(updated.invoiceNumber).toBe('INV-2026-DRAFT-EDIT-RENUMBERED');
+      expect(updated.total).toBe(920);
+    });
+
+    it('rejects changing line items/totals on a posted (sent) invoice', async () => {
+      const { service } = setup([]);
+      const posted = await createAndPostInvoice(service);
+
+      await expect(
+        service.updateInvoice(posted.id, {
+          lineItems: [{ id: 'li_1', description: 'Widget (edited)', quantity: 99, unitPrice: 500, taxAmount: 150, lineTotal: 1000 }],
+        }),
+      ).rejects.toThrow(/posted to the ledger/i);
+
+      await expect(service.updateInvoice(posted.id, { total: 99999 })).rejects.toThrow(/posted to the ledger/i);
+      await expect(service.updateInvoice(posted.id, { subtotal: 1 })).rejects.toThrow(/posted to the ledger/i);
+      await expect(service.updateInvoice(posted.id, { taxTotal: 1 })).rejects.toThrow(/posted to the ledger/i);
+      await expect(service.updateInvoice(posted.id, { customerId: 'cust_other' })).rejects.toThrow(/posted to the ledger/i);
+      await expect(service.updateInvoice(posted.id, { issueDate: '2026-01-01T00:00:00.000Z' })).rejects.toThrow(/posted to the ledger/i);
+      await expect(service.updateInvoice(posted.id, { invoiceNumber: 'INV-RENUMBERED' })).rejects.toThrow(/posted to the ledger/i);
+      await expect(service.updateInvoice(posted.id, { currency: 'USD' })).rejects.toThrow(/posted to the ledger/i);
+    });
+
+    it('rejects a direct status/amountPaid/journalEntryId change that would bypass postInvoice()/recordPayment()', async () => {
+      const { service } = setup([]);
+      const posted = await createAndPostInvoice(service);
+
+      await expect(service.updateInvoice(posted.id, { status: 'paid' })).rejects.toThrow(/posted to the ledger/i);
+      await expect(service.updateInvoice(posted.id, { amountPaid: 1150 })).rejects.toThrow(/posted to the ledger/i);
+      await expect(service.updateInvoice(posted.id, { journalEntryId: 'je_forged' })).rejects.toThrow(/posted to the ledger/i);
+    });
+
+    it('rejects an accounting-value edit on a partially-paid invoice, matching the sent-invoice rule', async () => {
+      const { service } = setup([]);
+      const posted = await createAndPostInvoice(service);
+      const partiallyPaid = await service.recordPayment(posted.id, 500);
+      expect(partiallyPaid.status).toBe('partially_paid');
+
+      await expect(service.updateInvoice(partiallyPaid.id, { total: 1 })).rejects.toThrow(/posted to the ledger/i);
+    });
+
+    it('still allows editing dueDate and notes on a posted invoice', async () => {
+      const { service } = setup([]);
+      const posted = await createAndPostInvoice(service);
+
+      const updated = await service.updateInvoice(posted.id, {
+        dueDate: '2026-12-25T00:00:00.000Z',
+        notes: 'Customer requested extended terms.',
+      });
+
+      expect(updated.dueDate).toBe('2026-12-25T00:00:00.000Z');
+      expect(updated.notes).toBe('Customer requested extended terms.');
+    });
+
+    it('does not reject a full-object patch whose accounting fields are unchanged from what is already stored', async () => {
+      const { service } = setup([]);
+      const posted = await createAndPostInvoice(service);
+
+      // A caller submitting the whole invoice back (e.g. a form that always
+      // sends every field) should not be blocked just because a protected
+      // key is present — only an actual attempted change is rejected.
+      const updated = await service.updateInvoice(posted.id, {
+        ...posted,
+        notes: 'Just adding a note.',
+      });
+
+      expect(updated.notes).toBe('Just adding a note.');
+      expect(updated.total).toBe(posted.total);
+    });
+  });
+
   describe('postInvoice / markInvoiceAsSent', () => {
     it('posts a balanced journal entry and transitions draft -> sent', async () => {
       const { service, journalEntryService } = setup([]);

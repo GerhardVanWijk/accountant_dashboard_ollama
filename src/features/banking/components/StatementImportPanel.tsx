@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { format } from 'date-fns';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
+import { Download } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
+import { Amount } from '@/components/app/figure';
+import { formatDate } from '@/lib/app/format';
 import type { MatchCandidate, ParsedStatementLine, StatementFileFormat } from '../types';
 import { detectStatementFormat, parseStatementFile } from '../utils/statementParsers';
-import { formatZAR } from '../utils/formatZAR';
+
+const selectClassName =
+  'rounded-lg border border-input bg-transparent px-2 py-1 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const FORMAT_LABELS: Record<StatementFileFormat, string> = {
   csv: 'CSV',
@@ -20,12 +23,11 @@ export interface StatementImportPanelProps {
 }
 
 /**
- * Real bank-statement file import: reads the uploaded file with FileReader,
- * parses it with the format-specific parser in
- * src/features/banking/utils/statementParsers.ts (OFX/CSV/QIF/MT940 — no
- * fake "Import" button), runs smart-matching against already-recorded
- * transactions for each line so obvious duplicates are unchecked by
- * default, and imports only the lines the user leaves checked.
+ * Real bank-statement file import — same FileReader/statementParsers.ts
+ * (OFX/CSV/QIF/MT940) and smart-matching wiring as before the port, JSX
+ * re-skinned. Only the lines the user leaves checked get imported; lines
+ * with a strong existing match are unchecked by default (likely already
+ * recorded).
  */
 export function StatementImportPanel({ onImport, findMatches, onCancel }: StatementImportPanelProps) {
   const [fileName, setFileName] = useState<string | null>(null);
@@ -104,10 +106,10 @@ export function StatementImportPanel({ onImport, findMatches, onCancel }: Statem
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm rounded-md border border-dashed border-border p-lg text-center">
-        <Icon name="download" size={28} className="mx-auto text-text-muted" />
-        <label className="cursor-pointer text-sm font-medium text-primary hover:underline">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border p-6 text-center">
+        <Download className="mx-auto size-6 text-muted-foreground" aria-hidden="true" />
+        <label className="cursor-pointer text-sm font-medium text-brand hover:underline">
           Choose a statement file (CSV, OFX/QFX, QIF, or SWIFT MT940)
           <input
             type="file"
@@ -119,11 +121,11 @@ export function StatementImportPanel({ onImport, findMatches, onCancel }: Statem
             }}
           />
         </label>
-        {fileName && <p className="text-xs text-text-secondary">{fileName}</p>}
-        <label className="mx-auto flex items-center gap-xs text-xs text-text-secondary">
+        {fileName && <p className="text-xs text-muted-foreground">{fileName}</p>}
+        <label className="mx-auto flex items-center gap-2 text-xs text-muted-foreground">
           Format override:
           <select
-            className="rounded-md border border-border bg-panel px-xs py-1 text-xs"
+            className={selectClassName}
             value={formatOverride}
             onChange={(e) => setFormatOverride(e.target.value as StatementFileFormat | '')}
           >
@@ -138,49 +140,48 @@ export function StatementImportPanel({ onImport, findMatches, onCancel }: Statem
       </div>
 
       {error && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </p>
       )}
 
-      {isParsing && <p className="text-sm text-text-secondary">Parsing statement file…</p>}
+      {isParsing && <p className="text-sm text-muted-foreground">Parsing statement file…</p>}
 
       {!isParsing && lines.length > 0 && (
-        <div className="flex flex-col gap-sm">
-          <p className="text-sm text-text-secondary">
-            Found <span className="font-semibold text-text-primary">{lines.length}</span> transaction(s).{' '}
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Found <span className="font-semibold text-foreground">{lines.length}</span> transaction(s).{' '}
             {selected.size} selected for import. Lines flagged with a strong existing match are unchecked by default
             (likely already recorded) — review before importing.
           </p>
-          <div className="max-h-80 overflow-y-auto rounded-md border border-border">
-            <div className="grid grid-cols-[32px_100px_1.6fr_120px_110px_1.4fr] gap-2 border-b border-border bg-background px-3 py-2 text-xs font-semibold text-text-secondary">
+          <div className="max-h-80 overflow-y-auto rounded-xl border border-border">
+            <div className="grid grid-cols-[32px_100px_1.6fr_120px_110px_1.4fr] gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
               <span />
               <span>Date</span>
               <span>Description</span>
               <span className="text-right">Amount</span>
               <span>Direction</span>
-              <span>Best Match</span>
+              <span>Best match</span>
             </div>
             {lines.map((line) => {
               const candidates = matches.get(line.sourceRowId) ?? [];
               const best = candidates[0];
               return (
-                <div
-                  key={line.sourceRowId}
-                  className="grid grid-cols-[32px_100px_1.6fr_120px_110px_1.4fr] gap-2 border-b border-border/50 px-3 py-2 text-sm tabular-nums"
-                >
+                <div key={line.sourceRowId} className="grid grid-cols-[32px_100px_1.6fr_120px_110px_1.4fr] gap-2 border-b border-border/50 px-3 py-2 text-sm tabular-nums">
                   <input
                     type="checkbox"
                     aria-label={`Import ${line.description}`}
                     checked={selected.has(line.sourceRowId)}
                     onChange={() => toggleRow(line.sourceRowId)}
-                    className="h-4 w-4"
+                    className="size-4 rounded border-input"
                   />
-                  <span className="text-text-secondary">{format(new Date(line.date), 'dd MMM yy')}</span>
-                  <span className="truncate text-text-primary">{line.description}</span>
-                  <span className="text-right">{formatZAR(line.direction === 'credit' ? -line.amount : line.amount)}</span>
-                  <span className="text-text-secondary">{line.direction === 'debit' ? 'Money in' : 'Money out'}</span>
-                  <span className="text-xs text-text-secondary">
+                  <span className="text-muted-foreground">{formatDate(line.date)}</span>
+                  <span className="truncate">{line.description}</span>
+                  <span className="text-right">
+                    <Amount value={line.direction === 'credit' ? -line.amount : line.amount} plain />
+                  </span>
+                  <span className="text-muted-foreground">{line.direction === 'debit' ? 'Money in' : 'Money out'}</span>
+                  <span className="text-xs text-muted-foreground">
                     {best ? `${best.score}% — ${best.reasons.join(', ')}` : 'No match found'}
                   </span>
                 </div>
@@ -190,17 +191,12 @@ export function StatementImportPanel({ onImport, findMatches, onCancel }: Statem
         </div>
       )}
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button variant="outline" type="button" onClick={onCancel}>
           Cancel
         </Button>
-        <Button
-          variant="primary"
-          type="button"
-          disabled={lines.length === 0 || isImporting}
-          onClick={() => void handleImport()}
-        >
-          {isImporting ? 'Importing…' : `Import ${selected.size || ''} Transaction${selected.size === 1 ? '' : 's'}`}
+        <Button type="button" disabled={lines.length === 0 || isImporting} onClick={() => void handleImport()}>
+          {isImporting ? 'Importing…' : `Import ${selected.size || ''} transaction${selected.size === 1 ? '' : 's'}`}
         </Button>
       </div>
     </div>

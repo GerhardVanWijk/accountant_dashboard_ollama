@@ -34,6 +34,47 @@ export interface InventoryMover {
 }
 
 /**
+ * Every field that either fed the journal entry `postInvoice()` created
+ * (invoiceNumber/issueDate/lineItems/subtotal/taxTotal/total/currency —
+ * see its doc comment for the exact debit/credit mapping) or is otherwise
+ * exclusively owned by a dedicated, already-guarded transition
+ * (status/amountPaid by postInvoice()/recordPayment(); journalEntryId/
+ * salesOrderId are provenance, never user-editable). updateInvoice()
+ * refuses to change any of these once the invoice is no longer 'draft' —
+ * see its doc comment.
+ */
+const ACCOUNTING_RELEVANT_FIELDS: (keyof Invoice)[] = [
+  'invoiceNumber',
+  'customerId',
+  'salesOrderId',
+  'issueDate',
+  'lineItems',
+  'subtotal',
+  'taxTotal',
+  'total',
+  'amountPaid',
+  'currency',
+  'status',
+  'journalEntryId',
+];
+
+/**
+ * True only if `patch` actually attempts to change `key`'s value — a
+ * caller submitting a full Invoice-shaped object where a protected field
+ * happens to already match what's stored is not an edit, so it's not
+ * blocked. Arrays (`lineItems`) are compared by value, not reference.
+ */
+function fieldChanged<K extends keyof Invoice>(current: Invoice, patch: Partial<Invoice>, key: K): boolean {
+  if (!(key in patch)) return false;
+  const nextValue = patch[key];
+  const currentValue = current[key];
+  if (Array.isArray(nextValue) || Array.isArray(currentValue)) {
+    return JSON.stringify(nextValue) !== JSON.stringify(currentValue);
+  }
+  return nextValue !== currentValue;
+}
+
+/**
  * Business-logic layer between hooks/components and the repository.
  * Handles invoice operations including CRUD, status transitions, payment
  * tracking, and GL posting for the draft -> sent transition.
@@ -64,7 +105,31 @@ export class InvoiceService {
     });
   }
 
+  /**
+   * Updates an invoice, refusing any change to a field that fed the
+   * already-posted GL entry once the invoice is past 'draft' — see
+   * ACCOUNTING_RELEVANT_FIELDS' doc comment. A draft invoice (never
+   * posted, no `journalEntryId`) may still be edited freely, matching
+   * `deleteInvoice()`'s own draft/posted distinction. Only `dueDate` and
+   * `notes` remain editable after posting — neither feeds the journal
+   * entry (postInvoice() posts against `issueDate`, not `dueDate`, and
+   * never reads `notes`) — everything else must go through a Credit Note
+   * instead, the same correction path `deleteInvoice()` already points
+   * callers to. Enforced here, not just hidden in the UI, so no other
+   * caller (a future API route, a script, a different page) can bypass it.
+   */
   async updateInvoice(id: string, patch: Partial<Invoice>): Promise<Invoice> {
+    const invoice = await this.requireInvoice(id);
+    if (invoice.status !== 'draft') {
+      const changedField = ACCOUNTING_RELEVANT_FIELDS.find((key) => fieldChanged(invoice, patch, key));
+      if (changedField) {
+        throw new Error(
+          `Cannot edit invoice "${id}": "${changedField}" cannot be changed once the invoice has posted to the ledger ` +
+            `(current status: ${invoice.status}). Only dueDate and notes may still be changed here — correct the ` +
+            `invoiced amount with a credit note instead.`,
+        );
+      }
+    }
     return this.repository.update(id, patch);
   }
 

@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Account } from '@/types';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
 import { ACCOUNT_TYPES } from '../types/account.types';
 import {
   accountFormSchema,
@@ -11,8 +13,8 @@ import {
   type AccountFormSchema,
 } from '../utils/accountFormSchema';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface AccountFormProps {
   initialValues?: Account;
@@ -24,14 +26,18 @@ export interface AccountFormProps {
   hasPostings?: boolean;
   onSubmit: (values: AccountFormSchema) => Promise<void> | void;
   onCancel: () => void;
+  submitting?: boolean;
+  submitError?: string | null;
   submitLabel?: string;
 }
 
 /**
- * Chart of Accounts create/edit form. `type` drives a suggested
- * `normalBalance` default (debit for assets/expenses, credit for
- * liabilities/equity/revenue) but the field stays editable since a
- * contra account can legitimately run the other way.
+ * Chart of Accounts create/edit form — identical accountFormSchema.ts and
+ * AccountService wiring as before the port, JSX re-skinned onto v0's
+ * Field/Input primitives. `type` drives a suggested `normalBalance`
+ * default (debit for assets/expenses, credit for liabilities/equity/
+ * revenue) but the field stays editable since a contra account can
+ * legitimately run the other way.
  */
 export function AccountForm({
   initialValues,
@@ -39,14 +45,16 @@ export function AccountForm({
   hasPostings = false,
   onSubmit,
   onCancel,
-  submitLabel = 'Save Account',
+  submitting,
+  submitError,
+  submitLabel = 'Save account',
 }: AccountFormProps) {
   const {
     register,
     handleSubmit,
     watch,
     setValue,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<AccountFormSchema>({
     resolver: zodResolver(accountFormSchema),
     defaultValues: toDefaultValues(initialValues),
@@ -57,28 +65,34 @@ export function AccountForm({
 
   return (
     <form
-      onSubmit={handleSubmit(async (values) => {
-        await onSubmit(values);
+      onSubmit={handleSubmit((values) => {
+        void onSubmit(values);
       })}
-      className="flex flex-col gap-lg"
+      className="flex flex-col gap-6"
     >
       {hasPostings && (
-        <p className="rounded-md border border-border bg-background px-sm py-xs text-xs text-text-secondary">
+        <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           This account has posted ledger history — it can be renamed or deactivated, but it cannot be deleted from
           the chart.
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <Field label="Account Code" error={errors.code?.message}>
-          <input className={`${inputClass} font-mono`} {...register('code')} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="account-code">Account code</FieldLabel>
+          <Input id="account-code" className="figure" {...register('code')} />
+          <FieldError errors={[errors.code]} />
         </Field>
-        <Field label="Account Name" error={errors.name?.message}>
-          <input className={inputClass} {...register('name')} />
+        <Field>
+          <FieldLabel htmlFor="account-name">Account name</FieldLabel>
+          <Input id="account-name" {...register('name')} />
+          <FieldError errors={[errors.name]} />
         </Field>
-        <Field label="Master Type" error={errors.type?.message}>
+        <Field>
+          <FieldLabel htmlFor="account-type">Master type</FieldLabel>
           <select
-            className={inputClass}
+            id="account-type"
+            className={selectClassName}
             {...register('type', {
               onChange: (e) => {
                 const nextType = e.target.value as AccountFormSchema['type'];
@@ -93,18 +107,23 @@ export function AccountForm({
               </option>
             ))}
           </select>
+          <FieldError errors={[errors.type]} />
         </Field>
-        <Field label="Sub-Type (optional)">
-          <input className={inputClass} placeholder="e.g. current_asset" {...register('subType')} />
+        <Field>
+          <FieldLabel htmlFor="account-subtype">Sub-type (optional)</FieldLabel>
+          <Input id="account-subtype" placeholder="e.g. current_asset" {...register('subType')} />
         </Field>
-        <Field label="Normal Balance" error={errors.normalBalance?.message}>
-          <select className={inputClass} {...register('normalBalance')}>
+        <Field>
+          <FieldLabel htmlFor="account-normal-balance">Normal balance</FieldLabel>
+          <select id="account-normal-balance" className={selectClassName} {...register('normalBalance')}>
             <option value="debit">Debit</option>
             <option value="credit">Credit</option>
           </select>
+          <FieldError errors={[errors.normalBalance]} />
         </Field>
-        <Field label="Parent Account (optional)">
-          <select className={inputClass} {...register('parentAccountId')}>
+        <Field>
+          <FieldLabel htmlFor="account-parent">Parent account (optional)</FieldLabel>
+          <select id="account-parent" className={selectClassName} {...register('parentAccountId')}>
             <option value="">No parent — top-level account</option>
             {parentOptions.map((a) => (
               <option key={a.id} value={a.id}>
@@ -113,36 +132,29 @@ export function AccountForm({
             ))}
           </select>
         </Field>
-        <Field label="Status">
-          <label className="flex items-center gap-sm text-sm text-text-primary">
-            <input type="checkbox" className="h-4 w-4 rounded border-border" {...register('isActive')} />
+        <Field orientation="horizontal" className="sm:col-span-2">
+          <input type="checkbox" id="account-active" className="size-4 rounded border-input" {...register('isActive')} />
+          <FieldLabel htmlFor="account-active" className="font-normal">
             Active — can be posted to
-          </label>
+          </FieldLabel>
         </Field>
       </div>
 
-      <Field label="Description (optional)">
-        <textarea className={inputClass} rows={2} {...register('description')} />
+      <Field>
+        <FieldLabel htmlFor="account-description">Description (optional)</FieldLabel>
+        <Textarea id="account-description" rows={2} {...register('description')} />
       </Field>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button variant="outline" type="button" onClick={onCancel} disabled={submitting}>
           Cancel
         </Button>
-        <Button variant="primary" type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Saving…' : submitLabel}
+        <Button type="submit" disabled={submitting}>
+          {submitting ? 'Saving…' : submitLabel}
         </Button>
       </div>
     </form>
-  );
-}
-
-function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
-  return (
-    <label className="flex flex-col gap-xs text-sm">
-      <span className="font-medium text-text-primary">{label}</span>
-      {children}
-      {error && <span className="text-xs text-danger">{error}</span>}
-    </label>
   );
 }

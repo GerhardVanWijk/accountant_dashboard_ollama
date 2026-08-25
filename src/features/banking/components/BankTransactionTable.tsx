@@ -1,13 +1,11 @@
-import { useMemo, useState } from 'react';
-import { format } from 'date-fns';
 import type { BankAccount } from '@/types';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
-import { Icon } from '@/components/ui/Icon';
+import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { Amount } from '@/components/app/figure';
+import { StatusBadge } from '@/components/app/status-badge';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { formatDate } from '@/lib/app/format';
 import type { BankTransactionWithAllocations } from '../types';
-import { formatZAR } from '../utils/formatZAR';
-
-type SortKey = 'date' | 'amount';
 
 export interface BankTransactionTableProps {
   transactions: BankTransactionWithAllocations[];
@@ -17,134 +15,133 @@ export interface BankTransactionTableProps {
   onDelete: (transaction: BankTransactionWithAllocations) => void;
 }
 
-const STATUS_CLASSES: Record<string, string> = {
-  unreconciled: 'bg-warning-financial/20 text-warning-financial',
-  matched: 'bg-info-financial/20 text-info-financial',
-  reconciled: 'bg-positive/20 text-positive',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  unreconciled: 'Unreconciled',
-  matched: 'Matched',
-  reconciled: 'Reconciled',
-};
-
-/** Bank transactions list — sortable, signed amounts, allocation/delete row actions. */
-export function BankTransactionTable({
-  transactions,
-  bankAccountsById,
-  showAccountColumn = false,
-  onAllocate,
-  onDelete,
-}: BankTransactionTableProps) {
-  const [sortBy, setSortBy] = useState<SortKey>('date');
-  const [sortDesc, setSortDesc] = useState(true);
-
-  const sorted = useMemo(() => {
-    const copy = [...transactions];
-    copy.sort((a, b) => {
-      const comparison = sortBy === 'amount' ? a.amount - b.amount : a.date.localeCompare(b.date);
-      return sortDesc ? -comparison : comparison;
-    });
-    return copy;
-  }, [transactions, sortBy, sortDesc]);
-
-  function toggleSort(key: SortKey) {
-    if (sortBy === key) setSortDesc((d) => !d);
-    else {
-      setSortBy(key);
-      setSortDesc(true);
-    }
-  }
-
-  const cols = showAccountColumn
-    ? '110px 1fr 140px 140px 130px 120px 110px 90px'
-    : '110px 1.6fr 140px 130px 120px 110px 90px';
+/**
+ * Bank transactions list, re-skinned onto v0's DataTable. Real
+ * `BankTransactionStatus` (unreconciled/matched/reconciled) — not v0's own
+ * mock set (matched/unmatched/needs-review), and no "Balance" or "matched
+ * record" columns: the real domain has no per-transaction running balance
+ * anywhere (only the account's own `currentBalance` and the reconciliation
+ * service's point-in-time `glCashbookBalance`), and `matchedEntityId` has
+ * no service that ever populates a human-readable label for it — see the
+ * M5 report. Money in/out split into separate columns, matching v0's
+ * unambiguous-direction convention.
+ */
+export function BankTransactionTable({ transactions, bankAccountsById, showAccountColumn = false, onAllocate, onDelete }: BankTransactionTableProps) {
+  const columns: DataTableColumn<BankTransactionWithAllocations>[] = [
+    {
+      key: 'date',
+      header: 'Date',
+      sortValue: (t) => t.date,
+      cell: (t) => <span className="whitespace-nowrap">{formatDate(t.date)}</span>,
+    },
+    {
+      key: 'description',
+      header: 'Description',
+      sortValue: (t) => t.description,
+      cell: (t) => {
+        const needsAllocation = t.allocations.length === 0 && !t.transferPairId;
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="flex items-center gap-1.5 text-sm">
+              {t.description}
+              {needsAllocation && (
+                <Badge variant="outline" className="text-warning">
+                  Needs allocation
+                </Badge>
+              )}
+            </span>
+            <span className="text-xs text-muted-foreground">{t.reference ?? '—'}</span>
+          </div>
+        );
+      },
+    },
+    ...(showAccountColumn
+      ? [
+          {
+            key: 'account',
+            header: 'Account',
+            hideBelowMd: true,
+            sortValue: (t: BankTransactionWithAllocations) => bankAccountsById.get(t.bankAccountId)?.name ?? '',
+            cell: (t: BankTransactionWithAllocations) => (
+              <span className="text-xs text-muted-foreground">{bankAccountsById.get(t.bankAccountId)?.name ?? t.bankAccountId}</span>
+            ),
+          } satisfies DataTableColumn<BankTransactionWithAllocations>,
+        ]
+      : []),
+    {
+      key: 'in',
+      header: 'Money in',
+      align: 'right',
+      sortValue: (t) => (t.direction === 'debit' ? t.amount : 0),
+      cell: (t) => (t.direction === 'debit' ? <Amount value={t.amount} plain className="text-sm text-positive" /> : <span className="text-xs text-muted-foreground">&mdash;</span>),
+    },
+    {
+      key: 'out',
+      header: 'Money out',
+      align: 'right',
+      sortValue: (t) => (t.direction === 'credit' ? t.amount : 0),
+      cell: (t) => (t.direction === 'credit' ? <Amount value={t.amount} plain className="text-sm" /> : <span className="text-xs text-muted-foreground">&mdash;</span>),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortValue: (t) => t.status,
+      cell: (t) => <StatusBadge status={t.status} />,
+    },
+    {
+      key: 'actions',
+      header: '',
+      headClassName: 'w-24',
+      cell: (t) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={Boolean(t.transferPairId)}
+            onClick={() => onAllocate(t)}
+            aria-label={`Allocate ${t.description}`}
+          >
+            Allocate
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={t.status === 'reconciled'}
+            onClick={() => onDelete(t)}
+            aria-label={`Delete ${t.description}`}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            Delete
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <div style={{ minWidth: showAccountColumn ? 1080 : 940 }}>
-        <div
-          className="grid gap-3 border-b border-border bg-background px-4 py-3 text-sm font-semibold tabular-nums"
-          style={{ gridTemplateColumns: cols }}
-        >
-          <FinancialTableCell type="label">
-            <button type="button" onClick={() => toggleSort('date')} className="hover:text-primary">
-              Date {sortBy === 'date' && (sortDesc ? '↓' : '↑')}
-            </button>
-          </FinancialTableCell>
-          <FinancialTableCell type="label">Description</FinancialTableCell>
-          {showAccountColumn && <FinancialTableCell type="label">Account</FinancialTableCell>}
-          <FinancialTableCell type="label">Reference</FinancialTableCell>
-          <FinancialTableCell type="number">
-            <button type="button" onClick={() => toggleSort('amount')} className="hover:text-primary">
-              Amount {sortBy === 'amount' && (sortDesc ? '↓' : '↑')}
-            </button>
-          </FinancialTableCell>
-          <FinancialTableCell type="status">Status</FinancialTableCell>
-          <FinancialTableCell type="status">Actions</FinancialTableCell>
-        </div>
-
-        {sorted.map((txn) => {
-          const signed = txn.direction === 'credit' ? -txn.amount : txn.amount;
-          const needsAllocation = txn.allocations.length === 0 && !txn.transferPairId;
-          return (
-            <div
-              key={txn.id}
-              className="grid gap-3 border-b border-border/50 px-4 py-3 tabular-nums hover:bg-primary/5"
-              style={{ gridTemplateColumns: cols }}
-            >
-              <FinancialTableCell type="label" className="text-text-secondary">
-                {format(new Date(txn.date), 'dd MMM yy')}
-              </FinancialTableCell>
-              <FinancialTableCell type="label" className="text-text-primary">
-                {txn.description}
-                {needsAllocation && (
-                  <span className="ml-2 rounded-full bg-warning-financial/20 px-2 py-0.5 text-xs font-semibold text-warning-financial">
-                    Needs allocation
-                  </span>
-                )}
-              </FinancialTableCell>
-              {showAccountColumn && (
-                <FinancialTableCell type="label" className="text-text-secondary">
-                  {bankAccountsById.get(txn.bankAccountId)?.name ?? txn.bankAccountId}
-                </FinancialTableCell>
-              )}
-              <FinancialTableCell type="label" className="font-mono text-xs text-text-secondary">
-                {txn.reference ?? '—'}
-              </FinancialTableCell>
-              <FinancialTableCell type="number">
-                <FinancialNumber value={signed} format={formatZAR} showFlash={false} />
-              </FinancialTableCell>
-              <FinancialTableCell type="status">
-                <span className={`rounded-full px-2 py-1 text-xs font-semibold ${STATUS_CLASSES[txn.status]}`}>
-                  {STATUS_LABELS[txn.status]}
-                </span>
-              </FinancialTableCell>
-              <FinancialTableCell type="status" className="flex items-center justify-center gap-xs">
-                <button
-                  type="button"
-                  aria-label={`Allocate ${txn.description}`}
-                  onClick={() => onAllocate(txn)}
-                  disabled={Boolean(txn.transferPairId)}
-                  className="rounded-md p-1 text-text-secondary hover:bg-background hover:text-primary disabled:opacity-30"
-                >
-                  <Icon name="edit" size={16} />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Delete ${txn.description}`}
-                  onClick={() => onDelete(txn)}
-                  disabled={txn.status === 'reconciled'}
-                  className="rounded-md p-1 text-text-secondary hover:bg-background hover:text-danger disabled:opacity-30"
-                >
-                  <Icon name="delete" size={16} />
-                </button>
-              </FinancialTableCell>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <DataTable
+      rows={transactions}
+      columns={columns}
+      getRowKey={(t) => t.id}
+      searchable={(t) => [t.description, t.reference ?? '', t.category ?? ''].join(' ')}
+      searchPlaceholder="Search description or reference"
+      initialSortKey="date"
+      initialSortDirection="desc"
+      pageSize={15}
+      filters={[
+        {
+          key: 'status',
+          label: 'All statuses',
+          options: [
+            { value: 'unreconciled', label: 'Unreconciled' },
+            { value: 'matched', label: 'Matched' },
+            { value: 'reconciled', label: 'Reconciled' },
+          ],
+          match: (t, value) => t.status === value,
+        },
+      ]}
+      emptyTitle="No transactions found"
+      emptyDescription="Adjust the search or filters to widen the view."
+    />
   );
 }

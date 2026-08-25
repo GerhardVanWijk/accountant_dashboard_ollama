@@ -1,26 +1,26 @@
 import { useMemo, useState } from 'react';
+import { Loader2, Plus } from 'lucide-react';
 import type { RelatedParty } from '@/types/relatedParty';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useRelatedParties } from '../hooks/useRelatedParties';
 import { useRelatedPartyTransactions } from '../hooks/useRelatedPartyTransactions';
 import { RelatedPartyForm } from '../components/RelatedPartyForm';
 import { RelatedPartiesTable } from '../components/RelatedPartiesTable';
-import { Modal } from '../components/Modal';
 import type { CreateRelatedPartyDTO, UpdateRelatedPartyDTO } from '../services';
 
 type DialogState = { mode: 'create' } | { mode: 'edit'; relatedParty: RelatedParty } | null;
 
 /**
- * Related Party Register — route `/related-parties/register`
- * (SA_ACCOUNTING_MASTER_SPEC.md §88). A disclosure-support register only:
- * no journal entries, no draft/posted lifecycle. Directors, shareholders,
- * subsidiaries, associates, key management, and other related entities
- * are entered manually — this app has no shareholder register or
- * org-chart data to derive them from automatically.
+ * Related Party Register — route `/related-parties/register`. A
+ * disclosure-support register only: no journal entries, no draft/posted
+ * lifecycle. Directors, shareholders, subsidiaries, associates, key
+ * management, and other related entities are entered manually — this app
+ * has no shareholder register or org-chart data to derive them from
+ * automatically. No `related-parties` entry exists in the real permission
+ * catalog (M11), so this route/its actions stay ungated, same as before.
+ * Re-skinned onto v0's PageHeader/SectionCard/DataTable/Dialog (M13).
  */
 export function RelatedPartyRegisterPage() {
   const { relatedParties, loading, error, refetch, createRelatedParty, updateRelatedParty, deleteRelatedParty } = useRelatedParties();
@@ -63,55 +63,60 @@ export function RelatedPartyRegisterPage() {
   const busy = loading || transactionsLoading;
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Related Party Register</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Directors, shareholders, subsidiaries, associates, key management, and other related entities, kept for
-            financial statement disclosure. /related-parties/register
-          </p>
-        </div>
-        <Button onClick={() => setDialog({ mode: 'create' })}>New Related Party</Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Related party register"
+        description="Directors, shareholders, subsidiaries, associates, key management, and other related entities, kept for financial statement disclosure."
+        actions={
+          <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+            <Plus data-icon="inline-start" />
+            New related party
+          </Button>
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {actionError}
         </p>
       )}
 
-      {busy && <Spinner label="Loading related parties…" />}
-      {!busy && error && <ErrorState message={error.message} onRetry={refetch} />}
+      {busy && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading related parties…</p>
+        </div>
+      )}
+      {!busy && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       {!busy && !error && (
-        <Card>
-          {relatedParties.length === 0 ? (
-            <EmptyState
-              title="No related parties yet"
-              message="Add a director, shareholder, subsidiary, associate, or other related entity to start the register."
-              action={<Button onClick={() => setDialog({ mode: 'create' })}>New Related Party</Button>}
-            />
-          ) : (
-            <RelatedPartiesTable
-              relatedParties={relatedParties}
-              transactionCountByPartyId={transactionCountByPartyId}
-              onEdit={(relatedParty) => setDialog({ mode: 'edit', relatedParty })}
-              onDelete={handleDelete}
-            />
-          )}
-        </Card>
+        <SectionCard>
+          <RelatedPartiesTable
+            relatedParties={relatedParties}
+            transactionCountByPartyId={transactionCountByPartyId}
+            onEdit={(relatedParty) => setDialog({ mode: 'edit', relatedParty })}
+            onDelete={(relatedParty) => void handleDelete(relatedParty)}
+          />
+        </SectionCard>
       )}
 
-      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
-        <Modal title={dialog.mode === 'edit' ? 'Edit Related Party' : 'New Related Party'} onClose={() => setDialog(null)}>
-          <RelatedPartyForm
-            relatedParty={dialog.mode === 'edit' ? dialog.relatedParty : undefined}
-            onSubmit={handleFormSubmit}
-            onCancel={() => setDialog(null)}
-          />
-        </Modal>
-      )}
+      <Dialog open={dialog?.mode === 'create' || dialog?.mode === 'edit'} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{dialog?.mode === 'edit' ? 'Edit Related Party' : 'New Related Party'}</DialogTitle>
+          </DialogHeader>
+          {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
+            <RelatedPartyForm relatedParty={dialog.mode === 'edit' ? dialog.relatedParty : undefined} onSubmit={handleFormSubmit} onCancel={() => setDialog(null)} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

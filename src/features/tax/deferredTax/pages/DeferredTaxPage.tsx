@@ -1,20 +1,19 @@
 import { useMemo, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Loader2 } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { formatCurrency, formatDate } from '@/lib/app/format';
 import { useDeferredTax } from '../hooks/useDeferredTax';
 import { TemporaryDifferencesTable } from '../components/TemporaryDifferencesTable';
 import { findMostRecentPostedBefore } from '../services/deferredTaxCalculations';
-import { fieldInput, fieldLabel } from '../components/formStyles';
 
-/** Deferred Tax — route `/tax/deferred-tax` (docs/ROUTES.md). SA_ACCOUNTING_MASTER_SPEC.md §50, §116 Phase 12 "Advanced Accounting". */
+const selectClassName = 'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+
+/** Deferred Tax — route `/tax/deferred-tax`. Re-skinned onto v0's PageHeader/SectionCard (M7); data/mutation wiring unchanged. */
 export function DeferredTaxPage() {
-  const { financialYears, company, computations, loading, error, refetch, createComputation, updateItems, deleteComputation, postComputation } =
-    useDeferredTax();
+  const { financialYears, company, computations, loading, error, refetch, createComputation, updateItems, deleteComputation, postComputation } = useDeferredTax();
 
   const [selectedFinancialYearId, setSelectedFinancialYearId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -27,13 +26,8 @@ export function DeferredTaxPage() {
   const selectedFinancialYear = sortedFinancialYears.find((y) => y.id === activeFinancialYearId);
   const selectedComputation = computations.find((c) => c.financialYearId === activeFinancialYearId);
 
-  const priorComputation =
-    selectedComputation && company
-      ? findMostRecentPostedBefore(computations, company.id, selectedComputation.asOfDate, selectedComputation.id)
-      : undefined;
-  const previewMovement = selectedComputation
-    ? selectedComputation.netDeferredTaxLiability - (priorComputation?.netDeferredTaxLiability ?? 0)
-    : 0;
+  const priorComputation = selectedComputation && company ? findMostRecentPostedBefore(computations, company.id, selectedComputation.asOfDate, selectedComputation.id) : undefined;
+  const previewMovement = selectedComputation ? selectedComputation.netDeferredTaxLiability - (priorComputation?.netDeferredTaxLiability ?? 0) : 0;
 
   const runAction = async (action: () => Promise<void>, successMessage?: string) => {
     setActionError(null);
@@ -50,132 +44,107 @@ export function DeferredTaxPage() {
   };
 
   if (loading) {
-    return <Spinner label="Loading deferred tax data…" />;
+    return (
+      <div role="status" className="flex min-h-[40vh] items-center justify-center gap-2 text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+        <span className="text-sm">Loading deferred tax data…</span>
+      </div>
+    );
   }
   if (error) {
-    return <ErrorState message={error.message} onRetry={refetch} />;
+    return (
+      <SectionCard>
+        <p role="alert" className="text-sm text-destructive">
+          {error.message}
+        </p>
+        <Button variant="outline" className="mt-3" onClick={refetch}>
+          Retry
+        </Button>
+      </SectionCard>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Deferred Tax</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Temporary differences, Deferred Tax Assets/Liabilities, and the period movement (§50). /tax/deferred-tax
-          </p>
-        </div>
-        {sortedFinancialYears.length > 0 && (
-          <div>
-            <label className={fieldLabel} htmlFor="dtFinancialYearSelect">
-              Financial Year
-            </label>
-            <select
-              id="dtFinancialYearSelect"
-              className={fieldInput}
-              value={activeFinancialYearId ?? ''}
-              onChange={(e) => setSelectedFinancialYearId(e.target.value)}
-            >
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Deferred Tax"
+        description="Temporary differences, Deferred Tax Assets/Liabilities, and the period movement."
+        actions={
+          sortedFinancialYears.length > 0 ? (
+            <select aria-label="Financial Year" className={selectClassName} value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
               {sortedFinancialYears.map((year) => (
                 <option key={year.id} value={year.id}>
                   {year.name}
                 </option>
               ))}
             </select>
-          </div>
-        )}
-      </div>
+          ) : undefined
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
           {actionError}
         </p>
       )}
       {statusMessage && (
-        <p role="status" className="rounded-md border border-border bg-positive/10 px-md py-sm text-sm text-positive">
+        <p role="status" className="rounded-lg border border-positive/40 bg-positive/10 px-4 py-2.5 text-sm text-positive">
           {statusMessage}
         </p>
       )}
 
-      <p role="note" className="rounded-md border border-warning bg-warning/10 px-md py-sm text-sm text-warning-financial">
-        Not calculated as accounting profit × tax rate — every figure below is a real temporary difference (carrying
-        amount vs. tax base). A Deferred Tax Asset only counts once you confirm it&apos;s probable future taxable
-        profit will be available to use it (§50) — that judgment is never made automatically. Requires
-        professional/accounting review before relying on it for a statutory filing (§110/§111).
+      <p role="note" className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
+        Not calculated as accounting profit × tax rate — every figure below is a real temporary difference (carrying amount vs. tax base). A Deferred Tax Asset only counts once you
+        confirm it&apos;s probable future taxable profit will be available to use it — that judgment is never made automatically. Requires professional/accounting review before relying
+        on it for a statutory filing.
       </p>
 
       {sortedFinancialYears.length === 0 && (
-        <EmptyState title="No financial years yet" message="A FinancialYear must exist before deferred tax can be computed." />
+        <Empty>
+          <EmptyTitle>No financial years yet</EmptyTitle>
+          <EmptyDescription>A FinancialYear must exist before deferred tax can be computed.</EmptyDescription>
+        </Empty>
       )}
 
       {selectedFinancialYear && !selectedComputation && (
-        <Card>
-          <EmptyState
-            title={`No deferred tax computation yet for ${selectedFinancialYear.name}`}
-            message="Create one to pull in the Fixed Asset Tax Register's temporary differences and add any others (provisions, assessed losses)."
-            action={
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  runAction(async () => {
-                    await createComputation(selectedFinancialYear.id);
-                  }, `Created a draft deferred tax computation for ${selectedFinancialYear.name}.`)
-                }
-              >
-                Create Deferred Tax Computation
-              </Button>
-            }
-          />
-        </Card>
+        <SectionCard>
+          <Empty>
+            <EmptyTitle>No deferred tax computation yet for {selectedFinancialYear.name}</EmptyTitle>
+            <EmptyDescription>Create one to pull in the Fixed Asset Tax Register's temporary differences and add any others (provisions, assessed losses).</EmptyDescription>
+            <Button
+              disabled={busy}
+              onClick={() =>
+                runAction(async () => {
+                  await createComputation(selectedFinancialYear.id);
+                }, `Created a draft deferred tax computation for ${selectedFinancialYear.name}.`)
+              }
+            >
+              Create Deferred Tax Computation
+            </Button>
+          </Empty>
+        </SectionCard>
       )}
 
       {selectedComputation && (
         <>
-          <Card>
-            <div className="flex flex-wrap items-center justify-between gap-sm">
-              <h2 className="text-sm font-semibold text-text-primary">
-                {selectedComputation.financialYearLabel} — {selectedComputation.status === 'draft' ? 'Draft' : 'Posted'}
-              </h2>
-              <span className="text-xs text-text-secondary">
-                As of {selectedComputation.asOfDate.slice(0, 10)} · {selectedComputation.taxRatePercent}% rate ({selectedComputation.taxConfigTaxYearLabel})
-              </span>
+          <SectionCard
+            title={`${selectedComputation.financialYearLabel} — ${selectedComputation.status === 'draft' ? 'Draft' : 'Posted'}`}
+            description={`As of ${formatDate(selectedComputation.asOfDate)} · ${selectedComputation.taxRatePercent}% rate (${selectedComputation.taxConfigTaxYearLabel})`}
+          >
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <FigureBlock label="Deferred Tax Liability" value={formatCurrency(selectedComputation.totalDeferredTaxLiability)} />
+              <FigureBlock label="Deferred Tax Asset" value={formatCurrency(selectedComputation.totalDeferredTaxAsset)} />
+              <FigureBlock label="Net Position" value={formatCurrency(selectedComputation.netDeferredTaxLiability)} tone="warning" />
+              <FigureBlock
+                label={selectedComputation.status === 'draft' ? 'Movement Preview' : 'Movement Posted'}
+                value={formatCurrency(selectedComputation.status === 'draft' ? previewMovement : (selectedComputation.movementAmount ?? 0))}
+                hint={priorComputation ? `vs. ${priorComputation.financialYearLabel} (posted)` : 'vs. R0.00 (first computation for this company)'}
+                tone="warning"
+              />
             </div>
+          </SectionCard>
 
-            <div className="mt-md grid grid-cols-2 gap-md tabular-nums md:grid-cols-4">
-              <div>
-                <p className="text-xs text-text-secondary">Deferred Tax Liability</p>
-                <FinancialNumber value={selectedComputation.totalDeferredTaxLiability} format={formatCurrency} className="text-lg" />
-              </div>
-              <div>
-                <p className="text-xs text-text-secondary">Deferred Tax Asset</p>
-                <FinancialNumber value={selectedComputation.totalDeferredTaxAsset} format={formatCurrency} className="text-lg" />
-              </div>
-              <div>
-                <p className="text-xs text-text-secondary">Net Position</p>
-                <FinancialNumber value={selectedComputation.netDeferredTaxLiability} format={formatCurrency} isInverted className="text-lg" />
-              </div>
-              <div>
-                <p className="text-xs text-text-secondary">
-                  {selectedComputation.status === 'draft' ? 'Movement Preview' : 'Movement Posted'}
-                </p>
-                <FinancialNumber
-                  value={selectedComputation.status === 'draft' ? previewMovement : (selectedComputation.movementAmount ?? 0)}
-                  format={formatCurrency}
-                  isInverted
-                  className="text-lg"
-                />
-                <p className="mt-xs text-xs text-text-muted">
-                  {priorComputation
-                    ? `vs. ${priorComputation.financialYearLabel} (posted)`
-                    : 'vs. R0.00 (first computation for this company)'}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card>
-            <h2 className="mb-sm text-sm font-semibold text-text-primary">Temporary Differences</h2>
+          <SectionCard title="Temporary Differences">
             <TemporaryDifferencesTable
               key={selectedComputation.id}
               items={selectedComputation.items}
@@ -186,13 +155,13 @@ export function DeferredTaxPage() {
                 setStatusMessage('Temporary differences saved and the deferred tax position recomputed.');
               }}
             />
-          </Card>
+          </SectionCard>
 
           {selectedComputation.status === 'draft' ? (
-            <div className="flex justify-end gap-sm">
+            <div className="flex justify-end gap-2">
               <Button
-                type="button"
-                variant="danger"
+                variant="outline"
+                className="text-destructive"
                 disabled={busy}
                 onClick={() =>
                   runAction(async () => {
@@ -203,7 +172,6 @@ export function DeferredTaxPage() {
                 Delete Draft
               </Button>
               <Button
-                type="button"
                 disabled={busy}
                 onClick={() =>
                   runAction(async () => {
@@ -215,12 +183,10 @@ export function DeferredTaxPage() {
               </Button>
             </div>
           ) : (
-            <p className="text-xs text-text-secondary">
+            <p className="text-xs text-muted-foreground">
               Posted{selectedComputation.postedAt ? ` on ${new Date(selectedComputation.postedAt).toLocaleDateString()}` : ''}
-              {selectedComputation.journalEntryId
-                ? ` — journal entry ${selectedComputation.journalEntryId}.`
-                : ' — no journal entry (nil movement).'}{' '}
-              A posted computation is immutable; there is no reversal path yet.
+              {selectedComputation.journalEntryId ? ` — journal entry ${selectedComputation.journalEntryId}.` : ' — no journal entry (nil movement).'} A posted computation is immutable;
+              there is no reversal path yet.
             </p>
           )}
         </>

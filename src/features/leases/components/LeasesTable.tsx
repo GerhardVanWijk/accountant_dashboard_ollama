@@ -1,20 +1,9 @@
-import type { LeaseContract, LeaseStatus } from '@/types/lease';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { cn } from '@/utils/cn';
+import type { LeaseContract } from '@/types/lease';
+import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { Amount } from '@/components/app/figure';
+import { StatusBadge } from '@/components/app/status-badge';
+import { Button } from '@/components/ui/shadcn/button';
 import { calculateCurrentPortionForLease } from '../services';
-
-const STATUS_STYLES: Record<LeaseStatus, string> = {
-  draft: 'bg-text-muted/10 text-text-secondary',
-  active: 'bg-positive/10 text-positive',
-  terminated: 'bg-text-muted/10 text-text-muted',
-};
-
-const STATUS_LABELS: Record<LeaseStatus, string> = {
-  draft: 'Draft',
-  active: 'Active',
-  terminated: 'Terminated',
-};
 
 export interface LeasesTableProps {
   leases: LeaseContract[];
@@ -26,104 +15,98 @@ export interface LeasesTableProps {
   onDelete: (lease: LeaseContract) => void;
 }
 
-export function LeasesTable({
-  leases,
-  completedAmortizationRunsByLease,
-  onEdit,
-  onPostCommencement,
-  onTerminate,
-  onDelete,
-}: LeasesTableProps) {
+/** Lease register, re-skinned onto v0's DataTable (M13) — every figure (outstanding liability, ROU carrying value, current portion) is read off the real LeaseContract record or `calculateCurrentPortionForLease()`, no lease math performed here. */
+export function LeasesTable({ leases, completedAmortizationRunsByLease, onEdit, onPostCommencement, onTerminate, onDelete }: LeasesTableProps) {
+  const columns: DataTableColumn<LeaseContract>[] = [
+    {
+      key: 'number',
+      header: 'Lease',
+      sortValue: (l) => l.leaseNumber,
+      cell: (l) => (
+        <div className="flex flex-col">
+          <span className="font-mono text-sm font-medium text-foreground">{l.leaseNumber}</span>
+          <span className="text-xs text-muted-foreground">{l.assetDescription}</span>
+        </div>
+      ),
+    },
+    { key: 'lessor', header: 'Lessor', hideBelowMd: true, sortValue: (l) => l.lessorName, cell: (l) => <span className="text-xs">{l.lessorName}</span> },
+    { key: 'term', header: 'Term (months)', align: 'right', hideBelowMd: true, sortValue: (l) => l.leaseTermMonths, cell: (l) => <span className="figure text-sm tabular-nums">{l.leaseTermMonths}</span> },
+    { key: 'payment', header: 'Monthly payment', align: 'right', hideBelowMd: true, sortValue: (l) => l.monthlyPayment, cell: (l) => <Amount value={l.monthlyPayment} plain className="text-sm text-muted-foreground" /> },
+    {
+      key: 'liability',
+      header: 'Outstanding liability',
+      align: 'right',
+      sortValue: (l) => l.outstandingLeaseLiability,
+      cell: (l) => <Amount value={-l.outstandingLeaseLiability} plain className="text-sm" />,
+    },
+    {
+      key: 'rou',
+      header: 'ROU carrying value',
+      align: 'right',
+      sortValue: (l) => l.initialRightOfUseAsset - l.accumulatedDepreciation,
+      cell: (l) => <Amount value={l.initialRightOfUseAsset - l.accumulatedDepreciation} className="text-sm font-medium" />,
+    },
+    {
+      key: 'currentPortion',
+      header: 'Current portion (12mo)',
+      align: 'right',
+      hideBelowMd: true,
+      sortValue: (l) => (l.status === 'active' ? calculateCurrentPortionForLease(l, completedAmortizationRunsByLease[l.id] ?? 0) : 0),
+      cell: (l) => <Amount value={-(l.status === 'active' ? calculateCurrentPortionForLease(l, completedAmortizationRunsByLease[l.id] ?? 0) : 0)} plain className="text-sm" />,
+    },
+    { key: 'status', header: 'Status', sortValue: (l) => l.status, cell: (l) => <StatusBadge status={l.status} /> },
+    {
+      key: 'actions',
+      header: '',
+      cell: (l) => (
+        <div className="flex justify-end gap-1">
+          {l.status === 'draft' && (
+            <Button variant="ghost" size="sm" onClick={() => onPostCommencement(l)}>
+              Post commencement
+            </Button>
+          )}
+          {l.status === 'active' && (
+            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onTerminate(l)}>
+              Terminate
+            </Button>
+          )}
+          {l.status === 'draft' && (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => onEdit(l)}>
+                Edit
+              </Button>
+              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(l)}>
+                Delete
+              </Button>
+            </>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[1080px] border-collapse text-left text-sm">
-        <thead className="bg-background">
-          <tr>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Lease #</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Lessor</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Term (Months)</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Monthly Payment</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Status</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Outstanding Liability</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">ROU Carrying Value</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Current Portion (12mo)</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary" />
-          </tr>
-        </thead>
-        <tbody>
-          {leases.map((lease) => {
-            const rouCarryingValue = lease.initialRightOfUseAsset - lease.accumulatedDepreciation;
-            const currentPortion =
-              lease.status === 'active'
-                ? calculateCurrentPortionForLease(lease, completedAmortizationRunsByLease[lease.id] ?? 0)
-                : 0;
-            return (
-              <tr key={lease.id} className="border-t border-border hover:bg-background">
-                <td className="whitespace-nowrap px-md py-sm font-mono text-text-primary">{lease.leaseNumber}</td>
-                <td className="whitespace-nowrap px-md py-sm text-text-primary">{lease.lessorName}</td>
-                <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">{lease.leaseTermMonths}</td>
-                <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                  <FinancialNumber value={lease.monthlyPayment} format={formatCurrency} showFlash={false} />
-                </td>
-                <td className="whitespace-nowrap px-md py-sm">
-                  <span className={cn('inline-flex items-center rounded-full px-sm py-0.5 text-xs font-medium', STATUS_STYLES[lease.status])}>
-                    {STATUS_LABELS[lease.status]}
-                  </span>
-                </td>
-                <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                  <FinancialNumber value={lease.outstandingLeaseLiability} format={formatCurrency} showFlash={false} isInverted />
-                </td>
-                <td className="whitespace-nowrap px-md py-sm text-right font-semibold tabular-nums">
-                  <FinancialNumber value={rouCarryingValue} format={formatCurrency} showFlash={false} />
-                </td>
-                <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                  <FinancialNumber value={currentPortion} format={formatCurrency} showFlash={false} isInverted />
-                </td>
-                <td className="whitespace-nowrap px-md py-sm">
-                  <div className="flex justify-end gap-sm">
-                    {lease.status === 'draft' && (
-                      <button
-                        type="button"
-                        onClick={() => onPostCommencement(lease)}
-                        className="rounded-md px-sm py-xs text-xs font-medium text-primary hover:underline"
-                      >
-                        Post Commencement
-                      </button>
-                    )}
-                    {lease.status === 'active' && (
-                      <button
-                        type="button"
-                        onClick={() => onTerminate(lease)}
-                        className="rounded-md px-sm py-xs text-xs font-medium text-danger hover:underline"
-                      >
-                        Terminate
-                      </button>
-                    )}
-                    {lease.status === 'draft' && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => onEdit(lease)}
-                          className="rounded-md px-sm py-xs text-xs font-medium text-primary hover:underline"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(lease)}
-                          className="rounded-md px-sm py-xs text-xs font-medium text-danger hover:underline"
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      rows={leases}
+      columns={columns}
+      getRowKey={(l) => l.id}
+      searchable={(l) => [l.leaseNumber, l.lessorName, l.assetDescription].join(' ')}
+      searchPlaceholder="Search by lease number, lessor or asset"
+      initialSortKey="number"
+      filters={[
+        {
+          key: 'status',
+          label: 'All statuses',
+          options: [
+            { value: 'draft', label: 'Draft' },
+            { value: 'active', label: 'Active' },
+            { value: 'terminated', label: 'Terminated' },
+          ],
+          match: (l, value) => l.status === value,
+        },
+      ]}
+      emptyTitle="No leases yet"
+      emptyDescription="Add a lease to start the register."
+    />
   );
 }

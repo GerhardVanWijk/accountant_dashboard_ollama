@@ -1,5 +1,9 @@
-import { Button } from '@/components/ui/Button';
-import { cn } from '@/utils/cn';
+import { Button } from '@/components/ui/shadcn/button';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { ListTree } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { formatDate } from '@/lib/app/format';
 import type { TaxRate } from '@/types';
 import { treatmentLabels } from '../utils/treatmentLabels';
 
@@ -14,75 +18,80 @@ function isCurrentlyOpen(rate: TaxRate): boolean {
 }
 
 /**
- * Groups every tax rate version by `code`, newest first within each
- * group — the "rate history" view SA_ACCOUNTING_MASTER_SPEC.md §82
- * requires (reproduce what a historical transaction actually used).
- * Only the currently-open version of an active code can be superseded or
- * deactivated; every past version is read-only, shown for traceability.
+ * Groups every tax rate version by `code`, newest first within each group
+ * — the effective-dated "rate history" view (reproduces what a historical
+ * transaction actually used). Only the currently-open version of an
+ * active code can be superseded or deactivated; every past version is
+ * read-only, shown for traceability. Kept as a purpose-built grouped
+ * table rather than the shared DataTable — same reasoning as Chart of
+ * Accounts' hierarchy table (M3): DataTable's flat sort model has no
+ * group-header-row concept and would flatten away the real version
+ * history. Re-skinned onto shadcn Table/Badge/Empty (M7); grouping and
+ * supersede/deactivate logic unchanged.
  */
 export function TaxRateTable({ taxRates, onSupersede, onDeactivate }: TaxRateTableProps) {
   const codes = [...new Set(taxRates.map((r) => r.code))].sort();
 
   if (codes.length === 0) {
-    return <p className="text-sm text-text-muted">No tax codes yet — create one to get started.</p>;
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <ListTree />
+          </EmptyMedia>
+          <EmptyTitle>No tax codes yet</EmptyTitle>
+          <EmptyDescription>Create one to get started.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-lg">
+    <div className="flex flex-col gap-6">
       {codes.map((code) => {
-        const versions = taxRates
-          .filter((r) => r.code === code)
-          .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+        const versions = taxRates.filter((r) => r.code === code).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
         const current = versions.find(isCurrentlyOpen);
 
         return (
-          <div key={code} className="overflow-x-auto rounded-md border border-border">
-            <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-              <thead className="bg-background">
+          <div key={code} className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+              <thead className="bg-muted/40">
                 <tr>
-                  <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Code</th>
-                  <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Name</th>
-                  <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Treatment</th>
-                  <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Rate</th>
-                  <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Effective From</th>
-                  <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Effective To</th>
-                  <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Status</th>
-                  <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary" />
+                  <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground">Code</th>
+                  <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground">Name</th>
+                  <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground">Treatment</th>
+                  <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Rate</th>
+                  <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground">Effective From</th>
+                  <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground">Effective To</th>
+                  <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground">Status</th>
+                  <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground" />
                 </tr>
               </thead>
               <tbody>
                 {versions.map((rate) => (
-                  <tr key={rate.id} className={cn('border-t border-border/50', !isCurrentlyOpen(rate) && 'text-text-muted')}>
-                    <td className="whitespace-nowrap px-md py-sm font-mono">{rate.code}</td>
-                    <td className="whitespace-nowrap px-md py-sm">{rate.name}</td>
-                    <td className="whitespace-nowrap px-md py-sm">{treatmentLabels[rate.treatment]}</td>
-                    <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">{rate.rate}%</td>
-                    <td className="whitespace-nowrap px-md py-sm">{new Date(rate.effectiveFrom).toLocaleDateString()}</td>
-                    <td className="whitespace-nowrap px-md py-sm">
-                      {rate.effectiveTo ? new Date(rate.effectiveTo).toLocaleDateString() : '—'}
-                    </td>
-                    <td className="whitespace-nowrap px-md py-sm">
+                  <tr key={rate.id} className={cn('border-t border-border', !isCurrentlyOpen(rate) && 'text-muted-foreground')}>
+                    <td className="whitespace-nowrap px-4 py-2.5 font-mono">{rate.code}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5">{rate.name}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5">{treatmentLabels[rate.treatment]}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{rate.rate}%</td>
+                    <td className="whitespace-nowrap px-4 py-2.5">{formatDate(rate.effectiveFrom)}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5">{rate.effectiveTo ? formatDate(rate.effectiveTo) : '—'}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5">
                       {!rate.isActive ? (
-                        <span className="rounded-full bg-background px-sm py-0.5 text-xs font-semibold text-text-muted">
-                          Deactivated
-                        </span>
+                        <Badge variant="outline">Deactivated</Badge>
                       ) : isCurrentlyOpen(rate) ? (
-                        <span className="rounded-full bg-positive/10 px-sm py-0.5 text-xs font-semibold text-positive">
-                          Current
-                        </span>
+                        <Badge className="bg-positive/15 text-positive">Current</Badge>
                       ) : (
-                        <span className="rounded-full bg-background px-sm py-0.5 text-xs font-semibold text-text-muted">
-                          Superseded
-                        </span>
+                        <Badge variant="outline">Superseded</Badge>
                       )}
                     </td>
-                    <td className="whitespace-nowrap px-md py-sm">
+                    <td className="whitespace-nowrap px-4 py-2.5">
                       {rate.id === current?.id && rate.isActive && (
-                        <div className="flex justify-end gap-sm">
-                          <Button variant="ghost" onClick={() => onSupersede(rate)}>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => onSupersede(rate)}>
                             Supersede
                           </Button>
-                          <Button variant="ghost" onClick={() => onDeactivate(rate)}>
+                          <Button variant="ghost" size="sm" onClick={() => onDeactivate(rate)}>
                             Deactivate
                           </Button>
                         </div>

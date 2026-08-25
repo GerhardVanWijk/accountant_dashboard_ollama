@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, FileText, Loader2 } from 'lucide-react';
 import type { Customer } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Icon } from '@/components/ui/Icon';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDate } from '@/utils/formatDate';
-import { cn } from '@/utils/cn';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { useCustomer } from '../hooks/useCustomer';
 import { useCustomerMutations } from '../hooks/useCustomerMutations';
 import { calculateAgingForCustomer } from '../utils/calculateAging';
@@ -17,8 +18,6 @@ import { calculateFinancialSummary } from '../utils/customerFinancials';
 import { invoicesToOpenItems } from '../mock-data/openItems';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { CustomerStatusBadge, CreditHoldBadge } from '../components/CustomerStatusBadge';
-import { CustomerSummaryCards } from '../components/CustomerSummaryCards';
-import { CustomerAgingBreakdown } from '../components/CustomerAgingBreakdown';
 
 export interface CustomerDetailPageProps {
   customerId: string;
@@ -26,34 +25,33 @@ export interface CustomerDetailPageProps {
   onEdit: (customer: Customer) => void;
 }
 
-type DetailTab = 'overview' | 'aging' | 'transactions' | 'statements';
-
-const tabs: { id: DetailTab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'aging', label: 'Aging' },
-  { id: 'transactions', label: 'Transaction History' },
-  { id: 'statements', label: 'Statements' },
-];
-
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-md border-b border-border py-sm last:border-b-0">
-      <span className="text-sm text-text-secondary">{label}</span>
-      <span className="text-sm font-medium text-text-primary">{value}</span>
+    <div className="flex items-center justify-between gap-4 border-b border-border py-2 text-sm last:border-b-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground">{value}</span>
     </div>
   );
 }
 
+const agingBuckets: { key: 'current' | 'days30' | 'days60' | 'days90Plus'; label: string }[] = [
+  { key: 'current', label: 'Current' },
+  { key: 'days30', label: '1-30 days' },
+  { key: 'days60', label: '31-60 days' },
+  { key: 'days90Plus', label: '90+ days' },
+];
+
 /**
- * Customer Hub: financial summary cards, aging breakdown, contact/address
+ * Customer Hub: financial summary, aging breakdown, contact/address
  * overview, transaction history (stub — no real invoice data exists yet),
  * and a statements date-range stub. Reached from CustomerListPage via
  * in-page view state (no dedicated route — see CustomersPage.tsx).
+ * Re-skinned onto v0's PageHeader/SectionCard/Tabs/FigureBlock; the real
+ * aging/financial-summary calculations and mutation hooks are unchanged.
  */
 export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetailPageProps) {
   const { customer, loading, error, refetch } = useCustomer(customerId);
   const { inactivateCustomer, activateCustomer, saving } = useCustomerMutations();
-  const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const [statementFrom, setStatementFrom] = useState('');
   const [statementTo, setStatementTo] = useState('');
   const navigate = useNavigate();
@@ -79,163 +77,212 @@ export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetai
     refetch();
   }
 
-  if (loading) return <Spinner label="Loading customer…" />;
-  if (error) return <ErrorState message={error.message} onRetry={refetch} />;
+  if (loading) {
+    return (
+      <div role="status" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+        <p className="text-sm">Loading customer…</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div role="alert" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
+        <p className="text-sm text-destructive">{error.message}</p>
+        <Button variant="outline" size="sm" onClick={refetch}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
   if (!customer) {
     return (
-      <EmptyState
-        title="Customer not found"
-        message="This customer may have been removed."
-        action={
-          <Button variant="ghost" onClick={onBack}>
-            Back to Customer Directory
+      <SectionCard>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Customer not found</EmptyTitle>
+            <EmptyDescription>This customer may have been removed.</EmptyDescription>
+          </EmptyHeader>
+          <Button variant="outline" size="sm" onClick={onBack}>
+            Back to customers
           </Button>
-        }
-      />
+        </Empty>
+      </SectionCard>
     );
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm">
-        <Button variant="ghost" className="w-fit px-sm py-xs text-sm" onClick={onBack}>
-          ← Back to Customer Directory
-        </Button>
-        <div className="flex flex-col gap-sm sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-sm">
-              <h1 className="text-2xl font-semibold text-text-primary">{customer.name}</h1>
-              <CustomerStatusBadge status={customer.status} />
-              {customer.creditHold && <CreditHoldBadge />}
-            </div>
-            <p className="mt-xs text-sm text-text-secondary">
-              {customer.customerNumber}
-              {customer.email ? ` · ${customer.email}` : ''}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-sm">
-            <Button variant="ghost" onClick={() => navigate('/sales/invoices')}>
-              New Invoice
+    <>
+      <PageHeader
+        title={customer.name}
+        description={`${customer.customerNumber}${customer.email ? ` · ${customer.email}` : ''}`}
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={onBack}>
+              <ArrowLeft data-icon="inline-start" />
+              Back
             </Button>
-            <Button variant="ghost" onClick={() => onEdit(customer)}>
+            <Button variant="outline" size="sm" onClick={() => navigate('/sales/invoices')}>
+              New invoice
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onEdit(customer)}>
               Edit
             </Button>
-            <Button variant={customer.status === 'active' ? 'danger' : 'primary'} disabled={saving} onClick={() => void handleToggleActive()}>
+            <Button
+              variant={customer.status === 'active' ? 'destructive' : 'default'}
+              size="sm"
+              disabled={saving}
+              onClick={() => void handleToggleActive()}
+            >
               {customer.status === 'active' ? 'Inactivate' : 'Activate'}
             </Button>
-          </div>
-        </div>
+          </>
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <CustomerStatusBadge status={customer.status} />
+        {customer.creditHold && <CreditHoldBadge />}
       </div>
 
-      {summary && <CustomerSummaryCards summary={summary} currency={customer.currency} />}
+      {summary && (
+        <section aria-label="Customer financial summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <SectionCard bodyClassName="p-5">
+            <FigureBlock label="Total outstanding" value={formatCurrency(summary.totalOutstanding, customer.currency)} />
+          </SectionCard>
+          <SectionCard bodyClassName="p-5">
+            <FigureBlock
+              label="Overdue balance"
+              value={formatCurrency(summary.overdueBalance, customer.currency)}
+              tone={summary.overdueBalance > 0 ? 'negative' : 'default'}
+            />
+          </SectionCard>
+          <SectionCard bodyClassName="p-5">
+            <FigureBlock
+              label="Available credit"
+              value={summary.availableCredit === null ? 'No limit set' : formatCurrency(summary.availableCredit, customer.currency)}
+              tone={summary.availableCredit !== null && summary.availableCredit < 0 ? 'negative' : 'positive'}
+            />
+          </SectionCard>
+          <SectionCard bodyClassName="p-5">
+            <FigureBlock label="YTD sales" value={formatCurrency(summary.ytdSales, customer.currency)} />
+          </SectionCard>
+        </section>
+      )}
 
-      <Card className="flex flex-col gap-lg">
-        <div role="tablist" aria-label="Customer detail sections" className="flex flex-wrap gap-xs border-b border-border">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                'rounded-t-md px-md py-sm text-sm font-medium transition-colors',
-                activeTab === tab.id ? 'bg-primary text-on-accent' : 'text-text-secondary hover:text-text-primary',
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      <Tabs defaultValue="overview">
+        <TabsList variant="line" className="w-full justify-start border-b border-border">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="aging">Aging</TabsTrigger>
+          <TabsTrigger value="transactions">Transaction history</TabsTrigger>
+          <TabsTrigger value="statements">Statements</TabsTrigger>
+        </TabsList>
 
-        {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 gap-lg lg:grid-cols-2">
-            <div>
-              <h3 className="mb-sm text-sm font-semibold text-text-primary">Contact Details</h3>
+        <TabsContent value="overview" className="pt-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <SectionCard title="Contact details">
               <InfoRow label="Phone" value={customer.phone ?? '—'} />
               <InfoRow label="Email" value={customer.email ?? '—'} />
-              <InfoRow label="Primary Contact" value={customer.contacts?.find((c) => c.isPrimary)?.name ?? customer.contacts?.[0]?.name ?? '—'} />
+              <InfoRow
+                label="Primary contact"
+                value={customer.contacts?.find((c) => c.isPrimary)?.name ?? customer.contacts?.[0]?.name ?? '—'}
+              />
+              <div className="mt-4 flex flex-col gap-3">
+                <h3 className="text-sm font-semibold">Billing address</h3>
+                <p className="text-sm text-muted-foreground">
+                  {customer.billingAddress
+                    ? [customer.billingAddress.line1, customer.billingAddress.line2, customer.billingAddress.city, customer.billingAddress.postalCode, customer.billingAddress.country]
+                        .filter(Boolean)
+                        .join(', ')
+                    : 'No billing address on file.'}
+                </p>
+                <h3 className="text-sm font-semibold">Shipping address</h3>
+                <p className="text-sm text-muted-foreground">
+                  {customer.shippingAddress
+                    ? [customer.shippingAddress.line1, customer.shippingAddress.line2, customer.shippingAddress.city, customer.shippingAddress.postalCode, customer.shippingAddress.country]
+                        .filter(Boolean)
+                        .join(', ')
+                    : 'Same as billing / none on file.'}
+                </p>
+              </div>
+            </SectionCard>
 
-              <h3 className="mb-sm mt-lg text-sm font-semibold text-text-primary">Billing Address</h3>
-              <p className="text-sm text-text-secondary">
-                {customer.billingAddress
-                  ? [customer.billingAddress.line1, customer.billingAddress.line2, customer.billingAddress.city, customer.billingAddress.postalCode, customer.billingAddress.country]
-                      .filter(Boolean)
-                      .join(', ')
-                  : 'No billing address on file.'}
-              </p>
-
-              <h3 className="mb-sm mt-lg text-sm font-semibold text-text-primary">Shipping Address</h3>
-              <p className="text-sm text-text-secondary">
-                {customer.shippingAddress
-                  ? [customer.shippingAddress.line1, customer.shippingAddress.line2, customer.shippingAddress.city, customer.shippingAddress.postalCode, customer.shippingAddress.country]
-                      .filter(Boolean)
-                      .join(', ')
-                  : 'Same as billing / none on file.'}
-              </p>
-            </div>
-
-            <div>
-              <h3 className="mb-sm text-sm font-semibold text-text-primary">Financial Settings</h3>
+            <SectionCard title="Financial settings">
               <InfoRow label="Currency" value={customer.currency} />
-              <InfoRow label="Payment Terms" value={customer.paymentTerms ?? '—'} />
-              <InfoRow label="Credit Limit" value={typeof customer.creditLimit === 'number' ? formatCurrency(customer.creditLimit, customer.currency) : '—'} />
-              <InfoRow label="Default Discount" value={typeof customer.defaultDiscountPercent === 'number' ? `${customer.defaultDiscountPercent}%` : '—'} />
-              <InfoRow label="Tax/VAT Number" value={customer.taxNumber ?? '—'} />
-              <InfoRow label="Tax Status" value={customer.taxStatus ?? '—'} />
-              <InfoRow label="Customer Since" value={formatDate(customer.createdAt)} />
+              <InfoRow label="Payment terms" value={customer.paymentTerms ?? '—'} />
+              <InfoRow label="Credit limit" value={typeof customer.creditLimit === 'number' ? formatCurrency(customer.creditLimit, customer.currency) : '—'} />
+              <InfoRow label="Default discount" value={typeof customer.defaultDiscountPercent === 'number' ? `${customer.defaultDiscountPercent}%` : '—'} />
+              <InfoRow label="Tax/VAT number" value={customer.taxNumber ?? '—'} />
+              <InfoRow label="Tax status" value={customer.taxStatus ?? '—'} />
+              <InfoRow label="Customer since" value={formatDate(customer.createdAt)} />
               {customer.notes && (
-                <>
-                  <h3 className="mb-sm mt-lg text-sm font-semibold text-text-primary">Notes</h3>
-                  <p className="text-sm text-text-secondary">{customer.notes}</p>
-                </>
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold">Notes</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{customer.notes}</p>
+                </div>
               )}
-            </div>
+            </SectionCard>
           </div>
-        )}
+        </TabsContent>
 
-        {activeTab === 'aging' && <CustomerAgingBreakdown aging={aging} currency={customer.currency} />}
-
-        {activeTab === 'transactions' && (
-          <EmptyState
-            title="No transaction history yet"
-            message="Invoices, credit notes, and receipts will appear here once the Sales module is connected."
-          />
-        )}
-
-        {activeTab === 'statements' && (
-          <div className="flex flex-col gap-md">
-            <div className="flex flex-col gap-sm sm:flex-row sm:items-end sm:gap-md">
-              <label className="flex flex-col gap-xs text-sm text-text-secondary">
-                From
-                <input
-                  type="date"
-                  value={statementFrom}
-                  onChange={(e) => setStatementFrom(e.target.value)}
-                  className="rounded-md border border-border bg-panel px-sm py-sm text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                />
-              </label>
-              <label className="flex flex-col gap-xs text-sm text-text-secondary">
-                To
-                <input
-                  type="date"
-                  value={statementTo}
-                  onChange={(e) => setStatementTo(e.target.value)}
-                  className="rounded-md border border-border bg-panel px-sm py-sm text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                />
-              </label>
-              <Button disabled title="PDF statement export ships once the Sales module provides real invoice data.">
-                <Icon name="invoices" size={16} />
-                Export Statement (PDF)
-              </Button>
+        <TabsContent value="aging" className="pt-4">
+          <SectionCard title="Accounts receivable aging">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {agingBuckets.map(({ key, label }) => (
+                <FigureBlock key={key} label={label} value={formatCurrency(aging[key], customer.currency)} />
+              ))}
             </div>
-            <p className="text-sm text-text-muted">
-              PDF statement export is not yet available — it will be enabled once the Sales module supplies real
-              invoice and receipt records for this date range.
-            </p>
-          </div>
-        )}
-      </Card>
-    </div>
+          </SectionCard>
+        </TabsContent>
+
+        <TabsContent value="transactions" className="pt-4">
+          <SectionCard>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <FileText />
+                </EmptyMedia>
+                <EmptyTitle>No transaction history yet</EmptyTitle>
+                <EmptyDescription>
+                  Invoices, credit notes, and receipts will appear here once posted.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          </SectionCard>
+        </TabsContent>
+
+        <TabsContent value="statements" className="pt-4">
+          <SectionCard title="Remittance & statements">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-end gap-4">
+                <Field className="w-auto">
+                  <FieldLabel htmlFor="statement-from">From</FieldLabel>
+                  <Input id="statement-from" type="date" value={statementFrom} onChange={(e) => setStatementFrom(e.target.value)} />
+                </Field>
+                <Field className="w-auto">
+                  <FieldLabel htmlFor="statement-to">To</FieldLabel>
+                  <Input id="statement-to" type="date" value={statementTo} onChange={(e) => setStatementTo(e.target.value)} />
+                </Field>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  title="PDF statement export ships once the Sales module provides real invoice data."
+                >
+                  <FileText data-icon="inline-start" />
+                  Export statement (PDF)
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                PDF statement export is not yet available — it will be enabled once the Sales module supplies real
+                invoice and receipt records for this date range.
+              </p>
+            </div>
+          </SectionCard>
+        </TabsContent>
+      </Tabs>
+    </>
   );
 }

@@ -1,40 +1,47 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
+import { Loader2, Plus } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
 import { QuoteList } from '@/features/sales/components/QuoteList';
 import { QuoteDetail } from '@/features/sales/components/QuoteDetail';
-import { QuoteForm } from '@/features/sales/components/QuoteForm';
-import { Modal } from '@/features/sales/components/Modal';
+import { QuoteFormModal } from '@/features/sales/components/QuoteFormModal';
 import { useQuotes } from '@/features/sales/hooks/useQuotes';
 import { useQuoteMutations } from '@/features/sales/hooks/useQuoteMutations';
 import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
 
 type View = { type: 'list' } | { type: 'detail'; id: string };
+type FormState = { mode: 'create' } | null;
 
 /**
- * Route target for /sales/quotes. Assembles the Quote list/detail views and
- * create form, plus the Quote -> Sales Order conversion action.
+ * Route target for /sales/quotes — real useQuotes()/QuoteService data
+ * throughout, v0 page shell (PageHeader/SectionCard), list/detail views and
+ * create modal in-page-state, matching InvoicesPage.tsx's convention (M13).
+ * No `quotes` (or `sales`) entry exists in the real permission catalog
+ * (M11) — docs/PERMISSIONS.md already documented Quotes/Orders as ungated
+ * alongside Credit Notes/Receipts, so this route/its actions stay ungated,
+ * same as before the port.
  */
 export function QuotesPage() {
   const [view, setView] = useState<View>({ type: 'list' });
-  const [showForm, setShowForm] = useState(false);
+  const [formState, setFormState] = useState<FormState>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const { quotes, isLoading, error, refetch } = useQuotes();
   // Derived from the (re-fetched) list rather than a separate by-id fetch,
   // so a status-transition mutation is reflected immediately in the open
-  // detail view without a stale read — see final report for rationale.
+  // detail view without a stale read.
   const detailQuote = view.type === 'detail' ? quotes.find((q) => q.id === view.id) : undefined;
   const { customers: customerMap } = useCustomerMap();
   const { customers: customerList } = useCustomerList();
   const {
     createQuote,
+    deleteQuote,
     markAsSent,
     markAsAccepted,
     markAsDeclined,
     convertToSalesOrder,
     isLoading: isMutating,
-    error: mutationError,
   } = useQuoteMutations({
     onSuccess: () => refetch(),
   });
@@ -43,77 +50,119 @@ export function QuotesPage() {
 
   async function handleCreate(data: Parameters<typeof createQuote>[0]) {
     await createQuote(data);
-    setShowForm(false);
+    setFormState(null);
   }
 
   async function handleTransition(action: (id: string) => Promise<unknown>, id: string, message: string) {
-    await action(id);
-    setNotice(message);
+    setActionError(null);
+    try {
+      await action(id);
+      setNotice(message);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not update quote.');
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setActionError(null);
+    try {
+      await deleteQuote(id);
+      setView({ type: 'list' });
+      setNotice('Draft quote deleted.');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not delete quote.');
+    }
   }
 
   async function handleConvert(id: string) {
-    const order = await convertToSalesOrder(id);
-    setNotice(`Converted to Sales Order ${order.orderNumber}. Find it on the Sales Orders page.`);
-    setView({ type: 'list' });
+    setActionError(null);
+    try {
+      const order = await convertToSalesOrder(id);
+      setNotice(`Converted to Sales Order ${order.orderNumber}. Find it on the Sales Orders page.`);
+      setView({ type: 'list' });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not convert quote to a sales order.');
+    }
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Quotes</h1>
-        {view.type === 'list' && (
-          <Button variant="primary" onClick={() => setShowForm(true)}>
-            <Icon name="add" size={16} />
-            New Quote
-          </Button>
-        )}
-      </div>
-
-      {notice && (
-        <p className="rounded-md border border-positive bg-positive/10 px-sm py-xs text-sm text-positive">{notice}</p>
-      )}
-      {mutationError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
-          {mutationError.message}
-        </p>
-      )}
-
+    <>
       {view.type === 'list' && (
-        <QuoteList
-          quotes={quotes}
-          customers={customerMap}
-          onSelect={(id) => {
-            setNotice(null);
-            setView({ type: 'detail', id });
-          }}
-          isLoading={isLoading}
-          error={error?.message}
-        />
+        <div className="flex flex-col gap-6">
+          <PageHeader
+            title="Quotes"
+            description="Pre-sale quotes issued to customers — nothing here posts to the GL until converted to a sales order and invoiced."
+            actions={
+              <Button size="sm" onClick={() => setFormState({ mode: 'create' })}>
+                <Plus data-icon="inline-start" />
+                New quote
+              </Button>
+            }
+          />
+
+          {notice && (
+            <p role="status" className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">
+              {notice}
+            </p>
+          )}
+
+          <SectionCard>
+            <QuoteList
+              quotes={quotes}
+              customers={customerMap}
+              onSelect={(id) => {
+                setNotice(null);
+                setActionError(null);
+                setView({ type: 'detail', id });
+              }}
+            />
+          </SectionCard>
+        </div>
+      )}
+
+      {isLoading && view.type === 'list' && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading quotes…</p>
+        </div>
+      )}
+
+      {!isLoading && error && view.type === 'list' && (
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error.message}
+        </div>
       )}
 
       {view.type === 'detail' && detailQuote && (
-        <QuoteDetail
-          quote={detailQuote}
-          customerName={customerMap.get(detailQuote.customerId) || 'Unknown Customer'}
-          onClose={() => setView({ type: 'list' })}
-          isBusy={isMutating}
-          onMarkAsSent={(id) => void handleTransition(markAsSent, id, 'Quote marked as sent.')}
-          onMarkAsAccepted={(id) => void handleTransition(markAsAccepted, id, 'Quote marked as accepted.')}
-          onMarkAsDeclined={(id) => void handleTransition(markAsDeclined, id, 'Quote marked as declined.')}
-          onConvertToSalesOrder={(id) => void handleConvert(id)}
-        />
+        <div className="flex flex-col gap-6">
+          {actionError && (
+            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {actionError}
+            </div>
+          )}
+          <QuoteDetail
+            quote={detailQuote}
+            customerName={customerMap.get(detailQuote.customerId) || 'Unknown Customer'}
+            onBack={() => setView({ type: 'list' })}
+            onDelete={() => void handleDelete(detailQuote.id)}
+            isBusy={isMutating}
+            onMarkAsSent={(id) => void handleTransition(markAsSent, id, 'Quote marked as sent.')}
+            onMarkAsAccepted={(id) => void handleTransition(markAsAccepted, id, 'Quote marked as accepted.')}
+            onMarkAsDeclined={(id) => void handleTransition(markAsDeclined, id, 'Quote marked as declined.')}
+            onConvertToSalesOrder={(id) => void handleConvert(id)}
+          />
+        </div>
       )}
 
-      {showForm && (
-        <Modal title="New Quote" onClose={() => setShowForm(false)} wide>
-          <QuoteForm
-            customers={customerList}
-            defaultQuoteNumber={nextQuoteNumber}
-            onSubmit={handleCreate}
-            onCancel={() => setShowForm(false)}
-          />
-        </Modal>
+      {formState?.mode === 'create' && (
+        <QuoteFormModal
+          title="New quote"
+          customers={customerList}
+          defaultQuoteNumber={nextQuoteNumber}
+          onSubmit={handleCreate}
+          onClose={() => setFormState(null)}
+        />
       )}
-    </div>
+    </>
   );
 }

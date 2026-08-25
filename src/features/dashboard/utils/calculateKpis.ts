@@ -20,6 +20,11 @@ function percentChange(current: number, previous: number): number {
   return ((current - previous) / Math.abs(previous)) * 100;
 }
 
+/** Net Profit for a single month — the one place `revenue - expenses` is computed (docs/DO_NOT_BREAK.md). Also used by the v0 dashboard mapper's monthly series. */
+export function calculateNetProfit(month: MonthlyFinancials): number {
+  return month.revenue - month.expenses;
+}
+
 function emptyKpis(): DashboardKpis {
   return {
     revenue: { label: 'Revenue', value: 0, trendPercent: 0 },
@@ -43,8 +48,8 @@ export function calculateDashboardKpis(months: MonthlyFinancials[]): DashboardKp
   const latest = months[months.length - 1];
   const previous = months.length > 1 ? months[months.length - 2] : undefined;
 
-  const netProfitLatest = latest.revenue - latest.expenses;
-  const netProfitPrevious = previous ? previous.revenue - previous.expenses : netProfitLatest;
+  const netProfitLatest = calculateNetProfit(latest);
+  const netProfitPrevious = previous ? calculateNetProfit(previous) : netProfitLatest;
 
   const cashFlow = calculateCashFlowSeries(months);
   const cashLatest = cashFlow[cashFlow.length - 1].cumulativeCash;

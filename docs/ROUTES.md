@@ -2,7 +2,7 @@
 
 | Route Endpoint | Feature Domain | Page Title | Navigation Section |
 |---|---|---|---|
-| `/` | `dashboard` | Executive Overview | Sidebar Top |
+| `/` | `dashboard` / `marketing` | Executive Overview (authenticated) / Homepage (unauthenticated, M6) | Sidebar Top |
 | `/accounting/coa` | `accounting` | Chart of Accounts | Accounting |
 | `/accounting/journals` | `accounting` | General Journals | Accounting |
 | `/accounting/ledger` | `accounting` | General Ledger Detail | Accounting |
@@ -35,7 +35,12 @@
 | `/tax/vat-return` | `tax` | VAT201 Reporting | Tax |
 | `/tax/deferred-tax` | `tax` | Deferred Tax | Tax |
 | `/tax/expected-credit-losses` | `tax` | Expected Credit Losses | Tax |
-| `/reports` | `reports` | Financial Statements Hub | Reports |
+| `/reports` | `reports` | Report Library (Reporting Centre, M9) | Reports |
+| `/reports/income-statement` | `reports` | Income Statement | Reports |
+| `/reports/balance-sheet` | `reports` | Balance Sheet | Reports |
+| `/reports/cash-flow` | `reports` | Statement of Cash Flows | Reports |
+| `/reports/customer-aging` | `reports` | Accounts Receivable Aging | Reports |
+| `/reports/supplier-aging` | `reports` | Accounts Payable Aging | Reports |
 | `/compliance/dashboard` | `compliance` | Compliance Dashboard | Compliance |
 | `/compliance/public-interest-score` | `compliance` | Public Interest Score | Compliance |
 | `/compliance/reporting-standards` | `compliance` | Reporting Standards | Compliance |
@@ -46,8 +51,14 @@
 | `/leases/register` | `leases` | Lease Register | Leases |
 | `/leases/amortization` | `leases` | Lease Amortization | Leases |
 | `/admin/users` | `admin` | User & Role Management | Admin |
-| `/admin/audit` | `audit` | System Audit Trail | Admin |
+| `/admin/audit-trail` | `admin` | Audit Trail (business changes, M10) | Admin |
+| `/admin/audit` | `admin` | Access Log (access checkpoints, M10) | Admin |
+| `/settings` | `settings` | Settings (Profile/Password/Preferences/Company, M10) | Admin |
+| `/settings/accounting` | `settings` | Accounting Settings (link hub, M10) | Admin |
+| `/help` | `help` | Help Centre (M10) | Help |
 | `/login` | `auth` | Sign In | *(unauthenticated, no nav entry)* |
 | `/signup` | `auth` | Create Account | *(unauthenticated, no nav entry)* |
+| `/forgot-password` | `auth` | Reset Your Password | *(unauthenticated, no nav entry, M6)* |
+| `/reset-password` | `auth` | Set A New Password | *(unauthenticated — Supabase reset-link callback target, no nav entry, M6)* |
 | `/onboarding` | `auth` | Set Up Your Company | *(authenticated, pre-company, no nav entry)* |
 | `/admin/superuser` | `admin` | Superuser Dashboard | *(superuser-only, self-contained layout, no top nav)* |

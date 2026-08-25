@@ -1,12 +1,13 @@
+import { Plus, Trash2 } from 'lucide-react';
 import type { Account, TaxRate } from '@/types';
-import { Icon } from '@/components/ui/Icon';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
+import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
+import { Amount } from '@/components/app/figure';
 import type { AllocationInput } from '../services';
 import { computeAllocationTax } from '../utils/taxCalculations';
-import { formatZAR } from '../utils/formatZAR';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface AllocationRowsProps {
   allocations: AllocationInput[];
@@ -22,13 +23,12 @@ function emptyRow(): AllocationInput {
 }
 
 /**
- * Split-allocation editor: one line per GL account this transaction posts
- * against, each with its own VAT rate (Standard 15%/Zero-Rated/Exempt/
- * Non-Deductible via the shared TaxRate model). Shows a running total vs.
- * the transaction's gross amount so the user can see, before saving,
- * whether the split will balance — the real check still happens in
- * BankTransactionService (docs/DO_NOT_BREAK.md: UI-only validation is not
- * enough).
+ * Split-allocation editor — same computeAllocationTax()/validation as
+ * before the port, JSX re-skinned. One line per GL account this
+ * transaction posts against, each with its own VAT rate. Shows a running
+ * total vs. the transaction's gross amount so the user can see, before
+ * saving, whether the split will balance — the real check still happens
+ * in BankTransactionService (UI-only validation is not enough).
  */
 export function AllocationRows({ allocations, onChange, glAccounts, taxRates, grossAmount }: AllocationRowsProps) {
   function updateRow(index: number, patch: Partial<AllocationInput>) {
@@ -52,26 +52,22 @@ export function AllocationRows({ allocations, onChange, glAccounts, taxRates, gr
   const isBalanced = Math.abs(remaining) < 0.01;
 
   return (
-    <div className="flex flex-col gap-sm">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-text-primary">Split Allocation</span>
-        <button
-          type="button"
-          onClick={addRow}
-          className="inline-flex items-center gap-xs rounded-md border border-border px-sm py-xs text-xs font-medium text-text-primary hover:border-primary hover:text-primary"
-        >
-          <Icon name="add" size={14} />
+        <span className="text-sm font-medium">Split allocation</span>
+        <Button variant="outline" size="sm" type="button" onClick={addRow}>
+          <Plus data-icon="inline-start" />
           Add line
-        </button>
+        </Button>
       </div>
 
-      <div className="overflow-x-auto rounded-md border border-border">
+      <div className="overflow-x-auto rounded-xl border border-border">
         <div className="min-w-[640px]">
-          <div className="grid grid-cols-[1.4fr_1.2fr_110px_1fr_100px_32px] gap-2 border-b border-border bg-background px-3 py-2 text-xs font-semibold text-text-secondary">
-            <span>GL Account</span>
+          <div className="grid grid-cols-[1.4fr_1.2fr_110px_1fr_100px_32px] gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            <span>GL account</span>
             <span>Description</span>
-            <span className="text-right">Net Amount</span>
-            <span>VAT Rate</span>
+            <span className="text-right">Net amount</span>
+            <span>VAT rate</span>
             <span className="text-right">VAT</span>
             <span />
           </div>
@@ -79,13 +75,10 @@ export function AllocationRows({ allocations, onChange, glAccounts, taxRates, gr
             const taxRate = taxRates.find((r) => r.id === row.taxRateId);
             const taxAmount = computeAllocationTax(row.netAmount || 0, taxRate);
             return (
-              <div
-                key={index}
-                className="grid grid-cols-[1.4fr_1.2fr_110px_1fr_100px_32px] gap-2 border-b border-border/50 px-3 py-2 tabular-nums"
-              >
+              <div key={index} className="grid grid-cols-[1.4fr_1.2fr_110px_1fr_100px_32px] gap-2 border-b border-border/50 px-3 py-2 tabular-nums">
                 <select
                   aria-label={`Allocation ${index + 1} GL account`}
-                  className={inputClass}
+                  className={selectClassName}
                   value={row.glAccountId}
                   onChange={(e) => updateRow(index, { glAccountId: e.target.value })}
                 >
@@ -96,24 +89,23 @@ export function AllocationRows({ allocations, onChange, glAccounts, taxRates, gr
                     </option>
                   ))}
                 </select>
-                <input
+                <Input
                   aria-label={`Allocation ${index + 1} description`}
-                  className={inputClass}
                   placeholder="Line description"
                   value={row.description ?? ''}
                   onChange={(e) => updateRow(index, { description: e.target.value })}
                 />
-                <input
+                <Input
                   aria-label={`Allocation ${index + 1} net amount`}
                   type="number"
                   step="0.01"
-                  className={`${inputClass} text-right`}
+                  className="text-right"
                   value={row.netAmount || ''}
                   onChange={(e) => updateRow(index, { netAmount: parseFloat(e.target.value) || 0 })}
                 />
                 <select
                   aria-label={`Allocation ${index + 1} VAT rate`}
-                  className={inputClass}
+                  className={selectClassName}
                   value={row.taxRateId ?? ''}
                   onChange={(e) => updateRow(index, { taxRateId: e.target.value || undefined })}
                 >
@@ -124,31 +116,35 @@ export function AllocationRows({ allocations, onChange, glAccounts, taxRates, gr
                     </option>
                   ))}
                 </select>
-                <span className="text-right text-text-secondary">{formatZAR(taxAmount)}</span>
-                <button
+                <span className="text-right text-sm text-muted-foreground">
+                  <Amount value={taxAmount} plain />
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
                   type="button"
-                  aria-label={`Remove allocation line ${index + 1}`}
+                  className="justify-self-end text-muted-foreground hover:text-destructive"
                   onClick={() => removeRow(index)}
-                  className="flex items-center justify-center rounded-md text-text-muted hover:text-danger"
+                  aria-label={`Remove allocation line ${index + 1}`}
                 >
-                  <Icon name="delete" size={14} />
-                </button>
+                  <Trash2 />
+                </Button>
               </div>
             );
           })}
           {allocations.length === 0 && (
-            <div className="px-3 py-4 text-center text-sm text-text-muted">
+            <div className="px-3 py-4 text-center text-sm text-muted-foreground">
               No allocation lines yet — add at least one GL account to post this transaction.
             </div>
           )}
         </div>
       </div>
 
-      <div className="flex items-center justify-between rounded-md border border-border bg-background px-sm py-xs text-sm">
-        <span className="text-text-secondary">Allocated total vs. transaction amount</span>
-        <span className={`font-semibold ${isBalanced ? 'text-positive' : 'text-negative'}`}>
-          <FinancialNumber value={total} format={formatZAR} showFlash={false} className="mr-2" />
-          {isBalanced ? '— balanced' : `— ${remaining > 0 ? 'short by' : 'over by'} ${formatZAR(Math.abs(remaining))}`}
+      <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm">
+        <span className="text-muted-foreground">Allocated total vs. transaction amount</span>
+        <span className={isBalanced ? 'font-semibold text-positive' : 'font-semibold text-negative'}>
+          <Amount value={total} plain className="mr-2" />
+          {isBalanced ? '— balanced' : `— ${remaining > 0 ? 'short by' : 'over by'} ${Math.abs(remaining).toFixed(2)}`}
         </span>
       </div>
     </div>

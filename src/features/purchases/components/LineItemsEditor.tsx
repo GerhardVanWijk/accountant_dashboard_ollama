@@ -1,12 +1,12 @@
+import { Plus, Trash2 } from 'lucide-react';
 import type { AssetCategory, DepreciationMethod, DocumentLineItem, FixedAssetLineDetails, Product, TaxRate, Warehouse } from '@/types';
-import { Icon } from '@/components/ui/Icon';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
+import { Amount } from '@/components/app/figure';
 import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS } from '@/features/assets/constants';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface LineItemsEditorProps {
   lineItems: DocumentLineItem[];
@@ -70,12 +70,19 @@ function computeLine(
 
 /**
  * Reusable line-item editor shared by the Purchase Order and Bill create
- * forms — quantity/unit price/tax rate drive an auto-calculated tax amount
- * and line total, both rendered via FinancialNumber per
- * docs/FINANCIAL_UI_GUIDE.md. Tax rates are the real, currently-effective
- * `TaxRate` records (src/features/tax/services/taxRateService.ts, via
- * useTaxRates()) — passed in as a prop, never imported locally. Same for
- * `products` (via useProducts()).
+ * forms — v0-styled re-skin (M14) of the same component, mirroring
+ * `src/features/sales/components/SalesLineItemsEditor.tsx`'s card-grid
+ * layout/shadcn Input/Button/Amount language. Kept as its own file rather
+ * than merged with the Sales editor: this side pre-fills from `costPrice`
+ * (not `unitPrice`) and carries the Bill-only fixed-asset capitalization
+ * sub-panel that Sales has no equivalent of — see
+ * `allowFixedAssetCapitalization` below. `computeLine()` stays a local,
+ * independent copy of the Sales editor's identical calculation rather than
+ * a shared import, matching the pre-M14 structure — no behavior changed.
+ * Tax rates are the real, currently-effective `TaxRate` records
+ * (src/features/tax/services/taxRateService.ts, via useTaxRates()) —
+ * passed in as a prop, never imported locally. Same for `products` (via
+ * useProducts()).
  */
 export function LineItemsEditor({
   lineItems,
@@ -98,20 +105,20 @@ export function LineItemsEditor({
    */
   const gridColsClass =
     showAssetColumn && showWarehouseColumn
-      ? 'grid-cols-[160px_90px_140px_2fr_80px_100px_140px_100px_100px_36px]'
+      ? 'sm:grid-cols-[1fr_70px_140px_2fr_80px_100px_140px_100px_100px_36px]'
       : showAssetColumn
-        ? 'grid-cols-[160px_90px_2fr_80px_100px_140px_100px_100px_36px]'
+        ? 'sm:grid-cols-[1fr_70px_2fr_80px_100px_140px_100px_100px_36px]'
         : showWarehouseColumn
-          ? 'grid-cols-[160px_140px_2fr_80px_100px_140px_100px_100px_36px]'
-          : 'grid-cols-[160px_2fr_80px_100px_140px_100px_100px_36px]';
-  const minWidthClass =
+          ? 'sm:grid-cols-[1fr_140px_2fr_80px_100px_140px_100px_100px_36px]'
+          : 'sm:grid-cols-[1fr_2fr_80px_100px_140px_100px_100px_36px]';
+  const headerGridColsClass =
     showAssetColumn && showWarehouseColumn
-      ? 'min-w-[1030px]'
+      ? 'grid-cols-[1fr_70px_140px_2fr_80px_100px_140px_100px_100px_36px]'
       : showAssetColumn
-        ? 'min-w-[890px]'
+        ? 'grid-cols-[1fr_70px_2fr_80px_100px_140px_100px_100px_36px]'
         : showWarehouseColumn
-          ? 'min-w-[940px]'
-          : 'min-w-[800px]';
+          ? 'grid-cols-[1fr_140px_2fr_80px_100px_140px_100px_100px_36px]'
+          : 'grid-cols-[1fr_2fr_80px_100px_140px_100px_100px_36px]';
 
   function updateLine(index: number, patch: Partial<DocumentLineItem>) {
     const merged = { ...lineItems[index], ...patch };
@@ -184,223 +191,226 @@ export function LineItemsEditor({
   }
 
   return (
-    <div className="flex flex-col gap-sm">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-text-primary">Line Items</span>
-        <Button variant="ghost" type="button" onClick={addLine} disabled={disabled}>
-          <Icon name="add" size={14} />
-          Add Line
+        <span className="text-sm font-medium">Line items</span>
+        <Button variant="outline" size="sm" type="button" onClick={addLine} disabled={disabled}>
+          <Plus data-icon="inline-start" />
+          Add line
         </Button>
       </div>
-      <div className="overflow-x-auto rounded-md border border-border">
-        <div className={`grid ${minWidthClass} ${gridColsClass} gap-2 bg-primary/10 px-sm py-xs text-xs font-semibold tabular-nums`}>
-          <div>Product</div>
-          {showAssetColumn && <div>Asset</div>}
-          {showWarehouseColumn && <div>Warehouse</div>}
-          <div>Description</div>
-          <div className="text-right">Qty</div>
-          <div className="text-right">Unit Price</div>
-          <div>Tax Rate</div>
-          <div className="text-right">Tax</div>
-          <div className="text-right">Line Total</div>
-          <div />
-        </div>
+
+      <div className={`hidden gap-3 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase sm:grid ${headerGridColsClass}`}>
+        <span>Product</span>
+        {showAssetColumn && <span>Asset</span>}
+        {showWarehouseColumn && <span>Warehouse</span>}
+        <span>Description</span>
+        <span className="text-right">Qty</span>
+        <span className="text-right">Unit price</span>
+        <span>Tax rate</span>
+        <span className="text-right">Tax</span>
+        <span className="text-right">Line total</span>
+        <span />
+      </div>
+
+      <div className="flex flex-col gap-3">
         {lineItems.map((item, index) => (
-          <div key={item.id} className="border-t border-border/50">
-          <div
-            className={`grid ${minWidthClass} ${gridColsClass} items-center gap-2 px-sm py-xs tabular-nums`}
-          >
-            <select
-              className={inputClass}
-              value={item.productId ?? ''}
-              disabled={disabled || Boolean(item.fixedAssetDetails)}
-              onChange={(e) => selectProduct(index, e.target.value)}
-              aria-label="Product"
-            >
-              <option value="">Custom line</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.sku} — {p.name}
-                </option>
-              ))}
-            </select>
-            {showAssetColumn && (
-              <label className="flex items-center justify-center gap-xs text-xs text-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={Boolean(item.fixedAssetDetails)}
-                  disabled={disabled || Boolean(item.productId)}
-                  onChange={(e) => toggleFixedAsset(index, e.target.checked)}
-                  aria-label="Capitalize as fixed asset"
-                />
-                Asset
-              </label>
-            )}
-            {showWarehouseColumn && (
+          <div key={item.id} className="flex flex-col gap-0 rounded-lg border border-border sm:border-0">
+            <div className={`grid grid-cols-2 gap-3 p-3 sm:items-center sm:p-0 ${gridColsClass}`}>
               <select
-                className={inputClass}
-                value={item.warehouseId ?? ''}
-                disabled={disabled || !item.productId}
-                onChange={(e) => updateLine(index, { warehouseId: e.target.value || undefined })}
-                aria-label="Warehouse"
+                className={`col-span-2 sm:col-span-1 ${selectClassName}`}
+                value={item.productId ?? ''}
+                disabled={disabled || Boolean(item.fixedAssetDetails)}
+                onChange={(e) => selectProduct(index, e.target.value)}
+                aria-label="Product"
               >
-                <option value="">Default warehouse</option>
-                {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
+                <option value="">Custom line</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.sku} — {p.name}
                   </option>
                 ))}
               </select>
-            )}
-            <input
-              className={inputClass}
-              value={item.description}
-              placeholder="Description"
-              disabled={disabled}
-              onChange={(e) => updateLine(index, { description: e.target.value })}
-            />
-            <input
-              type="number"
-              min="0"
-              step="1"
-              className={`${inputClass} text-right`}
-              value={item.quantity || ''}
-              disabled={disabled}
-              onChange={(e) => updateLine(index, { quantity: parseFloat(e.target.value) || 0 })}
-            />
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              className={`${inputClass} text-right`}
-              value={item.unitPrice || ''}
-              disabled={disabled}
-              onChange={(e) => updateLine(index, { unitPrice: parseFloat(e.target.value) || 0 })}
-            />
-            <select
-              className={inputClass}
-              value={item.taxRateId ?? ''}
-              disabled={disabled}
-              onChange={(e) => updateLine(index, { taxRateId: e.target.value || undefined })}
-            >
-              <option value="">No Tax</option>
-              {taxRates.map((rate) => (
-                <option key={rate.id} value={rate.id}>
-                  {rate.name}
-                </option>
-              ))}
-            </select>
-            <div className="text-right text-sm text-text-secondary">
-              <FinancialNumber value={item.taxAmount} format={formatCurrency} showFlash={false} />
-            </div>
-            <div className="text-right text-sm font-semibold">
-              <FinancialNumber value={item.lineTotal} format={formatCurrency} showFlash={false} />
-            </div>
-            <button
-              type="button"
-              onClick={() => removeLine(index)}
-              disabled={disabled}
-              aria-label="Remove line"
-              className="text-text-muted hover:text-danger disabled:opacity-50"
-            >
-              <Icon name="delete" size={14} />
-            </button>
-          </div>
-          {item.fixedAssetDetails && (
-            <div className="grid grid-cols-1 gap-2 border-t border-dashed border-border/50 bg-background px-sm py-xs sm:grid-cols-3 md:grid-cols-5">
-              <label className="flex flex-col gap-0.5 text-xs text-text-secondary">
-                Category
-                <select
-                  className={inputClass}
-                  value={item.fixedAssetDetails.category}
-                  disabled={disabled}
-                  onChange={(e) => selectAssetCategory(index, e.target.value as AssetCategory)}
-                >
-                  {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-0.5 text-xs text-text-secondary">
-                Useful Life (Years)
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  className={inputClass}
-                  value={item.fixedAssetDetails.usefulLifeYears || ''}
-                  disabled={disabled}
-                  onChange={(e) => updateFixedAssetDetails(index, { usefulLifeYears: parseFloat(e.target.value) || 0 })}
-                />
-              </label>
-              <label className="flex flex-col gap-0.5 text-xs text-text-secondary">
-                Depreciation Method
-                <select
-                  className={inputClass}
-                  value={item.fixedAssetDetails.depreciationMethod}
-                  disabled={disabled}
-                  onChange={(e) =>
-                    updateFixedAssetDetails(index, { depreciationMethod: e.target.value as DepreciationMethod })
-                  }
-                >
-                  {Object.entries(DEPRECIATION_METHOD_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-0.5 text-xs text-text-secondary">
-                Residual Value
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className={inputClass}
-                  value={item.fixedAssetDetails.residualValue || ''}
-                  disabled={disabled}
-                  onChange={(e) => updateFixedAssetDetails(index, { residualValue: parseFloat(e.target.value) || 0 })}
-                />
-              </label>
-              {item.fixedAssetDetails.depreciationMethod === 'reducing_balance' && (
-                <label className="flex flex-col gap-0.5 text-xs text-text-secondary">
-                  Reducing Balance Rate (%)
+              {showAssetColumn && (
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <input
+                    type="checkbox"
+                    checked={Boolean(item.fixedAssetDetails)}
+                    disabled={disabled || Boolean(item.productId)}
+                    onChange={(e) => toggleFixedAsset(index, e.target.checked)}
+                    aria-label="Capitalize as fixed asset"
+                    className="accent-primary"
+                  />
+                  Asset
+                </label>
+              )}
+              {showWarehouseColumn && (
+                <select
+                  className={selectClassName}
+                  value={item.warehouseId ?? ''}
+                  disabled={disabled || !item.productId}
+                  onChange={(e) => updateLine(index, { warehouseId: e.target.value || undefined })}
+                  aria-label="Warehouse"
+                >
+                  <option value="">Default warehouse</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <Input
+                className="col-span-2 sm:col-span-1"
+                value={item.description}
+                placeholder="Item or service description"
+                disabled={disabled}
+                onChange={(e) => updateLine(index, { description: e.target.value })}
+                aria-label="Line description"
+              />
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                className="text-right"
+                value={item.quantity || ''}
+                disabled={disabled}
+                onChange={(e) => updateLine(index, { quantity: parseFloat(e.target.value) || 0 })}
+                aria-label="Quantity"
+              />
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                className="text-right"
+                value={item.unitPrice || ''}
+                disabled={disabled}
+                onChange={(e) => updateLine(index, { unitPrice: parseFloat(e.target.value) || 0 })}
+                aria-label="Unit price"
+              />
+              <select
+                className={selectClassName}
+                value={item.taxRateId ?? ''}
+                disabled={disabled}
+                onChange={(e) => updateLine(index, { taxRateId: e.target.value || undefined })}
+                aria-label="Tax rate"
+              >
+                <option value="">No tax</option>
+                {taxRates.map((rate) => (
+                  <option key={rate.id} value={rate.id}>
+                    {rate.name}
+                  </option>
+                ))}
+              </select>
+              <span className="figure text-right text-sm tabular-nums text-muted-foreground">
+                <Amount value={item.taxAmount} plain />
+              </span>
+              <span className="figure text-right text-sm font-medium tabular-nums">
+                <Amount value={item.lineTotal} plain />
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                type="button"
+                className="justify-self-end text-muted-foreground hover:text-destructive"
+                onClick={() => removeLine(index)}
+                disabled={disabled}
+                aria-label="Remove line"
+              >
+                <Trash2 />
+              </Button>
+            </div>
+            {item.fixedAssetDetails && (
+              <div className="grid grid-cols-1 gap-3 border-t border-dashed border-border bg-muted/20 p-3 sm:grid-cols-3 md:grid-cols-5">
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  Category
+                  <select
+                    className={selectClassName}
+                    value={item.fixedAssetDetails.category}
+                    disabled={disabled}
+                    onChange={(e) => selectAssetCategory(index, e.target.value as AssetCategory)}
+                  >
+                    {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  Useful Life (Years)
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={item.fixedAssetDetails.usefulLifeYears || ''}
+                    disabled={disabled}
+                    onChange={(e) => updateFixedAssetDetails(index, { usefulLifeYears: parseFloat(e.target.value) || 0 })}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  Depreciation Method
+                  <select
+                    className={selectClassName}
+                    value={item.fixedAssetDetails.depreciationMethod}
+                    disabled={disabled}
+                    onChange={(e) =>
+                      updateFixedAssetDetails(index, { depreciationMethod: e.target.value as DepreciationMethod })
+                    }
+                  >
+                    {Object.entries(DEPRECIATION_METHOD_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  Residual Value
+                  <Input
                     type="number"
                     min="0"
                     step="0.01"
-                    className={inputClass}
-                    value={item.fixedAssetDetails.reducingBalanceRatePercent ?? ''}
+                    value={item.fixedAssetDetails.residualValue || ''}
+                    disabled={disabled}
+                    onChange={(e) => updateFixedAssetDetails(index, { residualValue: parseFloat(e.target.value) || 0 })}
+                  />
+                </label>
+                {item.fixedAssetDetails.depreciationMethod === 'reducing_balance' && (
+                  <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                    Reducing Balance Rate (%)
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.fixedAssetDetails.reducingBalanceRatePercent ?? ''}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        updateFixedAssetDetails(index, { reducingBalanceRatePercent: parseFloat(e.target.value) || 0 })
+                      }
+                    />
+                  </label>
+                )}
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  SARS Wear-and-Tear Rate (%)
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.fixedAssetDetails.taxWearTearRatePercent ?? ''}
                     disabled={disabled}
                     onChange={(e) =>
-                      updateFixedAssetDetails(index, { reducingBalanceRatePercent: parseFloat(e.target.value) || 0 })
+                      updateFixedAssetDetails(index, { taxWearTearRatePercent: parseFloat(e.target.value) || 0 })
                     }
                   />
                 </label>
-              )}
-              <label className="flex flex-col gap-0.5 text-xs text-text-secondary">
-                SARS Wear-and-Tear Rate (%)
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className={inputClass}
-                  value={item.fixedAssetDetails.taxWearTearRatePercent ?? ''}
-                  disabled={disabled}
-                  onChange={(e) =>
-                    updateFixedAssetDetails(index, { taxWearTearRatePercent: parseFloat(e.target.value) || 0 })
-                  }
-                />
-              </label>
-            </div>
-          )}
+              </div>
+            )}
           </div>
         ))}
         {lineItems.length === 0 && (
-          <div className="px-sm py-md text-center text-sm text-text-muted">
-            No line items — click &ldquo;Add Line&rdquo; to start.
+          <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+            No line items — click &ldquo;Add line&rdquo; to start.
           </div>
         )}
       </div>

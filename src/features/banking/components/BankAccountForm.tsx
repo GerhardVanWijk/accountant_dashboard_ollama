@@ -1,13 +1,14 @@
-import type { ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Account, BankAccount } from '@/types';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
 import { BANK_ACCOUNT_TYPE_LABELS, SA_BANKS } from '../constants';
 import { bankAccountFormSchema, toDefaultValues, type BankAccountFormSchema } from '../utils/bankAccountFormSchema';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface BankAccountFormProps {
   initialValues?: BankAccount;
@@ -15,21 +16,26 @@ export interface BankAccountFormProps {
   glAccounts: Account[];
   onSubmit: (values: BankAccountFormSchema) => Promise<void> | void;
   onCancel: () => void;
+  submitting?: boolean;
+  submitError?: string | null;
   submitLabel?: string;
 }
 
 /**
- * Cash & Bank Account create/edit form: account type (Current/Savings/
- * Credit Card/Petty Cash/Money Market/Foreign Currency), SA banking
- * metadata (Bank Name, Branch Code, Account Number, Swift Code), and the
- * required Chart of Accounts GL link.
+ * Cash & Bank Account create/edit form — same bankAccountFormSchema.ts and
+ * BankAccountService wiring as before the port, JSX re-skinned onto v0's
+ * Field/Input primitives. Account type (Current/Savings/Credit Card/Petty
+ * Cash/Money Market/Foreign Currency), SA banking metadata, and the
+ * required Chart of Accounts GL link are unchanged.
  */
 export function BankAccountForm({
   initialValues,
   glAccounts,
   onSubmit,
   onCancel,
-  submitLabel = 'Save Bank Account',
+  submitting,
+  submitError,
+  submitLabel = 'Save bank account',
 }: BankAccountFormProps) {
   const {
     register,
@@ -52,65 +58,82 @@ export function BankAccountForm({
           bankName: values.bankName === 'Other' ? values.bankNameOther?.trim() || 'Other' : values.bankName,
         });
       })}
-      className="flex flex-col gap-lg"
+      className="flex flex-col gap-6"
     >
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <Field label="Account Name" error={errors.name?.message}>
-          <input className={inputClass} placeholder="e.g. FNB Business Current Account" {...register('name')} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="bank-account-name">Account name</FieldLabel>
+          <Input id="bank-account-name" placeholder="e.g. FNB Business Current Account" {...register('name')} />
+          <FieldError errors={[errors.name]} />
         </Field>
-        <Field label="Account Type" error={errors.accountType?.message}>
-          <select className={inputClass} {...register('accountType')}>
+        <Field>
+          <FieldLabel htmlFor="bank-account-type">Account type</FieldLabel>
+          <select id="bank-account-type" className={selectClassName} {...register('accountType')}>
             {Object.entries(BANK_ACCOUNT_TYPE_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </select>
+          <FieldError errors={[errors.accountType]} />
         </Field>
 
-        <Field label="Bank Name" error={errors.bankName?.message}>
-          <select className={inputClass} {...register('bankName')}>
+        <Field>
+          <FieldLabel htmlFor="bank-account-bank">Bank name</FieldLabel>
+          <select id="bank-account-bank" className={selectClassName} {...register('bankName')}>
             {SA_BANKS.map((bank) => (
               <option key={bank} value={bank}>
                 {bank}
               </option>
             ))}
           </select>
+          <FieldError errors={[errors.bankName]} />
         </Field>
         {bankName === 'Other' && (
-          <Field label="Other Bank Name">
-            <input className={inputClass} {...register('bankNameOther')} />
+          <Field>
+            <FieldLabel htmlFor="bank-account-bank-other">Other bank name</FieldLabel>
+            <Input id="bank-account-bank-other" {...register('bankNameOther')} />
           </Field>
         )}
 
-        <Field label="Account Number" error={errors.accountNumber?.message}>
-          <input className={`${inputClass} font-mono`} {...register('accountNumber')} />
+        <Field>
+          <FieldLabel htmlFor="bank-account-number">Account number</FieldLabel>
+          <Input id="bank-account-number" className="figure" {...register('accountNumber')} />
+          <FieldError errors={[errors.accountNumber]} />
         </Field>
-        <Field label="Branch Code">
-          <input className={`${inputClass} font-mono`} placeholder="e.g. 250655" {...register('branchCode')} />
+        <Field>
+          <FieldLabel htmlFor="bank-account-branch">Branch code</FieldLabel>
+          <Input id="bank-account-branch" className="figure" placeholder="e.g. 250655" {...register('branchCode')} />
         </Field>
 
         {accountType === 'foreign_currency' && (
-          <Field label="Swift / BIC Code">
-            <input className={`${inputClass} font-mono`} placeholder="e.g. FIRNZAJJ" {...register('swiftCode')} />
+          <Field>
+            <FieldLabel htmlFor="bank-account-swift">Swift / BIC code</FieldLabel>
+            <Input id="bank-account-swift" className="figure" placeholder="e.g. FIRNZAJJ" {...register('swiftCode')} />
           </Field>
         )}
-        <Field label="Currency" error={errors.currency?.message}>
-          <input className={`${inputClass} font-mono uppercase`} maxLength={3} {...register('currency')} />
+        <Field>
+          <FieldLabel htmlFor="bank-account-currency">Currency</FieldLabel>
+          <Input id="bank-account-currency" className="figure uppercase" maxLength={3} {...register('currency')} />
+          <FieldError errors={[errors.currency]} />
         </Field>
 
-        <Field label="Opening Balance" error={errors.openingBalance?.message}>
-          <input type="number" step="0.01" className={inputClass} {...register('openingBalance')} />
+        <Field>
+          <FieldLabel htmlFor="bank-account-opening-balance">Opening balance</FieldLabel>
+          <Input id="bank-account-opening-balance" type="number" step="0.01" {...register('openingBalance')} />
+          <FieldError errors={[errors.openingBalance]} />
         </Field>
-        <Field label="Status">
-          <select className={inputClass} {...register('status')}>
+        <Field>
+          <FieldLabel htmlFor="bank-account-status">Status</FieldLabel>
+          <select id="bank-account-status" className={selectClassName} {...register('status')}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
         </Field>
 
-        <Field label="Linked GL Account (Chart of Accounts)" error={errors.glAccountId?.message}>
-          <select className={inputClass} {...register('glAccountId')}>
+        <Field className="sm:col-span-2">
+          <FieldLabel htmlFor="bank-account-gl">Linked GL account (Chart of Accounts)</FieldLabel>
+          <select id="bank-account-gl" className={selectClassName} {...register('glAccountId')}>
             <option value="">Select a GL account…</option>
             {glAccounts.map((a) => (
               <option key={a.id} value={a.id}>
@@ -118,27 +141,20 @@ export function BankAccountForm({
               </option>
             ))}
           </select>
+          <FieldError errors={[errors.glAccountId]} />
         </Field>
       </div>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button variant="outline" type="button" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Saving…' : submitLabel}
+        <Button type="submit" disabled={isSubmitting || submitting}>
+          {isSubmitting || submitting ? 'Saving…' : submitLabel}
         </Button>
       </div>
     </form>
-  );
-}
-
-function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
-  return (
-    <label className="flex flex-col gap-xs text-sm">
-      <span className="font-medium text-text-primary">{label}</span>
-      {children}
-      {error && <span className="text-xs text-danger">{error}</span>}
-    </label>
   );
 }

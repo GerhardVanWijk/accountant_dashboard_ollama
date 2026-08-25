@@ -1,28 +1,26 @@
 import { useMemo, useState } from 'react';
+import { Loader2, Plus } from 'lucide-react';
 import type { RelatedPartyTransaction } from '@/types/relatedParty';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useRelatedParties } from '../hooks/useRelatedParties';
 import { useRelatedPartyTransactions } from '../hooks/useRelatedPartyTransactions';
 import { RelatedPartyTransactionForm } from '../components/RelatedPartyTransactionForm';
 import { RelatedPartyTransactionsTable } from '../components/RelatedPartyTransactionsTable';
 import { DisclosureSummaryTable } from '../components/DisclosureSummaryTable';
-import { Modal } from '../components/Modal';
 import { buildRelatedPartyDisclosureSummary, type CreateRelatedPartyTransactionDTO, type UpdateRelatedPartyTransactionDTO } from '../services';
 
 type DialogState = { mode: 'create' } | { mode: 'edit'; transaction: RelatedPartyTransaction } | null;
 
 /**
- * Related Party Transactions — route `/related-parties/transactions`
- * (SA_ACCOUNTING_MASTER_SPEC.md §88). Purely a disclosure-support record
- * of transactions between the company and its related parties: never
- * posted to the GL, and `sourceReference` is a free-text cross-check
- * pointer only, not an enforced link to any Invoice/Bill. Also renders
- * the per-related-party disclosure summary computed by
- * buildRelatedPartyDisclosureSummary().
+ * Related Party Transactions — route `/related-parties/transactions`.
+ * Purely a disclosure-support record of transactions between the company
+ * and its related parties: never posted to the GL, and `sourceReference`
+ * is a free-text cross-check pointer only, not an enforced link to any
+ * Invoice/Bill. Also renders the per-related-party disclosure summary
+ * computed by buildRelatedPartyDisclosureSummary(). Re-skinned onto v0's
+ * PageHeader/SectionCard/DataTable/Dialog (M13).
  */
 export function RelatedPartyTransactionsPage() {
   const { relatedParties, loading: relatedPartiesLoading } = useRelatedParties();
@@ -31,11 +29,7 @@ export function RelatedPartyTransactionsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const relatedPartiesById = useMemo(() => new Map(relatedParties.map((p) => [p.id, p])), [relatedParties]);
-
-  const disclosureSummary = useMemo(
-    () => buildRelatedPartyDisclosureSummary(relatedParties, transactions),
-    [relatedParties, transactions],
-  );
+  const disclosureSummary = useMemo(() => buildRelatedPartyDisclosureSummary(relatedParties, transactions), [relatedParties, transactions]);
 
   const handleFormSubmit = async (data: CreateRelatedPartyTransactionDTO | UpdateRelatedPartyTransactionDTO) => {
     setActionError(null);
@@ -64,81 +58,67 @@ export function RelatedPartyTransactionsPage() {
   const busy = loading || relatedPartiesLoading;
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Related Party Transactions</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Transactions with directors, shareholders, subsidiaries, associates, and other related entities, kept
-            for disclosure only — nothing here posts to the GL. /related-parties/transactions
-          </p>
-        </div>
-        <Button onClick={() => setDialog({ mode: 'create' })} disabled={relatedParties.length === 0}>
-          New Transaction
-        </Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Related party transactions"
+        description="Transactions with directors, shareholders, subsidiaries, associates, and other related entities, kept for disclosure only — nothing here posts to the GL."
+        actions={
+          <Button size="sm" disabled={relatedParties.length === 0} onClick={() => setDialog({ mode: 'create' })}>
+            <Plus data-icon="inline-start" />
+            New transaction
+          </Button>
+        }
+      />
 
       {relatedParties.length === 0 && !relatedPartiesLoading && (
-        <p role="alert" className="rounded-md border border-warning bg-warning/10 px-md py-sm text-sm text-warning-financial">
+        <p role="alert" className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
           No related parties exist yet — add one on the Related Party Register before recording a transaction.
         </p>
       )}
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {actionError}
         </p>
       )}
 
-      {busy && <Spinner label="Loading related party transactions…" />}
-      {!busy && error && <ErrorState message={error.message} onRetry={refetch} />}
+      {busy && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading related party transactions…</p>
+        </div>
+      )}
+      {!busy && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       {!busy && !error && (
         <>
-          <Card>
-            {transactions.length === 0 ? (
-              <EmptyState
-                title="No related party transactions yet"
-                message="Record a transaction to start building the disclosure history."
-                action={
-                  <Button onClick={() => setDialog({ mode: 'create' })} disabled={relatedParties.length === 0}>
-                    New Transaction
-                  </Button>
-                }
-              />
-            ) : (
-              <RelatedPartyTransactionsTable
-                transactions={transactions}
-                relatedPartiesById={relatedPartiesById}
-                onEdit={(transaction) => setDialog({ mode: 'edit', transaction })}
-                onDelete={handleDelete}
-              />
-            )}
-          </Card>
+          <SectionCard>
+            <RelatedPartyTransactionsTable transactions={transactions} relatedPartiesById={relatedPartiesById} onEdit={(transaction) => setDialog({ mode: 'edit', transaction })} onDelete={(transaction) => void handleDelete(transaction)} />
+          </SectionCard>
 
-          <div>
-            <h2 className="mb-sm text-lg font-semibold text-text-primary">Disclosure Summary</h2>
-            <Card>
-              {disclosureSummary.length === 0 ? (
-                <EmptyState title="Nothing to disclose yet" message="Record at least one transaction to see it summarized here." />
-              ) : (
-                <DisclosureSummaryTable rows={disclosureSummary} />
-              )}
-            </Card>
-          </div>
+          <SectionCard title="Disclosure summary">
+            <DisclosureSummaryTable rows={disclosureSummary} />
+          </SectionCard>
         </>
       )}
 
-      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
-        <Modal title={dialog.mode === 'edit' ? 'Edit Transaction' : 'New Transaction'} onClose={() => setDialog(null)}>
-          <RelatedPartyTransactionForm
-            transaction={dialog.mode === 'edit' ? dialog.transaction : undefined}
-            relatedParties={relatedParties}
-            onSubmit={handleFormSubmit}
-            onCancel={() => setDialog(null)}
-          />
-        </Modal>
-      )}
+      <Dialog open={dialog?.mode === 'create' || dialog?.mode === 'edit'} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{dialog?.mode === 'edit' ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
+          </DialogHeader>
+          {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
+            <RelatedPartyTransactionForm transaction={dialog.mode === 'edit' ? dialog.transaction : undefined} relatedParties={relatedParties} onSubmit={handleFormSubmit} onCancel={() => setDialog(null)} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

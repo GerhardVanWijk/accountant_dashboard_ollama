@@ -27,6 +27,7 @@ the test-suite's own backing store (see the Testing note below).
 | F | Fixed Assets, Payroll, Tax modules | not started |
 | G | Compliance & Phase 12 (Deferred Tax, ECL, Leases, Related Parties, FX, Reporting Standards) | ✅ done 2026-08-23 |
 | T | Multi-Tenant Auth + Role System + Superuser Dashboard | ✅ done 2026-08-23 |
+| — | Reconciliation persistence (`reconciliations` table, closes the Phase E `bank_transactions.reconciliation_id` gap) | ✅ done 2026-08-25 |
 
 ## Testing note — read before trusting a green test run as migration proof
 
@@ -1407,3 +1408,94 @@ Real, deliberate scope boundaries (not bugs) are catalogued in
 `docs/KNOWN_ISSUES.md`'s Phase T entry — most importantly, the new
 fine-grained roles gate the UI only; the ~45 pre-existing tables' RLS is
 still `profiles.role`-only, unchanged by this phase.
+
+## Reconciliation persistence — ✅ 2026-08-25
+
+Closes the Phase E note ("`bankReconciliationRepository` stays Mock —
+reconciliations weren't in this phase's scope, `bank_transactions.
+reconciliation_id` has no FK target yet") and the M5 UI-port gap flagged the
+same way. User-approved, precisely scoped brief: persist `BankReconciliation`
+exactly, keep the repository interface append-only, don't touch
+reconciliation business logic.
+
+**Migration `0017_bank_reconciliation_persistence`** — one new table,
+`reconciliations`, mirroring `BankReconciliation`
+(`src/features/banking/types/bankReconciliation.ts`) field-for-field. Same
+append-only shape as `journal_entries`/`journal_lines`/`stock_movements`
+(Phase C/E): RLS has SELECT/INSERT-only policies scoped to `company_id =
+(select get_my_company_id())`, plus `revoke all ... from anon` /
+`revoke update, delete, truncate ... from authenticated` as the
+defense-in-depth layer — verified directly via
+`information_schema.role_table_grants`, not just the advisor, same
+discipline as every prior append-only table. `company_id`/`bank_account_id`
+indexed (RLS filter + `getByAccount()`'s actual filter, respectively).
+`finalized_by_user_id` is `text`, not `uuid`/FK — same reasoning as
+`audit_log_entries.user_id` (Phase C): the real value passed today is
+`journalEntryService.SYSTEM_USER_ID = 'system'`
+(`useBankReconciliation.ts`'s `finalize()` isn't wired to a real
+authenticated user id yet), not a valid uuid.
+
+**`bank_transactions.reconciliation_id` FK added in the same migration**
+(`bank_transactions_reconciliation_id_fkey → reconciliations(id)`, `NO
+ACTION`, matching `transfer_pair_id`/`journal_entry_id`'s existing
+same-shape FKs). Confirmed safe to add, not deferred: `BankReconciliationService.
+finalizeReconciliation()` already unconditionally calls
+`bankTransactionRepository.update(id, { reconciliationId: record.id })` for
+every cleared transaction immediately after creating the reconciliation
+snapshot (pre-existing logic, untouched by this migration), and
+`bankTransactionRepository` was already `SupabaseBankTransactionRepository`
+— so every real finalize from here on populates the column with a real,
+just-created, always-valid id. Verified live before adding the constraint:
+0 existing `bank_transactions` rows carried a non-null `reconciliation_id`.
+
+**`SupabaseBankReconciliationRepository`**
+(`src/features/banking/repositories/`) implements `IBankReconciliationRepository`
+exactly — `getAll()`/`getById()`/`getByAccount()`/`create()`, no
+`update()`/`delete()` methods exist on the class at all. Resolves "the"
+company internally via `resolveDefaultCompanyId()` (`BankReconciliation` has
+no `companyId` field), same pattern as every other Phase-D-and-later
+repository. Wired in `src/features/banking/services/index.ts`, replacing
+`MockBankReconciliationRepository` (kept, unused by the live singleton now —
+still the test suite's own backing store, per this guide's "Mock
+repositories are never deleted" rule).
+
+**Tests**: `SupabaseBankReconciliationRepository.test.ts` — the first
+committed test file for any `SupabaseXxxRepository` in this codebase (no
+prior phase left one; every earlier live-database proof was run ad hoc
+through the Supabase MCP tools and cleaned up, never persisted as a vitest
+file). Built against a minimal in-memory fake `SupabaseClient` double
+(mimics the exact `.from().select()/.insert().eq().order().limit().single()/
+.maybeSingle()` chains this repository calls), backed by a store kept
+outside any single repository instance — exercises the real query-shaping/
+row-mapping code with no network dependency, and legitimately proves
+persistence-across-re-instantiation the same way two repository instances
+sharing one live table would. 7 tests. `bankReconciliationService.test.ts`
+(Mock-backed, unaffected) still passes unchanged — finalization guards
+untouched.
+
+**Live verification against the real database**: grants/RLS verified
+directly (not just the advisor) — `authenticated` holds exactly `INSERT,
+REFERENCES, SELECT, TRIGGER` on `reconciliations`, `anon` holds nothing.
+`get_advisors` — zero new unaddressed findings (the expected
+`auth_allow_anonymous_sign_ins` on the new table, and `unindexed_foreign_keys`
+INFO on `bank_transactions_reconciliation_id_fkey`, matching the same
+already-accepted category as ~15 other reference-only FK columns elsewhere
+in this schema). A real insert/select round trip was run and confirmed
+against the live table using the project's actual company/bank-account ids,
+then the throwaway row's id was recorded for cleanup — **the cleanup DELETE
+itself was blocked by this session's own tool-permission classifier**
+(mutating writes via `execute_sql` outside table creation were disallowed
+mid-session), so one throwaway row (id `40d27c80-f1a9-43ca-911d-09ba7cdb391b`,
+self-documented via its own `notes` field) remains in the live
+`reconciliations` table pending manual deletion. `bank_transactions` itself
+was never touched — the two attempted `UPDATE`s proving the FK's reject
+path were blocked the same way, before either could run.
+
+**Deliberately not done here**: `useBankReconciliation.ts`'s `finalize()`
+still passes `SYSTEM_USER_ID` instead of a real authenticated user id (a
+pre-existing gap, not introduced or fixed by this change — it's exactly why
+`finalized_by_user_id` had to be `text` rather than `uuid`/FK). No index on
+`bank_transactions.reconciliation_id` — nothing in the codebase queries by
+it today (no `getByReconciliation()`-shaped method exists), so it wasn't
+"justified by existing repository access patterns" per this task's own
+scoping rule; revisit if such a query is ever added.

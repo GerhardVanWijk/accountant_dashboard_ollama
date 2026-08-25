@@ -1,14 +1,12 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { Loader2, Play } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useLeaseAmortization } from '../hooks/useLeaseAmortization';
 import { useLeases } from '../hooks/useLeases';
 import { RunAmortizationForm } from '../components/RunAmortizationForm';
 import { AmortizationHistoryTable } from '../components/AmortizationHistoryTable';
-import { Modal } from '../components/Modal';
 
 function endOfCurrentMonth(): string {
   const now = new Date();
@@ -16,7 +14,13 @@ function endOfCurrentMonth(): string {
   return end.toISOString().slice(0, 10);
 }
 
-/** Lease Amortization — route `/leases/amortization`. Mirrors src/features/assets/pages/DepreciationPage.tsx. */
+/**
+ * Lease Amortization — route `/leases/amortization`. Real
+ * useLeaseAmortization()/leaseAmortizationService data; the run action
+ * posts one combined journal entry via the existing service, mirroring
+ * DepreciationPage. Re-skinned onto v0's
+ * PageHeader/SectionCard/DataTable/Dialog (M13).
+ */
 export function LeaseAmortizationPage() {
   const { history, loading, error, refetch, runAmortization } = useLeaseAmortization();
   const { leases, loading: leasesLoading } = useLeases();
@@ -44,54 +48,64 @@ export function LeaseAmortizationPage() {
   };
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Lease Amortization</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Run periodic lease interest/principal amortization and Right-of-Use depreciation. /leases/amortization
-          </p>
-        </div>
-        <div className="flex items-center gap-sm">
-          <span className="text-sm text-text-secondary">{activeCount} active lease{activeCount === 1 ? '' : 's'}</span>
-          <Button onClick={() => setRunDialogOpen(true)} disabled={busy}>
-            Run Amortization
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Lease amortization"
+        description="Run periodic lease interest/principal amortization and Right-of-Use depreciation."
+        actions={
+          <Button size="sm" disabled={busy} onClick={() => setRunDialogOpen(true)}>
+            <Play data-icon="inline-start" />
+            Run amortization
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {actionError}
         </p>
       )}
       {lastRunMessage && (
-        <p role="status" className="rounded-md border border-border bg-positive/10 px-md py-sm text-sm text-positive">
+        <p role="status" className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">
           {lastRunMessage}
         </p>
       )}
 
-      {busy && <Spinner label="Loading lease amortization history…" />}
-      {!busy && error && <ErrorState message={error.message} onRetry={refetch} />}
+      <SectionCard>
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{activeCount}</span> active lease{activeCount === 1 ? '' : 's'} eligible for amortization.
+        </p>
+      </SectionCard>
+
+      {busy && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading lease amortization history…</p>
+        </div>
+      )}
+      {!busy && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       {!busy && !error && (
-        <Card>
-          {history.length === 0 ? (
-            <EmptyState
-              title="No lease amortization posted yet"
-              message="Run amortization once a lease has commenced on the Lease Register."
-            />
-          ) : (
-            <AmortizationHistoryTable entries={history} leases={leases} />
-          )}
-        </Card>
+        <SectionCard title="Posting history" description="Every lease amortization charge posted so far, most recent first.">
+          <AmortizationHistoryTable entries={history} leases={leases} />
+        </SectionCard>
       )}
 
-      {runDialogOpen && (
-        <Modal title="Run Amortization" onClose={() => setRunDialogOpen(false)}>
+      <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Run Amortization</DialogTitle>
+          </DialogHeader>
           <RunAmortizationForm defaultPeriodEnd={endOfCurrentMonth()} onSubmit={handleRun} onCancel={() => setRunDialogOpen(false)} />
-        </Modal>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

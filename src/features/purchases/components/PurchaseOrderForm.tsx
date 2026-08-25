@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import type { Supplier } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { FigureBlock } from '@/components/app/figure';
+import { formatCurrency } from '@/lib/app/format';
 import type { CreatePurchaseOrderDTO } from '../services';
 import { LineItemsEditor } from './LineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface PurchaseOrderFormProps {
   suppliers: Supplier[];
@@ -24,9 +26,10 @@ function today(): string {
 }
 
 /**
- * Purchase Order create form. POs never post to the GL (only Bills do,
- * per this dispatch's brief) — this only builds and validates the
- * CreatePurchaseOrderDTO payload for purchaseOrderService.createPurchaseOrder().
+ * Purchase Order create form. POs never post to the GL (only Bills do) —
+ * this only builds and validates the CreatePurchaseOrderDTO payload for
+ * purchaseOrderService.createPurchaseOrder(). Re-skinned onto v0's
+ * Field/Input (M8); `LineItemsEditor` untouched.
  */
 export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCancel }: PurchaseOrderFormProps) {
   const { taxRates } = useTaxRates();
@@ -78,70 +81,56 @@ export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCanc
   }
 
   return (
-    <div className="flex flex-col gap-lg">
+    <div className="flex flex-col gap-6">
       {formError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+        <p role="alert" className="text-sm text-destructive">
           {formError}
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">PO Number</span>
-          <input className={`${inputClass} font-mono`} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Supplier</span>
-          <select className={inputClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="po-number">PO Number</FieldLabel>
+          <Input id="po-number" className="font-mono" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="po-supplier">Supplier</FieldLabel>
+          <select id="po-supplier" className={selectClassName} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
             {suppliers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Order Date</span>
-          <input type="date" className={inputClass} value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Expected Date (optional)</span>
-          <input
-            type="date"
-            className={inputClass}
-            value={expectedDate}
-            onChange={(e) => setExpectedDate(e.target.value)}
-          />
-        </label>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="po-order-date">Order Date</FieldLabel>
+          <Input id="po-order-date" type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="po-expected-date">Expected Date (optional)</FieldLabel>
+          <Input id="po-expected-date" type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
+        </Field>
       </div>
 
       <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} products={products} warehouses={warehouses} />
 
-      <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
-        <div>
-          <div className="text-xs text-text-muted">Subtotal</div>
-          <FinancialNumber value={subtotal} format={formatCurrency} className="text-base font-semibold" />
-        </div>
-        <div>
-          <div className="text-xs text-text-muted">Tax</div>
-          <FinancialNumber value={taxTotal} format={formatCurrency} className="text-base font-semibold" />
-        </div>
-        <div>
-          <div className="text-xs text-text-muted">Total</div>
-          <FinancialNumber value={total} format={formatCurrency} className="text-base font-semibold" />
-        </div>
+      <div className="grid grid-cols-3 gap-4 rounded-lg border border-border bg-muted/30 p-4">
+        <FigureBlock label="Subtotal" value={formatCurrency(subtotal)} className="text-base" />
+        <FigureBlock label="Tax" value={formatCurrency(taxTotal)} className="text-base" />
+        <FigureBlock label="Total" value={formatCurrency(total)} className="text-base" />
       </div>
 
-      <label className="flex flex-col gap-xs text-sm">
-        <span className="font-medium text-text-primary">Notes (optional)</span>
-        <textarea className={inputClass} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </label>
+      <Field>
+        <FieldLabel htmlFor="po-notes">Notes (optional)</FieldLabel>
+        <Textarea id="po-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      </Field>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
+        <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
           {isSubmitting ? 'Saving…' : 'Create Purchase Order'}
         </Button>
       </div>

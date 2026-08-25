@@ -1,17 +1,22 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { Loader2, Trash2 } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useAssetDisposals } from '../hooks/useAssetDisposals';
 import { useFixedAssets } from '../hooks/useFixedAssets';
 import { useAccounts } from '@/features/accounting/hooks/useAccounts';
 import { DisposeAssetForm } from '../components/DisposeAssetForm';
 import { DisposalsTable } from '../components/DisposalsTable';
-import { Modal } from '../components/Modal';
 
-/** Disposals — route `/assets/disposals` (docs/ROUTES.md). */
+/**
+ * Asset Disposals — route `/assets/disposals`. Real
+ * useAssetDisposals()/assetDisposalService data; disposal (with its
+ * gain/loss) is a real, permanent status change on the FixedAsset — never
+ * an invented hard delete. No literal v0 template exists for this report
+ * — re-skinned onto v0's general PageHeader/SectionCard/Dialog language
+ * (M8).
+ */
 export function DisposalsPage() {
   const { disposals, loading, error, refetch, disposeAsset } = useAssetDisposals();
   const { assets, loading: assetsLoading, refetch: refetchAssets } = useFixedAssets();
@@ -34,43 +39,53 @@ export function DisposalsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Asset Disposals</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Dispose of a fixed asset and record the resulting gain or loss. /assets/disposals
-          </p>
-        </div>
-        <Button onClick={() => setDialogOpen(true)} disabled={busy || disposableCount === 0}>
-          Dispose Asset
-        </Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Asset disposals"
+        description="Dispose of a fixed asset and record the resulting gain or loss."
+        actions={
+          <Button size="sm" variant="destructive" disabled={busy || disposableCount === 0} onClick={() => setDialogOpen(true)}>
+            <Trash2 data-icon="inline-start" />
+            Dispose asset
+          </Button>
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {actionError}
         </p>
       )}
 
-      {busy && <Spinner label="Loading disposals…" />}
-      {!busy && error && <ErrorState message={error.message} onRetry={refetch} />}
+      {busy && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading disposals…</p>
+        </div>
+      )}
+      {!busy && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       {!busy && !error && (
-        <Card>
-          {disposals.length === 0 ? (
-            <EmptyState title="No disposals yet" message="Dispose of a capitalized asset to record it here." />
-          ) : (
-            <DisposalsTable disposals={disposals} assets={assets} />
-          )}
-        </Card>
+        <SectionCard title="Disposal history" description="Every disposed asset, its carrying value, proceeds and resulting gain or loss.">
+          <DisposalsTable disposals={disposals} assets={assets} />
+        </SectionCard>
       )}
 
-      {dialogOpen && (
-        <Modal title="Dispose Asset" onClose={() => setDialogOpen(false)}>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Dispose Asset</DialogTitle>
+          </DialogHeader>
           <DisposeAssetForm assets={assets} accounts={accounts} onSubmit={handleDispose} onCancel={() => setDialogOpen(false)} />
-        </Modal>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
