@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { TrialBalancePage } from './TrialBalancePage';
-import { journalEntryService } from '../services';
+import { accountService, journalEntryService } from '../services';
 
 vi.mock('../services', () => ({
   accountService: {
-    getAccounts: vi.fn(),
+    getAccounts: vi.fn().mockResolvedValue([]),
     getAccount: vi.fn(),
     createAccount: vi.fn(),
     updateAccount: vi.fn(),
@@ -26,10 +26,12 @@ vi.mock('../services', () => ({
 }));
 
 const mockedComputeTrialBalance = journalEntryService.computeTrialBalance as unknown as ReturnType<typeof vi.fn>;
+const mockedGetAccounts = accountService.getAccounts as unknown as ReturnType<typeof vi.fn>;
 
 describe('TrialBalancePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedGetAccounts.mockResolvedValue([]);
   });
 
   it('shows a loading state while the trial balance is computing', () => {

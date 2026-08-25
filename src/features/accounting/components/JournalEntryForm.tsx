@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import type { Account } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { cn } from '@/utils/cn';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Amount } from '@/components/app/figure';
+import { cn } from '@/lib/utils';
 import type { JournalValidationResult, NewJournalEntryInput, NewJournalLineInput } from '../services';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 interface DraftLine {
   key: string;
@@ -40,11 +41,17 @@ export interface JournalEntryFormProps {
 
 /**
  * Manual journal entry workspace: header (date/memo/source) + a dynamic
- * debit/credit line grid with real-time balance validation. The
- * debit=credit check itself is never recomputed here — every keystroke
- * re-runs journalEntryService.validateLines() (via the `validateLines`
- * prop) so the UI can never drift from the one place that invariant is
- * allowed to live (docs/LEDGER_ARCHITECTURE.md).
+ * debit/credit line grid with real-time balance validation. This is a v0
+ * re-skin only — every piece of state, the debounce, and the submit flow
+ * are unchanged from the pre-port form. The debit=credit check itself is
+ * never recomputed here — every keystroke re-runs
+ * journalEntryService.validateLines() (via the `validateLines` prop) so
+ * the UI can never drift from the one place that invariant is allowed to
+ * live (docs/LEDGER_ARCHITECTURE.md). There is no "save as draft" —
+ * JournalEntryService.postJournalEntry() posts immediately, so submitting
+ * this form posts to the real ledger right away; v0's mock data implies a
+ * draft/awaiting-review workflow the real engine doesn't have, see the M3
+ * report.
  */
 export function JournalEntryForm({ accounts, validateLines, onSubmit, onCancel }: JournalEntryFormProps) {
   const activeAccounts = accounts.filter((a) => a.isActive);
@@ -111,54 +118,55 @@ export function JournalEntryForm({ accounts, validateLines, onSubmit, onCancel }
   }
 
   return (
-    <div className="flex flex-col gap-lg">
+    <div className="flex flex-col gap-6">
       {submitError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {submitError}
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-3">
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Date</span>
-          <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Source</span>
-          <input className={inputClass} value={source} onChange={(e) => setSource(e.target.value)} placeholder="manual" />
-        </label>
-        <label className="flex flex-col gap-xs text-sm md:col-span-1">
-          <span className="font-medium text-text-primary">Memo (optional)</span>
-          <input className={inputClass} value={memo} onChange={(e) => setMemo(e.target.value)} />
-        </label>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Field>
+          <FieldLabel htmlFor="je-date">Date</FieldLabel>
+          <Input id="je-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="je-source">Source</FieldLabel>
+          <Input id="je-source" value={source} onChange={(e) => setSource(e.target.value)} placeholder="manual" />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="je-memo">Memo (optional)</FieldLabel>
+          <Input id="je-memo" value={memo} onChange={(e) => setMemo(e.target.value)} />
+        </Field>
       </div>
 
-      <div className="flex flex-col gap-sm">
-        <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="flex flex-col gap-3">
+        <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full min-w-[640px] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-border bg-background">
-                <th className="px-sm py-xs text-left text-xs font-semibold uppercase tracking-wide text-text-secondary">
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-3 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Account
                 </th>
-                <th className="px-sm py-xs text-left text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                <th className="px-3 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Description
                 </th>
-                <th className="px-sm py-xs text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                <th className="px-3 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Debit
                 </th>
-                <th className="px-sm py-xs text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                <th className="px-3 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Credit
                 </th>
-                <th className="px-sm py-xs" />
+                <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
               {lines.map((line) => (
                 <tr key={line.key} className="border-b border-border last:border-0">
-                  <td className="px-sm py-xs align-top">
+                  <td className="px-3 py-2 align-top">
                     <select
-                      className={inputClass}
+                      aria-label="Account"
+                      className={selectClassName}
                       value={line.accountId}
                       onChange={(e) => updateLine(line.key, { accountId: e.target.value })}
                     >
@@ -170,42 +178,44 @@ export function JournalEntryForm({ accounts, validateLines, onSubmit, onCancel }
                       ))}
                     </select>
                   </td>
-                  <td className="px-sm py-xs align-top">
-                    <input
-                      className={inputClass}
+                  <td className="px-3 py-2 align-top">
+                    <Input
+                      aria-label="Line description"
                       value={line.description}
                       onChange={(e) => updateLine(line.key, { description: e.target.value })}
                     />
                   </td>
-                  <td className="px-sm py-xs align-top">
-                    <input
+                  <td className="px-3 py-2 align-top">
+                    <Input
+                      aria-label="Debit"
                       type="number"
                       step="0.01"
                       min="0"
-                      className={cn(inputClass, 'text-right tabular-nums')}
+                      className={cn('text-right tabular-nums')}
                       value={line.debit}
                       onChange={(e) => updateLine(line.key, { debit: e.target.value, credit: e.target.value ? '' : line.credit })}
                     />
                   </td>
-                  <td className="px-sm py-xs align-top">
-                    <input
+                  <td className="px-3 py-2 align-top">
+                    <Input
+                      aria-label="Credit"
                       type="number"
                       step="0.01"
                       min="0"
-                      className={cn(inputClass, 'text-right tabular-nums')}
+                      className={cn('text-right tabular-nums')}
                       value={line.credit}
                       onChange={(e) => updateLine(line.key, { credit: e.target.value, debit: e.target.value ? '' : line.debit })}
                     />
                   </td>
-                  <td className="px-sm py-xs align-top text-right">
+                  <td className="px-3 py-2 align-top text-right">
                     <button
                       type="button"
                       aria-label="Remove line"
                       onClick={() => removeLine(line.key)}
                       disabled={lines.length <= 2}
-                      className="rounded-md p-xs text-text-secondary hover:bg-background hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      <Icon name="delete" size={16} />
+                      <Trash2 className="size-4" aria-hidden="true" />
                     </button>
                   </td>
                 </tr>
@@ -214,29 +224,29 @@ export function JournalEntryForm({ accounts, validateLines, onSubmit, onCancel }
           </table>
         </div>
 
-        <Button variant="ghost" type="button" className="self-start px-sm py-xs text-xs" onClick={addLine}>
-          <Icon name="add" size={14} />
-          Add Line
+        <Button variant="ghost" size="sm" type="button" className="self-start" onClick={addLine}>
+          <Plus data-icon="inline-start" />
+          Add line
         </Button>
       </div>
 
-      <div className="flex flex-col gap-xs rounded-md border border-border bg-background px-md py-sm text-sm">
+      <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-muted/20 px-4 py-3 text-sm">
         <div className="flex items-center justify-between">
-          <span className="text-text-secondary">Total Debits</span>
-          <FinancialNumber value={totalDebit} format={formatCurrency} showFlash={false} />
+          <span className="text-muted-foreground">Total debits</span>
+          <Amount value={totalDebit} />
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-text-secondary">Total Credits</span>
-          <FinancialNumber value={totalCredit} format={formatCurrency} showFlash={false} />
+          <span className="text-muted-foreground">Total credits</span>
+          <Amount value={totalCredit} />
         </div>
-        <div className="flex items-center justify-between border-t border-border pt-xs font-medium">
+        <div className="flex items-center justify-between border-t border-border pt-1.5 font-medium">
           <span className={difference === 0 ? 'text-positive' : 'text-negative'}>
             {difference === 0 ? 'Balanced' : 'Out of balance'}
           </span>
-          <FinancialNumber value={difference} format={formatCurrency} showFlash={false} />
+          <Amount value={difference} />
         </div>
         {!validating && validation.errors.length > 0 && (
-          <ul className="mt-xs list-disc pl-md text-xs text-danger">
+          <ul className="mt-1.5 list-disc pl-5 text-xs text-destructive">
             {validation.errors.map((err) => (
               <li key={err}>{err}</li>
             ))}
@@ -244,12 +254,12 @@ export function JournalEntryForm({ accounts, validateLines, onSubmit, onCancel }
         )}
       </div>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel} disabled={submitting}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button variant="outline" type="button" onClick={onCancel} disabled={submitting}>
           Cancel
         </Button>
-        <Button variant="primary" type="button" onClick={handleSubmit} disabled={!canSubmit}>
-          {submitting ? 'Posting…' : 'Post Journal Entry'}
+        <Button type="button" onClick={handleSubmit} disabled={!canSubmit}>
+          {submitting ? 'Posting…' : 'Post journal entry'}
         </Button>
       </div>
     </div>

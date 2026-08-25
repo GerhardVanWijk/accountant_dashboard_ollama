@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { Account, JournalEntry } from '@/types';
 import { JournalsPage } from './JournalsPage';
-import { accountService, journalEntryService } from '../services';
+import { accountService, journalEntryService, accountingPeriodService } from '../services';
 
 vi.mock('../services', () => ({
   accountService: {
@@ -21,10 +21,15 @@ vi.mock('../services', () => ({
     getAccountLedger: vi.fn(),
     computeTrialBalance: vi.fn(),
   },
+  accountingPeriodService: {
+    getPeriods: vi.fn().mockResolvedValue([]),
+  },
+  SYSTEM_USER_ID: 'system',
 }));
 
 const mockedGetEntries = journalEntryService.getEntries as unknown as ReturnType<typeof vi.fn>;
 const mockedGetAccounts = accountService.getAccounts as unknown as ReturnType<typeof vi.fn>;
+const mockedGetPeriods = accountingPeriodService.getPeriods as unknown as ReturnType<typeof vi.fn>;
 
 function makeAccount(overrides: Partial<Account> = {}): Account {
   return {
@@ -63,6 +68,7 @@ describe('JournalsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedGetAccounts.mockResolvedValue([makeAccount()]);
+    mockedGetPeriods.mockResolvedValue([]);
   });
 
   it('shows a loading state while entries are being fetched', () => {
@@ -80,7 +86,7 @@ describe('JournalsPage', () => {
   it('shows an empty state when there are no journal entries', async () => {
     mockedGetEntries.mockResolvedValue([]);
     render(<JournalsPage />);
-    expect(await screen.findByText(/no journal entries yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no journals found/i)).toBeInTheDocument();
   });
 
   it('renders posted entries once data loads', async () => {

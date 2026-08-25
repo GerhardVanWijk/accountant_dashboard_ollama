@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import type { Account } from '@/types';
+import type { Account, JournalEntry } from '@/types';
 import { LedgerPage } from './LedgerPage';
 import { accountService, journalEntryService } from '../services';
 import { useAccountingUiStore } from '../store/accountingUiStore';
@@ -26,6 +26,7 @@ vi.mock('../services', () => ({
 
 const mockedGetAccounts = accountService.getAccounts as unknown as ReturnType<typeof vi.fn>;
 const mockedGetAccount = accountService.getAccount as unknown as ReturnType<typeof vi.fn>;
+const mockedGetEntries = journalEntryService.getEntries as unknown as ReturnType<typeof vi.fn>;
 const mockedGetAccountLedger = journalEntryService.getAccountLedger as unknown as ReturnType<typeof vi.fn>;
 
 function makeAccount(overrides: Partial<Account> = {}): Account {
@@ -42,33 +43,49 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
   };
 }
 
+function makeEntry(overrides: Partial<JournalEntry> = {}): JournalEntry {
+  return {
+    id: 'je_0001',
+    entryNumber: 'JE-0001',
+    date: '2026-01-01T00:00:00.000Z',
+    memo: 'Opening balances',
+    status: 'posted',
+    postedAt: '2026-01-01T00:00:00.000Z',
+    source: 'manual',
+    lines: [{ id: 'l1', accountId: 'acc_1000', debit: 100, credit: 0 }],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 describe('LedgerPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAccountingUiStore.setState({ selectedLedgerAccountId: null });
-  });
-
-  it('shows an empty state when there are no accounts to pick from', async () => {
-    mockedGetAccounts.mockResolvedValue([]);
-    render(<LedgerPage />);
-    expect(await screen.findByText(/no accounts yet/i)).toBeInTheDocument();
-  });
-
-  it('shows an empty state when the selected account has no postings', async () => {
-    mockedGetAccounts.mockResolvedValue([makeAccount()]);
-    mockedGetAccount.mockResolvedValue(makeAccount());
+    mockedGetAccount.mockResolvedValue(undefined);
     mockedGetAccountLedger.mockResolvedValue([]);
-    render(<LedgerPage />);
-    expect(await screen.findByText(/no postings yet/i)).toBeInTheDocument();
   });
 
-  it('renders ledger rows with a running balance once data loads', async () => {
+  it('shows an empty state when there are no posted lines yet', async () => {
+    mockedGetAccounts.mockResolvedValue([]);
+    mockedGetEntries.mockResolvedValue([]);
+    render(<LedgerPage />);
+    expect(await screen.findByText(/no ledger entries found/i)).toBeInTheDocument();
+  });
+
+  it('renders flat ledger rows across accounts once data loads', async () => {
     mockedGetAccounts.mockResolvedValue([makeAccount()]);
-    mockedGetAccount.mockResolvedValue(makeAccount());
-    mockedGetAccountLedger.mockResolvedValue([
-      { entryId: 'je_1', entryNumber: 'JE-0001', date: '2026-01-01T00:00:00.000Z', debit: 100, credit: 0, runningBalance: 100 },
-    ]);
+    mockedGetEntries.mockResolvedValue([makeEntry()]);
     render(<LedgerPage />);
     expect(await screen.findByText('JE-0001')).toBeInTheDocument();
+    expect(screen.getByText('1000')).toBeInTheDocument();
+  });
+
+  it('shows an error state when the fetch fails', async () => {
+    mockedGetAccounts.mockResolvedValue([]);
+    mockedGetEntries.mockRejectedValue(new Error('Network unreachable'));
+    render(<LedgerPage />);
+    expect(await screen.findByText(/network unreachable/i)).toBeInTheDocument();
   });
 });
