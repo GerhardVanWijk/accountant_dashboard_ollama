@@ -1,8 +1,62 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MockSupplierRepository } from './MockSupplierRepository';
 import { SupplierService } from '../services/supplierService';
+import { billService } from '@/features/purchases/services';
+import type { Bill } from '@/types';
+
+/**
+ * SupplierService.deleteSupplier()'s accounts-payable guard reaches through
+ * to the REAL, Supabase-backed `billService` singleton (Purchases module,
+ * shipped after this Mock repository's own tests were first written) — not
+ * a second, supplier-local copy of bill data. Mocking it here is required
+ * for this to be a real unit test rather than an accidental live-network
+ * integration test: the guard previously appeared to pass only because a
+ * hardcoded Mock-era supplier id (`sup_00000004`) happened to still match a
+ * seed row in `src/mock-data/bills.ts`, a dataset `billService` stopped
+ * reading from once it moved to Supabase (M8) — the live database has no
+ * bill for that non-UUID id, so the guard silently found nothing to block
+ * and the delete went through, which is what M11's inspection traced this
+ * to (a stale test fixture, not a business-logic bug: the guard's own
+ * logic — block delete whenever real open bills exist — is correct and
+ * unchanged; it's exercised directly below instead of depending on
+ * whatever real data happens to exist in Supabase today, which the
+ * original test silently did and which would only get more fragile as
+ * real data changes).
+ */
+vi.mock('@/features/purchases/services', () => ({
+  billService: { getBillsBySupplier: vi.fn() },
+}));
+
+const mockedGetBillsBySupplier = vi.mocked(billService.getBillsBySupplier);
+
+function makeOpenBill(overrides: Partial<Bill> = {}): Bill {
+  return {
+    id: 'bill_1',
+    billNumber: 'BILL-0001',
+    supplierId: 'sup_00000004',
+    issueDate: '2026-07-01',
+    dueDate: '2026-07-31',
+    lineItems: [],
+    subtotal: 1000,
+    taxTotal: 150,
+    total: 1150,
+    amountPaid: 0,
+    currency: 'ZAR',
+    status: 'awaiting_payment',
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
 
 describe('MockSupplierRepository + SupplierService (repository pattern)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Default: no linked bills, so delete-related tests unrelated to the
+    // guard itself aren't accidentally blocked by a leftover mock return value.
+    mockedGetBillsBySupplier.mockResolvedValue([]);
+  });
+
   it('lists seeded suppliers', async () => {
     const repo = new MockSupplierRepository();
     const suppliers = await repo.getAll();
@@ -57,15 +111,21 @@ describe('MockSupplierRepository + SupplierService (repository pattern)', () => 
   });
 
   it('refuses to hard-delete a supplier with linked open bills (accounts-payable guard)', async () => {
-    // sup_00000004 (City of Johannesburg Municipal Services) has a real,
-    // unpaid 'awaiting_payment' bill in src/mock-data/bills.ts
-    // (bill_00000004) — the guard now checks real Bill data via
-    // billService, not the old temporary mock dataset.
+    mockedGetBillsBySupplier.mockResolvedValue([makeOpenBill()]);
+
     const service = new SupplierService(new MockSupplierRepository());
     await expect(service.deleteSupplier('sup_00000004')).rejects.toThrow(/linked financial history/i);
+    expect(mockedGetBillsBySupplier).toHaveBeenCalledWith('sup_00000004');
 
     const stillThere = await service.getSupplier('sup_00000004');
     expect(stillThere).toBeDefined();
+  });
+
+  it('allows deleting a supplier once its only bill is fully paid (not just present)', async () => {
+    mockedGetBillsBySupplier.mockResolvedValue([makeOpenBill({ status: 'paid', amountPaid: 1150 })]);
+
+    const service = new SupplierService(new MockSupplierRepository());
+    await expect(service.deleteSupplier('sup_00000004')).resolves.toBeUndefined();
   });
 
   it('allows setStatus and setOnHold to toggle a supplier without deleting it', async () => {

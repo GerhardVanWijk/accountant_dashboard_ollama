@@ -1,17 +1,16 @@
 import { useState } from 'react';
+import { Loader2, Plus } from 'lucide-react';
 import type { PayrollRun } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useAccounts } from '@/features/accounting/hooks/useAccounts';
 import { usePayrollRuns } from '../hooks/usePayrollRuns';
 import { PayrollRunForm } from '../components/PayrollRunForm';
 import { PayrollRunsTable } from '../components/PayrollRunsTable';
 import { PayslipLinesTable } from '../components/PayslipLinesTable';
 import { PostPayrollRunForm } from '../components/PostPayrollRunForm';
-import { Modal } from '../components/Modal';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 type DialogState = { mode: 'create' } | { mode: 'view'; run: PayrollRun } | { mode: 'post'; run: PayrollRun } | null;
 
@@ -29,12 +28,20 @@ function endOfMonthISO(): string {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
 }
 
-/** Payroll Runs — route `/payroll/runs` (docs/ROUTES.md). */
+/**
+ * Payroll Runs — route `/payroll/runs`. Real usePayrollRuns()/
+ * payrollRunService data throughout — creation, review, per-employee
+ * overtime/bonus overrides, and posting all go through the same real,
+ * GL-posting service unchanged. Re-skinned onto v0's
+ * PageHeader/SectionCard/DataTable/Dialog (M13).
+ */
 export function PayrollRunsPage() {
   const { runs, loading, error, refetch, createPayrollRun, updatePayslipOverride, deletePayrollRun, postPayrollRun } = usePayrollRuns();
   const { accounts, loading: accountsLoading } = useAccounts();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const canCreate = useCanAccess('payroll', 'create');
+  const canDelete = useCanAccess('payroll', 'delete');
 
   const handleCreate = async (payPeriodStart: string, payPeriodEnd: string, payDate: string) => {
     setActionError(null);
@@ -79,83 +86,94 @@ export function PayrollRunsPage() {
   const busy = loading || accountsLoading;
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Payroll Runs</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Create, review, and post payroll — each run computes every active employee's payslip, then posts one
-            combined GL entry. /payroll/runs
-          </p>
-        </div>
-        <Button onClick={() => setDialog({ mode: 'create' })}>New Payroll Run</Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Payroll runs"
+        description="Create, review, and post payroll — each run computes every active employee's payslip, then posts one combined GL entry."
+        actions={
+          canCreate ? (
+            <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+              <Plus data-icon="inline-start" />
+              New payroll run
+            </Button>
+          ) : undefined
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {actionError}
         </p>
       )}
 
-      {busy && <Spinner label="Loading payroll runs…" />}
-      {!busy && error && <ErrorState message={error.message} onRetry={refetch} />}
+      {busy && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading payroll runs…</p>
+        </div>
+      )}
+      {!busy && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       {!busy && !error && (
-        <Card>
-          {runs.length === 0 ? (
-            <EmptyState
-              title="No payroll runs yet"
-              message="Create a payroll run to pay your employees."
-              action={<Button onClick={() => setDialog({ mode: 'create' })}>New Payroll Run</Button>}
-            />
-          ) : (
-            <PayrollRunsTable runs={runs} onView={(run) => setDialog({ mode: 'view', run })} onDelete={handleDelete} />
+        <SectionCard>
+          <PayrollRunsTable runs={runs} onView={(run) => setDialog({ mode: 'view', run })} onDelete={canDelete ? (run) => void handleDelete(run) : undefined} />
+        </SectionCard>
+      )}
+
+      <Dialog open={dialog?.mode === 'create'} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>New Payroll Run</DialogTitle>
+          </DialogHeader>
+          {dialog?.mode === 'create' && (
+            <PayrollRunForm defaultPeriodStart={firstOfMonthISO()} defaultPeriodEnd={endOfMonthISO()} defaultPayDate={todayISO()} onSubmit={handleCreate} onCancel={() => setDialog(null)} />
           )}
-        </Card>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {dialog?.mode === 'create' && (
-        <Modal title="New Payroll Run" onClose={() => setDialog(null)}>
-          <PayrollRunForm
-            defaultPeriodStart={firstOfMonthISO()}
-            defaultPeriodEnd={endOfMonthISO()}
-            defaultPayDate={todayISO()}
-            onSubmit={handleCreate}
-            onCancel={() => setDialog(null)}
-          />
-        </Modal>
-      )}
-
-      {dialog?.mode === 'view' && (
-        <Modal title={`Payroll Run ${dialog.run.runNumber}`} onClose={() => setDialog(null)} wide>
-          <div className="flex flex-col gap-md">
-            <PayslipLinesTable
-              run={dialog.run}
-              onOverrideChange={
-                dialog.run.status === 'draft'
-                  ? (employeeId, overtime, bonus) => handleOverrideChange(dialog.run.id, employeeId, overtime, bonus)
-                  : undefined
-              }
-            />
-            <div className="flex justify-end gap-sm">
-              <Button type="button" variant="ghost" onClick={() => setDialog(null)}>
-                Close
-              </Button>
-              {dialog.run.status === 'draft' && <Button type="button" onClick={() => setDialog({ mode: 'post', run: dialog.run })}>Post Run</Button>}
+      <Dialog open={dialog?.mode === 'view'} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>{dialog?.mode === 'view' ? `Payroll Run ${dialog.run.runNumber}` : ''}</DialogTitle>
+          </DialogHeader>
+          {dialog?.mode === 'view' && (
+            <div className="flex flex-col gap-4">
+              <PayslipLinesTable
+                run={dialog.run}
+                onOverrideChange={dialog.run.status === 'draft' ? (employeeId, overtime, bonus) => handleOverrideChange(dialog.run.id, employeeId, overtime, bonus) : undefined}
+              />
+              <div className="flex justify-end gap-2 border-t border-border pt-4">
+                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
+                  Close
+                </Button>
+                {dialog.run.status === 'draft' && (
+                  <Button type="button" onClick={() => setDialog({ mode: 'post', run: dialog.run })}>
+                    Post Run
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
-        </Modal>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
 
-      {dialog?.mode === 'post' && (
-        <Modal title={`Post Payroll Run ${dialog.run.runNumber}`} onClose={() => setDialog(null)}>
-          <PostPayrollRunForm
-            accounts={accounts}
-            onSubmit={(contraAccountId) => handlePost(dialog.run.id, contraAccountId)}
-            onCancel={() => setDialog({ mode: 'view', run: dialog.run })}
-          />
-        </Modal>
-      )}
+      <Dialog open={dialog?.mode === 'post'} onOpenChange={(open) => !open && dialog?.mode === 'post' && setDialog({ mode: 'view', run: dialog.run })}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{dialog?.mode === 'post' ? `Post Payroll Run ${dialog.run.runNumber}` : ''}</DialogTitle>
+          </DialogHeader>
+          {dialog?.mode === 'post' && (
+            <PostPayrollRunForm accounts={accounts} onSubmit={(contraAccountId) => handlePost(dialog.run.id, contraAccountId)} onCancel={() => setDialog({ mode: 'view', run: dialog.run })} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

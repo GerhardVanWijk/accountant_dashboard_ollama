@@ -57,7 +57,9 @@ describe('CustomerAgingPage', () => {
     expect(screen.queryByText('Paid Up Customer')).not.toBeInTheDocument();
     // Grand total across the two visible rows: 100 + 900. Appears both in
     // the "Total Receivable" stat card and the table's TOTAL footer row.
-    expect(screen.getAllByText('+1,000.00').length).toBeGreaterThanOrEqual(2);
+    // Locale-agnostic regex (en-ZA formatCurrency uses a non-breaking space
+    // thousands separator and comma decimal) rather than an exact string.
+    expect(screen.getAllByText(/1.?000,00/).length).toBeGreaterThanOrEqual(2);
 
     // Toggle "show all" — the zero-balance customer should now appear.
     fireEvent.click(screen.getByRole('checkbox', { name: /show customers with a zero balance/i }));

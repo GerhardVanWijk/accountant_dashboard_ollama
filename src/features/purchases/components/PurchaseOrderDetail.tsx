@@ -1,12 +1,11 @@
-import React from 'react';
-import { format } from 'date-fns';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
-import { Button } from '@/components/ui/Button';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { StatusBadge } from '@/components/app/status-badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/shadcn/table';
+import { formatCurrency, formatDate } from '@/lib/app/format';
 import type { PurchaseOrder } from '@/types';
 
-interface PurchaseOrderDetailProps {
+export interface PurchaseOrderDetailProps {
   purchaseOrder: PurchaseOrder;
   suppliersMap?: Record<string, string>;
   onClose?: () => void;
@@ -17,199 +16,129 @@ interface PurchaseOrderDetailProps {
   isBusy?: boolean;
 }
 
-export const PurchaseOrderDetail: React.FC<PurchaseOrderDetailProps> = ({
-  purchaseOrder,
-  suppliersMap = {},
-  onClose,
-  onSend,
-  onRecordReceipt,
-  onCancel,
-  onConvertToBill,
-  isBusy = false,
-}) => {
-  const supplierName = suppliersMap[purchaseOrder.supplierId] || purchaseOrder.supplierId;
+/**
+ * Purchase Order detail — re-skinned onto v0's PageHeader/SectionCard
+ * (M8), same action gating and real PO→GRN→Bill workflow as before the
+ * port. "Cancel Order" reflects PurchaseOrderService's real cancel path
+ * (a status change, not a hard delete) — matches the real domain, not an
+ * invented destructive action.
+ */
+export function PurchaseOrderDetail({ purchaseOrder, suppliersMap = {}, onClose, onSend, onRecordReceipt, onCancel, onConvertToBill, isBusy = false }: PurchaseOrderDetailProps) {
+  const supplierName = suppliersMap[purchaseOrder.supplierId] ?? purchaseOrder.supplierId;
   const canSend = purchaseOrder.status === 'draft';
   const canReceive = purchaseOrder.status === 'sent' || purchaseOrder.status === 'partially_received';
   const canCancel = purchaseOrder.status !== 'received' && purchaseOrder.status !== 'cancelled';
-  const canConvert =
-    purchaseOrder.status !== 'draft' && purchaseOrder.status !== 'cancelled' && !purchaseOrder.billId;
+  const canConvert = purchaseOrder.status !== 'draft' && purchaseOrder.status !== 'cancelled' && !purchaseOrder.billId;
 
   return (
-    <div className="max-w-4xl mx-auto bg-panel p-8 rounded-lg border border-border">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-8 pb-8 border-b border-border">
-        <div>
-          <div className="text-3xl font-bold mb-2">Purchase Order</div>
-          <div className="text-text-secondary">{supplierName}</div>
-        </div>
-        <div className="text-right">
-          <div className="font-mono text-xl font-semibold">{purchaseOrder.poNumber}</div>
-          <div className="text-sm text-text-muted">
-            {format(new Date(purchaseOrder.orderDate), 'dd MMMM yyyy')}
-          </div>
-        </div>
-      </div>
-
-      {/* Supplier & Dates */}
-      <div className="grid grid-cols-2 gap-8 mb-8">
-        <div>
-          <div className="text-xs text-text-muted uppercase tracking-wide mb-2">Order From</div>
-          <div className="font-semibold mb-1">{supplierName}</div>
-          <div className="text-sm text-text-secondary">Supplier ID: {purchaseOrder.supplierId}</div>
-        </div>
-        <div>
-          <div className="space-y-3">
-            <div>
-              <div className="text-xs text-text-muted uppercase tracking-wide">Order Date</div>
-              <div className="font-semibold">{format(new Date(purchaseOrder.orderDate), 'dd MMMM yyyy')}</div>
-            </div>
-            {purchaseOrder.expectedDate && (
-              <div>
-                <div className="text-xs text-text-muted uppercase tracking-wide">Expected Date</div>
-                <div className="font-semibold">{format(new Date(purchaseOrder.expectedDate), 'dd MMMM yyyy')}</div>
-              </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title={purchaseOrder.poNumber}
+        description={supplierName}
+        actions={
+          <>
+            {onClose && (
+              <Button variant="outline" size="sm" onClick={onClose}>
+                Back
+              </Button>
             )}
-          </div>
-        </div>
+            {onCancel && canCancel && (
+              <Button variant="outline" size="sm" className="text-destructive" disabled={isBusy} onClick={() => onCancel(purchaseOrder.id)}>
+                Cancel Order
+              </Button>
+            )}
+            {onSend && canSend && (
+              <Button variant="outline" size="sm" disabled={isBusy} onClick={() => onSend(purchaseOrder.id)}>
+                Send to Supplier
+              </Button>
+            )}
+            {onRecordReceipt && canReceive && (
+              <Button variant="outline" size="sm" disabled={isBusy} onClick={() => onRecordReceipt(purchaseOrder.id)}>
+                Record Receipt
+              </Button>
+            )}
+            {onConvertToBill && canConvert && (
+              <Button size="sm" disabled={isBusy} onClick={() => onConvertToBill(purchaseOrder.id)}>
+                Convert to Bill
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      <div className="flex items-center gap-2">
+        <StatusBadge status={purchaseOrder.status} />
       </div>
 
-      {/* Line Items Table */}
-      <div className="mb-8">
-        <div className="grid grid-cols-[2fr_80px_100px_60px_100px_100px] gap-3 px-4 py-3 bg-primary/10 border border-border border-b-0 font-semibold text-sm tabular-nums">
-          <FinancialTableCell type="label">Description</FinancialTableCell>
-          <FinancialTableCell type="number">Qty</FinancialTableCell>
-          <FinancialTableCell type="number">Unit Price</FinancialTableCell>
-          <FinancialTableCell type="number">Tax %</FinancialTableCell>
-          <FinancialTableCell type="number">Net Total</FinancialTableCell>
-          <FinancialTableCell type="number">Gross Total</FinancialTableCell>
-        </div>
-
-        {purchaseOrder.lineItems.map((item) => (
-          <div
-            key={item.id}
-            className="grid grid-cols-[2fr_80px_100px_60px_100px_100px] gap-3 px-4 py-3 border-b border-border text-sm tabular-nums"
-          >
-            <FinancialTableCell type="label">{item.description}</FinancialTableCell>
-            <FinancialTableCell type="number" className="text-text-secondary">
-              {item.quantity.toFixed(2)}
-            </FinancialTableCell>
-            <FinancialTableCell type="number">
-              <FinancialNumber value={item.unitPrice} format={formatCurrency} />
-            </FinancialTableCell>
-            <FinancialTableCell type="number" className="text-text-secondary">
-              {item.lineTotal > 0 ? `${Math.round((item.taxAmount / item.lineTotal) * 100)}%` : '0%'}
-            </FinancialTableCell>
-            <FinancialTableCell type="number">
-              <FinancialNumber value={item.lineTotal} format={formatCurrency} />
-            </FinancialTableCell>
-            <FinancialTableCell type="number" className="font-semibold">
-              <FinancialNumber value={item.lineTotal + item.taxAmount} format={formatCurrency} />
-            </FinancialTableCell>
+      <SectionCard title="Order from" description={supplierName}>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div>
+            <div className="text-xs tracking-wide text-muted-foreground uppercase">Order date</div>
+            <div className="text-sm font-medium">{formatDate(purchaseOrder.orderDate)}</div>
           </div>
-        ))}
-
-        <div className="grid grid-cols-[2fr_80px_100px_60px_100px_100px] gap-3 px-4 py-3 bg-background border-t-2 border-border font-semibold tabular-nums">
-          <div></div>
-          <div></div>
-          <div></div>
-          <div></div>
-          <div className="px-2 py-2 text-sm text-right">Subtotal</div>
-          <div className="px-2 py-2 text-sm text-right">
-            <FinancialNumber value={purchaseOrder.subtotal} format={formatCurrency} />
-          </div>
+          {purchaseOrder.expectedDate && (
+            <div>
+              <div className="text-xs tracking-wide text-muted-foreground uppercase">Expected date</div>
+              <div className="text-sm font-medium">{formatDate(purchaseOrder.expectedDate)}</div>
+            </div>
+          )}
         </div>
+      </SectionCard>
 
-        <div className="grid grid-cols-[2fr_80px_100px_60px_100px_100px] gap-3 px-4 py-3 bg-background border-b border-border tabular-nums">
-          <div></div>
-          <div></div>
-          <div></div>
-          <div></div>
-          <div className="px-2 py-2 text-sm text-right">Tax/VAT</div>
-          <div className="px-2 py-2 text-sm text-right">
-            <FinancialNumber value={purchaseOrder.taxTotal} format={formatCurrency} />
-          </div>
+      <SectionCard title="Line items">
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Description</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead className="text-right">Unit Price</TableHead>
+                <TableHead className="text-right">Line Total</TableHead>
+                <TableHead className="text-right">VAT</TableHead>
+                <TableHead className="text-right">Gross Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {purchaseOrder.lineItems.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>{item.description}</TableCell>
+                  <TableCell className="text-right tabular-nums">{item.quantity.toFixed(2)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCurrency(item.unitPrice)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCurrency(item.lineTotal)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCurrency(item.taxAmount)}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">{formatCurrency(item.lineTotal + item.taxAmount)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell colSpan={5} className="text-right">
+                  Subtotal
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{formatCurrency(purchaseOrder.subtotal)}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell colSpan={5} className="text-right">
+                  VAT
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{formatCurrency(purchaseOrder.taxTotal)}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell colSpan={5} className="text-right font-semibold">
+                  Total
+                </TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(purchaseOrder.total)}</TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
         </div>
+      </SectionCard>
 
-        <div className="grid grid-cols-[2fr_80px_100px_60px_100px_100px] gap-3 px-4 py-3 bg-positive/10 border-b-2 border-border font-bold text-lg tabular-nums">
-          <div></div>
-          <div></div>
-          <div></div>
-          <div></div>
-          <div className="px-2 py-2 text-sm text-right">TOTAL</div>
-          <div className="px-2 py-2 text-sm text-right text-positive">
-            <FinancialNumber value={purchaseOrder.total} format={formatCurrency} />
-          </div>
-        </div>
-      </div>
-
-      {/* Status */}
-      <div className="mb-8">
-        <div className="bg-panel p-4 rounded-lg border border-border inline-block">
-          <div className="text-xs text-text-muted mb-2">Status</div>
-          <div className={`text-lg font-semibold ${getStatusColorClass(purchaseOrder.status)}`}>
-            {getStatusLabel(purchaseOrder.status)}
-          </div>
-        </div>
-      </div>
-
-      {/* Notes */}
       {purchaseOrder.notes && (
-        <div className="mb-8">
-          <div className="text-xs text-text-muted uppercase tracking-wide mb-2">Notes</div>
-          <div className="text-sm text-text-secondary whitespace-pre-wrap">{purchaseOrder.notes}</div>
-        </div>
+        <SectionCard title="Notes">
+          <p className="text-sm whitespace-pre-wrap text-muted-foreground">{purchaseOrder.notes}</p>
+        </SectionCard>
       )}
-
-      {/* Action Buttons */}
-      <div className="flex flex-wrap gap-3 justify-end pt-8 border-t border-border">
-        {onClose && (
-          <Button variant="ghost" onClick={onClose}>
-            Close
-          </Button>
-        )}
-        {onCancel && canCancel && (
-          <Button variant="danger" disabled={isBusy} onClick={() => onCancel(purchaseOrder.id)}>
-            Cancel Order
-          </Button>
-        )}
-        {onSend && canSend && (
-          <Button variant="secondary" disabled={isBusy} onClick={() => onSend(purchaseOrder.id)}>
-            Send to Supplier
-          </Button>
-        )}
-        {onRecordReceipt && canReceive && (
-          <Button variant="secondary" disabled={isBusy} onClick={() => onRecordReceipt(purchaseOrder.id)}>
-            Record Receipt
-          </Button>
-        )}
-        {onConvertToBill && canConvert && (
-          <Button variant="primary" disabled={isBusy} onClick={() => onConvertToBill(purchaseOrder.id)}>
-            Convert to Bill
-          </Button>
-        )}
-      </div>
     </div>
   );
-};
-
-function getStatusLabel(status: string): string {
-  const labels = {
-    draft: 'Draft',
-    sent: 'Sent',
-    partially_received: 'Partially Received',
-    received: 'Received',
-    cancelled: 'Cancelled',
-  };
-  return labels[status as keyof typeof labels] || status;
-}
-
-function getStatusColorClass(status: string): string {
-  const classes = {
-    draft: 'text-info-financial',
-    sent: 'text-warning-financial',
-    partially_received: 'text-warning-financial',
-    received: 'text-positive',
-    cancelled: 'text-text-muted',
-  };
-  return classes[status as keyof typeof classes] || '';
 }

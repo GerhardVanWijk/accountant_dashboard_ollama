@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Card } from '@/components/ui/Card';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { useAuthStore } from '@/stores/authStore';
 import type { AuditLogAccessEntry } from '@/types';
 import { auditLogAccessService } from '@/features/auth/services';
 
 /**
  * Real content for the access-audit log (Phase T's `audit_logs_access`
- * table) — replaces the old placeholder. Deliberately scoped to THIS log
- * only: the older, separate `AuditLogEntry` business audit trail
- * (src/services/auditLogService.ts — who changed a posted document's
- * fields) has its own pre-existing "no UI yet" gap, tracked in
- * docs/KNOWN_ISSUES.md, not attempted here. See src/types/accessAudit.ts
- * for why this log is best-effort, not a complete record of every access.
+ * table). Deliberately scoped to THIS log only: the separate, newer
+ * `AuditLogEntry` business audit trail (M10's `/admin/audit-trail`,
+ * src/features/admin/pages/AuditTrailPage.tsx — who changed a posted
+ * document's fields) is a different log entirely. See
+ * src/types/accessAudit.ts for why this log is best-effort, not a complete
+ * record of every access. Re-skinned onto v0's PageHeader/SectionCard
+ * (M14) — this page was missed by every earlier phase (M10 built the newer
+ * AuditTrailPage.tsx alongside it but left this pre-existing page
+ * untouched); no data/behavior change, same auditLogAccessService call.
  */
 export function AuditPage() {
   const companyId = useAuthStore((s) => s.profile?.companyId);
@@ -29,41 +32,37 @@ export function AuditPage() {
   if (!companyId) return null;
 
   return (
-    <div className="flex flex-col gap-lg">
-      <h1 className="text-xl font-semibold text-text-primary">System Audit Trail</h1>
-      <Card>
-        <h2 className="text-base font-semibold text-text-primary">Access log</h2>
-        <p className="mt-xs text-sm text-text-secondary">
-          Best-effort record of access checkpoints logged by the app, not a complete interception of every query — see
-          docs/SUPABASE_MIGRATION_GUIDE.md's Phase T section.
-        </p>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Access log" description="Best-effort record of access checkpoints logged by the app, not a complete interception of every query." />
+
+      <SectionCard bodyClassName="p-0">
         {loading ? (
-          <p className="mt-md text-sm text-text-secondary">Loading…</p>
+          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
         ) : (
-          <div className="mt-md overflow-x-auto">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-border text-text-secondary">
-                  <th className="py-xs pr-md font-medium">When</th>
-                  <th className="py-xs pr-md font-medium">Action</th>
-                  <th className="py-xs pr-md font-medium">Table</th>
-                  <th className="py-xs pr-md font-medium">Result</th>
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">When</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Action</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Table</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Result</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map((entry) => (
                   <tr key={entry.id} className="border-b border-border last:border-0">
-                    <td className="py-sm pr-md text-text-secondary">{new Date(entry.occurredAt).toLocaleString()}</td>
-                    <td className="py-sm pr-md text-text-primary">{entry.action}</td>
-                    <td className="py-sm pr-md text-text-primary">{entry.tableName}</td>
-                    <td className="py-sm pr-md">
-                      <span className={entry.result === 'allowed' ? 'text-positive' : 'text-danger'}>{entry.result}</span>
+                    <td className="px-4 py-2 text-muted-foreground">{new Date(entry.occurredAt).toLocaleString()}</td>
+                    <td className="px-4 py-2">{entry.action}</td>
+                    <td className="px-4 py-2">{entry.tableName}</td>
+                    <td className="px-4 py-2">
+                      <span className={entry.result === 'allowed' ? 'text-positive' : 'text-negative'}>{entry.result}</span>
                     </td>
                   </tr>
                 ))}
                 {entries.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-md text-center text-text-secondary">
+                    <td colSpan={4} className="px-4 py-4 text-center text-muted-foreground">
                       No access log entries yet.
                     </td>
                   </tr>
@@ -72,7 +71,7 @@ export function AuditPage() {
             </table>
           </div>
         )}
-      </Card>
+      </SectionCard>
     </div>
   );
 }

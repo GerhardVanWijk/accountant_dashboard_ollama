@@ -180,24 +180,27 @@ describe('IncomeStatementPage', () => {
 
     render(<IncomeStatementPage />);
 
-    expect(screen.getByRole('heading', { name: 'Income Statement' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Income statement' })).toBeInTheDocument();
     expect(screen.getByText(/Sales Revenue/)).toBeInTheDocument();
     expect(screen.getByText('Net Profit After Tax')).toBeInTheDocument();
 
     // Revenue 10000 -> COGS 3000 -> Gross Profit 7000 -> OpEx 2000 ->
     // Profit Before Tax 5000 -> Income Tax 1000 -> Net Profit After Tax 4000.
-    // Every amount is always rendered with a "+" prefix per
-    // docs/DO_NOT_BREAK.md ("Show P&L without sign" is a listed mistake) —
-    // expense/deduction rows are distinguished by color (isInverted) and
-    // label, not by a negated value. Each single-account category's line
-    // item and its category total render the same figure twice;
-    // Gross/Pre-Tax/Net Profit are aggregate-only rows and render once.
-    expect(screen.getAllByText('+10,000.00')).toHaveLength(2);
-    expect(screen.getAllByText('+3,000.00')).toHaveLength(2);
-    expect(screen.getByText('+7,000.00')).toBeInTheDocument();
-    expect(screen.getAllByText('+2,000.00')).toHaveLength(2);
-    expect(screen.getByText('+5,000.00')).toBeInTheDocument();
-    expect(screen.getAllByText('+1,000.00')).toHaveLength(2);
-    expect(screen.getByText('+4,000.00')).toBeInTheDocument();
+    // Expense/deduction rows are distinguished by section header and
+    // indentation, not a negated value or a "+" sign (v0's own statement
+    // convention, M9) — each single-account category's line item and its
+    // category total render the same figure twice; Gross/Pre-Tax/Net Profit
+    // are aggregate-only rows and render once. `Amount`'s `statement` mode
+    // (formatStatementAmount) has no currency symbol, just a locale-agnostic
+    // grouped/decimal number, anchored to the whole element text (each
+    // figure is its own DOM node, so there's no risk of one number's regex
+    // matching inside a different, larger rendered number).
+    expect(screen.getAllByText(/^10.?000,00$/)).toHaveLength(2);
+    expect(screen.getAllByText(/^3.?000,00$/)).toHaveLength(2);
+    expect(screen.getByText(/^7.?000,00$/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^2.?000,00$/)).toHaveLength(2);
+    expect(screen.getByText(/^5.?000,00$/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^1.?000,00$/)).toHaveLength(2);
+    expect(screen.getByText(/^4.?000,00$/)).toBeInTheDocument();
   });
 });

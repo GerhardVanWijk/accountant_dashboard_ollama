@@ -1,12 +1,17 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { Product, ProductType } from '@/types';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { UOM_OPTIONS, INVENTORY_CURRENCY } from '../constants';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
-import { fieldError, fieldHint, fieldInput, fieldLabel } from './formStyles';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
+
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function isNonNegativeNumber(value: string): boolean {
   return value.trim() !== '' && !Number.isNaN(Number(value)) && Number(value) >= 0;
@@ -65,13 +70,16 @@ function toDefaultValues(product?: Product): ProductFormValues {
  * Create/edit form for the product catalog (react-hook-form + zod), used
  * by ProductsPage. quantityOnHand is intentionally NOT a form field — it
  * is shown read-only for context and can only change via a stock movement
- * (docs/DO_NOT_BREAK.md § Inventory & Stock).
+ * (docs/DO_NOT_BREAK.md § Inventory & Stock). Re-skinned onto v0's
+ * Field/Input/Textarea/Checkbox (M8); validation schema and submit wiring
+ * unchanged.
  */
 export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
   const { taxRates } = useTaxRates();
   const {
     register,
     handleSubmit,
+    control,
     watch,
     formState: { errors, isSubmitting },
   } = useForm<ProductFormValues>({
@@ -105,81 +113,63 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-md" noValidate>
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="sku">
-            SKU
-          </label>
-          <input id="sku" className={fieldInput} {...register('sku')} />
-          {errors.sku && <p className={fieldError}>{errors.sku.message}</p>}
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="name">
-            Name
-          </label>
-          <input id="name" className={fieldInput} {...register('name')} />
-          {errors.name && <p className={fieldError}>{errors.name.message}</p>}
-        </div>
+    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="sku">SKU</FieldLabel>
+          <Input id="sku" {...register('sku')} />
+          <FieldError errors={[errors.sku]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="name">Name</FieldLabel>
+          <Input id="name" {...register('name')} />
+          <FieldError errors={[errors.name]} />
+        </Field>
       </div>
 
-      <div>
-        <label className={fieldLabel} htmlFor="description">
-          Description
-        </label>
-        <textarea id="description" rows={2} className={fieldInput} {...register('description')} />
-      </div>
+      <Field>
+        <FieldLabel htmlFor="description">Description</FieldLabel>
+        <Textarea id="description" rows={2} {...register('description')} />
+      </Field>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-3">
-        <div>
-          <label className={fieldLabel} htmlFor="type">
-            Type
-          </label>
-          <select id="type" className={fieldInput} {...register('type')}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Field>
+          <FieldLabel htmlFor="type">Type</FieldLabel>
+          <select id="type" className={selectClassName} {...register('type')}>
             <option value="good">Physical Good</option>
             <option value="service">Service</option>
           </select>
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="category">
-            Category
-          </label>
-          <input id="category" className={fieldInput} {...register('category')} />
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="uom">
-            Unit of Measure
-          </label>
-          <select id="uom" className={fieldInput} {...register('uom')}>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="category">Category</FieldLabel>
+          <Input id="category" {...register('category')} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="uom">Unit of Measure</FieldLabel>
+          <select id="uom" className={selectClassName} {...register('uom')}>
             {UOM_OPTIONS.map((uom) => (
               <option key={uom} value={uom}>
                 {uom}
               </option>
             ))}
           </select>
-        </div>
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-3">
-        <div>
-          <label className={fieldLabel} htmlFor="costPrice">
-            Cost Price ({INVENTORY_CURRENCY})
-          </label>
-          <input id="costPrice" type="number" step="0.01" className={fieldInput} {...register('costPrice')} />
-          {errors.costPrice && <p className={fieldError}>{errors.costPrice.message}</p>}
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="unitPrice">
-            Sell Price ({INVENTORY_CURRENCY})
-          </label>
-          <input id="unitPrice" type="number" step="0.01" className={fieldInput} {...register('unitPrice')} />
-          {errors.unitPrice && <p className={fieldError}>{errors.unitPrice.message}</p>}
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="taxRateId">
-            Tax Rate
-          </label>
-          <select id="taxRateId" className={fieldInput} {...register('taxRateId')}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Field>
+          <FieldLabel htmlFor="costPrice">Cost Price ({INVENTORY_CURRENCY})</FieldLabel>
+          <Input id="costPrice" type="number" step="0.01" {...register('costPrice')} />
+          <FieldError errors={[errors.costPrice]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="unitPrice">Sell Price ({INVENTORY_CURRENCY})</FieldLabel>
+          <Input id="unitPrice" type="number" step="0.01" {...register('unitPrice')} />
+          <FieldError errors={[errors.unitPrice]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="taxRateId">Tax Rate</FieldLabel>
+          <select id="taxRateId" className={selectClassName} {...register('taxRateId')}>
             <option value="">No tax rate</option>
             {taxRates.map((rate) => (
               <option key={rate.id} value={rate.id}>
@@ -187,74 +177,68 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
               </option>
             ))}
           </select>
-        </div>
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="barcode">
-            Barcode
-          </label>
-          <input id="barcode" className={fieldInput} {...register('barcode')} />
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="status">
-            Status
-          </label>
-          <select id="status" className={fieldInput} {...register('status')}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="barcode">Barcode</FieldLabel>
+          <Input id="barcode" {...register('barcode')} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="status">Status</FieldLabel>
+          <select id="status" className={selectClassName} {...register('status')}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
-        </div>
+        </Field>
       </div>
 
       {type !== 'service' && (
-        <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-          <div className="flex items-center gap-sm pt-lg">
-            <input id="trackInventory" type="checkbox" className="h-4 w-4" {...register('trackInventory')} />
-            <label className="text-sm font-medium text-text-primary" htmlFor="trackInventory">
-              Track inventory for this item
-            </label>
-          </div>
-          <div>
-            <label className={fieldLabel} htmlFor="reorderLevel">
-              Reorder Level
-            </label>
-            <input id="reorderLevel" type="number" className={fieldInput} {...register('reorderLevel')} />
-            {errors.reorderLevel && <p className={fieldError}>{errors.reorderLevel.message}</p>}
-          </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Controller
+            control={control}
+            name="trackInventory"
+            render={({ field }) => (
+              <Field orientation="horizontal">
+                <Checkbox id="trackInventory" checked={field.value} onCheckedChange={(value) => field.onChange(value === true)} />
+                <FieldLabel htmlFor="trackInventory">Track inventory for this item</FieldLabel>
+              </Field>
+            )}
+          />
+          <Field>
+            <FieldLabel htmlFor="reorderLevel">Reorder Level</FieldLabel>
+            <Input id="reorderLevel" type="number" {...register('reorderLevel')} />
+            <FieldError errors={[errors.reorderLevel]} />
+          </Field>
         </div>
       )}
 
       {type !== 'service' && trackInventoryWatched && (
-        <div>
-          <label className={fieldLabel} htmlFor="valuationMethod">
-            Valuation Method
-          </label>
-          <select id="valuationMethod" className={fieldInput} {...register('valuationMethod')}>
+        <Field>
+          <FieldLabel htmlFor="valuationMethod">Valuation Method</FieldLabel>
+          <select id="valuationMethod" className={selectClassName} {...register('valuationMethod')}>
             <option value="weighted_average">Weighted Average Cost</option>
             <option value="fifo">FIFO (First In, First Out)</option>
           </select>
-          <p className={fieldHint}>
+          <FieldDescription>
             FIFO costs each sale from the oldest stock received first, instead of a blended average. Switching an
             existing product to FIFO only affects stock received from now on — it has no cost history to draw on
             until then.
-          </p>
-        </div>
+          </FieldDescription>
+        </Field>
       )}
 
       {product && (
-        <div>
-          <p className={fieldLabel}>Quantity on Hand</p>
-          <p className="text-sm text-text-primary">{product.quantityOnHand}</p>
-          <p className={fieldHint}>
-            Read-only — record a Stock Adjustment or Transfer on the Warehouses page to change quantities.
-          </p>
-        </div>
+        <Field>
+          <FieldLabel>Quantity on Hand</FieldLabel>
+          <p className="text-sm text-foreground">{product.quantityOnHand}</p>
+          <FieldDescription>Read-only — record a Stock Adjustment or Transfer on the Warehouses page to change quantities.</FieldDescription>
+        </Field>
       )}
 
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>

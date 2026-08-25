@@ -1,20 +1,29 @@
 import { useMemo, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Loader2 } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock, Amount } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { formatCurrency, formatDate } from '@/lib/app/format';
 import { useEcl } from '../hooks/useEcl';
 import { EclBucketTable } from '../components/EclBucketTable';
 import { findMostRecentPostedEclBefore } from '../services/eclCalculations';
-import { fieldInput, fieldLabel } from '../components/formStyles';
 
-/** Expected Credit Losses — route `/tax/expected-credit-losses` (docs/ROUTES.md). SA_ACCOUNTING_MASTER_SPEC.md §46 (IFRS 9), §116 Phase 12 "Advanced Accounting". */
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+
+/**
+ * Expected Credit Losses — route `/tax/expected-credit-losses`. Real
+ * useEcl()/eclComputationService data throughout — the provision matrix on
+ * trade receivables and its period movement (IFRS 9). No `ecl`/`financial
+ * instruments` entry exists in the real permission catalog (M11), so this
+ * route/its actions stay ungated, same as before. Re-skinned onto v0's
+ * PageHeader/SectionCard/FigureBlock (M13); no ECL math performed here —
+ * `recalculateBucketLine()`/`findMostRecentPostedEclBefore()` remain the
+ * sole calculation sources.
+ */
 export function EclProvisionPage() {
-  const { financialYears, company, computations, loading, error, refetch, createComputation, updateBuckets, deleteComputation, postComputation } =
-    useEcl();
+  const { financialYears, company, computations, loading, error, refetch, createComputation, updateBuckets, deleteComputation, postComputation } = useEcl();
 
   const [selectedFinancialYearId, setSelectedFinancialYearId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -27,13 +36,8 @@ export function EclProvisionPage() {
   const selectedFinancialYear = sortedFinancialYears.find((y) => y.id === activeFinancialYearId);
   const selectedComputation = computations.find((c) => c.financialYearId === activeFinancialYearId);
 
-  const priorComputation =
-    selectedComputation && company
-      ? findMostRecentPostedEclBefore(computations, company.id, selectedComputation.asOfDate, selectedComputation.id)
-      : undefined;
-  const previewMovement = selectedComputation
-    ? selectedComputation.totalExpectedCreditLoss - (priorComputation?.totalExpectedCreditLoss ?? 0)
-    : 0;
+  const priorComputation = selectedComputation && company ? findMostRecentPostedEclBefore(computations, company.id, selectedComputation.asOfDate, selectedComputation.id) : undefined;
+  const previewMovement = selectedComputation ? selectedComputation.totalExpectedCreditLoss - (priorComputation?.totalExpectedCreditLoss ?? 0) : 0;
 
   const runAction = async (action: () => Promise<void>, successMessage?: string) => {
     setActionError(null);
@@ -49,126 +53,108 @@ export function EclProvisionPage() {
     }
   };
 
-  if (loading) {
-    return <Spinner label="Loading expected credit loss data…" />;
-  }
-  if (error) {
-    return <ErrorState message={error.message} onRetry={refetch} />;
-  }
-
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Expected Credit Losses</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Provision matrix on trade receivables and the period movement (§46, IFRS 9). /tax/expected-credit-losses
-          </p>
-        </div>
-        {sortedFinancialYears.length > 0 && (
-          <div>
-            <label className={fieldLabel} htmlFor="eclFinancialYearSelect">
-              Financial Year
-            </label>
-            <select
-              id="eclFinancialYearSelect"
-              className={fieldInput}
-              value={activeFinancialYearId ?? ''}
-              onChange={(e) => setSelectedFinancialYearId(e.target.value)}
-            >
-              {sortedFinancialYears.map((year) => (
-                <option key={year.id} value={year.id}>
-                  {year.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Expected credit losses"
+        description="Provision matrix on trade receivables and the period movement (IFRS 9)."
+        actions={
+          sortedFinancialYears.length > 0 ? (
+            <Field className="w-44">
+              <FieldLabel htmlFor="eclFinancialYearSelect">Financial year</FieldLabel>
+              <select id="eclFinancialYearSelect" className={selectClassName} value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
+                {sortedFinancialYears.map((year) => (
+                  <option key={year.id} value={year.id}>
+                    {year.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : undefined
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {actionError}
         </p>
       )}
       {statusMessage && (
-        <p role="status" className="rounded-md border border-border bg-positive/10 px-md py-sm text-sm text-positive">
+        <p role="status" className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">
           {statusMessage}
         </p>
       )}
 
-      <p role="note" className="rounded-md border border-warning bg-warning/10 px-md py-sm text-sm text-warning-financial">
+      <p role="note" className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
         Gross receivables per bucket come from the real Customer Aging Report. Loss rates per bucket are ALWAYS a
         manual entry — this system has no historical default-rate data to derive them from, and does not guess one.
-        Requires professional/accounting review before relying on it for a statutory filing (§110/§111).
+        Requires professional/accounting review before relying on it for a statutory filing.
       </p>
 
-      {sortedFinancialYears.length === 0 && (
-        <EmptyState title="No financial years yet" message="A FinancialYear must exist before expected credit losses can be computed." />
+      {loading && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading expected credit loss data…</p>
+        </div>
+      )}
+      {!loading && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
       )}
 
-      {selectedFinancialYear && !selectedComputation && (
-        <Card>
-          <EmptyState
-            title={`No expected credit loss computation yet for ${selectedFinancialYear.name}`}
-            message="Create one to pull in real receivable balances by aging bucket from the Customer Aging Report."
-            action={
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  runAction(async () => {
-                    await createComputation(selectedFinancialYear.id);
-                  }, `Created a draft expected credit loss computation for ${selectedFinancialYear.name}.`)
-                }
-              >
-                Create Computation
-              </Button>
-            }
-          />
-        </Card>
+      {!loading && !error && sortedFinancialYears.length === 0 && (
+        <SectionCard>
+          <Empty>
+            <EmptyTitle>No financial years yet</EmptyTitle>
+            <EmptyDescription>A financial year must exist before expected credit losses can be computed.</EmptyDescription>
+          </Empty>
+        </SectionCard>
       )}
 
-      {selectedComputation && (
+      {!loading && !error && selectedFinancialYear && !selectedComputation && (
+        <SectionCard>
+          <Empty>
+            <EmptyTitle>No expected credit loss computation yet for {selectedFinancialYear.name}</EmptyTitle>
+            <EmptyDescription>Create one to pull in real receivable balances by aging bucket from the Customer Aging Report.</EmptyDescription>
+          </Empty>
+          <div className="flex justify-center pb-5">
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                runAction(async () => {
+                  await createComputation(selectedFinancialYear.id);
+                }, `Created a draft expected credit loss computation for ${selectedFinancialYear.name}.`)
+              }
+            >
+              Create Computation
+            </Button>
+          </div>
+        </SectionCard>
+      )}
+
+      {!loading && !error && selectedComputation && (
         <>
-          <Card>
-            <div className="flex flex-wrap items-center justify-between gap-sm">
-              <h2 className="text-sm font-semibold text-text-primary">
-                {selectedComputation.financialYearLabel} — {selectedComputation.status === 'draft' ? 'Draft' : 'Posted'}
-              </h2>
-              <span className="text-xs text-text-secondary">As of {selectedComputation.asOfDate.slice(0, 10)}</span>
-            </div>
-
-            <div className="mt-md grid grid-cols-2 gap-md tabular-nums md:grid-cols-3">
-              <div>
-                <p className="text-xs text-text-secondary">Gross Receivables</p>
-                <FinancialNumber value={selectedComputation.totalGrossReceivable} format={formatCurrency} className="text-lg" />
-              </div>
-              <div>
-                <p className="text-xs text-text-secondary">Expected Credit Loss Provision</p>
-                <FinancialNumber value={selectedComputation.totalExpectedCreditLoss} format={formatCurrency} isInverted className="text-lg" />
-              </div>
-              <div>
-                <p className="text-xs text-text-secondary">
-                  {selectedComputation.status === 'draft' ? 'Movement Preview' : 'Movement Posted'}
-                </p>
-                <FinancialNumber
-                  value={selectedComputation.status === 'draft' ? previewMovement : (selectedComputation.movementAmount ?? 0)}
-                  format={formatCurrency}
-                  isInverted
-                  className="text-lg"
-                />
-                <p className="mt-xs text-xs text-text-muted">
-                  {priorComputation
-                    ? `vs. ${priorComputation.financialYearLabel} (posted)`
-                    : 'vs. R0.00 (first computation for this company)'}
-                </p>
+          <SectionCard
+            title={`${selectedComputation.financialYearLabel} — ${selectedComputation.status === 'draft' ? 'Draft' : 'Posted'}`}
+            description={`As of ${formatDate(selectedComputation.asOfDate)}`}
+          >
+            <div className="grid gap-6 sm:grid-cols-3">
+              <FigureBlock label="Gross receivables" value={formatCurrency(selectedComputation.totalGrossReceivable)} />
+              <FigureBlock label="Expected credit loss provision" value={formatCurrency(selectedComputation.totalExpectedCreditLoss)} tone="warning" />
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{selectedComputation.status === 'draft' ? 'Movement preview' : 'Movement posted'}</span>
+                <Amount value={selectedComputation.status === 'draft' ? previewMovement : (selectedComputation.movementAmount ?? 0)} className="text-xl font-semibold" />
+                <span className="text-xs text-muted-foreground">{priorComputation ? `vs. ${priorComputation.financialYearLabel} (posted)` : 'vs. R0.00 (first computation for this company)'}</span>
               </div>
             </div>
-          </Card>
+          </SectionCard>
 
-          <Card>
-            <h2 className="mb-sm text-sm font-semibold text-text-primary">Provision Matrix</h2>
+          <SectionCard title="Provision matrix">
             <EclBucketTable
               key={selectedComputation.id}
               buckets={selectedComputation.buckets}
@@ -178,13 +164,13 @@ export function EclProvisionPage() {
                 setStatusMessage('Loss rates saved and the provision recomputed.');
               }}
             />
-          </Card>
+          </SectionCard>
 
           {selectedComputation.status === 'draft' ? (
-            <div className="flex justify-end gap-sm">
+            <div className="flex justify-end gap-2">
               <Button
                 type="button"
-                variant="danger"
+                variant="destructive"
                 disabled={busy}
                 onClick={() =>
                   runAction(async () => {
@@ -207,12 +193,10 @@ export function EclProvisionPage() {
               </Button>
             </div>
           ) : (
-            <p className="text-xs text-text-secondary">
-              Posted{selectedComputation.postedAt ? ` on ${new Date(selectedComputation.postedAt).toLocaleDateString()}` : ''}
-              {selectedComputation.journalEntryId
-                ? ` — journal entry ${selectedComputation.journalEntryId}.`
-                : ' — no journal entry (nil movement).'}{' '}
-              A posted computation is immutable; there is no reversal path yet.
+            <p className="text-xs text-muted-foreground">
+              Posted{selectedComputation.postedAt ? ` on ${formatDate(selectedComputation.postedAt)}` : ''}
+              {selectedComputation.journalEntryId ? ` — journal entry ${selectedComputation.journalEntryId}.` : ' — no journal entry (nil movement).'} A posted computation is immutable; there is
+              no reversal path yet.
             </p>
           )}
         </>

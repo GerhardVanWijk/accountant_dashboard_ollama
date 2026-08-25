@@ -16,6 +16,7 @@ import { useCustomerReceiptMutations } from '@/features/sales/hooks/useCustomerR
 import { useCompany } from '@/features/admin/hooks/useCompany';
 import { invoiceService } from '@/services';
 import type { CreateInvoiceDTO } from '@/services/invoiceService';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 type View = { type: 'list' } | { type: 'detail'; invoiceId: string };
 type FormState = { mode: 'create' } | { mode: 'edit'; invoice: Invoice } | null;
@@ -39,6 +40,9 @@ export function InvoicesPage() {
   const { company } = useCompany();
   const [actionError, setActionError] = useState<string | null>(null);
   const [showRecordPayment, setShowRecordPayment] = useState(false);
+  const canCreate = useCanAccess('invoicing', 'create');
+  const canUpdate = useCanAccess('invoicing', 'update');
+  const canDelete = useCanAccess('invoicing', 'delete');
 
   const { receipts, refetch: refetchReceipts } = useCustomerReceipts();
   const { recordReceipt } = useCustomerReceiptMutations();
@@ -120,10 +124,12 @@ export function InvoicesPage() {
             title="Invoices"
             description="Every invoice raised against your customers, with outstanding balances and payment status."
             actions={
-              <Button size="sm" onClick={() => setFormState({ mode: 'create' })}>
-                <Plus data-icon="inline-start" />
-                New invoice
-              </Button>
+              canCreate ? (
+                <Button size="sm" onClick={() => setFormState({ mode: 'create' })}>
+                  <Plus data-icon="inline-start" />
+                  New invoice
+                </Button>
+              ) : undefined
             }
           />
 
@@ -179,9 +185,9 @@ export function InvoicesPage() {
             customerName={customers.get(detailInvoice.customerId) || 'Unknown Customer'}
             company={company}
             onBack={() => setView({ type: 'list' })}
-            onEdit={() => setFormState({ mode: 'edit', invoice: detailInvoice })}
-            onDelete={() => void handleDelete(detailInvoice.id)}
-            onMarkAsSent={() => void handleMarkAsSent(detailInvoice.id)}
+            onEdit={canUpdate ? () => setFormState({ mode: 'edit', invoice: detailInvoice }) : undefined}
+            onDelete={canDelete ? () => void handleDelete(detailInvoice.id) : undefined}
+            onMarkAsSent={canUpdate ? () => void handleMarkAsSent(detailInvoice.id) : undefined}
             onRecordPayment={() => setShowRecordPayment(true)}
           />
         </div>

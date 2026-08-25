@@ -1,51 +1,57 @@
 import type { AssetDisposal, FixedAsset } from '@/types';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { Amount } from '@/components/app/figure';
+import { formatDate } from '@/lib/app/format';
 
 export interface DisposalsTableProps {
   disposals: AssetDisposal[];
   assets: FixedAsset[];
 }
 
+/** Asset disposal ledger, re-skinned onto v0's DataTable (M8) — gain/loss is read from the posted AssetDisposal record, not recomputed. */
 export function DisposalsTable({ disposals, assets }: DisposalsTableProps) {
   const assetById = new Map(assets.map((a) => [a.id, a]));
-  const sorted = [...disposals].sort((a, b) => b.disposalDate.localeCompare(a.disposalDate));
+
+  const columns: DataTableColumn<AssetDisposal>[] = [
+    { key: 'date', header: 'Disposal date', sortValue: (d) => d.disposalDate, cell: (d) => formatDate(d.disposalDate) },
+    {
+      key: 'asset',
+      header: 'Asset',
+      sortValue: (d) => assetById.get(d.assetId)?.assetNumber ?? d.assetId,
+      cell: (d) => {
+        const asset = assetById.get(d.assetId);
+        return asset ? `${asset.assetNumber} - ${asset.name}` : d.assetId;
+      },
+    },
+    {
+      key: 'carrying',
+      header: 'Carrying value',
+      align: 'right',
+      hideBelowMd: true,
+      sortValue: (d) => d.carryingValueAtDisposal,
+      cell: (d) => <Amount value={d.carryingValueAtDisposal} plain className="text-sm text-muted-foreground" />,
+    },
+    { key: 'proceeds', header: 'Proceeds', align: 'right', sortValue: (d) => d.proceeds, cell: (d) => <Amount value={d.proceeds} plain className="text-sm" /> },
+    {
+      key: 'gainLoss',
+      header: 'Gain / loss',
+      align: 'right',
+      sortValue: (d) => d.gainLoss,
+      cell: (d) => <Amount value={d.gainLoss} className="text-sm font-medium" />,
+    },
+  ];
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[780px] border-collapse text-left text-sm">
-        <thead className="bg-background">
-          <tr>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Disposal Date</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Asset</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Carrying Value</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Proceeds</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Gain / Loss</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((disposal) => {
-            const asset = assetById.get(disposal.assetId);
-            return (
-              <tr key={disposal.id} className="border-t border-border">
-                <td className="whitespace-nowrap px-md py-sm text-text-primary">{disposal.disposalDate}</td>
-                <td className="whitespace-nowrap px-md py-sm text-text-primary">
-                  {asset ? `${asset.assetNumber} - ${asset.name}` : disposal.assetId}
-                </td>
-                <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                  <FinancialNumber value={disposal.carryingValueAtDisposal} format={formatCurrency} showFlash={false} />
-                </td>
-                <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                  <FinancialNumber value={disposal.proceeds} format={formatCurrency} showFlash={false} />
-                </td>
-                <td className="whitespace-nowrap px-md py-sm text-right font-semibold tabular-nums">
-                  <FinancialNumber value={disposal.gainLoss} format={formatCurrency} showFlash={false} />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      rows={disposals}
+      columns={columns}
+      getRowKey={(d) => d.id}
+      searchable={(d) => [assetById.get(d.assetId)?.assetNumber ?? '', assetById.get(d.assetId)?.name ?? ''].join(' ')}
+      searchPlaceholder="Search asset number or name"
+      initialSortKey="date"
+      initialSortDirection="desc"
+      emptyTitle="No disposals yet"
+      emptyDescription="Dispose of a capitalized asset to record it here."
+    />
   );
 }

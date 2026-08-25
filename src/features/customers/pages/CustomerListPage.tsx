@@ -13,6 +13,7 @@ import {
 import { useCustomers } from '../hooks/useCustomers';
 import { useCustomerMutations } from '../hooks/useCustomerMutations';
 import { CustomerTable } from '../components/CustomerTable';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 export interface CustomerListPageProps {
   onView: (customer: Customer) => void;
@@ -30,6 +31,8 @@ export interface CustomerListPageProps {
 export function CustomerListPage({ onView, onCreate, onEdit }: CustomerListPageProps) {
   const { customers, loading, error, refetch } = useCustomers();
   const { inactivateCustomer, activateCustomer } = useCustomerMutations();
+  const canCreate = useCanAccess('customer_management', 'create');
+  const canUpdate = useCanAccess('customer_management', 'update');
 
   async function handleToggleActive(customer: Customer): Promise<void> {
     if (customer.status === 'active') {
@@ -46,10 +49,12 @@ export function CustomerListPage({ onView, onCreate, onEdit }: CustomerListPageP
         title="Customers"
         description="Search, filter, and manage your accounts-receivable customer master list."
         actions={
-          <Button size="sm" onClick={onCreate}>
-            <Plus data-icon="inline-start" />
-            New customer
-          </Button>
+          canCreate ? (
+            <Button size="sm" onClick={onCreate}>
+              <Plus data-icon="inline-start" />
+              New customer
+            </Button>
+          ) : undefined
         }
       />
 
@@ -79,12 +84,14 @@ export function CustomerListPage({ onView, onCreate, onEdit }: CustomerListPageP
               <EmptyTitle>No customers yet</EmptyTitle>
               <EmptyDescription>Create your first customer to start tracking sales and receivables.</EmptyDescription>
             </EmptyHeader>
-            <EmptyContent>
-              <Button size="sm" onClick={onCreate}>
-                <Plus data-icon="inline-start" />
-                New customer
-              </Button>
-            </EmptyContent>
+            {canCreate && (
+              <EmptyContent>
+                <Button size="sm" onClick={onCreate}>
+                  <Plus data-icon="inline-start" />
+                  New customer
+                </Button>
+              </EmptyContent>
+            )}
           </Empty>
         </SectionCard>
       )}
@@ -94,8 +101,8 @@ export function CustomerListPage({ onView, onCreate, onEdit }: CustomerListPageP
           <CustomerTable
             customers={customers}
             onView={onView}
-            onEdit={onEdit}
-            onToggleActive={(customer) => void handleToggleActive(customer)}
+            onEdit={canUpdate ? onEdit : undefined}
+            onToggleActive={canUpdate ? (customer) => void handleToggleActive(customer) : undefined}
           />
         </SectionCard>
       )}

@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import type { Account, FixedAsset } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { fieldError, fieldHint, fieldInput, fieldLabel } from './formStyles';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Amount, FigureBlock } from '@/components/app/figure';
+import { formatCurrency } from '@/lib/app/format';
+
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface DisposeAssetFormProps {
   assets: FixedAsset[];
@@ -16,7 +19,7 @@ export interface DisposeAssetFormProps {
  * Disposes an active/fully_depreciated asset — the gain/loss preview
  * below is computed the same way assetDisposalService.disposeAsset()
  * computes it for real (proceeds - carrying value), so what the user sees
- * here is exactly what will post.
+ * here is exactly what will post. Re-skinned onto v0's Field/Input (M8).
  */
 export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel }: DisposeAssetFormProps) {
   const disposable = assets.filter((a) => a.status === 'active' || a.status === 'fully_depreciated');
@@ -43,63 +46,37 @@ export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel }: Dispo
   };
 
   if (disposable.length === 0) {
-    return <p className="text-sm text-text-secondary">No capitalized assets are available to dispose.</p>;
+    return <p className="text-sm text-muted-foreground">No capitalized assets are available to dispose.</p>;
   }
 
   return (
-    <div className="flex flex-col gap-md">
-      <div>
-        <label className={fieldLabel} htmlFor="assetId">
-          Asset
-        </label>
-        <select id="assetId" className={fieldInput} value={assetId} onChange={(e) => setAssetId(e.target.value)}>
+    <div className="flex flex-col gap-4">
+      <Field>
+        <FieldLabel htmlFor="assetId">Asset</FieldLabel>
+        <select id="assetId" className={selectClassName} value={assetId} onChange={(e) => setAssetId(e.target.value)}>
           {disposable.map((a) => (
             <option key={a.id} value={a.id}>
               {a.assetNumber} - {a.name}
             </option>
           ))}
         </select>
+      </Field>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="disposalDate">Disposal Date</FieldLabel>
+          <Input id="disposalDate" type="date" value={disposalDate} onChange={(e) => setDisposalDate(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="proceeds">Proceeds</FieldLabel>
+          <Input id="proceeds" type="number" step="0.01" value={proceeds} onChange={(e) => setProceeds(e.target.value)} />
+          {proceedsError && <FieldError errors={[{ message: 'Proceeds cannot be negative' }]} />}
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="disposalDate">
-            Disposal Date
-          </label>
-          <input
-            id="disposalDate"
-            type="date"
-            className={fieldInput}
-            value={disposalDate}
-            onChange={(e) => setDisposalDate(e.target.value)}
-          />
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="proceeds">
-            Proceeds
-          </label>
-          <input
-            id="proceeds"
-            type="number"
-            step="0.01"
-            className={fieldInput}
-            value={proceeds}
-            onChange={(e) => setProceeds(e.target.value)}
-          />
-          {proceedsError && <p className={fieldError}>Proceeds cannot be negative</p>}
-        </div>
-      </div>
-
-      <div>
-        <label className={fieldLabel} htmlFor="proceedsAccountId">
-          Proceeds Account
-        </label>
-        <select
-          id="proceedsAccountId"
-          className={fieldInput}
-          value={proceedsAccountId}
-          onChange={(e) => setProceedsAccountId(e.target.value)}
-        >
+      <Field>
+        <FieldLabel htmlFor="proceedsAccountId">Proceeds Account</FieldLabel>
+        <select id="proceedsAccountId" className={selectClassName} value={proceedsAccountId} onChange={(e) => setProceedsAccountId(e.target.value)}>
           {accounts
             .filter((a) => a.isActive)
             .map((account) => (
@@ -108,27 +85,24 @@ export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel }: Dispo
               </option>
             ))}
         </select>
-        <p className={fieldHint}>Where the disposal proceeds land — Cash and Bank, or Accounts Receivable if on credit.</p>
-      </div>
+        <FieldDescription>Where the disposal proceeds land — Cash and Bank, or Accounts Receivable if on credit.</FieldDescription>
+      </Field>
 
       {asset && (
-        <div className="rounded-md border border-border bg-background p-md text-sm">
-          <div className="flex justify-between">
-            <span className="text-text-secondary">Carrying Value</span>
-            <span className="font-medium tabular-nums">{formatCurrency(carryingValue)}</span>
-          </div>
-          <div className="mt-xs flex justify-between">
-            <span className="text-text-secondary">{gainLoss >= 0 ? 'Gain' : 'Loss'} on Disposal</span>
-            <FinancialNumber value={gainLoss} format={formatCurrency} showFlash={false} />
+        <div className="grid grid-cols-2 gap-4 rounded-lg border border-border bg-muted/30 p-4">
+          <FigureBlock label="Carrying Value" value={formatCurrency(carryingValue)} className="text-base" />
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">{gainLoss >= 0 ? 'Gain' : 'Loss'} on Disposal</span>
+            <Amount value={gainLoss} className="text-base font-medium" />
           </div>
         </div>
       )}
 
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="button" variant="danger" onClick={submit} disabled={submitting || !asset || proceedsError}>
+        <Button type="button" variant="destructive" disabled={submitting || !asset || proceedsError} onClick={() => void submit()}>
           Dispose Asset
         </Button>
       </div>

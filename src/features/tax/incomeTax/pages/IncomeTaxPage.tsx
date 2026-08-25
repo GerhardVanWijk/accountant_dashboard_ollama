@@ -1,19 +1,19 @@
 import { useMemo, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { FileQuestion, Loader2 } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { formatCurrency } from '@/lib/app/format';
 import { SYSTEM_USER_ID } from '@/features/accounting/services';
 import { useIncomeTax } from '../hooks/useIncomeTax';
 import { AdjustmentsTable } from '../components/AdjustmentsTable';
 import { SbcEligibilityForm } from '../components/SbcEligibilityForm';
-import { Modal } from '../components/Modal';
-import { fieldInput, fieldLabel } from '../components/formStyles';
 
-/** Income Tax — route `/tax/income-tax` (docs/ROUTES.md). */
+const selectClassName = 'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+
+/** Income Tax — route `/tax/income-tax` (docs/ROUTES.md). Re-skinned onto v0's PageHeader/SectionCard/Dialog (M7); data/mutation wiring unchanged. */
 export function IncomeTaxPage() {
   const {
     financialYears,
@@ -35,10 +35,7 @@ export function IncomeTaxPage() {
   const [sbcModalOpen, setSbcModalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const sortedFinancialYears = useMemo(
-    () => [...financialYears].sort((a, b) => b.endDate.localeCompare(a.endDate)),
-    [financialYears],
-  );
+  const sortedFinancialYears = useMemo(() => [...financialYears].sort((a, b) => b.endDate.localeCompare(a.endDate)), [financialYears]);
 
   const activeFinancialYearId = selectedFinancialYearId ?? sortedFinancialYears[0]?.id ?? null;
   const selectedFinancialYear = sortedFinancialYears.find((y) => y.id === activeFinancialYearId);
@@ -59,30 +56,36 @@ export function IncomeTaxPage() {
   };
 
   if (loading) {
-    return <Spinner label="Loading income tax data…" />;
+    return (
+      <div role="status" className="flex min-h-[40vh] items-center justify-center gap-2 text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+        <span className="text-sm">Loading income tax data…</span>
+      </div>
+    );
   }
   if (error) {
-    return <ErrorState message={error.message} onRetry={refetch} />;
+    return (
+      <SectionCard>
+        <p role="alert" className="text-sm text-destructive">
+          {error.message}
+        </p>
+        <Button variant="outline" className="mt-3" onClick={refetch}>
+          Retry
+        </Button>
+      </SectionCard>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Income Tax</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Corporate income tax computation, SBC eligibility, and the accounting-profit-to-taxable-income
-            reconciliation (§51/§52/§53). /tax/income-tax
-          </p>
-        </div>
-        {sortedFinancialYears.length > 0 && (
-          <div>
-            <label className={fieldLabel} htmlFor="financialYearSelect">
-              Financial Year
-            </label>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Income Tax"
+        description="Corporate income tax computation, SBC eligibility, and the accounting-profit-to-taxable-income reconciliation."
+        actions={
+          sortedFinancialYears.length > 0 ? (
             <select
-              id="financialYearSelect"
-              className={fieldInput}
+              aria-label="Financial Year"
+              className={selectClassName}
               value={activeFinancialYearId ?? ''}
               onChange={(e) => setSelectedFinancialYearId(e.target.value)}
             >
@@ -92,107 +95,82 @@ export function IncomeTaxPage() {
                 </option>
               ))}
             </select>
-          </div>
-        )}
-      </div>
+          ) : undefined
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
           {actionError}
         </p>
       )}
       {statusMessage && (
-        <p role="status" className="rounded-md border border-border bg-positive/10 px-md py-sm text-sm text-positive">
+        <p role="status" className="rounded-lg border border-positive/40 bg-positive/10 px-4 py-2.5 text-sm text-positive">
           {statusMessage}
         </p>
       )}
 
-      <Card>
-        <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-text-primary">SBC (Small Business Corporation) Eligibility</h2>
-            <p className="mt-xs text-xs text-text-secondary">
-              Manually confirmed by an accountant only — not auto-determined (§53). See{' '}
-              {company?.isSbcEligible ? 'currently flagged eligible' : 'currently not flagged eligible'}
-              {company?.sbcEligibilityReason ? `: "${company.sbcEligibilityReason}"` : '.'}
-            </p>
-          </div>
-          <Button type="button" variant="ghost" onClick={() => setSbcModalOpen(true)}>
+      <SectionCard
+        title="SBC (Small Business Corporation) Eligibility"
+        description={`Manually confirmed by an accountant only — not auto-determined. ${company?.isSbcEligible ? 'Currently flagged eligible' : 'Currently not flagged eligible'}${company?.sbcEligibilityReason ? `: "${company.sbcEligibilityReason}"` : '.'}`}
+        actions={
+          <Button variant="outline" onClick={() => setSbcModalOpen(true)}>
             {company?.isSbcEligible ? 'Change' : 'Flag as SBC-eligible'}
           </Button>
-        </div>
-      </Card>
+        }
+        bodyClassName="hidden"
+      >
+        {null}
+      </SectionCard>
 
       {sortedFinancialYears.length === 0 && (
-        <EmptyState title="No financial years yet" message="A FinancialYear must exist before income tax can be computed." />
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <FileQuestion />
+            </EmptyMedia>
+            <EmptyTitle>No financial years yet</EmptyTitle>
+            <EmptyDescription>A FinancialYear must exist before income tax can be computed.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
 
       {selectedFinancialYear && !selectedComputation && (
-        <Card>
-          <EmptyState
-            title={`No tax computation yet for ${selectedFinancialYear.name}`}
-            message="Create one to compute accounting profit, suggested tax adjustments, taxable income, and the resulting tax liability."
-            action={
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  runAction(async () => {
-                    await createComputation(selectedFinancialYear.id);
-                  }, `Created a draft tax computation for ${selectedFinancialYear.name}.`)
-                }
-              >
-                Create Tax Computation
-              </Button>
-            }
-          />
-        </Card>
+        <SectionCard>
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No tax computation yet for {selectedFinancialYear.name}</EmptyTitle>
+              <EmptyDescription>Create one to compute accounting profit, suggested tax adjustments, taxable income, and the resulting tax liability.</EmptyDescription>
+            </EmptyHeader>
+            <Button
+              disabled={busy}
+              onClick={() =>
+                runAction(async () => {
+                  await createComputation(selectedFinancialYear.id);
+                }, `Created a draft tax computation for ${selectedFinancialYear.name}.`)
+              }
+            >
+              Create Tax Computation
+            </Button>
+          </Empty>
+        </SectionCard>
       )}
 
       {selectedComputation && (
         <>
-          <Card>
-            <div className="flex flex-wrap items-center justify-between gap-sm">
-              <h2 className="text-sm font-semibold text-text-primary">
-                {selectedComputation.financialYearLabel} — {selectedComputation.status === 'draft' ? 'Draft' : 'Posted'}
-              </h2>
-              <span className="text-xs text-text-secondary">
-                Tax year of assessment: {selectedComputation.taxConfigTaxYearLabel} ·{' '}
-                {selectedComputation.isSbcEligible ? 'SBC brackets applied' : 'Standard corporate rate applied'}
-              </span>
+          <SectionCard
+            title={`${selectedComputation.financialYearLabel} — ${selectedComputation.status === 'draft' ? 'Draft' : 'Posted'}`}
+            description={`Tax year of assessment: ${selectedComputation.taxConfigTaxYearLabel} · ${selectedComputation.isSbcEligible ? 'SBC brackets applied' : 'Standard corporate rate applied'}`}
+          >
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <FigureBlock label="Accounting Profit" value={formatCurrency(selectedComputation.accountingProfit)} />
+              <FigureBlock label="Net Adjustments" value={formatCurrency(selectedComputation.taxableIncome - selectedComputation.accountingProfit)} />
+              <FigureBlock label="Taxable Income" value={formatCurrency(selectedComputation.taxableIncome)} />
+              <FigureBlock label="Tax Liability" value={formatCurrency(selectedComputation.taxLiability)} tone="warning" />
             </div>
+          </SectionCard>
 
-            <div className="mt-md grid grid-cols-2 gap-md tabular-nums md:grid-cols-4">
-              <div>
-                <p className="text-xs text-text-secondary">Accounting Profit</p>
-                <FinancialNumber value={selectedComputation.accountingProfit} format={formatCurrency} className="text-lg" />
-              </div>
-              <div>
-                <p className="text-xs text-text-secondary">Net Adjustments</p>
-                <FinancialNumber
-                  value={selectedComputation.taxableIncome - selectedComputation.accountingProfit}
-                  format={formatCurrency}
-                  className="text-lg"
-                />
-              </div>
-              <div>
-                <p className="text-xs text-text-secondary">Taxable Income</p>
-                <FinancialNumber value={selectedComputation.taxableIncome} format={formatCurrency} className="text-lg" />
-              </div>
-              <div>
-                <p className="text-xs text-text-secondary">Tax Liability</p>
-                <FinancialNumber
-                  value={selectedComputation.taxLiability}
-                  format={formatCurrency}
-                  isInverted
-                  className="text-lg"
-                />
-              </div>
-            </div>
-          </Card>
-
-          <Card>
-            <h2 className="mb-sm text-sm font-semibold text-text-primary">Tax Adjustments</h2>
+          <SectionCard title="Tax Adjustments">
             <AdjustmentsTable
               key={selectedComputation.id}
               adjustments={selectedComputation.adjustments}
@@ -202,13 +180,13 @@ export function IncomeTaxPage() {
                 setStatusMessage('Adjustments saved and taxable income/tax liability recomputed.');
               }}
             />
-          </Card>
+          </SectionCard>
 
           {selectedComputation.status === 'draft' ? (
-            <div className="flex justify-end gap-sm">
+            <div className="flex justify-end gap-2">
               <Button
-                type="button"
-                variant="danger"
+                variant="outline"
+                className="text-destructive"
                 disabled={busy}
                 onClick={() =>
                   runAction(async () => {
@@ -219,7 +197,6 @@ export function IncomeTaxPage() {
                 Delete Draft
               </Button>
               <Button
-                type="button"
                 disabled={busy}
                 onClick={() =>
                   runAction(async () => {
@@ -231,19 +208,20 @@ export function IncomeTaxPage() {
               </Button>
             </div>
           ) : (
-            <p className="text-xs text-text-secondary">
+            <p className="text-xs text-muted-foreground">
               Posted{selectedComputation.postedAt ? ` on ${new Date(selectedComputation.postedAt).toLocaleDateString()}` : ''}
-              {selectedComputation.journalEntryId
-                ? ` — journal entry ${selectedComputation.journalEntryId}.`
-                : ' — no journal entry (nil tax liability).'}{' '}
-              A posted computation is immutable; there is no reversal path yet.
+              {selectedComputation.journalEntryId ? ` — journal entry ${selectedComputation.journalEntryId}.` : ' — no journal entry (nil tax liability).'} A posted computation is
+              immutable; there is no reversal path yet.
             </p>
           )}
         </>
       )}
 
-      {sbcModalOpen && (
-        <Modal title="SBC Eligibility" onClose={() => setSbcModalOpen(false)}>
+      <Dialog open={sbcModalOpen} onOpenChange={setSbcModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>SBC Eligibility</DialogTitle>
+          </DialogHeader>
           <SbcEligibilityForm
             currentValue={company?.isSbcEligible ?? false}
             onCancel={() => setSbcModalOpen(false)}
@@ -254,8 +232,8 @@ export function IncomeTaxPage() {
               setSbcModalOpen(false);
             }}
           />
-        </Modal>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -55,7 +55,9 @@ describe('SupplierAgingPage', () => {
     expect(screen.queryByText('Paid Up Supplier')).not.toBeInTheDocument();
     // Grand total across the two visible rows: 100 + 900. Appears both in
     // the "Total Payable" stat card and the table's TOTAL footer row.
-    expect(screen.getAllByText('+1,000.00').length).toBeGreaterThanOrEqual(2);
+    // Locale-agnostic regex (en-ZA formatCurrency uses a non-breaking space
+    // thousands separator and comma decimal) rather than an exact string.
+    expect(screen.getAllByText(/1.?000,00/).length).toBeGreaterThanOrEqual(2);
 
     fireEvent.click(screen.getByRole('checkbox', { name: /show suppliers with a zero balance/i }));
     expect(await screen.findByText('Paid Up Supplier')).toBeInTheDocument();

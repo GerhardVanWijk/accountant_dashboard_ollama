@@ -1,51 +1,57 @@
 import type { DepreciationEntry, FixedAsset } from '@/types';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { Amount } from '@/components/app/figure';
+import { formatDate } from '@/lib/app/format';
 
 export interface DepreciationHistoryTableProps {
   entries: DepreciationEntry[];
   assets: FixedAsset[];
 }
 
+/** Depreciation posting history, re-skinned onto v0's DataTable (M8) — every row is a real posted DepreciationEntry, no math performed here. */
 export function DepreciationHistoryTable({ entries, assets }: DepreciationHistoryTableProps) {
   const assetById = new Map(assets.map((a) => [a.id, a]));
-  const sorted = [...entries].sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
+
+  const columns: DataTableColumn<DepreciationEntry>[] = [
+    { key: 'period', header: 'Period end', sortValue: (e) => e.periodEnd, cell: (e) => formatDate(e.periodEnd) },
+    {
+      key: 'asset',
+      header: 'Asset',
+      sortValue: (e) => assetById.get(e.assetId)?.assetNumber ?? e.assetId,
+      cell: (e) => {
+        const asset = assetById.get(e.assetId);
+        return asset ? `${asset.assetNumber} - ${asset.name}` : e.assetId;
+      },
+    },
+    { key: 'charge', header: 'Charge', align: 'right', sortValue: (e) => e.amount, cell: (e) => <Amount value={-e.amount} plain className="text-sm" /> },
+    {
+      key: 'accumAfter',
+      header: 'Accum. depreciation after',
+      align: 'right',
+      hideBelowMd: true,
+      sortValue: (e) => e.accumulatedDepreciationAfter,
+      cell: (e) => <Amount value={e.accumulatedDepreciationAfter} plain className="text-sm text-muted-foreground" />,
+    },
+    {
+      key: 'carryingAfter',
+      header: 'Carrying value after',
+      align: 'right',
+      sortValue: (e) => e.carryingValueAfter,
+      cell: (e) => <Amount value={e.carryingValueAfter} className="text-sm font-medium" />,
+    },
+  ];
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-        <thead className="bg-background">
-          <tr>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Period End</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Asset</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Charge</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Accum. Depreciation After</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Carrying Value After</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((entry) => {
-            const asset = assetById.get(entry.assetId);
-            return (
-              <tr key={entry.id} className="border-t border-border">
-                <td className="whitespace-nowrap px-md py-sm text-text-primary">{entry.periodEnd}</td>
-                <td className="whitespace-nowrap px-md py-sm text-text-primary">
-                  {asset ? `${asset.assetNumber} - ${asset.name}` : entry.assetId}
-                </td>
-                <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                  <FinancialNumber value={entry.amount} format={formatCurrency} showFlash={false} isInverted />
-                </td>
-                <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                  <FinancialNumber value={entry.accumulatedDepreciationAfter} format={formatCurrency} showFlash={false} />
-                </td>
-                <td className="whitespace-nowrap px-md py-sm text-right font-semibold tabular-nums">
-                  <FinancialNumber value={entry.carryingValueAfter} format={formatCurrency} showFlash={false} />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      rows={entries}
+      columns={columns}
+      getRowKey={(e) => e.id}
+      searchable={(e) => [assetById.get(e.assetId)?.assetNumber ?? '', assetById.get(e.assetId)?.name ?? ''].join(' ')}
+      searchPlaceholder="Search asset number or name"
+      initialSortKey="period"
+      initialSortDirection="desc"
+      emptyTitle="No depreciation posted yet"
+      emptyDescription="Run depreciation once an asset has been capitalized on the Asset Register."
+    />
   );
 }

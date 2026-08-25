@@ -1,47 +1,60 @@
 import { useMemo, useState } from 'react';
+import { Loader2, Plus } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { formatCurrency } from '@/lib/app/format';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { useBills } from '../hooks/useBills';
 import { useBillMutations } from '../hooks/useBillMutations';
 import { usePayments, usePaymentMutations } from '../hooks';
-import { BillList, BillDetail, BillForm, PaymentForm, Modal } from '../components';
+import { BillList } from '../components/BillList';
+import { BillDetail } from '../components/BillDetail';
+import { BillForm } from '../components/BillForm';
+import { PaymentForm } from '../components/PaymentForm';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 
+type View = { type: 'list' } | { type: 'detail'; id: string };
+
 /**
- * Page for managing supplier bills.
- * Displays a list of bills with filtering, sorting, and search.
- * Allows viewing details, creating, and posting bills.
- *
- * "+ New Bill" previously had no handler at all — the only real path to a
- * posted Bill was via Purchase Order conversion. See
- * docs/KNOWN_ISSUES.md's now-resolved "no way to create/post a standalone
- * Bill from the UI" entry.
+ * Supplier bills — route `/purchases/bills` (nav label "Expenses" per v0's
+ * own naming — v0's "Expenses" page is "supplier costs captured against
+ * the ledger," which is exactly what a Bill already is in this codebase;
+ * see the M8 report on why no separate Expense entity was invented).
+ * Real useBills()/BillService data, v0 page shell, list/detail views, the
+ * standalone-Bill create form, and Record Payment (which opens the same
+ * real PaymentForm/paymentService the Supplier Payments page uses) — all
+ * in-page-state, matching every other module's convention.
  */
 export function BillsPage() {
+  const [view, setView] = useState<View>({ type: 'list' });
+  const [showCreate, setShowCreate] = useState(false);
+  const [showRecordPayment, setShowRecordPayment] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
   const { bills, isLoading, error, refetch } = useBills();
   const { suppliers } = useSuppliers();
   const billMutations = useBillMutations();
   const { payments, refetch: refetchPayments } = usePayments();
   const { createPayment } = usePaymentMutations();
-  const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showRecordPayment, setShowRecordPayment] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const selectedBill = bills.find((b) => b.id === selectedBillId);
 
-  const suppliersMap = useMemo(
-    () => Object.fromEntries(suppliers.map((s) => [s.id, s.name])),
-    [suppliers],
-  );
-  const outstandingBills = useMemo(
-    () => bills.filter((bill) => bill.status !== 'void' && bill.total > bill.amountPaid),
-    [bills],
-  );
+  const detailBill = view.type === 'detail' ? bills.find((b) => b.id === view.id) : undefined;
 
-  async function runAction(action: () => Promise<unknown>) {
+  const suppliersMap = useMemo(() => Object.fromEntries(suppliers.map((s) => [s.id, s.name])), [suppliers]);
+  const outstandingBills = useMemo(() => bills.filter((bill) => bill.status !== 'void' && bill.total > bill.amountPaid), [bills]);
+
+  const totalOutstanding = bills.reduce((sum, b) => sum + (b.status === 'void' ? 0 : b.total - b.amountPaid), 0);
+  const overdueBills = bills.filter((b) => b.status === 'overdue');
+  const draftBills = bills.filter((b) => b.status === 'draft');
+
+  async function runAction(action: () => Promise<unknown>, successMessage?: string) {
     setActionError(null);
     try {
       await action();
       await refetch();
+      if (successMessage) setNotice(successMessage);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Action failed.');
     }
@@ -50,94 +63,117 @@ export function BillsPage() {
   async function handleCreate(data: Parameters<typeof billMutations.createBill>[0]) {
     await billMutations.createBill(data);
     await refetch();
-    setShowCreateModal(false);
+    setShowCreate(false);
+    setNotice('Bill created as a draft.');
   }
 
-  /**
-   * Deliberately does NOT catch — PaymentForm's own onSubmit handler
-   * already wraps this in try/catch and shows the error inline in the
-   * modal, same pattern PaymentsPage.handleCreate() uses.
-   */
+  /** PaymentForm's own onSubmit handler already wraps this in try/catch and shows the error inline in the modal. */
   async function handleRecordPayment(data: Parameters<typeof createPayment>[0]) {
     await createPayment(data);
     await Promise.all([refetchPayments(), refetch()]);
     setShowRecordPayment(false);
+    setNotice('Payment recorded and posted to the ledger.');
   }
 
-  if (selectedBill) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setSelectedBillId(null)}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-secondary text-text-primary hover:bg-secondary/80 transition-colors"
-          >
-            ← Back to Bills
-          </button>
-          <h1 className="text-2xl font-bold">Bill Details</h1>
-        </div>
-        {actionError && (
-          <p role="alert" className="rounded-md border border-danger bg-danger/10 px-4 py-2 text-sm text-danger">
-            {actionError}
-          </p>
-        )}
-        <BillDetail
-          bill={selectedBill}
-          suppliersMap={suppliersMap}
-          onClose={() => setSelectedBillId(null)}
-          onPost={(id) => void runAction(() => billMutations.postBill(id))}
-          onRecordPayment={() => setShowRecordPayment(true)}
-        />
+  return (
+    <>
+      {view.type === 'list' && (
+        <div className="flex flex-col gap-6">
+          <PageHeader
+            title="Expenses"
+            description="Supplier bills captured against the ledger, with VAT and payment state."
+            actions={
+              <Button size="sm" onClick={() => setShowCreate(true)}>
+                <Plus data-icon="inline-start" />
+                New bill
+              </Button>
+            }
+          />
 
-        {showRecordPayment && (
-          <Modal title={`Record Payment — ${selectedBill.billNumber}`} onClose={() => setShowRecordPayment(false)} wide>
+          <SectionCard>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              <FigureBlock label="Total bills" value={String(bills.length)} />
+              <FigureBlock label="Outstanding" value={formatCurrency(totalOutstanding)} tone={totalOutstanding > 0 ? 'warning' : 'default'} />
+              <FigureBlock label="Overdue" value={String(overdueBills.length)} tone={overdueBills.length > 0 ? 'negative' : 'default'} />
+              <FigureBlock label="Drafts" value={String(draftBills.length)} hint="Not yet posted" />
+            </div>
+          </SectionCard>
+
+          {notice && <p className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{notice}</p>}
+          {actionError && (
+            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {actionError}
+            </p>
+          )}
+
+          {isLoading && (
+            <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+              <p className="text-sm">Loading bills…</p>
+            </div>
+          )}
+          {!isLoading && error && (
+            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error.message}
+            </div>
+          )}
+          {!isLoading && !error && (
+            <BillList
+              bills={bills}
+              suppliersMap={suppliersMap}
+              onSelect={(id) => {
+                setNotice(null);
+                setView({ type: 'detail', id });
+              }}
+            />
+          )}
+        </div>
+      )}
+
+      {view.type === 'detail' && detailBill && (
+        <div className="flex flex-col gap-6">
+          {notice && <p className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{notice}</p>}
+          {actionError && (
+            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {actionError}
+            </p>
+          )}
+          <BillDetail
+            bill={detailBill}
+            suppliersMap={suppliersMap}
+            onClose={() => setView({ type: 'list' })}
+            onPost={(id) => void runAction(() => billMutations.postBill(id), 'Bill posted to the ledger.')}
+            onRecordPayment={() => setShowRecordPayment(true)}
+          />
+        </div>
+      )}
+
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>New Bill</DialogTitle>
+          </DialogHeader>
+          <BillForm suppliers={suppliers} defaultBillNumber={nextDocumentNumber(bills.map((b) => b.billNumber), 'BILL')} onSubmit={handleCreate} onCancel={() => setShowCreate(false)} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showRecordPayment && Boolean(detailBill)} onOpenChange={setShowRecordPayment}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{detailBill ? `Record Payment — ${detailBill.billNumber}` : 'Record Payment'}</DialogTitle>
+          </DialogHeader>
+          {detailBill && (
             <PaymentForm
               suppliers={suppliers}
               outstandingBills={outstandingBills}
               defaultPaymentNumber={nextDocumentNumber(payments.map((p) => p.paymentNumber), 'PAY')}
-              presetBillId={selectedBill.id}
+              presetBillId={detailBill.id}
               onSubmit={handleRecordPayment}
               onCancel={() => setShowRecordPayment(false)}
             />
-          </Modal>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Supplier Bills</h1>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 text-sm font-medium rounded-lg bg-primary text-text-on-primary hover:bg-primary/90 transition-colors"
-        >
-          + New Bill
-        </button>
-      </div>
-      {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-4 py-2 text-sm text-danger">
-          {actionError}
-        </p>
-      )}
-      <BillList
-        bills={bills}
-        onSelect={setSelectedBillId}
-        isLoading={isLoading}
-        error={error?.message}
-      />
-
-      {showCreateModal && (
-        <Modal title="New Bill" onClose={() => setShowCreateModal(false)} wide>
-          <BillForm
-            suppliers={suppliers}
-            defaultBillNumber={nextDocumentNumber(bills.map((b) => b.billNumber), 'BILL')}
-            onSubmit={handleCreate}
-            onCancel={() => setShowCreateModal(false)}
-          />
-        </Modal>
-      )}
-    </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

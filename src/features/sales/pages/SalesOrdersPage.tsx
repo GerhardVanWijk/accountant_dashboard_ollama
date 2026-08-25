@@ -1,25 +1,35 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
+import { Loader2, Plus } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
 import { SalesOrderList } from '@/features/sales/components/SalesOrderList';
 import { SalesOrderDetail } from '@/features/sales/components/SalesOrderDetail';
-import { SalesOrderForm } from '@/features/sales/components/SalesOrderForm';
-import { Modal } from '@/features/sales/components/Modal';
+import { SalesOrderFormModal } from '@/features/sales/components/SalesOrderFormModal';
 import { useSalesOrders } from '@/features/sales/hooks/useSalesOrders';
 import { useSalesOrderMutations } from '@/features/sales/hooks/useSalesOrderMutations';
 import { useQuotes } from '@/features/sales/hooks/useQuotes';
 import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
 
 type View = { type: 'list' } | { type: 'detail'; id: string };
+type FormState = { mode: 'create' } | null;
 
 /**
- * Route target for /sales/orders. Assembles the Sales Order list/detail
- * views and create form, plus the Sales Order -> Invoice conversion action.
+ * Route target for /sales/orders — real useSalesOrders()/SalesOrderService
+ * data throughout, v0 page shell (PageHeader/SectionCard), list/detail
+ * views and create modal in-page-state, matching InvoicesPage.tsx's/
+ * QuotesPage.tsx's convention (M13). No `sales`/`sales_orders` entry
+ * exists in the real permission catalog (M11) — docs/PERMISSIONS.md
+ * already documented Quotes/Orders as ungated alongside Credit Notes/
+ * Receipts, so this route/its actions stay ungated, same as before the
+ * port. The Sales Order -> Invoice conversion goes through the existing
+ * `SalesOrderService.convertToInvoice()` unchanged — no invoice logic is
+ * duplicated here.
  */
 export function SalesOrdersPage() {
   const [view, setView] = useState<View>({ type: 'list' });
-  const [showForm, setShowForm] = useState(false);
+  const [formState, setFormState] = useState<FormState>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const { salesOrders, isLoading, error, refetch } = useSalesOrders();
   const detailOrder = view.type === 'detail' ? salesOrders.find((o) => o.id === view.id) : undefined;
@@ -29,11 +39,11 @@ export function SalesOrdersPage() {
   const { quotes } = useQuotes();
   const {
     createSalesOrder,
+    deleteSalesOrder,
     confirmOrder,
     cancelOrder,
     convertToInvoice,
     isLoading: isMutating,
-    error: mutationError,
   } = useSalesOrderMutations({
     onSuccess: () => refetch(),
   });
@@ -42,78 +52,120 @@ export function SalesOrdersPage() {
 
   async function handleCreate(data: Parameters<typeof createSalesOrder>[0]) {
     await createSalesOrder(data);
-    setShowForm(false);
+    setFormState(null);
   }
 
   async function handleTransition(action: (id: string) => Promise<unknown>, id: string, message: string) {
-    await action(id);
-    setNotice(message);
+    setActionError(null);
+    try {
+      await action(id);
+      setNotice(message);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not update sales order.');
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setActionError(null);
+    try {
+      await deleteSalesOrder(id);
+      setView({ type: 'list' });
+      setNotice('Pending sales order deleted.');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not delete sales order.');
+    }
   }
 
   async function handleConvert(id: string) {
-    const invoice = await convertToInvoice(id);
-    await refetch();
-    setNotice(`Converted to draft Invoice ${invoice.invoiceNumber}. Find it on the Invoices page.`);
-    setView({ type: 'list' });
+    setActionError(null);
+    try {
+      const invoice = await convertToInvoice(id);
+      await refetch();
+      setNotice(`Converted to draft Invoice ${invoice.invoiceNumber}. Find it on the Invoices page.`);
+      setView({ type: 'list' });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not convert sales order to an invoice.');
+    }
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Sales Orders</h1>
-        {view.type === 'list' && (
-          <Button variant="primary" onClick={() => setShowForm(true)}>
-            <Icon name="add" size={16} />
-            New Sales Order
-          </Button>
-        )}
-      </div>
-
-      {notice && (
-        <p className="rounded-md border border-positive bg-positive/10 px-sm py-xs text-sm text-positive">{notice}</p>
-      )}
-      {mutationError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
-          {mutationError.message}
-        </p>
-      )}
-
+    <>
       {view.type === 'list' && (
-        <SalesOrderList
-          salesOrders={salesOrders}
-          customers={customerMap}
-          onSelect={(id) => {
-            setNotice(null);
-            setView({ type: 'detail', id });
-          }}
-          isLoading={isLoading}
-          error={error?.message}
-        />
+        <div className="flex flex-col gap-6">
+          <PageHeader
+            title="Sales orders"
+            description="Confirmed customer orders — nothing here posts to the GL until converted to an invoice."
+            actions={
+              <Button size="sm" onClick={() => setFormState({ mode: 'create' })}>
+                <Plus data-icon="inline-start" />
+                New sales order
+              </Button>
+            }
+          />
+
+          {notice && (
+            <p role="status" className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">
+              {notice}
+            </p>
+          )}
+
+          <SectionCard>
+            <SalesOrderList
+              salesOrders={salesOrders}
+              customers={customerMap}
+              onSelect={(id) => {
+                setNotice(null);
+                setActionError(null);
+                setView({ type: 'detail', id });
+              }}
+            />
+          </SectionCard>
+        </div>
+      )}
+
+      {isLoading && view.type === 'list' && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading sales orders…</p>
+        </div>
+      )}
+
+      {!isLoading && error && view.type === 'list' && (
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error.message}
+        </div>
       )}
 
       {view.type === 'detail' && detailOrder && (
-        <SalesOrderDetail
-          salesOrder={detailOrder}
-          customerName={customerMap.get(detailOrder.customerId) || 'Unknown Customer'}
-          quoteNumber={quotes.find((q) => q.id === detailOrder.quoteId)?.quoteNumber}
-          onClose={() => setView({ type: 'list' })}
-          isBusy={isMutating}
-          onConfirmOrder={(id) => void handleTransition(confirmOrder, id, 'Sales order confirmed.')}
-          onCancelOrder={(id) => void handleTransition(cancelOrder, id, 'Sales order cancelled.')}
-          onConvertToInvoice={(id) => void handleConvert(id)}
-        />
+        <div className="flex flex-col gap-6">
+          {actionError && (
+            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {actionError}
+            </div>
+          )}
+          <SalesOrderDetail
+            salesOrder={detailOrder}
+            customerName={customerMap.get(detailOrder.customerId) || 'Unknown Customer'}
+            quoteNumber={quotes.find((q) => q.id === detailOrder.quoteId)?.quoteNumber}
+            onBack={() => setView({ type: 'list' })}
+            onDelete={() => void handleDelete(detailOrder.id)}
+            isBusy={isMutating}
+            onConfirmOrder={(id) => void handleTransition(confirmOrder, id, 'Sales order confirmed.')}
+            onCancelOrder={(id) => void handleTransition(cancelOrder, id, 'Sales order cancelled.')}
+            onConvertToInvoice={(id) => void handleConvert(id)}
+          />
+        </div>
       )}
 
-      {showForm && (
-        <Modal title="New Sales Order" onClose={() => setShowForm(false)} wide>
-          <SalesOrderForm
-            customers={customerList}
-            defaultOrderNumber={nextOrderNumber}
-            onSubmit={handleCreate}
-            onCancel={() => setShowForm(false)}
-          />
-        </Modal>
+      {formState?.mode === 'create' && (
+        <SalesOrderFormModal
+          title="New sales order"
+          customers={customerList}
+          defaultOrderNumber={nextOrderNumber}
+          onSubmit={handleCreate}
+          onClose={() => setFormState(null)}
+        />
       )}
-    </div>
+    </>
   );
 }

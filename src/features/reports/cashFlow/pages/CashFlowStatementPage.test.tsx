@@ -75,11 +75,11 @@ describe('CashFlowStatementPage', () => {
   it('renders the classified sections and the reconciliation check when data is loaded', () => {
     mockedUseCashFlowStatement.mockReturnValue(baseHookValue());
     render(<CashFlowStatementPage />);
-    expect(screen.getByText('Statement of Cash Flows')).toBeInTheDocument();
+    expect(screen.getByText('Statement of cash flows')).toBeInTheDocument();
     expect(screen.getByText('Operating Activities')).toBeInTheDocument();
     expect(screen.getByText('Investing Activities')).toBeInTheDocument();
     expect(screen.getByText('Financing Activities')).toBeInTheDocument();
-    expect(screen.getByText('Reconciliation Check')).toBeInTheDocument();
+    expect(screen.getByText('Reconciliation check')).toBeInTheDocument();
     expect(screen.getByText(/Reconciles to actual cash movement/i)).toBeInTheDocument();
   });
 

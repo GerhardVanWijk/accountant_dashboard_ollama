@@ -3,10 +3,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { AssetCategory, DepreciationMethod, FixedAsset } from '@/types';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
 import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS, ASSETS_CURRENCY } from '../constants';
-import { fieldError, fieldHint, fieldInput, fieldLabel } from './formStyles';
 import type { CreateFixedAssetDTO, UpdateFixedAssetDTO } from '../services';
+
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
 function isPositiveNumber(value: string): boolean {
   return value.trim() !== '' && !Number.isNaN(Number(value)) && Number(value) > 0;
@@ -78,7 +82,8 @@ function toDefaultValues(asset?: FixedAsset): AssetFormValues {
  * Once an asset has left 'draft' (capitalized), fixedAssetService rejects
  * edits to cost/method/useful-life/dates/GL-mapping — those fields are
  * disabled here rather than only failing on submit, so the guard is
- * visible before the user tries.
+ * visible before the user tries. Re-skinned onto v0's Field/Input/Textarea
+ * (M8); validation schema and submit wiring unchanged.
  */
 export function AssetForm({ asset, onSubmit, onCancel }: AssetFormProps) {
   const locked = asset !== undefined && asset.status !== 'draft';
@@ -130,156 +135,101 @@ export function AssetForm({ asset, onSubmit, onCancel }: AssetFormProps) {
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-md" noValidate>
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="assetNumber">
-            Asset Number
-          </label>
-          <input id="assetNumber" className={fieldInput} {...register('assetNumber')} />
-          {errors.assetNumber && <p className={fieldError}>{errors.assetNumber.message}</p>}
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="name">
-            Name
-          </label>
-          <input id="name" className={fieldInput} {...register('name')} />
-          {errors.name && <p className={fieldError}>{errors.name.message}</p>}
-        </div>
+    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="assetNumber">Asset Number</FieldLabel>
+          <Input id="assetNumber" className="font-mono" {...register('assetNumber')} />
+          <FieldError errors={[errors.assetNumber]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="name">Name</FieldLabel>
+          <Input id="name" {...register('name')} />
+          <FieldError errors={[errors.name]} />
+        </Field>
       </div>
 
-      <div>
-        <label className={fieldLabel} htmlFor="description">
-          Description
-        </label>
-        <textarea id="description" rows={2} className={fieldInput} {...register('description')} />
-      </div>
+      <Field>
+        <FieldLabel htmlFor="description">Description</FieldLabel>
+        <Textarea id="description" rows={2} {...register('description')} />
+      </Field>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="category">
-            Category
-          </label>
-          <select id="category" className={fieldInput} {...register('category')}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="category">Category</FieldLabel>
+          <select id="category" className={selectClassName} {...register('category')}>
             {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="acquisitionDate">
-            Acquisition Date
-          </label>
-          <input
-            id="acquisitionDate"
-            type="date"
-            className={fieldInput}
-            disabled={locked}
-            {...register('acquisitionDate')}
-          />
-          {errors.acquisitionDate && <p className={fieldError}>{errors.acquisitionDate.message}</p>}
-        </div>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="acquisitionDate">Acquisition Date</FieldLabel>
+          <Input id="acquisitionDate" type="date" disabled={locked} {...register('acquisitionDate')} />
+          <FieldError errors={[errors.acquisitionDate]} />
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-3">
-        <div>
-          <label className={fieldLabel} htmlFor="cost">
-            Cost ({ASSETS_CURRENCY})
-          </label>
-          <input id="cost" type="number" step="0.01" className={fieldInput} disabled={locked} {...register('cost')} />
-          {errors.cost && <p className={fieldError}>{errors.cost.message}</p>}
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="residualValue">
-            Residual Value ({ASSETS_CURRENCY})
-          </label>
-          <input
-            id="residualValue"
-            type="number"
-            step="0.01"
-            className={fieldInput}
-            disabled={locked}
-            {...register('residualValue')}
-          />
-          {errors.residualValue && <p className={fieldError}>{errors.residualValue.message}</p>}
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="usefulLifeYears">
-            Useful Life (Years)
-          </label>
-          <input
-            id="usefulLifeYears"
-            type="number"
-            step="1"
-            className={fieldInput}
-            disabled={locked}
-            {...register('usefulLifeYears')}
-          />
-          {errors.usefulLifeYears && <p className={fieldError}>{errors.usefulLifeYears.message}</p>}
-        </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Field>
+          <FieldLabel htmlFor="cost">Cost ({ASSETS_CURRENCY})</FieldLabel>
+          <Input id="cost" type="number" step="0.01" disabled={locked} {...register('cost')} />
+          <FieldError errors={[errors.cost]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="residualValue">Residual Value ({ASSETS_CURRENCY})</FieldLabel>
+          <Input id="residualValue" type="number" step="0.01" disabled={locked} {...register('residualValue')} />
+          <FieldError errors={[errors.residualValue]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="usefulLifeYears">Useful Life (Years)</FieldLabel>
+          <Input id="usefulLifeYears" type="number" step="1" disabled={locked} {...register('usefulLifeYears')} />
+          <FieldError errors={[errors.usefulLifeYears]} />
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="depreciationMethod">
-            Depreciation Method
-          </label>
-          <select id="depreciationMethod" className={fieldInput} disabled={locked} {...register('depreciationMethod')}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="depreciationMethod">Depreciation Method</FieldLabel>
+          <select id="depreciationMethod" className={selectClassName} disabled={locked} {...register('depreciationMethod')}>
             {Object.entries(DEPRECIATION_METHOD_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </select>
-        </div>
+        </Field>
         {depreciationMethod === 'reducing_balance' && (
-          <div>
-            <label className={fieldLabel} htmlFor="reducingBalanceRatePercent">
-              Annual Rate (%)
-            </label>
-            <input
-              id="reducingBalanceRatePercent"
-              type="number"
-              step="0.01"
-              className={fieldInput}
-              disabled={locked}
-              {...register('reducingBalanceRatePercent')}
-            />
-            {errors.reducingBalanceRatePercent && <p className={fieldError}>{errors.reducingBalanceRatePercent.message}</p>}
-          </div>
+          <Field>
+            <FieldLabel htmlFor="reducingBalanceRatePercent">Annual Rate (%)</FieldLabel>
+            <Input id="reducingBalanceRatePercent" type="number" step="0.01" disabled={locked} {...register('reducingBalanceRatePercent')} />
+            <FieldError errors={[errors.reducingBalanceRatePercent]} />
+          </Field>
         )}
       </div>
 
-      <div>
-        <label className={fieldLabel} htmlFor="taxWearTearRatePercent">
-          SARS Wear-and-Tear Rate (%)
-        </label>
-        <input
-          id="taxWearTearRatePercent"
-          type="number"
-          step="0.01"
-          className={fieldInput}
-          {...register('taxWearTearRatePercent')}
-        />
-        <p className={fieldHint}>
+      <Field>
+        <FieldLabel htmlFor="taxWearTearRatePercent">SARS Wear-and-Tear Rate (%)</FieldLabel>
+        <Input id="taxWearTearRatePercent" type="number" step="0.01" {...register('taxWearTearRatePercent')} />
+        <FieldDescription>
           Feeds the Tax Register — a typical/indicative rate prefilled from the category, always editable. Not
           independently verified against SARS Binding General Practice Note 7; confirm with a tax practitioner
           before relying on it.
-        </p>
-      </div>
+        </FieldDescription>
+      </Field>
 
       {locked && (
-        <p className={fieldHint}>
+        <p className="text-sm text-muted-foreground">
           This asset has already been capitalized — cost, dates, useful life, and depreciation method are locked
           because real GL history now depends on them. Name, description, category, and the tax rate can still be
           edited.
         </p>
       )}
 
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>

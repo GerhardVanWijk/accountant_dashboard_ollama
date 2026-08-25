@@ -2,10 +2,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { LeaseContract } from '@/types/lease';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { fieldError, fieldHint, fieldInput, fieldLabel } from './formStyles';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Amount } from '@/components/app/figure';
 import type { CreateLeaseDTO, UpdateLeaseDTO } from '../services';
 import { calculateLeaseLiabilityPresentValue } from '../services';
 
@@ -46,14 +46,14 @@ function toDefaultValues(lease?: LeaseContract): LeaseFormValues {
 
 /**
  * Create/edit form for a draft lease (react-hook-form + zod), mirroring
- * src/features/assets/components/AssetForm.tsx's shape. The
- * initialLeaseLiability/initialRightOfUseAsset preview below calls
- * calculateLeaseLiabilityPresentValue() directly — the same pure function
- * leaseService.createLease() uses — rather than round-tripping through the
- * service, so the figure updates instantly as the user types. Only a
- * draft lease can reach this form (leaseService rejects edits once
- * commenced), so nothing here is ever locked/disabled the way AssetForm
- * locks fields post-capitalization.
+ * AssetForm.tsx's shape. The initialLeaseLiability/initialRightOfUseAsset
+ * preview below calls calculateLeaseLiabilityPresentValue() directly — the
+ * same pure function leaseService.createLease() uses — rather than
+ * round-tripping through the service, so the figure updates instantly as
+ * the user types. Only a draft lease can reach this form (leaseService
+ * rejects edits once commenced), so nothing here is ever locked/disabled
+ * the way AssetForm locks fields post-capitalization. Re-skinned onto v0's
+ * Field/Input (M13); validation and preview calculation unchanged.
  */
 export function LeaseForm({ lease, onSubmit, onCancel }: LeaseFormProps) {
   const {
@@ -74,9 +74,7 @@ export function LeaseForm({ lease, onSubmit, onCancel }: LeaseFormProps) {
   const paymentValid = isPositiveNumber(monthlyPayment);
   const rateValid = isNonNegativeNumber(discountRatePercent);
   const previewValid = termValid && paymentValid && rateValid;
-  const previewPv = previewValid
-    ? calculateLeaseLiabilityPresentValue(Number(monthlyPayment), Number(leaseTermMonths), Number(discountRatePercent))
-    : 0;
+  const previewPv = previewValid ? calculateLeaseLiabilityPresentValue(Number(monthlyPayment), Number(leaseTermMonths), Number(discountRatePercent)) : 0;
 
   const submit = handleSubmit(async (data) => {
     await onSubmit({
@@ -90,72 +88,60 @@ export function LeaseForm({ lease, onSubmit, onCancel }: LeaseFormProps) {
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-md" noValidate>
-      <div>
-        <label className={fieldLabel} htmlFor="lessorName">
-          Lessor Name
-        </label>
-        <input id="lessorName" className={fieldInput} {...register('lessorName')} />
-        {errors.lessorName && <p className={fieldError}>{errors.lessorName.message}</p>}
+    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+      <Field>
+        <FieldLabel htmlFor="lessorName">Lessor Name</FieldLabel>
+        <Input id="lessorName" {...register('lessorName')} />
+        <FieldError errors={[errors.lessorName]} />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="assetDescription">Asset Description</FieldLabel>
+        <Input id="assetDescription" {...register('assetDescription')} />
+        <FieldError errors={[errors.assetDescription]} />
+      </Field>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="commencementDate">Commencement Date</FieldLabel>
+          <Input id="commencementDate" type="date" {...register('commencementDate')} />
+          <FieldError errors={[errors.commencementDate]} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="leaseTermMonths">Lease Term (Months)</FieldLabel>
+          <Input id="leaseTermMonths" type="number" step="1" {...register('leaseTermMonths')} />
+          <FieldError errors={[errors.leaseTermMonths]} />
+        </Field>
       </div>
 
-      <div>
-        <label className={fieldLabel} htmlFor="assetDescription">
-          Asset Description
-        </label>
-        <input id="assetDescription" className={fieldInput} {...register('assetDescription')} />
-        {errors.assetDescription && <p className={fieldError}>{errors.assetDescription.message}</p>}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="monthlyPayment">Monthly Payment</FieldLabel>
+          <Input id="monthlyPayment" type="number" step="0.01" {...register('monthlyPayment')} />
+          <FieldError errors={[errors.monthlyPayment]} />
+          <FieldDescription>A single fixed figure for the whole term — escalation clauses are not modeled.</FieldDescription>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="discountRatePercent">Discount Rate (% p.a.)</FieldLabel>
+          <Input id="discountRatePercent" type="number" step="0.01" {...register('discountRatePercent')} />
+          <FieldError errors={[errors.discountRatePercent]} />
+          <FieldDescription>Your incremental borrowing rate — always a manual input, never looked up automatically.</FieldDescription>
+        </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="commencementDate">
-            Commencement Date
-          </label>
-          <input id="commencementDate" type="date" className={fieldInput} {...register('commencementDate')} />
-          {errors.commencementDate && <p className={fieldError}>{errors.commencementDate.message}</p>}
+      <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Lease Liability / Right-of-Use Asset (at commencement)</span>
+          <Amount value={previewPv} className="text-sm font-medium" />
         </div>
-        <div>
-          <label className={fieldLabel} htmlFor="leaseTermMonths">
-            Lease Term (Months)
-          </label>
-          <input id="leaseTermMonths" type="number" step="1" className={fieldInput} {...register('leaseTermMonths')} />
-          {errors.leaseTermMonths && <p className={fieldError}>{errors.leaseTermMonths.message}</p>}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="monthlyPayment">
-            Monthly Payment
-          </label>
-          <input id="monthlyPayment" type="number" step="0.01" className={fieldInput} {...register('monthlyPayment')} />
-          {errors.monthlyPayment && <p className={fieldError}>{errors.monthlyPayment.message}</p>}
-          <p className={fieldHint}>A single fixed figure for the whole term — escalation clauses are not modeled.</p>
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="discountRatePercent">
-            Discount Rate (% p.a.)
-          </label>
-          <input id="discountRatePercent" type="number" step="0.01" className={fieldInput} {...register('discountRatePercent')} />
-          {errors.discountRatePercent && <p className={fieldError}>{errors.discountRatePercent.message}</p>}
-          <p className={fieldHint}>Your incremental borrowing rate — always a manual input, never looked up automatically.</p>
-        </div>
-      </div>
-
-      <div className="rounded-md border border-border bg-background p-md text-sm">
-        <div className="flex justify-between">
-          <span className="text-text-secondary">Lease Liability / Right-of-Use Asset (at commencement)</span>
-          <FinancialNumber value={previewPv} format={formatCurrency} showFlash={false} />
-        </div>
-        <p className={fieldHint}>
-          Present value of the payment annuity, computed live as you type. This is what will be posted (DR Right-of-Use
-          Assets / CR Lease Liability) once you post commencement.
+        <p className="mt-2 text-sm text-muted-foreground">
+          Present value of the payment annuity, computed live as you type. This is what will be posted (DR
+          Right-of-Use Assets / CR Lease Liability) once you post commencement.
         </p>
       </div>
 
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>

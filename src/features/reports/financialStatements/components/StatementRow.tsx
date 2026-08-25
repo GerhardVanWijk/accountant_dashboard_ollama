@@ -1,37 +1,34 @@
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Amount } from '@/components/app/figure';
+import { cn } from '@/lib/utils';
 
 export interface StatementRowProps {
   label: string;
   amount: number;
-  /** Category/grand totals — bold text, top border, subtle panel tint. */
+  /** Category/grand totals — bold text, top border. */
   isTotal?: boolean;
   /** Individual account lines nest under their category header. */
   indent?: boolean;
-  /** Expenses/deductions: a positive amount here is a cost, not a gain. */
-  isInverted?: boolean;
 }
 
 /**
- * One row of an Income Statement or Balance Sheet — grid-based, right-
- * aligned tabular-nums amount per docs/FINANCIAL_UI_GUIDE.md. Shared by
- * both financialStatements pages so every report in this feature renders
- * amounts identically.
+ * One row of an Income Statement or Balance Sheet. Re-skinned onto v0's
+ * statement-table visual language (M9): negatives shown parenthesized via
+ * `Amount`'s `statement` mode (the accounting convention), not a separate
+ * "+"/inverted-color scheme — matches how v0's own StatementTable renders
+ * every row in one plain, undyed color regardless of section, distinguished
+ * by heading/indentation rather than per-row color. Shared by the Income
+ * Statement and Balance Sheet pages so both render amounts identically.
  */
-export function StatementRow({ label, amount, isTotal = false, indent = false, isInverted = false }: StatementRowProps) {
+export function StatementRow({ label, amount, isTotal = false, indent = false }: StatementRowProps) {
   return (
     <div
-      className={`grid grid-cols-[1fr_160px] gap-2 px-2 py-1 tabular-nums ${
-        isTotal ? 'mt-xs border-t border-border bg-panel font-semibold' : ''
-      }`}
+      className={cn(
+        'grid grid-cols-[1fr_auto] items-baseline gap-2 py-2',
+        isTotal && 'mt-1 border-t border-border font-semibold text-foreground',
+      )}
     >
-      <FinancialTableCell type="label" className={indent && !isTotal ? 'pl-lg text-text-secondary' : undefined}>
-        {label}
-      </FinancialTableCell>
-      <FinancialTableCell type="number">
-        <FinancialNumber value={amount} format={formatCurrency} isInverted={isInverted} />
-      </FinancialTableCell>
+      <span className={cn(indent && !isTotal && 'pl-4 text-muted-foreground')}>{label}</span>
+      <Amount value={amount} statement className={cn('text-sm', isTotal && 'font-semibold')} />
     </div>
   );
 }
@@ -42,5 +39,5 @@ export interface StatementSectionHeaderProps {
 
 /** Category header — "Revenue", "Operating Expenses", "Assets", etc. */
 export function StatementSectionHeader({ label }: StatementSectionHeaderProps) {
-  return <div className="px-2 pt-md pb-xs text-xs font-semibold uppercase tracking-wide text-text-secondary">{label}</div>;
+  return <div className="pt-6 pb-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase first:pt-0">{label}</div>;
 }

@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/shadcn/empty';
 import type { UseSuppliersResult } from '../hooks/useSuppliers';
 import { SupplierTable } from '../components/SupplierTable';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 export interface SupplierListPageProps {
   suppliersState: UseSuppliersResult;
@@ -29,6 +30,8 @@ export interface SupplierListPageProps {
  */
 export function SupplierListPage({ suppliersState, onView, onEdit, onCreate }: SupplierListPageProps) {
   const { suppliers, loading, error, refetch, setOnHold, setStatus } = suppliersState;
+  const canCreate = useCanAccess('supplier_management', 'create');
+  const canUpdate = useCanAccess('supplier_management', 'update');
 
   return (
     <>
@@ -36,10 +39,12 @@ export function SupplierListPage({ suppliersState, onView, onEdit, onCreate }: S
         title="Suppliers"
         description="Manage vendor accounts, credit terms, and accounts-payable standing."
         actions={
-          <Button size="sm" onClick={onCreate}>
-            <Plus data-icon="inline-start" />
-            Add supplier
-          </Button>
+          canCreate ? (
+            <Button size="sm" onClick={onCreate}>
+              <Plus data-icon="inline-start" />
+              Add supplier
+            </Button>
+          ) : undefined
         }
       />
 
@@ -69,12 +74,14 @@ export function SupplierListPage({ suppliersState, onView, onEdit, onCreate }: S
               <EmptyTitle>No suppliers yet</EmptyTitle>
               <EmptyDescription>Add your first vendor to start tracking accounts payable.</EmptyDescription>
             </EmptyHeader>
-            <EmptyContent>
-              <Button size="sm" onClick={onCreate}>
-                <Plus data-icon="inline-start" />
-                Add supplier
-              </Button>
-            </EmptyContent>
+            {canCreate && (
+              <EmptyContent>
+                <Button size="sm" onClick={onCreate}>
+                  <Plus data-icon="inline-start" />
+                  Add supplier
+                </Button>
+              </EmptyContent>
+            )}
           </Empty>
         </SectionCard>
       )}
@@ -84,13 +91,21 @@ export function SupplierListPage({ suppliersState, onView, onEdit, onCreate }: S
           <SupplierTable
             suppliers={suppliers}
             onView={(supplier) => onView(supplier.id)}
-            onEdit={(supplier) => onEdit(supplier.id)}
-            onToggleHold={(supplier) => {
-              void setOnHold(supplier.id, !supplier.onHold);
-            }}
-            onToggleStatus={(supplier) => {
-              void setStatus(supplier.id, supplier.status === 'active' ? 'inactive' : 'active');
-            }}
+            onEdit={canUpdate ? (supplier) => onEdit(supplier.id) : undefined}
+            onToggleHold={
+              canUpdate
+                ? (supplier) => {
+                    void setOnHold(supplier.id, !supplier.onHold);
+                  }
+                : undefined
+            }
+            onToggleStatus={
+              canUpdate
+                ? (supplier) => {
+                    void setStatus(supplier.id, supplier.status === 'active' ? 'inactive' : 'active');
+                  }
+                : undefined
+            }
           />
         </SectionCard>
       )}

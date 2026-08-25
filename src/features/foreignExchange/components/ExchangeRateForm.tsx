@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
 import type { ExchangeRate } from '@/types/foreignExchange';
 import type { CreateExchangeRateDTO } from '../services';
-import { fieldError, fieldHint, fieldInput, fieldLabel } from './formStyles';
 
 export interface ExchangeRateFormProps {
   /** Present when editing an existing rate — prefills every field. Absent for a brand-new rate. */
@@ -21,12 +23,14 @@ function toDateInputValue(iso: string | undefined): string {
 }
 
 /**
- * Create (or edit) a single point-in-time exchange rate
- * (SA_ACCOUNTING_MASTER_SPEC.md §33). As a matter of process a wrong rate
- * should generally be superseded by a NEW rate for the same date rather
- * than edited — see ExchangeRateService's doc comment — but this form is
- * reused for both create and edit since the repository itself doesn't
- * forbid it.
+ * Create (or edit) a single point-in-time exchange rate. As a matter of
+ * process a wrong rate should generally be superseded by a NEW rate for
+ * the same date rather than edited — see ExchangeRateService's doc
+ * comment — but this form is reused for both create and edit since the
+ * repository itself doesn't forbid it. Re-skinned onto v0's
+ * Field/Input/Textarea (M13); validation and submit wiring unchanged —
+ * this is still a plain useState form (no react-hook-form), matching the
+ * form's original shape.
  */
 export function ExchangeRateForm({ initialValue, onSubmit, onCancel, isLoading = false }: ExchangeRateFormProps) {
   const [fromCurrency, setFromCurrency] = useState(initialValue?.fromCurrency ?? '');
@@ -61,69 +65,50 @@ export function ExchangeRateForm({ initialValue, onSubmit, onCancel, isLoading =
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-md">
-      {error && <p className={fieldError}>{error}</p>}
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <label>
-          <span className={fieldLabel}>From Currency</span>
-          <input
-            className={`${fieldInput} font-mono uppercase`}
-            placeholder="e.g. USD"
-            maxLength={6}
-            value={fromCurrency}
-            onChange={(e) => setFromCurrency(e.target.value)}
-          />
-        </label>
-        <label>
-          <span className={fieldLabel}>To Currency</span>
-          <input
-            className={`${fieldInput} font-mono uppercase`}
-            placeholder="ZAR"
-            maxLength={6}
-            value={toCurrency}
-            onChange={(e) => setToCurrency(e.target.value)}
-          />
-        </label>
-        <label>
-          <span className={fieldLabel}>Rate</span>
-          <input
-            type="number"
-            min="0"
-            step="0.0001"
-            className={`${fieldInput} text-right tabular-nums`}
-            value={rate}
-            onChange={(e) => setRate(parseFloat(e.target.value) || 0)}
-          />
-          <span className={fieldHint}>Units of {toCurrency.trim() || 'ZAR'} per 1 unit of {fromCurrency.trim() || 'the from-currency'}.</span>
-        </label>
-        <label>
-          <span className={fieldLabel}>Rate Date</span>
-          <input type="date" className={fieldInput} value={rateDate} onChange={(e) => setRateDate(e.target.value)} />
-        </label>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="fromCurrency">From Currency</FieldLabel>
+          <Input id="fromCurrency" className="font-mono uppercase" placeholder="e.g. USD" maxLength={6} value={fromCurrency} onChange={(e) => setFromCurrency(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="toCurrency">To Currency</FieldLabel>
+          <Input id="toCurrency" className="font-mono uppercase" placeholder="ZAR" maxLength={6} value={toCurrency} onChange={(e) => setToCurrency(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="rate">Rate</FieldLabel>
+          <Input id="rate" type="number" min="0" step="0.0001" className="text-right" value={rate} onChange={(e) => setRate(parseFloat(e.target.value) || 0)} />
+          <FieldDescription>
+            Units of {toCurrency.trim() || 'ZAR'} per 1 unit of {fromCurrency.trim() || 'the from-currency'}.
+          </FieldDescription>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="rateDate">Rate Date</FieldLabel>
+          <Input id="rateDate" type="date" value={rateDate} onChange={(e) => setRateDate(e.target.value)} />
+        </Field>
       </div>
 
-      <label>
-        <span className={fieldLabel}>Source Reference</span>
-        <textarea
-          className={fieldInput}
-          rows={2}
-          placeholder="e.g. Manually entered from [bank/source] on [date] — not a live feed"
-          value={sourceReference}
-          onChange={(e) => setSourceReference(e.target.value)}
-        />
-        <span className={fieldHint}>
-          Required — every rate is always manually entered, no live FX feed is wired into this codebase
-          (SA_ACCOUNTING_MASTER_SPEC.md §110/§111). Say where this figure came from and note if it still needs
-          professional review before relying on it for a real filing.
-        </span>
-      </label>
+      <Field>
+        <FieldLabel htmlFor="sourceReference">Source Reference</FieldLabel>
+        <Textarea id="sourceReference" rows={2} placeholder="e.g. Manually entered from [bank/source] on [date] — not a live feed" value={sourceReference} onChange={(e) => setSourceReference(e.target.value)} />
+        <FieldDescription>
+          Required — every rate is always manually entered, no live FX feed is wired into this codebase. Say where
+          this figure came from and note if it still needs professional review before relying on it for a real
+          filing.
+        </FieldDescription>
+      </Field>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" type="submit" disabled={isLoading}>
+        <Button type="submit" disabled={isLoading}>
           {isLoading ? 'Saving…' : initialValue ? 'Save Changes' : 'Create Rate'}
         </Button>
       </div>

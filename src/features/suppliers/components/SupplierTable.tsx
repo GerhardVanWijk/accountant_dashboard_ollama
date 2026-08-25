@@ -14,9 +14,10 @@ import { StatusBadge } from './StatusBadge';
 export interface SupplierTableProps {
   suppliers: Supplier[];
   onView: (supplier: Supplier) => void;
-  onEdit: (supplier: Supplier) => void;
-  onToggleHold: (supplier: Supplier) => void;
-  onToggleStatus: (supplier: Supplier) => void;
+  /** Omit any of these three (M11: gated by supplier_management:update) to hide the corresponding row menu item. */
+  onEdit?: (supplier: Supplier) => void;
+  onToggleHold?: (supplier: Supplier) => void;
+  onToggleStatus?: (supplier: Supplier) => void;
 }
 
 /**
@@ -92,26 +93,27 @@ export function SupplierTable({ suppliers, onView, onEdit, onToggleHold, onToggl
       key: 'actions',
       header: '',
       align: 'right',
-      cell: (s) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${s.name}`} />
-            }
-          >
-            <MoreHorizontal />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEdit(s)}>Edit</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onToggleHold(s)}>
-              {s.onHold ? 'Release hold' : 'Put on hold'}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onToggleStatus(s)}>
-              {s.status === 'active' ? 'Deactivate' : 'Activate'}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
+      cell: (s) =>
+        onEdit || onToggleHold || onToggleStatus ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${s.name}`} />
+              }
+            >
+              <MoreHorizontal />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {onEdit && <DropdownMenuItem onClick={() => onEdit(s)}>Edit</DropdownMenuItem>}
+              {onToggleHold && (
+                <DropdownMenuItem onClick={() => onToggleHold(s)}>{s.onHold ? 'Release hold' : 'Put on hold'}</DropdownMenuItem>
+              )}
+              {onToggleStatus && (
+                <DropdownMenuItem onClick={() => onToggleStatus(s)}>{s.status === 'active' ? 'Deactivate' : 'Activate'}</DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null,
     },
   ];
 

@@ -32,6 +32,11 @@ const statusMap: Record<string, { tone: Tone; label: string }> = {
    * src/types/creditNote.ts) use underscores, not v0's own hyphenated
    * mock set — both spellings are kept so this stays a drop-in for either. */
   partially_paid: { tone: 'warning', label: 'Part paid' },
+  /** Real BillStatus (src/types/bill.ts) — not part of v0's own status set (M8). */
+  awaiting_payment: { tone: 'info', label: 'Awaiting payment' },
+  /** Real PurchaseOrderStatus (src/types/purchaseOrder.ts) — not part of v0's own status set (M8). */
+  partially_received: { tone: 'warning', label: 'Partially received' },
+  received: { tone: 'positive', label: 'Received' },
   overdue: { tone: 'critical', label: 'Overdue' },
   disputed: { tone: 'critical', label: 'Disputed' },
   'written-off': { tone: 'neutral', label: 'Written off' },
@@ -82,6 +87,8 @@ const statusMap: Record<string, { tone: Tone; label: string }> = {
   'on-hold': { tone: 'warning', label: 'On hold' },
   inactive: { tone: 'neutral', label: 'Inactive' },
   dormant: { tone: 'neutral', label: 'Dormant' },
+  /** Real EmployeeStatus (src/types/employee.ts) — v0's own party status set has no equivalent (M13). */
+  terminated: { tone: 'critical', label: 'Terminated' },
   archived: { tone: 'neutral', label: 'Archived' },
   invited: { tone: 'info', label: 'Invited' },
   suspended: { tone: 'critical', label: 'Suspended' },
@@ -91,6 +98,8 @@ const statusMap: Record<string, { tone: Tone; label: string }> = {
   'in-storage': { tone: 'neutral', label: 'In storage' },
   'under-repair': { tone: 'warning', label: 'Under repair' },
   disposed: { tone: 'neutral', label: 'Disposed' },
+  /** Real FixedAssetStatus (src/types/fixedAsset.ts) — v0's own asset status set has no equivalent to "fully depreciated but still on the register" (M8). */
+  fully_depreciated: { tone: 'warning', label: 'Fully depreciated' },
   'in-stock': { tone: 'positive', label: 'In stock' },
   'low-stock': { tone: 'warning', label: 'Low stock' },
   'out-of-stock': { tone: 'critical', label: 'Out of stock' },
@@ -104,6 +113,9 @@ const statusMap: Record<string, { tone: Tone; label: string }> = {
   compliant: { tone: 'positive', label: 'Compliant' },
   'due-soon': { tone: 'warning', label: 'Due soon' },
   complete: { tone: 'positive', label: 'Complete' },
+  /** Real DividendDeclarationStatus (src/types/dividendsTax.ts) — v0's own set has no dividends-tax lifecycle at all. `paid` and `draft` above are already the right tone/label for this status set too. */
+  declared: { tone: 'info', label: 'Declared' },
+  remitted: { tone: 'positive', label: 'Remitted' },
 
   /* Periods */
   current: { tone: 'info', label: 'Current' },
@@ -116,6 +128,15 @@ const statusMap: Record<string, { tone: Tone; label: string }> = {
   /* Documents */
   processed: { tone: 'positive', label: 'Processed' },
   'pending-review': { tone: 'warning', label: 'Pending review' },
+
+  /* Sales: Quotes and Sales Orders (M13) — `draft`/`sent`/`cancelled` above
+   * already cover the statuses these share with Invoices; `pending` above
+   * already covers QuoteStatus's SalesOrder counterpart. */
+  accepted: { tone: 'positive', label: 'Accepted' },
+  declined: { tone: 'critical', label: 'Declined' },
+  expired: { tone: 'neutral', label: 'Expired' },
+  confirmed: { tone: 'info', label: 'Confirmed' },
+  fulfilled: { tone: 'positive', label: 'Fulfilled' },
 };
 
 export function StatusBadge({

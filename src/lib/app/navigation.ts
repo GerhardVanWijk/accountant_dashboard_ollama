@@ -7,8 +7,10 @@ import {
   BuildingIcon,
   CalendarRangeIcon,
   ClipboardCheckIcon,
+  ClipboardListIcon,
   CreditCardIcon,
   FileBarChartIcon,
+  FileSignatureIcon,
   FileTextIcon,
   FolderOpenIcon,
   GaugeIcon,
@@ -33,6 +35,9 @@ import {
   UserCogIcon,
   WalletIcon,
   BellIcon,
+  UsersRoundIcon,
+  Building2Icon,
+  KeyRoundIcon,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -95,6 +100,8 @@ export const navGroups: NavGroup[] = [
   {
     title: 'Sales',
     items: [
+      { title: 'Quotes', href: '/sales/quotes', icon: FileSignatureIcon },
+      { title: 'Sales Orders', href: '/sales/orders', icon: ClipboardListIcon },
       { title: 'Invoices', href: '/sales/invoices', icon: FileTextIcon },
       { title: 'Credit Notes', href: '/sales/credit-notes', icon: ReceiptIcon },
       { title: 'Payments', href: '/sales/receipts', icon: BanknoteIcon },
@@ -136,22 +143,25 @@ export const navGroups: NavGroup[] = [
       { title: 'Income Statement', href: '/reports/income-statement', icon: TrendingUpIcon },
       { title: 'Balance Sheet', href: '/reports/balance-sheet', icon: GaugeIcon },
       { title: 'Cash Flow', href: '/reports/cash-flow', icon: FileBarChartIcon },
+      { title: 'Accounts Receivable Aging', href: '/reports/customer-aging', icon: UsersRoundIcon },
+      { title: 'Accounts Payable Aging', href: '/reports/supplier-aging', icon: Building2Icon },
     ],
   },
   {
     title: 'Administration',
     items: [
-      { title: 'Audit Trail', href: '/admin/audit', icon: ArchiveIcon },
+      { title: 'Audit Trail', href: '/admin/audit-trail', icon: ArchiveIcon },
+      { title: 'Access Log', href: '/admin/audit', icon: KeyRoundIcon },
       { title: 'Documents', href: '/documents', icon: FolderOpenIcon, comingSoon: true },
       { title: 'Notifications', href: '/notifications', icon: BellIcon, comingSoon: true },
       { title: 'User Management', href: '/admin/users', icon: UserCogIcon },
-      { title: 'Settings', href: '/settings', icon: SettingsIcon, comingSoon: true },
-      { title: 'Accounting Settings', href: '/settings/accounting', icon: SlidersHorizontalIcon, comingSoon: true },
+      { title: 'Settings', href: '/settings', icon: SettingsIcon },
+      { title: 'Accounting Settings', href: '/settings/accounting', icon: SlidersHorizontalIcon },
     ],
   },
   {
     title: 'Help',
-    items: [{ title: 'Help Centre', href: '/help', icon: HelpCircleIcon, comingSoon: true }],
+    items: [{ title: 'Help Centre', href: '/help', icon: HelpCircleIcon }],
   },
 ];
 
@@ -189,8 +199,11 @@ export const segmentLabels: Record<string, string> = {
   'income-statement': 'Income Statement',
   'balance-sheet': 'Balance Sheet',
   'cash-flow': 'Cash Flow',
+  'customer-aging': 'Accounts Receivable Aging',
+  'supplier-aging': 'Accounts Payable Aging',
   admin: 'Administration',
-  audit: 'Audit Trail',
+  audit: 'Access Log',
+  'audit-trail': 'Audit Trail',
   documents: 'Documents',
   notifications: 'Notifications',
   users: 'User Management',

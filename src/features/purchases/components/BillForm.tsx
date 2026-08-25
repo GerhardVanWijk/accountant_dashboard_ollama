@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import type { Supplier } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { FigureBlock } from '@/components/app/figure';
+import { formatCurrency } from '@/lib/app/format';
 import type { CreateBillDTO } from '../services';
 import { LineItemsEditor } from './LineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface BillFormProps {
   suppliers: Supplier[];
@@ -28,13 +30,13 @@ function plusDays(days: number): string {
 }
 
 /**
- * Standalone Bill create form — this is the ONLY prior route into
- * `billService.createBill()` for a bill with no purchase order behind it
- * (`BillsPage`'s "+ New Bill" button had no handler at all before this).
- * Follows PurchaseOrderForm's exact pattern: draft only, posted separately
- * via BillDetail's "Post Bill" action so `billService.postBill()`'s GL/
- * Inventory-capitalization logic always runs through the real service, per
- * docs/LEDGER_ARCHITECTURE.md's post-then-mutate ordering.
+ * Standalone Bill create form — the only route into `billService.createBill()`
+ * for a bill with no purchase order behind it. Draft only, posted
+ * separately via BillDetail's "Post Bill" action so
+ * `billService.postBill()`'s GL/Inventory-capitalization logic always
+ * runs through the real service. Re-skinned onto v0's Field/Input (M8);
+ * `LineItemsEditor` (shared with Sales/Purchases) is untouched — same
+ * totals computation, same tax-rate/product/warehouse wiring.
  */
 export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel }: BillFormProps) {
   const { taxRates } = useTaxRates();
@@ -87,72 +89,56 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel }: B
   }
 
   return (
-    <div className="flex flex-col gap-lg">
+    <div className="flex flex-col gap-6">
       {formError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+        <p role="alert" className="text-sm text-destructive">
           {formError}
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Bill Number</span>
-          <input className={`${inputClass} font-mono`} value={billNumber} onChange={(e) => setBillNumber(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Supplier</span>
-          <select className={inputClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="bill-number">Bill Number</FieldLabel>
+          <Input id="bill-number" className="font-mono" value={billNumber} onChange={(e) => setBillNumber(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="bill-supplier">Supplier</FieldLabel>
+          <select id="bill-supplier" className={selectClassName} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
             {suppliers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Issue Date</span>
-          <input type="date" className={inputClass} value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Due Date</span>
-          <input type="date" className={inputClass} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-        </label>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="bill-issue-date">Issue Date</FieldLabel>
+          <Input id="bill-issue-date" type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="bill-due-date">Due Date</FieldLabel>
+          <Input id="bill-due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        </Field>
       </div>
 
-      <LineItemsEditor
-        lineItems={lineItems}
-        onChange={setLineItems}
-        taxRates={taxRates}
-        products={products}
-        warehouses={warehouses}
-        allowFixedAssetCapitalization
-      />
+      <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} products={products} warehouses={warehouses} allowFixedAssetCapitalization />
 
-      <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
-        <div>
-          <div className="text-xs text-text-muted">Subtotal</div>
-          <FinancialNumber value={subtotal} format={formatCurrency} className="text-base font-semibold" />
-        </div>
-        <div>
-          <div className="text-xs text-text-muted">Tax</div>
-          <FinancialNumber value={taxTotal} format={formatCurrency} className="text-base font-semibold" />
-        </div>
-        <div>
-          <div className="text-xs text-text-muted">Total</div>
-          <FinancialNumber value={total} format={formatCurrency} className="text-base font-semibold" />
-        </div>
+      <div className="grid grid-cols-3 gap-4 rounded-lg border border-border bg-muted/30 p-4">
+        <FigureBlock label="Subtotal" value={formatCurrency(subtotal)} className="text-base" />
+        <FigureBlock label="Tax" value={formatCurrency(taxTotal)} className="text-base" />
+        <FigureBlock label="Total" value={formatCurrency(total)} className="text-base" />
       </div>
 
-      <label className="flex flex-col gap-xs text-sm">
-        <span className="font-medium text-text-primary">Notes (optional)</span>
-        <textarea className={inputClass} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </label>
+      <Field>
+        <FieldLabel htmlFor="bill-notes">Notes (optional)</FieldLabel>
+        <Textarea id="bill-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      </Field>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="primary" type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
+        <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
           {isSubmitting ? 'Saving…' : 'Create Bill'}
         </Button>
       </div>

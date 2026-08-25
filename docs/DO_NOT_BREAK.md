@@ -70,7 +70,19 @@ DO NOT:
 
 ## Financial UI Patterns (Phase 2+)
 
-**CRITICAL:** All Phase 2+ modules must follow these patterns. See `docs/DESIGN_SYSTEM.md`
+**SUPERSEDED (M9):** This section described the pre-v0-port `FinancialNumber`/
+`formatFinancial.ts` convention (explicit `+`/`-` sign, en-US grouping, no
+currency symbol). Every module ported since M0 (Dashboard, Sales, Purchases,
+Banking, Tax, Assets, Inventory, and — as of M9 — the Reports module) instead
+uses v0's own convention: `Amount`/`FigureBlock`/`formatCurrency`/
+`formatStatementAmount` from `@/lib/app/format` (en-ZA locale, `R 150,00`
+style, no `+`/`-` prefix — negatives shown parenthesized on statement rows via
+`Amount`'s `statement` mode instead). Treat the `Amount`/`FigureBlock`/
+`@/lib/app/format` convention as authoritative for any new or re-skinned
+financial UI going forward; the checklist below is kept for historical
+context, not as an active rule.
+
+**CRITICAL (historical):** All Phase 2+ modules must follow these patterns. See `docs/DESIGN_SYSTEM.md`
 and `mdskills/financial-ui-patterns/SKILL.md`.
 
 DO NOT:

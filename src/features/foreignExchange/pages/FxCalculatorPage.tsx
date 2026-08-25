@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { fieldHint, fieldInput, fieldLabel } from '../components/formStyles';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Amount } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { formatCurrency } from '@/lib/app/format';
 import { exchangeRateService } from '../services';
 import { calculateRealizedFxGainLoss, calculateUnrealizedFxGainLoss, type FxPositionType } from '../services/fxCalculations';
 
@@ -16,9 +17,7 @@ function today(): string {
 /**
  * A genuinely standalone FX gain/loss calculator — works with zero other
  * module dependencies, pure client-side arithmetic on user-typed numbers
- * via fxCalculations.ts (SA_ACCOUNTING_MASTER_SPEC.md §33). Route
- * `/foreign-exchange/calculator` (wired centrally by a later Queen
- * integration pass).
+ * via fxCalculations.ts. Route `/foreign-exchange/calculator`.
  *
  * SCOPE NOTE: this tool does not read from, or post to, any real
  * Invoice/Bill/Customer/Supplier/BankAccount — none of those types carry a
@@ -26,7 +25,9 @@ function today(): string {
  * "look up rates" section below is a real integration with THIS module's
  * own ExchangeRateService (exchangeRateService.getRateForDate()) only —
  * it never invents or interpolates a rate: if no rate is on file for a
- * date, it says so and leaves the rate field for manual entry.
+ * date, it says so and leaves the rate field for manual entry. Re-skinned
+ * onto v0's PageHeader/SectionCard/Field (M13); no new calculation logic —
+ * fxCalculations.ts is the sole source of the gain/loss figure.
  */
 export function FxCalculatorPage() {
   const [foreignAmount, setForeignAmount] = useState(1000);
@@ -86,134 +87,115 @@ export function FxCalculatorPage() {
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">FX Calculator</h1>
-        <p className="mt-xs text-sm text-text-secondary">
-          Realized and unrealized foreign exchange gain/loss (SA_ACCOUNTING_MASTER_SPEC.md §33). A standalone tool —
-          it does not read or post to any Invoice, Bill, Customer, Supplier, or Bank Account; this codebase does not
-          yet support a foreign transaction currency on those documents. Everything below is either typed in
-          directly or looked up from this module's own Exchange Rates register.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="FX calculator"
+        description="Realized and unrealized foreign exchange gain/loss. A standalone tool — it does not read or post to any Invoice, Bill, Customer, Supplier, or Bank Account; this codebase does not yet support a foreign transaction currency on those documents."
+      />
 
-      <Card className="flex flex-col gap-md">
-        <h2 className="text-sm font-semibold text-text-primary">Optional: auto-fill rates from the Exchange Rates register</h2>
-        <div className="grid grid-cols-1 gap-md md:grid-cols-4">
-          <label>
-            <span className={fieldLabel}>From Currency</span>
-            <input className={`${fieldInput} font-mono uppercase`} value={fromCurrency} onChange={(e) => setFromCurrency(e.target.value)} />
-          </label>
-          <label>
-            <span className={fieldLabel}>To Currency</span>
-            <input className={`${fieldInput} font-mono uppercase`} value={toCurrency} onChange={(e) => setToCurrency(e.target.value)} />
-          </label>
-          <label>
-            <span className={fieldLabel}>Recognition Date</span>
-            <input type="date" className={fieldInput} value={recognitionDate} onChange={(e) => setRecognitionDate(e.target.value)} />
-          </label>
-          <label>
-            <span className={fieldLabel}>{mode === 'realized' ? 'Settlement Date' : 'Revaluation Date'}</span>
-            <input type="date" className={fieldInput} value={settlementDate} onChange={(e) => setSettlementDate(e.target.value)} />
-          </label>
+      <SectionCard title="Optional: auto-fill rates from the Exchange Rates register">
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <Field>
+              <FieldLabel htmlFor="fx-calc-from">From Currency</FieldLabel>
+              <Input id="fx-calc-from" className="font-mono uppercase" value={fromCurrency} onChange={(e) => setFromCurrency(e.target.value)} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="fx-calc-to">To Currency</FieldLabel>
+              <Input id="fx-calc-to" className="font-mono uppercase" value={toCurrency} onChange={(e) => setToCurrency(e.target.value)} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="fx-calc-recognition-date">Recognition Date</FieldLabel>
+              <Input id="fx-calc-recognition-date" type="date" value={recognitionDate} onChange={(e) => setRecognitionDate(e.target.value)} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="fx-calc-settlement-date">{mode === 'realized' ? 'Settlement Date' : 'Revaluation Date'}</FieldLabel>
+              <Input id="fx-calc-settlement-date" type="date" value={settlementDate} onChange={(e) => setSettlementDate(e.target.value)} />
+            </Field>
+          </div>
+          <div>
+            <Button type="button" variant="outline" size="sm" disabled={isLookingUp} onClick={() => void handleLookup()}>
+              {isLookingUp ? 'Looking up…' : 'Look up rates'}
+            </Button>
+          </div>
+          {lookupMessage && <p className="text-sm text-muted-foreground">{lookupMessage}</p>}
         </div>
-        <div>
-          <Button variant="secondary" type="button" onClick={() => void handleLookup()} disabled={isLookingUp}>
-            {isLookingUp ? 'Looking up…' : 'Look Up Rates'}
-          </Button>
-        </div>
-        {lookupMessage && <p className={fieldHint}>{lookupMessage}</p>}
-      </Card>
+      </SectionCard>
 
-      <Card className="flex flex-col gap-md">
-        <div className="flex flex-wrap gap-lg">
-          <fieldset className="flex flex-col gap-xs">
-            <legend className={fieldLabel}>Calculation</legend>
-            <div className="flex gap-md text-sm">
-              <label className="flex items-center gap-xs">
-                <input type="radio" name="mode" checked={mode === 'realized'} onChange={() => setMode('realized')} />
-                Realized (actual settlement)
-              </label>
-              <label className="flex items-center gap-xs">
-                <input type="radio" name="mode" checked={mode === 'unrealized'} onChange={() => setMode('unrealized')} />
-                Unrealized (period-end revaluation)
-              </label>
+      <SectionCard>
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-wrap gap-6">
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-medium">Calculation</legend>
+              <div className="flex gap-4 text-sm">
+                <label className="flex items-center gap-1.5">
+                  <input type="radio" name="mode" className="accent-primary" checked={mode === 'realized'} onChange={() => setMode('realized')} />
+                  Realized (actual settlement)
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input type="radio" name="mode" className="accent-primary" checked={mode === 'unrealized'} onChange={() => setMode('unrealized')} />
+                  Unrealized (period-end revaluation)
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-medium">Position Type</legend>
+              <div className="flex gap-4 text-sm">
+                <label className="flex items-center gap-1.5">
+                  <input type="radio" name="positionType" className="accent-primary" checked={positionType === 'asset'} onChange={() => setPositionType('asset')} />
+                  Asset (e.g. foreign receivable)
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input type="radio" name="positionType" className="accent-primary" checked={positionType === 'liability'} onChange={() => setPositionType('liability')} />
+                  Liability (e.g. foreign payable)
+                </label>
+              </div>
+            </fieldset>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <Field>
+              <FieldLabel htmlFor="fx-calc-amount">Foreign Amount</FieldLabel>
+              <Input id="fx-calc-amount" type="number" step="0.01" className="text-right" value={foreignAmount} onChange={(e) => setForeignAmount(parseFloat(e.target.value) || 0)} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="fx-calc-rate-recognition">Rate at Recognition</FieldLabel>
+              <Input id="fx-calc-rate-recognition" type="number" step="0.0001" className="text-right" value={rateAtRecognition} onChange={(e) => setRateAtRecognition(parseFloat(e.target.value) || 0)} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="fx-calc-rate-settlement">{mode === 'realized' ? 'Rate at Settlement' : 'Rate at Revaluation'}</FieldLabel>
+              <Input id="fx-calc-rate-settlement" type="number" step="0.0001" className="text-right" value={rateAtSettlement} onChange={(e) => setRateAtSettlement(parseFloat(e.target.value) || 0)} />
+            </Field>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Result">
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Value at recognition</span>
+              <span className="figure text-sm tabular-nums">{formatCurrency(valueAtRecognition)}</span>
             </div>
-          </fieldset>
-
-          <fieldset className="flex flex-col gap-xs">
-            <legend className={fieldLabel}>Position Type</legend>
-            <div className="flex gap-md text-sm">
-              <label className="flex items-center gap-xs">
-                <input type="radio" name="positionType" checked={positionType === 'asset'} onChange={() => setPositionType('asset')} />
-                Asset (e.g. foreign receivable)
-              </label>
-              <label className="flex items-center gap-xs">
-                <input type="radio" name="positionType" checked={positionType === 'liability'} onChange={() => setPositionType('liability')} />
-                Liability (e.g. foreign payable)
-              </label>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Value at {mode === 'realized' ? 'settlement' : 'revaluation'}</span>
+              <span className="figure text-sm tabular-nums">{formatCurrency(valueAtSettlement)}</span>
             </div>
-          </fieldset>
-        </div>
-
-        <div className="grid grid-cols-1 gap-md md:grid-cols-3">
-          <label>
-            <span className={fieldLabel}>Foreign Amount</span>
-            <input
-              type="number"
-              step="0.01"
-              className={`${fieldInput} text-right tabular-nums`}
-              value={foreignAmount}
-              onChange={(e) => setForeignAmount(parseFloat(e.target.value) || 0)}
-            />
-          </label>
-          <label>
-            <span className={fieldLabel}>Rate at Recognition</span>
-            <input
-              type="number"
-              step="0.0001"
-              className={`${fieldInput} text-right tabular-nums`}
-              value={rateAtRecognition}
-              onChange={(e) => setRateAtRecognition(parseFloat(e.target.value) || 0)}
-            />
-          </label>
-          <label>
-            <span className={fieldLabel}>{mode === 'realized' ? 'Rate at Settlement' : 'Rate at Revaluation'}</span>
-            <input
-              type="number"
-              step="0.0001"
-              className={`${fieldInput} text-right tabular-nums`}
-              value={rateAtSettlement}
-              onChange={(e) => setRateAtSettlement(parseFloat(e.target.value) || 0)}
-            />
-          </label>
-        </div>
-      </Card>
-
-      <Card className="flex flex-col gap-sm">
-        <h2 className="text-sm font-semibold text-text-primary">Result</h2>
-        <div className="grid grid-cols-1 gap-sm text-sm md:grid-cols-3">
-          <div className="flex flex-col gap-xs">
-            <span className="text-text-secondary">Value at recognition</span>
-            <span className="tabular-nums font-mono text-text-primary">{formatCurrency(valueAtRecognition)}</span>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                {mode === 'realized' ? 'Realized' : 'Unrealized'} FX Gain/(Loss) — {positionType}
+              </span>
+              <Amount value={gainLoss} statement className="text-base font-semibold" />
+            </div>
           </div>
-          <div className="flex flex-col gap-xs">
-            <span className="text-text-secondary">Value at {mode === 'realized' ? 'settlement' : 'revaluation'}</span>
-            <span className="tabular-nums font-mono text-text-primary">{formatCurrency(valueAtSettlement)}</span>
-          </div>
-          <div className="flex flex-col gap-xs">
-            <span className="text-text-secondary">
-              {mode === 'realized' ? 'Realized' : 'Unrealized'} FX Gain/(Loss) — {positionType}
-            </span>
-            <FinancialNumber value={gainLoss} format={formatCurrency} className="font-mono text-base" />
-          </div>
+          <FieldDescription>
+            {positionType === 'asset'
+              ? 'Asset position: the rate rising between the two dates is a GAIN (each foreign-currency unit converts to more).'
+              : 'Liability position: the rate rising between the two dates is a LOSS (settling the same foreign-currency debt now costs more).'}
+          </FieldDescription>
         </div>
-        <p className={fieldHint}>
-          {positionType === 'asset'
-            ? 'Asset position: the rate rising between the two dates is a GAIN (each foreign-currency unit converts to more).'
-            : 'Liability position: the rate rising between the two dates is a LOSS (settling the same foreign-currency debt now costs more).'}
-        </p>
-      </Card>
+      </SectionCard>
     </div>
   );
 }

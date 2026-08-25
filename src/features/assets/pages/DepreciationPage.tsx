@@ -1,14 +1,12 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { Loader2, Play } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useDepreciation } from '../hooks/useDepreciation';
 import { useFixedAssets } from '../hooks/useFixedAssets';
 import { RunDepreciationForm } from '../components/RunDepreciationForm';
 import { DepreciationHistoryTable } from '../components/DepreciationHistoryTable';
-import { Modal } from '../components/Modal';
 
 function endOfCurrentMonth(): string {
   const now = new Date();
@@ -16,7 +14,14 @@ function endOfCurrentMonth(): string {
   return end.toISOString().slice(0, 10);
 }
 
-/** Depreciation — route `/assets/depreciation` (docs/ROUTES.md). */
+/**
+ * Depreciation — route `/assets/depreciation`. Real
+ * useDepreciation()/depreciationService data; the run action posts one
+ * combined journal entry via the existing service, no depreciation math
+ * lives in this page. No literal v0 template exists for this report —
+ * re-skinned onto v0's general PageHeader/SectionCard/Dialog language
+ * (M8), same precedent as M3's General Ledger.
+ */
 export function DepreciationPage() {
   const { history, loading, error, refetch, runDepreciation } = useDepreciation();
   const { assets, loading: assetsLoading } = useFixedAssets();
@@ -44,54 +49,64 @@ export function DepreciationPage() {
   };
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Depreciation</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Run periodic depreciation and review the posting history. /assets/depreciation
-          </p>
-        </div>
-        <div className="flex items-center gap-sm">
-          <span className="text-sm text-text-secondary">{activeCount} active asset{activeCount === 1 ? '' : 's'}</span>
-          <Button onClick={() => setRunDialogOpen(true)} disabled={busy}>
-            Run Depreciation
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Depreciation"
+        description="Run periodic depreciation and review the posting history."
+        actions={
+          <Button size="sm" disabled={busy} onClick={() => setRunDialogOpen(true)}>
+            <Play data-icon="inline-start" />
+            Run depreciation
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {actionError}
         </p>
       )}
       {lastRunMessage && (
-        <p role="status" className="rounded-md border border-border bg-positive/10 px-md py-sm text-sm text-positive">
+        <p role="status" className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">
           {lastRunMessage}
         </p>
       )}
 
-      {busy && <Spinner label="Loading depreciation history…" />}
-      {!busy && error && <ErrorState message={error.message} onRetry={refetch} />}
+      <SectionCard>
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{activeCount}</span> active asset{activeCount === 1 ? '' : 's'} eligible for depreciation.
+        </p>
+      </SectionCard>
+
+      {busy && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading depreciation history…</p>
+        </div>
+      )}
+      {!busy && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       {!busy && !error && (
-        <Card>
-          {history.length === 0 ? (
-            <EmptyState
-              title="No depreciation posted yet"
-              message="Run depreciation once an asset has been capitalized on the Asset Register."
-            />
-          ) : (
-            <DepreciationHistoryTable entries={history} assets={assets} />
-          )}
-        </Card>
+        <SectionCard title="Posting history" description="Every depreciation charge posted so far, most recent first.">
+          <DepreciationHistoryTable entries={history} assets={assets} />
+        </SectionCard>
       )}
 
-      {runDialogOpen && (
-        <Modal title="Run Depreciation" onClose={() => setRunDialogOpen(false)}>
+      <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Run Depreciation</DialogTitle>
+          </DialogHeader>
           <RunDepreciationForm defaultPeriodEnd={endOfCurrentMonth()} onSubmit={handleRun} onCancel={() => setRunDialogOpen(false)} />
-        </Modal>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { cn } from '@/utils/cn';
+import { Loader2 } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
+import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { formatCurrency } from '@/lib/app/format';
 import { useCompany } from '@/features/admin/hooks/useCompany';
 import { useCapitalGainsReport } from '../hooks/useCapitalGainsReport';
 import { CapitalGainsTable } from '../components/CapitalGainsTable';
@@ -41,12 +40,12 @@ function endOfDay(value: string): Date {
 }
 
 /**
- * Capital Gains Tax (SA_ACCOUNTING_MASTER_SPEC.md §55) — route
- * `/tax/capital-gains`. A read-only reconciliation report: computes the
- * TAXABLE capital gain on fixed-asset disposals in a chosen period,
- * shown side by side with the ACCOUNTING gain/loss already posted by
- * assetDisposalService, so the two are never conflated. Posts nothing to
- * the GL.
+ * Capital Gains Tax — route `/tax/capital-gains`. A read-only
+ * reconciliation report: computes the TAXABLE capital gain on fixed-asset
+ * disposals in a chosen period, shown side by side with the ACCOUNTING
+ * gain/loss already posted by assetDisposalService, so the two are never
+ * conflated. Posts nothing to the GL. Re-skinned onto v0's
+ * PageHeader/SectionCard (M7); data/mutation wiring unchanged.
  */
 export function CapitalGainsPage() {
   const { company, loading: companyLoading } = useCompany();
@@ -70,129 +69,97 @@ export function CapitalGainsPage() {
   const busy = companyLoading || loading;
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Capital Gains Tax</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Taxable capital gains on fixed-asset disposals, separate from the accounting gain/loss already posted
-            to the GL. /tax/capital-gains
-          </p>
-        </div>
-        <div className="flex flex-wrap items-end gap-sm">
-          <label className="flex flex-col gap-xs text-sm">
-            <span className="text-xs text-text-secondary">Period start</span>
-            <input
-              type="date"
-              aria-label="Period start"
-              className="rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              value={startInput}
-              max={endInput}
-              onChange={(e) => setStartInput(e.target.value)}
-            />
-          </label>
-          <label className="flex flex-col gap-xs text-sm">
-            <span className="text-xs text-text-secondary">Period end</span>
-            <input
-              type="date"
-              aria-label="Period end"
-              className="rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              value={endInput}
-              min={startInput}
-              onChange={(e) => setEndInput(e.target.value)}
-            />
-          </label>
-          <Button variant="ghost" onClick={resetToCurrentTaxYear}>
-            Current Tax Year
-          </Button>
-          <Button variant="ghost" onClick={refetch}>
-            Refresh
-          </Button>
-        </div>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Capital Gains Tax"
+        description="Taxable capital gains on fixed-asset disposals, separate from the accounting gain/loss already posted to the GL."
+        actions={
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-xs text-muted-foreground">Period start</span>
+              <Input type="date" aria-label="Period start" value={startInput} max={endInput} onChange={(e) => setStartInput(e.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-xs text-muted-foreground">Period end</span>
+              <Input type="date" aria-label="Period end" value={endInput} min={startInput} onChange={(e) => setEndInput(e.target.value)} />
+            </label>
+            <Button variant="outline" onClick={resetToCurrentTaxYear}>
+              Current Tax Year
+            </Button>
+            <Button variant="outline" onClick={refetch}>
+              Refresh
+            </Button>
+          </div>
+        }
+      />
 
-      {busy && <Spinner label="Computing Capital Gains Tax report…" />}
-      {!busy && error && <ErrorState message={error.message} onRetry={refetch} />}
+      {busy && (
+        <div role="status" className="flex min-h-[30vh] items-center justify-center gap-2 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <span className="text-sm">Computing Capital Gains Tax report…</span>
+        </div>
+      )}
+      {!busy && error && (
+        <SectionCard>
+          <p role="alert" className="text-sm text-destructive">
+            {error.message}
+          </p>
+          <Button variant="outline" className="mt-3" onClick={refetch}>
+            Retry
+          </Button>
+        </SectionCard>
+      )}
 
       {!busy && !error && report && (
         <>
-          {report.configWarnings.length > 0 && (
-            <div className="flex flex-col gap-xs">
-              {report.configWarnings.map((warning, i) => (
-                <p
-                  key={i}
-                  role="alert"
-                  className="rounded-md border border-warning bg-warning/10 px-md py-sm text-sm text-warning-financial"
-                >
-                  {warning}
-                </p>
-              ))}
-            </div>
-          )}
+          {report.configWarnings.map((warning, i) => (
+            <p key={i} role="alert" className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
+              {warning}
+            </p>
+          ))}
 
           {report.unresolvedDisposalCount > 0 && (
-            <p role="alert" className="rounded-md border border-warning bg-warning/10 px-md py-sm text-sm text-warning-financial">
-              {report.unresolvedDisposalCount} disposal{report.unresolvedDisposalCount === 1 ? '' : 's'} in this period could not be
-              matched to a Fixed Asset record and {report.unresolvedDisposalCount === 1 ? 'was' : 'were'} excluded from this report.
+            <p role="alert" className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
+              {report.unresolvedDisposalCount} disposal{report.unresolvedDisposalCount === 1 ? '' : 's'} in this period could not be matched to a Fixed Asset record and{' '}
+              {report.unresolvedDisposalCount === 1 ? 'was' : 'were'} excluded from this report.
             </p>
           )}
 
-          <div className="grid grid-cols-1 gap-md sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">Net Capital Gain / Loss</p>
-              <p className="mt-xs text-xl font-semibold tabular-nums">
-                <FinancialNumber value={report.netCapitalGainLoss} format={formatCurrency} showFlash={false} />
-              </p>
-              {report.netCapitalLossForPeriod > 0 && (
-                <p className="mt-xs text-xs text-text-muted">
-                  Net capital loss of <FinancialNumber value={report.netCapitalLossForPeriod} format={formatCurrency} showFlash={false} />{' '}
-                  for the period — not carried forward by this app (see gaps below).
-                </p>
-              )}
-            </Card>
-            <Card>
-              <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-                Annual Exclusion {report.annualExclusionEligible ? 'Applied' : '(N/A)'}
-              </p>
-              <p className="mt-xs text-xl font-semibold tabular-nums">
-                <FinancialNumber value={report.annualExclusionApplied} format={formatCurrency} showFlash={false} />
-              </p>
-              {report.annualExclusionEligible && (
-                <p className="mt-xs text-xs text-text-muted">
-                  Of <FinancialNumber value={report.annualExclusionAvailable} format={formatCurrency} showFlash={false} /> available
-                </p>
-              )}
-            </Card>
-            <Card>
-              <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">Inclusion Rate</p>
-              <p className="mt-xs text-xl font-semibold tabular-nums text-text-primary">{report.inclusionRatePercent}%</p>
-              <p className="mt-xs text-xs text-text-muted">{ENTITY_BUCKET_LABELS[report.entityTypeBucket]}</p>
-            </Card>
-            <Card>
-              <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">Taxable Capital Gain</p>
-              <p className="mt-xs text-xl font-semibold tabular-nums text-text-primary">{formatCurrency(report.taxableCapitalGain)}</p>
-            </Card>
-          </div>
-
-          <Card>
-            {report.disposals.length === 0 ? (
-              <EmptyState title="No disposals in this period" message="Choose a different period, or dispose of a fixed asset to see it reconciled here." />
-            ) : (
-              <CapitalGainsTable
-                disposals={report.disposals}
-                onSellingCostsChange={(disposalId, sellingCosts) => setSellingCosts(disposalId, sellingCosts)}
+          <SectionCard>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <FigureBlock
+                label="Net Capital Gain / Loss"
+                value={formatCurrency(report.netCapitalGainLoss)}
+                hint={report.netCapitalLossForPeriod > 0 ? `Net capital loss of ${formatCurrency(report.netCapitalLossForPeriod)} for the period — not carried forward by this app` : undefined}
               />
-            )}
-          </Card>
+              <FigureBlock
+                label={`Annual Exclusion ${report.annualExclusionEligible ? 'Applied' : '(N/A)'}`}
+                value={formatCurrency(report.annualExclusionApplied)}
+                hint={report.annualExclusionEligible ? `Of ${formatCurrency(report.annualExclusionAvailable)} available` : undefined}
+              />
+              <FigureBlock label="Inclusion Rate" value={`${report.inclusionRatePercent}%`} hint={ENTITY_BUCKET_LABELS[report.entityTypeBucket]} />
+              <FigureBlock label="Taxable Capital Gain" value={formatCurrency(report.taxableCapitalGain)} />
+            </div>
+          </SectionCard>
 
-          <Card className={cn('text-sm text-text-secondary')}>
-            <h2 className="mb-sm text-sm font-semibold text-text-primary">Simplifications &amp; Open Gaps</h2>
-            <ul className="list-inside list-disc space-y-xs">
+          <SectionCard>
+            {report.disposals.length === 0 ? (
+              <Empty>
+                <EmptyTitle>No disposals in this period</EmptyTitle>
+                <EmptyDescription>Choose a different period, or dispose of a fixed asset to see it reconciled here.</EmptyDescription>
+              </Empty>
+            ) : (
+              <CapitalGainsTable disposals={report.disposals} onSellingCostsChange={(disposalId, sellingCosts) => setSellingCosts(disposalId, sellingCosts)} />
+            )}
+          </SectionCard>
+
+          <SectionCard title="Simplifications & Open Gaps">
+            <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
               {report.simplificationNotes.map((note, i) => (
                 <li key={i}>{note}</li>
               ))}
             </ul>
-          </Card>
+          </SectionCard>
         </>
       )}
     </div>

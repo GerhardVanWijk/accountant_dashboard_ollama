@@ -1,20 +1,19 @@
 import { useState } from 'react';
+import { Loader2, Plus } from 'lucide-react';
 import type { Warehouse } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Icon } from '@/components/ui/Icon';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useWarehouses } from '../hooks/useWarehouses';
 import { useProducts } from '../hooks/useProducts';
 import { useStockMovements } from '../hooks/useStockMovements';
 import { WarehouseForm } from '../components/WarehouseForm';
+import { WarehousesTable } from '../components/WarehousesTable';
 import { StockByWarehouseTable } from '../components/StockByWarehouseTable';
 import { StockTransferForm } from '../components/StockTransferForm';
 import { StockAdjustmentForm } from '../components/StockAdjustmentForm';
-import { Modal } from '../components/Modal';
 import type { CreateWarehouseDTO, UpdateWarehouseDTO } from '../services/warehouseService';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 type DialogState =
   | { mode: 'create-warehouse' }
@@ -23,7 +22,14 @@ type DialogState =
   | { mode: 'adjust' }
   | null;
 
-/** Multi-Warehouse Stock — route `/inventory/warehouses` (docs/ROUTES.md). */
+/**
+ * Multi-Warehouse Stock — route `/inventory/warehouses`. Real
+ * useWarehouses()/useStockMovements() data throughout — all stock
+ * quantities come from the stock movement ledger via stockService, never
+ * computed here. No literal v0 template exists for multi-warehouse
+ * stock — re-skinned onto v0's general PageHeader/SectionCard/Dialog
+ * language (M8).
+ */
 export function WarehousesPage() {
   const {
     warehouses,
@@ -45,6 +51,9 @@ export function WarehousesPage() {
   } = useStockMovements();
 
   const [dialog, setDialog] = useState<DialogState>(null);
+  const canCreate = useCanAccess('inventory', 'create');
+  const canUpdate = useCanAccess('inventory', 'update');
+  const canDelete = useCanAccess('inventory', 'delete');
 
   const loading = warehousesLoading || productsLoading || movementsLoading;
   const error = warehousesError ?? productsError ?? movementsError;
@@ -65,149 +74,117 @@ export function WarehousesPage() {
   };
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Multi-Warehouse Stock</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Warehouses, stock-by-location, transfers, and adjustments. /inventory/warehouses
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-sm">
-          <Button variant="secondary" onClick={() => setDialog({ mode: 'adjust' })}>
-            Stock Adjustment
-          </Button>
-          <Button variant="secondary" onClick={() => setDialog({ mode: 'transfer' })}>
-            Stock Transfer
-          </Button>
-          <Button onClick={() => setDialog({ mode: 'create-warehouse' })}>New Warehouse</Button>
-        </div>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Multi-warehouse stock"
+        description="Warehouses, stock by location, transfers and adjustments."
+        actions={
+          canCreate || canUpdate ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {canUpdate && (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => setDialog({ mode: 'adjust' })}>
+                    Stock adjustment
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setDialog({ mode: 'transfer' })}>
+                    Stock transfer
+                  </Button>
+                </>
+              )}
+              {canCreate && (
+                <Button size="sm" onClick={() => setDialog({ mode: 'create-warehouse' })}>
+                  <Plus data-icon="inline-start" />
+                  New warehouse
+                </Button>
+              )}
+            </div>
+          ) : undefined
+        }
+      />
 
-      {loading && <Spinner label="Loading warehouse data…" />}
-      {!loading && error && <ErrorState message={error.message} onRetry={refetchWarehouses} />}
+      {loading && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading warehouse data…</p>
+        </div>
+      )}
+      {!loading && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetchWarehouses()}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       {!loading && !error && (
         <>
-          <Card>
-            <h2 className="mb-md flex items-center gap-sm text-base font-semibold text-text-primary">
-              <Icon name="warehouses" size={18} />
-              Warehouses
-            </h2>
-            {warehouses.length === 0 ? (
-              <EmptyState
-                title="No warehouses yet"
-                message="Add a warehouse to start allocating stock."
-                action={<Button onClick={() => setDialog({ mode: 'create-warehouse' })}>New Warehouse</Button>}
-              />
-            ) : (
-              <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[600px] border-collapse text-left text-sm">
-                  <thead className="bg-background">
-                    <tr>
-                      <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Name</th>
-                      <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Code</th>
-                      <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Location</th>
-                      <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Default</th>
-                      <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Status</th>
-                      <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {warehouses.map((w) => (
-                      <tr key={w.id} className="border-t border-border hover:bg-background">
-                        <td className="whitespace-nowrap px-md py-sm text-text-primary">{w.name}</td>
-                        <td className="whitespace-nowrap px-md py-sm text-text-primary">{w.code}</td>
-                        <td className="whitespace-nowrap px-md py-sm text-text-primary">
-                          {w.address?.city ?? '—'}
-                        </td>
-                        <td className="whitespace-nowrap px-md py-sm text-text-primary">
-                          {w.isDefault ? (
-                            <span className="inline-flex items-center rounded-full bg-primary px-sm py-0.5 text-xs font-medium text-on-accent">
-                              Default
-                            </span>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-md py-sm text-text-primary capitalize">{w.status}</td>
-                        <td className="whitespace-nowrap px-md py-sm">
-                          <div className="flex justify-end gap-sm">
-                            <button
-                              type="button"
-                              onClick={() => setDialog({ mode: 'edit-warehouse', warehouse: w })}
-                              className="rounded-md px-sm py-xs text-xs font-medium text-primary hover:underline"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteWarehouse(w)}
-                              className="rounded-md px-sm py-xs text-xs font-medium text-danger hover:underline"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
+          <SectionCard title="Warehouses" description="Every stock location and its default/active status.">
+            <WarehousesTable
+              warehouses={warehouses}
+              onEdit={canUpdate ? (warehouse) => setDialog({ mode: 'edit-warehouse', warehouse }) : undefined}
+              onDelete={canDelete ? (warehouse) => void handleDeleteWarehouse(warehouse) : undefined}
+            />
+          </SectionCard>
 
-          <Card>
-            <h2 className="mb-md text-base font-semibold text-text-primary">Stock by Warehouse</h2>
+          <SectionCard title="Stock by warehouse" description="Quantity on hand for every tracked product, per location.">
             <StockByWarehouseTable products={products} warehouses={warehouses} stockLevels={stockLevels} />
-          </Card>
+          </SectionCard>
         </>
       )}
 
-      {(dialog?.mode === 'create-warehouse' || dialog?.mode === 'edit-warehouse') && (
-        <Modal
-          title={dialog.mode === 'edit-warehouse' ? 'Edit Warehouse' : 'New Warehouse'}
-          onClose={() => setDialog(null)}
-        >
-          <WarehouseForm
-            warehouse={dialog.mode === 'edit-warehouse' ? dialog.warehouse : undefined}
-            onSubmit={handleWarehouseSubmit}
-            onCancel={() => setDialog(null)}
-          />
-        </Modal>
-      )}
+      <Dialog open={dialog?.mode === 'create-warehouse' || dialog?.mode === 'edit-warehouse'} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{dialog?.mode === 'edit-warehouse' ? 'Edit Warehouse' : 'New Warehouse'}</DialogTitle>
+          </DialogHeader>
+          {(dialog?.mode === 'create-warehouse' || dialog?.mode === 'edit-warehouse') && (
+            <WarehouseForm warehouse={dialog.mode === 'edit-warehouse' ? dialog.warehouse : undefined} onSubmit={handleWarehouseSubmit} onCancel={() => setDialog(null)} />
+          )}
+        </DialogContent>
+      </Dialog>
 
-      {dialog?.mode === 'transfer' && (
-        <Modal title="Stock Transfer" onClose={() => setDialog(null)}>
-          <StockTransferForm
-            products={products}
-            warehouses={warehouses}
-            onSubmit={async (input) => {
-              await transferStock(input);
-              setDialog(null);
-            }}
-            onCancel={() => setDialog(null)}
-          />
-        </Modal>
-      )}
+      <Dialog open={dialog?.mode === 'transfer'} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Stock Transfer</DialogTitle>
+          </DialogHeader>
+          {dialog?.mode === 'transfer' && (
+            <StockTransferForm
+              products={products}
+              warehouses={warehouses}
+              onSubmit={async (input) => {
+                await transferStock(input);
+                setDialog(null);
+              }}
+              onCancel={() => setDialog(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
-      {dialog?.mode === 'adjust' && (
-        <Modal title="Stock Adjustment" onClose={() => setDialog(null)}>
-          <StockAdjustmentForm
-            products={products}
-            warehouses={warehouses}
-            onSubmitAdjustment={async (input) => {
-              await adjustStock(input);
-              setDialog(null);
-            }}
-            onSubmitOpening={async (input) => {
-              await recordOpeningStock(input);
-              setDialog(null);
-            }}
-            onCancel={() => setDialog(null)}
-          />
-        </Modal>
-      )}
+      <Dialog open={dialog?.mode === 'adjust'} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Stock Adjustment</DialogTitle>
+          </DialogHeader>
+          {dialog?.mode === 'adjust' && (
+            <StockAdjustmentForm
+              products={products}
+              warehouses={warehouses}
+              onSubmitAdjustment={async (input) => {
+                await adjustStock(input);
+                setDialog(null);
+              }}
+              onSubmitOpening={async (input) => {
+                await recordOpeningStock(input);
+                setDialog(null);
+              }}
+              onCancel={() => setDialog(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

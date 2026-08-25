@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { Employee } from '@/types';
 import { EmployeesPage } from './EmployeesPage';
 import { employeeService } from '../services';
+import { useAuthStore } from '@/stores/authStore';
 
 vi.mock('../services', () => ({
   employeeService: {
@@ -40,6 +41,11 @@ function makeEmployee(overrides: Partial<Employee> = {}): Employee {
 describe('EmployeesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // M11: page actions are now gated by useCanAccess('payroll', ...) — an
+    // admin bypasses fine-grained permission checks (see docs/PERMISSIONS.md),
+    // so tests exercising the create/edit/delete flows sign in as one rather
+    // than threading a fine-grained permission grant through every test.
+    useAuthStore.setState({ profile: { id: 'u1', role: 'admin', companyId: 'c1', isActive: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' } });
   });
 
   it('shows a loading state while employees are being fetched', () => {

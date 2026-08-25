@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { fieldHint, fieldInput, fieldLabel } from './formStyles';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
 
 export interface RunAmortizationFormProps {
   defaultPeriodEnd: string;
@@ -11,7 +12,8 @@ export interface RunAmortizationFormProps {
 /**
  * Triggers leaseAmortizationService.runAmortization() for the chosen
  * period-end date across every eligible active lease in one combined
- * journal entry — mirrors src/features/assets/components/RunDepreciationForm.tsx.
+ * journal entry — mirrors RunDepreciationForm.tsx. Re-skinned onto v0's
+ * Field/Input (M13); no lease math here.
  */
 export function RunAmortizationForm({ defaultPeriodEnd, onSubmit, onCancel }: RunAmortizationFormProps) {
   const [periodEnd, setPeriodEnd] = useState(defaultPeriodEnd);
@@ -27,29 +29,21 @@ export function RunAmortizationForm({ defaultPeriodEnd, onSubmit, onCancel }: Ru
   };
 
   return (
-    <div className="flex flex-col gap-md">
-      <div>
-        <label className={fieldLabel} htmlFor="periodEnd">
-          Period End Date
-        </label>
-        <input
-          id="periodEnd"
-          type="date"
-          className={fieldInput}
-          value={periodEnd}
-          onChange={(e) => setPeriodEnd(e.target.value)}
-        />
-        <p className={fieldHint}>
-          Amortizes every active lease not already run for this exact date, one month's interest/principal split and
-          ROU depreciation charge each. Running twice for the same date is safe — the second run finds nothing left to
-          do.
-        </p>
-      </div>
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+    <div className="flex flex-col gap-4">
+      <Field>
+        <FieldLabel htmlFor="periodEnd">Period End Date</FieldLabel>
+        <Input id="periodEnd" type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+        <FieldDescription>
+          Amortizes every active lease not already run for this exact date, one month&apos;s interest/principal
+          split and ROU depreciation charge each. Running twice for the same date is safe — the second run finds
+          nothing left to do.
+        </FieldDescription>
+      </Field>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="button" onClick={submit} disabled={submitting || !periodEnd}>
+        <Button type="button" disabled={submitting || !periodEnd} onClick={() => void submit()}>
           Run Amortization
         </Button>
       </div>

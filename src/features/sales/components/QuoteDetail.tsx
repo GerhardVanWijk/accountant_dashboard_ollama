@@ -1,16 +1,26 @@
-import React from 'react';
-import { format } from 'date-fns';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
-import { Button } from '@/components/ui/Button';
 import type { Quote } from '@/types';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { StatusBadge } from '@/components/app/status-badge';
+import { Button } from '@/components/ui/shadcn/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/shadcn/alert-dialog';
+import { formatCurrency, formatDate } from '@/lib/app/format';
 
 interface QuoteDetailProps {
   quote: Quote;
   customerName: string;
-  onClose?: () => void;
+  onBack?: () => void;
   onEdit?: () => void;
+  onDelete?: () => void;
   onMarkAsSent?: (id: string) => void;
   onMarkAsAccepted?: (id: string) => void;
   onMarkAsDeclined?: (id: string) => void;
@@ -18,171 +28,161 @@ interface QuoteDetailProps {
   isBusy?: boolean;
 }
 
-export const QuoteDetail: React.FC<QuoteDetailProps> = ({
+/**
+ * Quote detail — re-skinned onto v0's PageHeader/SectionCard (M13), mirrors
+ * InvoiceDetail.tsx's shape. Action gating unchanged from before the port:
+ * Mark as Sent only from draft; Mark as Accepted/Declined only from sent;
+ * Convert to Sales Order only from accepted. Adds a "Delete draft" action
+ * wired to the existing quoteService.deleteQuote() guard (draft-only,
+ * already supported by the service but never surfaced by the old detail
+ * page), matching InvoiceDetail's equivalent action. Quotes never post to
+ * the GL, so there is no ledger-integrity reason to withhold it.
+ */
+export function QuoteDetail({
   quote,
   customerName,
-  onClose,
+  onBack,
   onEdit,
+  onDelete,
   onMarkAsSent,
   onMarkAsAccepted,
   onMarkAsDeclined,
   onConvertToSalesOrder,
   isBusy = false,
-}) => {
+}: QuoteDetailProps) {
   const canSend = quote.status === 'draft';
   const canRespond = quote.status === 'sent';
   const canConvert = quote.status === 'accepted';
 
   return (
-    <div className="max-w-4xl mx-auto bg-panel p-8 rounded-lg border border-border">
-      <div className="flex justify-between items-start mb-8 pb-8 border-b border-border">
-        <div>
-          <div className="text-3xl font-bold mb-2">Quote</div>
-          <div className="text-text-secondary">{customerName}</div>
-        </div>
-        <div className="text-right">
-          <div className="font-mono text-xl font-semibold">{quote.quoteNumber}</div>
-          <div className="text-sm text-text-muted">{format(new Date(quote.issueDate), 'dd MMMM yyyy')}</div>
-          <div className={`text-xs font-semibold mt-2 px-2 py-1 rounded inline-block ${getStatusClass(quote.status)}`}>
-            {getStatusLabel(quote.status)}
-          </div>
-        </div>
+    <>
+      <PageHeader
+        title={quote.quoteNumber}
+        description={`${customerName} — Quote`}
+        actions={
+          <>
+            {onBack && (
+              <Button variant="outline" size="sm" onClick={onBack}>
+                Back
+              </Button>
+            )}
+            {onEdit && quote.status === 'draft' && (
+              <Button variant="outline" size="sm" onClick={onEdit}>
+                Edit
+              </Button>
+            )}
+            {onDelete && quote.status === 'draft' && (
+              <AlertDialog>
+                <AlertDialogTrigger render={<Button variant="destructive" size="sm" disabled={isBusy} />}>
+                  Delete draft
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete {quote.quoteNumber}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This permanently removes the draft quote. This cannot be undone. Once sent, a quote is a
+                      customer-facing document and must be declined or left to expire instead of deleted.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive/10 text-destructive hover:bg-destructive/20"
+                      onClick={onDelete}
+                    >
+                      Delete draft
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            {onMarkAsSent && canSend && (
+              <Button size="sm" disabled={isBusy} onClick={() => onMarkAsSent(quote.id)}>
+                Mark as sent
+              </Button>
+            )}
+            {onMarkAsDeclined && canRespond && (
+              <Button variant="destructive" size="sm" disabled={isBusy} onClick={() => onMarkAsDeclined(quote.id)}>
+                Mark as declined
+              </Button>
+            )}
+            {onMarkAsAccepted && canRespond && (
+              <Button size="sm" disabled={isBusy} onClick={() => onMarkAsAccepted(quote.id)}>
+                Mark as accepted
+              </Button>
+            )}
+            {onConvertToSalesOrder && canConvert && (
+              <Button size="sm" disabled={isBusy} onClick={() => onConvertToSalesOrder(quote.id)}>
+                Convert to sales order
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge status={quote.status} />
       </div>
 
-      <div className="grid grid-cols-2 gap-8 mb-8">
-        <div>
-          <div className="text-xs text-text-muted uppercase tracking-wide mb-2">Quoted To</div>
-          <div className="font-semibold mb-1">{customerName}</div>
-        </div>
-        <div className="space-y-3">
+      <SectionCard title="Quoted to" description={customerName}>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div>
-            <div className="text-xs text-text-muted uppercase tracking-wide">Issue Date</div>
-            <div className="font-semibold">{format(new Date(quote.issueDate), 'dd MMMM yyyy')}</div>
+            <div className="text-xs tracking-wide text-muted-foreground uppercase">Issue date</div>
+            <div className="text-sm font-medium">{formatDate(quote.issueDate)}</div>
           </div>
           <div>
-            <div className="text-xs text-text-muted uppercase tracking-wide">Expiry Date</div>
-            <div className="font-semibold">{format(new Date(quote.expiryDate), 'dd MMMM yyyy')}</div>
+            <div className="text-xs tracking-wide text-muted-foreground uppercase">Expiry date</div>
+            <div className="text-sm font-medium">{formatDate(quote.expiryDate)}</div>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
-      <div className="mb-8">
-        <div className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 bg-primary/10 border border-border border-b-0 font-semibold text-sm">
-          <FinancialTableCell type="label">Description</FinancialTableCell>
-          <FinancialTableCell type="number">Qty</FinancialTableCell>
-          <FinancialTableCell type="number">Unit Price</FinancialTableCell>
-          <FinancialTableCell type="number">Tax</FinancialTableCell>
-          <FinancialTableCell type="number">Total</FinancialTableCell>
+      <SectionCard title="Line items" bodyClassName="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Description</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Qty</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Unit price</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Tax</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {quote.lineItems.map((item) => (
+                <tr key={item.id} className="border-b border-border last:border-0">
+                  <td className="px-4 py-2">{item.description}</td>
+                  <td className="px-4 py-2 text-right text-muted-foreground">{item.quantity.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(item.taxAmount)}</td>
+                  <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.lineTotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-border bg-muted/20">
+                <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
+                <td className="px-4 py-2 text-right font-medium">{formatCurrency(quote.subtotal)}</td>
+              </tr>
+              <tr className="bg-muted/20">
+                <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">Tax/VAT</td>
+                <td className="px-4 py-2 text-right font-medium">{formatCurrency(quote.taxTotal)}</td>
+              </tr>
+              <tr className="border-t border-border bg-positive/10">
+                <td colSpan={4} className="px-4 py-2 text-right text-sm font-semibold uppercase">Total</td>
+                <td className="px-4 py-2 text-right text-base font-bold text-positive">{formatCurrency(quote.total)}</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
-
-        {quote.lineItems.map((item) => (
-          <div key={item.id} className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 border-b border-border text-sm">
-            <FinancialTableCell type="label">{item.description}</FinancialTableCell>
-            <FinancialTableCell type="number" className="text-text-secondary">
-              {item.quantity.toFixed(2)}
-            </FinancialTableCell>
-            <FinancialTableCell type="number">
-              <FinancialNumber value={item.unitPrice} format={formatCurrency} />
-            </FinancialTableCell>
-            <FinancialTableCell type="number">
-              <FinancialNumber value={item.taxAmount} format={formatCurrency} />
-            </FinancialTableCell>
-            <FinancialTableCell type="number" className="font-semibold">
-              <FinancialNumber value={item.lineTotal} format={formatCurrency} />
-            </FinancialTableCell>
-          </div>
-        ))}
-
-        <div className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 bg-background border-t-2 border-border font-semibold">
-          <div></div>
-          <div></div>
-          <div></div>
-          <div className="px-2 py-2 text-sm text-right">Subtotal</div>
-          <div className="px-2 py-2 text-sm text-right">
-            <FinancialNumber value={quote.subtotal} format={formatCurrency} />
-          </div>
-        </div>
-        <div className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 bg-background border-b border-border">
-          <div></div>
-          <div></div>
-          <div></div>
-          <div className="px-2 py-2 text-sm text-right">Tax/VAT</div>
-          <div className="px-2 py-2 text-sm text-right">
-            <FinancialNumber value={quote.taxTotal} format={formatCurrency} />
-          </div>
-        </div>
-        <div className="grid grid-cols-[2fr_80px_100px_100px_100px] gap-3 px-4 py-3 bg-positive/10 border-b-2 border-border font-bold text-lg">
-          <div></div>
-          <div></div>
-          <div></div>
-          <div className="px-2 py-2 text-sm text-right">TOTAL</div>
-          <div className="px-2 py-2 text-sm text-right text-positive">
-            <FinancialNumber value={quote.total} format={formatCurrency} />
-          </div>
-        </div>
-      </div>
+      </SectionCard>
 
       {quote.notes && (
-        <div className="mb-8">
-          <div className="text-xs text-text-muted uppercase tracking-wide mb-2">Notes</div>
-          <div className="text-sm text-text-secondary whitespace-pre-wrap">{quote.notes}</div>
-        </div>
+        <SectionCard title="Notes">
+          <p className="text-sm whitespace-pre-wrap text-muted-foreground">{quote.notes}</p>
+        </SectionCard>
       )}
-
-      <div className="flex flex-wrap gap-3 justify-end pt-8 border-t border-border">
-        {onClose && (
-          <Button variant="ghost" onClick={onClose}>
-            Close
-          </Button>
-        )}
-        {onEdit && quote.status === 'draft' && (
-          <Button variant="secondary" onClick={onEdit}>
-            Edit
-          </Button>
-        )}
-        {onMarkAsSent && canSend && (
-          <Button variant="secondary" disabled={isBusy} onClick={() => onMarkAsSent(quote.id)}>
-            Mark as Sent
-          </Button>
-        )}
-        {onMarkAsDeclined && canRespond && (
-          <Button variant="danger" disabled={isBusy} onClick={() => onMarkAsDeclined(quote.id)}>
-            Mark as Declined
-          </Button>
-        )}
-        {onMarkAsAccepted && canRespond && (
-          <Button variant="secondary" disabled={isBusy} onClick={() => onMarkAsAccepted(quote.id)}>
-            Mark as Accepted
-          </Button>
-        )}
-        {onConvertToSalesOrder && canConvert && (
-          <Button variant="primary" disabled={isBusy} onClick={() => onConvertToSalesOrder(quote.id)}>
-            Convert to Sales Order
-          </Button>
-        )}
-      </div>
-    </div>
+    </>
   );
-};
-
-function getStatusClass(status: string): string {
-  const classes: Record<string, string> = {
-    draft: 'bg-info-financial/20 text-info-financial',
-    sent: 'bg-warning-financial/20 text-warning-financial',
-    accepted: 'bg-positive/20 text-positive',
-    declined: 'bg-negative/20 text-negative',
-    expired: 'bg-text-muted/20 text-text-muted',
-  };
-  return classes[status] || '';
-}
-
-function getStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    draft: 'Draft',
-    sent: 'Sent',
-    accepted: 'Accepted',
-    declined: 'Declined',
-    expired: 'Expired',
-  };
-  return labels[status] || status;
 }

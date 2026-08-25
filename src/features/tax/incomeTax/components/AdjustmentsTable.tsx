@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Plus, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/shadcn/table';
+import { Amount } from '@/components/app/figure';
 import type { TaxAdjustment, TaxAdjustmentCategory, TaxAdjustmentDirection } from '@/types';
-import { fieldInput } from './formStyles';
+
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const CATEGORY_LABELS: Record<TaxAdjustmentCategory, string> = {
   non_deductible_expense: 'Non-deductible expense',
@@ -49,14 +50,10 @@ export interface AdjustmentsTableProps {
 }
 
 /**
- * Editable accounting-profit-to-taxable-income adjustment lines
- * (SA_ACCOUNTING_MASTER_SPEC.md §51). Every line is pre-filled by
- * TaxComputationService but stays fully editable (amount/direction/
- * category/description, add/remove lines) while the parent computation is
- * a draft — §111 "professional review required", this is guidance, not
- * gospel. Parent should pass `key={computation.id}` so switching financial
- * year remounts this with a fresh local copy instead of merging stale
- * edits across computations.
+ * Editable accounting-profit-to-taxable-income adjustment lines. Every
+ * line is pre-filled by TaxComputationService but stays fully editable
+ * while the parent computation is a draft. Re-skinned onto shadcn
+ * Table/Input (M7); add/remove/save logic unchanged.
  */
 export function AdjustmentsTable({ adjustments, editable, onSave }: AdjustmentsTableProps) {
   const [rows, setRows] = useState<TaxAdjustment[]>(adjustments);
@@ -90,125 +87,105 @@ export function AdjustmentsTable({ adjustments, editable, onSave }: AdjustmentsT
   const netTotal = rows.reduce((sum, r) => sum + signedAmount(r), 0);
 
   if (!editable && rows.length === 0) {
-    return <p className="text-sm text-text-secondary">No adjustment lines were recorded for this computation.</p>;
+    return <p className="text-sm text-muted-foreground">No adjustment lines were recorded for this computation.</p>;
   }
 
   return (
-    <div className="flex flex-col gap-sm">
-      <div className="tabular-nums" role="table" aria-label="Tax adjustments">
-        <div className="grid grid-cols-[1.5fr_2fr_120px_100px_40px] gap-xs border-b border-border pb-xs text-xs font-medium text-text-secondary">
-          <FinancialTableCell type="label" className="font-medium">
-            Category
-          </FinancialTableCell>
-          <FinancialTableCell type="label" className="font-medium">
-            Description
-          </FinancialTableCell>
-          <FinancialTableCell type="number" className="font-medium">
-            Amount
-          </FinancialTableCell>
-          <FinancialTableCell type="status" className="font-medium">
-            Direction
-          </FinancialTableCell>
-          <FinancialTableCell type="status">{null}</FinancialTableCell>
-        </div>
-
-        {rows.map((row) => (
-          <div key={row.id} className="grid grid-cols-[1.5fr_2fr_120px_100px_40px] items-center gap-xs border-b border-border/50 py-xs">
-            <FinancialTableCell type="label">
-              {editable ? (
-                <select
-                  aria-label="Adjustment category"
-                  className={fieldInput}
-                  value={row.category}
-                  onChange={(e) => updateRow(row.id, { category: e.target.value as TaxAdjustmentCategory })}
-                >
-                  {CATEGORY_OPTIONS.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="text-sm text-text-primary">{CATEGORY_LABELS[row.category]}</span>
-              )}
-            </FinancialTableCell>
-            <FinancialTableCell type="label">
-              {editable ? (
-                <input
-                  aria-label="Adjustment description"
-                  className={fieldInput}
-                  value={row.description}
-                  onChange={(e) => updateRow(row.id, { description: e.target.value })}
-                />
-              ) : (
-                <span className="text-sm text-text-secondary">{row.description}</span>
-              )}
-            </FinancialTableCell>
-            <FinancialTableCell type="number">
-              {editable ? (
-                <input
-                  aria-label="Adjustment amount"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className={`${fieldInput} text-right tabular-nums`}
-                  value={row.amount}
-                  onChange={(e) => updateRow(row.id, { amount: Number(e.target.value) || 0 })}
-                />
-              ) : (
-                <FinancialNumber value={signedAmount(row)} format={formatCurrency} minWidth={90} />
-              )}
-            </FinancialTableCell>
-            <FinancialTableCell type="status">
-              {editable ? (
-                <select
-                  aria-label="Adjustment direction"
-                  className={fieldInput}
-                  value={row.direction}
-                  onChange={(e) => updateRow(row.id, { direction: e.target.value as TaxAdjustmentDirection })}
-                >
-                  <option value="add">+ Add</option>
-                  <option value="subtract">- Subtract</option>
-                </select>
-              ) : (
-                <span className="text-xs text-text-secondary">{row.direction === 'add' ? '+' : '-'}</span>
-              )}
-            </FinancialTableCell>
-            <FinancialTableCell type="status">
-              {editable && (
-                <button
-                  type="button"
-                  aria-label={`Remove adjustment: ${row.description || CATEGORY_LABELS[row.category]}`}
-                  onClick={() => removeRow(row.id)}
-                  className="rounded-md p-xs text-text-secondary hover:bg-background hover:text-danger"
-                >
-                  <Icon name="delete" size={16} />
-                </button>
-              )}
-            </FinancialTableCell>
-          </div>
-        ))}
-
-        <div className="grid grid-cols-[1.5fr_2fr_120px_100px_40px] items-center gap-xs pt-xs">
-          <FinancialTableCell type="label" className="font-semibold">
-            Net adjustment
-          </FinancialTableCell>
-          <FinancialTableCell type="label">{null}</FinancialTableCell>
-          <FinancialTableCell type="number" className="font-semibold">
-            <FinancialNumber value={netTotal} format={formatCurrency} minWidth={90} />
-          </FinancialTableCell>
-          <FinancialTableCell type="status">{null}</FinancialTableCell>
-          <FinancialTableCell type="status">{null}</FinancialTableCell>
-        </div>
+    <div className="flex flex-col gap-3">
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <Table aria-label="Tax adjustments">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Category</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+              <TableHead>Direction</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>
+                  {editable ? (
+                    <select aria-label="Adjustment category" className={selectClassName} value={row.category} onChange={(e) => updateRow(row.id, { category: e.target.value as TaxAdjustmentCategory })}>
+                      {CATEGORY_OPTIONS.map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    CATEGORY_LABELS[row.category]
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editable ? (
+                    <Input aria-label="Adjustment description" value={row.description} onChange={(e) => updateRow(row.id, { description: e.target.value })} />
+                  ) : (
+                    <span className="text-muted-foreground">{row.description}</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  {editable ? (
+                    <Input
+                      aria-label="Adjustment amount"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className="text-right tabular-nums"
+                      value={row.amount}
+                      onChange={(e) => updateRow(row.id, { amount: Number(e.target.value) || 0 })}
+                    />
+                  ) : (
+                    <Amount value={signedAmount(row)} />
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editable ? (
+                    <select aria-label="Adjustment direction" className={selectClassName} value={row.direction} onChange={(e) => updateRow(row.id, { direction: e.target.value as TaxAdjustmentDirection })}>
+                      <option value="add">+ Add</option>
+                      <option value="subtract">- Subtract</option>
+                    </select>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">{row.direction === 'add' ? '+' : '-'}</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editable && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Remove adjustment: ${row.description || CATEGORY_LABELS[row.category]}`}
+                      onClick={() => removeRow(row.id)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+            <TableRow>
+              <TableCell className="font-semibold">Net adjustment</TableCell>
+              <TableCell />
+              <TableCell className="text-right font-semibold">
+                <Amount value={netTotal} />
+              </TableCell>
+              <TableCell />
+              <TableCell />
+            </TableRow>
+          </TableBody>
+        </Table>
       </div>
 
       {editable && (
-        <div className="flex items-center justify-between gap-sm pt-sm">
+        <div className="flex items-center justify-between gap-2 pt-1">
           <Button type="button" variant="ghost" onClick={addRow}>
-            <Icon name="add" size={16} /> Add Adjustment
+            <Plus /> Add Adjustment
           </Button>
-          <div className="flex items-center gap-sm">
-            {saveError && <span className="text-xs text-danger">{saveError}</span>}
+          <div className="flex items-center gap-2">
+            {saveError && <span className="text-xs text-destructive">{saveError}</span>}
             <Button type="button" onClick={handleSave} disabled={saving}>
               Save Adjustments
             </Button>

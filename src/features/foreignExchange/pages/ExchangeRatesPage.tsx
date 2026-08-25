@@ -1,24 +1,22 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
+import { Loader2, Plus } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import type { ExchangeRate } from '@/types/foreignExchange';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import { ExchangeRateTable } from '../components/ExchangeRateTable';
 import { ExchangeRateForm } from '../components/ExchangeRateForm';
-import { Modal } from '../components/Modal';
 
 type DialogState = { mode: 'create' } | { mode: 'edit'; rate: ExchangeRate } | null;
 
 /**
- * Exchange Rates settings — record/edit/delete point-in-time market rates
- * per currency pair (SA_ACCOUNTING_MASTER_SPEC.md §33). Route
- * `/foreign-exchange/rates` (to be wired into router.tsx/navigation.ts by
- * a later Queen integration pass — see this module's scope-boundary note
- * in exchangeRateService.ts). Every rate here is ALWAYS manually entered;
- * there is no live FX feed. Mirrors TaxRatesPage.tsx's shape, but rates
- * are simpler point-in-time records rather than effective-dated versions.
+ * Exchange Rates register — route `/foreign-exchange/rates`. Real
+ * useExchangeRates()/exchangeRateService data throughout — every rate is
+ * ALWAYS manually entered, there is no live FX feed wired into this
+ * codebase. No `fx` entry exists in the real permission catalog (M11), so
+ * this route/its actions stay ungated, same as before. Re-skinned onto
+ * v0's PageHeader/SectionCard/Dialog (M13).
  */
 export function ExchangeRatesPage() {
   const { rates, loading, error, createRate, updateRate, deleteRate } = useExchangeRates();
@@ -63,54 +61,50 @@ export function ExchangeRatesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Exchange Rates</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Point-in-time FX rates by currency pair (SA_ACCOUNTING_MASTER_SPEC.md §33). Every rate is ALWAYS manually
-            entered — no live FX feed is wired into this codebase. As a matter of process, prefer recording a new
-            rate over editing an existing one for a date that already has a rate.
-          </p>
-        </div>
-        <Button variant="primary" onClick={() => setDialog({ mode: 'create' })}>
-          <Icon name="add" size={16} />
-          New Rate
-        </Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Exchange rates"
+        description="Point-in-time FX rates by currency pair. Every rate is ALWAYS manually entered — no live FX feed is wired into this codebase. Prefer recording a new rate over editing an existing one for a date that already has a rate."
+        actions={
+          <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+            <Plus data-icon="inline-start" />
+            New rate
+          </Button>
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {actionError}
         </p>
       )}
 
-      {loading && <Spinner label="Loading exchange rates…" />}
-      {!loading && error && <ErrorState message={error.message} />}
+      {loading && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading exchange rates…</p>
+        </div>
+      )}
+      {!loading && error && (
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error.message}
+        </div>
+      )}
       {!loading && !error && (
-        <ExchangeRateTable
-          rates={rates}
-          onEdit={(rate) => setDialog({ mode: 'edit', rate })}
-          onDelete={(rate) => void handleDelete(rate)}
-        />
+        <SectionCard>
+          <ExchangeRateTable rates={rates} onEdit={(rate) => setDialog({ mode: 'edit', rate })} onDelete={(rate) => void handleDelete(rate)} />
+        </SectionCard>
       )}
 
-      {dialog?.mode === 'create' && (
-        <Modal title="New Exchange Rate" onClose={() => setDialog(null)} wide>
-          <ExchangeRateForm onSubmit={handleCreate} onCancel={() => setDialog(null)} isLoading={isSaving} />
-        </Modal>
-      )}
-
-      {dialog?.mode === 'edit' && (
-        <Modal title={`Edit ${dialog.rate.fromCurrency}/${dialog.rate.toCurrency} Rate`} onClose={() => setDialog(null)} wide>
-          <ExchangeRateForm
-            initialValue={dialog.rate}
-            onSubmit={handleEdit}
-            onCancel={() => setDialog(null)}
-            isLoading={isSaving}
-          />
-        </Modal>
-      )}
+      <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{dialog?.mode === 'edit' ? `Edit ${dialog.rate.fromCurrency}/${dialog.rate.toCurrency} Rate` : 'New Exchange Rate'}</DialogTitle>
+          </DialogHeader>
+          {dialog?.mode === 'create' && <ExchangeRateForm onSubmit={handleCreate} onCancel={() => setDialog(null)} isLoading={isSaving} />}
+          {dialog?.mode === 'edit' && <ExchangeRateForm initialValue={dialog.rate} onSubmit={handleEdit} onCancel={() => setDialog(null)} isLoading={isSaving} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

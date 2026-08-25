@@ -1,6 +1,6 @@
 import type { RelatedPartyDisclosureSummaryRow } from '../services';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { Amount } from '@/components/app/figure';
 import { RELATIONSHIP_TYPE_LABELS } from '../constants';
 
 export interface DisclosureSummaryTableProps {
@@ -8,35 +8,29 @@ export interface DisclosureSummaryTableProps {
 }
 
 /**
- * Renders the per-related-party disclosure summary (§88 "available for
+ * Renders the per-related-party disclosure summary ("available for
  * financial statement disclosure") — one row per related party with at
  * least one transaction, built by buildRelatedPartyDisclosureSummary().
+ * Re-skinned onto v0's DataTable (M13); no disclosure math performed here.
  */
 export function DisclosureSummaryTable({ rows }: DisclosureSummaryTableProps) {
+  const columns: DataTableColumn<RelatedPartyDisclosureSummaryRow>[] = [
+    { key: 'name', header: 'Related party', sortValue: (r) => r.name, cell: (r) => <span className="font-medium text-foreground">{r.name}</span> },
+    { key: 'relationship', header: 'Relationship', sortValue: (r) => r.relationshipType, cell: (r) => RELATIONSHIP_TYPE_LABELS[r.relationshipType] },
+    { key: 'count', header: 'Transaction count', align: 'right', sortValue: (r) => r.transactionCount, cell: (r) => <span className="figure text-sm tabular-nums">{r.transactionCount}</span> },
+    { key: 'total', header: 'Total amount', align: 'right', sortValue: (r) => r.totalAmount, cell: (r) => <Amount value={r.totalAmount} className="text-sm font-medium" /> },
+  ];
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[640px] border-collapse text-left text-sm">
-        <thead className="bg-background">
-          <tr>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Related Party</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Relationship</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Transaction Count</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Total Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.relatedPartyId} className="border-t border-border hover:bg-background">
-              <td className="whitespace-nowrap px-md py-sm text-text-primary">{row.name}</td>
-              <td className="whitespace-nowrap px-md py-sm text-text-primary">{RELATIONSHIP_TYPE_LABELS[row.relationshipType]}</td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums text-text-primary">{row.transactionCount}</td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={row.totalAmount} format={formatCurrency} showFlash={false} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      rows={rows}
+      columns={columns}
+      getRowKey={(r) => r.relatedPartyId}
+      searchable={(r) => [r.name, RELATIONSHIP_TYPE_LABELS[r.relationshipType]].join(' ')}
+      searchPlaceholder="Search by related party"
+      initialSortKey="name"
+      emptyTitle="Nothing to disclose yet"
+      emptyDescription="Record at least one transaction to see it summarized here."
+    />
   );
 }

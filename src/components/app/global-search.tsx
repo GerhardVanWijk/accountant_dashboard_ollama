@@ -12,7 +12,7 @@ import {
   CommandList,
 } from '@/components/ui/shadcn/command';
 import { Kbd } from '@/components/ui/shadcn/kbd';
-import { navGroups } from '@/lib/app/navigation';
+import { useVisibleNavGroups } from '@/features/auth/hooks/useVisibleNavGroups';
 import { cn } from '@/lib/utils';
 
 /**
@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
  */
 export function GlobalSearch({ className }: { className?: string }) {
   const navigate = useNavigate();
+  const navGroups = useVisibleNavGroups();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -48,7 +49,7 @@ export function GlobalSearch({ className }: { className?: string }) {
           section: group.title,
         })),
       ),
-    [],
+    [navGroups],
   );
 
   function go(href: string) {

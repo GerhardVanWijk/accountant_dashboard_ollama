@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeVatReport, reconcileVatControlAccounts } from './vatReportService';
+import { computeVatReport, listVatTransactions, reconcileVatControlAccounts } from './vatReportService';
 import type { Bill, CreditNote, Invoice, TaxRate } from '@/types';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import { AccountService } from '@/features/accounting/services/accountService';
@@ -227,6 +227,55 @@ describe('computeVatReport', () => {
       ALL_RATES,
     );
     expect(report.unresolvedLineCount).toBe(1);
+  });
+});
+
+describe('listVatTransactions', () => {
+  it('lists a posted invoice as an output-VAT row and a posted bill as an input-VAT row', () => {
+    const rows = listVatTransactions(AUG_2026.start, AUG_2026.end, [invoice()], [], [bill()], ALL_RATES);
+
+    expect(rows).toHaveLength(2);
+    const invoiceRow = rows.find((r) => r.documentType === 'invoice');
+    const billRow = rows.find((r) => r.documentType === 'bill');
+    expect(invoiceRow).toMatchObject({ documentNumber: 'INV-0001', direction: 'output', taxBase: 1000, vatAmount: 150, treatment: 'standard_rated' });
+    expect(billRow).toMatchObject({ documentNumber: 'BILL-0001', direction: 'input', taxBase: 500, vatAmount: 75, treatment: 'standard_rated' });
+  });
+
+  it('lists an issued credit note as a negative output-VAT row (it reduces output VAT)', () => {
+    const rows = listVatTransactions(AUG_2026.start, AUG_2026.end, [], [creditNote()], [], ALL_RATES);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ documentType: 'credit_note', documentNumber: 'CN-0001', direction: 'output', taxBase: -200, vatAmount: -30 });
+  });
+
+  it('excludes draft/void documents and zero-VAT documents, same as computeVatReport', () => {
+    const rows = listVatTransactions(
+      AUG_2026.start,
+      AUG_2026.end,
+      [invoice({ id: 'draft', status: 'draft' }), invoice({ id: 'zero', taxTotal: 0, lineItems: [] })],
+      [],
+      [bill({ id: 'void_bill', status: 'void' })],
+      ALL_RATES,
+    );
+
+    expect(rows).toHaveLength(0);
+  });
+
+  it('excludes documents outside the period', () => {
+    const rows = listVatTransactions(AUG_2026.start, AUG_2026.end, [invoice({ issueDate: '2026-09-15T00:00:00.000Z' })], [], [], ALL_RATES);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('sorts rows by date ascending', () => {
+    const rows = listVatTransactions(
+      AUG_2026.start,
+      AUG_2026.end,
+      [invoice({ id: 'later', issueDate: '2026-08-20T00:00:00.000Z', invoiceNumber: 'INV-LATER' })],
+      [],
+      [bill({ id: 'earlier', issueDate: '2026-08-02T00:00:00.000Z', billNumber: 'BILL-EARLIER' })],
+      ALL_RATES,
+    );
+    expect(rows.map((r) => r.documentNumber)).toEqual(['BILL-EARLIER', 'INV-LATER']);
   });
 });
 

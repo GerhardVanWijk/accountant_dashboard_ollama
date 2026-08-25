@@ -12,13 +12,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
-import { currentUser } from '@/lib/app/mock/admin';
+import { useAuthStore } from '@/stores/authStore';
+import { toShellUser } from '@/features/auth/utils/shellUser';
 
 /**
- * Ported from accounting-v0-frontend/components/app/user-menu.tsx.
- * currentUser is still placeholder data (see lib/app/mock/admin.ts) — a
- * later phase wires this to the real authStore/profile instead. "Sign out"
- * points at /login (this app's real route), not v0's placeholder /signin.
+ * Ported from accounting-v0-frontend/components/app/user-menu.tsx. M6
+ * (docs/SUPABASE_MIGRATION_GUIDE.md) replaced the M0 `currentUser`
+ * placeholder with the real signed-in profile from `useAuthStore`, and
+ * wired "Sign out" to the real `logout()` action (calls
+ * `supabase.auth.signOut()` — src/stores/authStore.ts) instead of a plain
+ * link to /login, which never actually cleared the Supabase session.
  */
 const links = [
   { label: 'Profile settings', href: '/settings', icon: UserRound },
@@ -28,6 +31,10 @@ const links = [
 ];
 
 export function UserMenu() {
+  const profile = useAuthStore((s) => s.profile);
+  const logout = useAuthStore((s) => s.logout);
+  const user = toShellUser(profile);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -41,23 +48,35 @@ export function UserMenu() {
       >
         <Avatar className="size-6">
           <AvatarFallback className="bg-brand-muted text-[11px] font-semibold text-brand">
-            {currentUser.initials}
+            {user.initials}
           </AvatarFallback>
         </Avatar>
         <span className="hidden text-sm font-medium sm:inline">
-          {currentUser.name.split(' ')[0]}
+          {user.name.split(' ')[0]}
         </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel className="flex flex-col gap-0.5">
-          <span className="text-sm font-medium">{currentUser.name}</span>
-          <span className="text-xs font-normal text-muted-foreground">
-            {currentUser.email}
-          </span>
-          <span className="mt-1 w-fit rounded-full bg-brand-muted px-2 py-0.5 text-[10px] font-medium text-brand">
-            {currentUser.role}
-          </span>
-        </DropdownMenuLabel>
+        {/*
+          Real bug found while wiring this to real profile data (M6,
+          docs/SUPABASE_MIGRATION_GUIDE.md): base-ui's Menu.GroupLabel
+          throws "MenuGroupContext is missing" when rendered outside a
+          Menu.Group — the original ported v0 JSX had DropdownMenuLabel as
+          a direct child of DropdownMenuContent, uncaught until a real
+          click-through test opened this menu for the first time. Fixed by
+          wrapping it in its own DropdownMenuGroup (a plain, unstyled
+          Menu.Group wrapper — no visual change).
+        */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="flex flex-col gap-0.5">
+            <span className="text-sm font-medium">{user.name}</span>
+            {user.email && <span className="text-xs font-normal text-muted-foreground">{user.email}</span>}
+            {user.role && (
+              <span className="mt-1 w-fit rounded-full bg-brand-muted px-2 py-0.5 text-[10px] font-medium text-brand">
+                {user.role}
+              </span>
+            )}
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           {links.map((link) => (
@@ -72,10 +91,7 @@ export function UserMenu() {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem
-            render={<Link to="/login" />}
-            variant="destructive"
-          >
+          <DropdownMenuItem onClick={() => logout()} variant="destructive">
             <LogOut />
             Sign out
           </DropdownMenuItem>

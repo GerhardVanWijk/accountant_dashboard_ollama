@@ -4,11 +4,12 @@ import { creditNoteService } from '@/features/sales/services';
 import { billService } from '@/features/purchases/services';
 import { journalEntryService, accountMappingService } from '@/features/accounting/services';
 import { taxRateService } from '../services';
-import { computeVatReport, reconcileVatControlAccounts, type VatReconciliation, type VatReport } from '../services/vatReportService';
+import { computeVatReport, listVatTransactions, reconcileVatControlAccounts, type VatReconciliation, type VatReport, type VatTransactionRow } from '../services/vatReportService';
 
 export interface UseVatReportResult {
   report: VatReport | null;
   reconciliation: VatReconciliation | null;
+  transactions: VatTransactionRow[];
   loading: boolean;
   error: Error | null;
   refetch: () => void;
@@ -24,6 +25,7 @@ export interface UseVatReportResult {
 export function useVatReport(periodStart: Date, periodEnd: Date): UseVatReportResult {
   const [report, setReport] = useState<VatReport | null>(null);
   const [reconciliation, setReconciliation] = useState<VatReconciliation | null>(null);
+  const [transactions, setTransactions] = useState<VatTransactionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -43,6 +45,7 @@ export function useVatReport(periodStart: Date, periodEnd: Date): UseVatReportRe
         if (cancelled) return;
         const computed = computeVatReport(periodStart, periodEnd, invoices, creditNotes, bills, allTaxRates);
         setReport(computed);
+        setTransactions(listVatTransactions(periodStart, periodEnd, invoices, creditNotes, bills, allTaxRates));
         return reconcileVatControlAccounts(journalEntryService, accountMappingService, periodStart, periodEnd, computed);
       })
       .then((recon) => {
@@ -63,5 +66,5 @@ export function useVatReport(periodStart: Date, periodEnd: Date): UseVatReportRe
 
   const refetch = useCallback(() => setReloadToken((t) => t + 1), []);
 
-  return { report, reconciliation, loading, error, refetch };
+  return { report, reconciliation, transactions, loading, error, refetch };
 }

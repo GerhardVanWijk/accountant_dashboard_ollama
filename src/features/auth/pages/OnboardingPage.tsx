@@ -3,12 +3,16 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
 import { supabase } from '@/config/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import type { SALegalEntityType } from '@/types';
 import { profileService } from '../services';
+
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const legalEntityOptions: { value: SALegalEntityType; label: string }[] = [
   { value: 'private_company', label: '(Pty) Ltd — Private Company' },
@@ -45,28 +49,14 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-const inputClasses =
-  'w-full rounded-md border border-border bg-background px-md py-sm text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
-
 /**
  * First-login step for a signed-up user with no company yet
- * (`profile.companyId` undefined). Only "create a company" is offered —
- * deliberately NOT a self-serve "join an existing company by name/id":
- * every company-scoped table's RLS grants full read/write the instant
- * `company_id` matches, with no separate membership-approval gate, so
- * letting a user set their own `company_id` to any company they can find
- * would be a real tenant-isolation bypass (found while designing this —
- * see docs/SUPABASE_MIGRATION_GUIDE.md's Phase T section). Joining an
- * existing company is instead admin-initiated: a company admin adds an
- * already-signed-up, still-companyless user from the Users & Roles admin
- * page (src/features/admin/pages/UsersPage.tsx), which the DB now
- * explicitly permits (migration 0012's `profiles_update_admin_same_company`
- * policy) without opening this hole.
- *
- * Runs through `create_company_and_become_admin`, a SECURITY DEFINER RPC
- * (migration 0012) rather than plain client-side table writes — the same
- * migration's `protect_profile_privileged_columns` trigger otherwise locks
- * every signed-in user's own `role`/`company_id` against self-elevation.
+ * (`profile.companyId` undefined). PRESENTATION ONLY re-skin (M10) — same
+ * `create_company_and_become_admin` SECURITY DEFINER RPC, same fields, same
+ * validation, same redirect. See the pre-M10 version's history for the full
+ * rationale on why this is a "create only" step (no self-serve "join an
+ * existing company" — see docs/SUPABASE_MIGRATION_GUIDE.md's Phase T
+ * section) and why it runs through an RPC rather than plain table writes.
  */
 export function OnboardingPage() {
   const navigate = useNavigate();
@@ -103,76 +93,62 @@ export function OnboardingPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-lg">
-      <Card className="w-full max-w-md">
-        <h1 className="text-xl font-semibold text-text-primary">Set up your company</h1>
-        <p className="mt-xs text-sm text-text-secondary">
-          You'll become this company's admin. Already have a company on the platform? Ask its admin to add you using{' '}
-          <span className="font-medium text-text-primary">{profile?.email}</span>.
+    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-md rounded-xl border border-border bg-card p-6">
+        <h1 className="text-xl font-semibold text-foreground">Set up your company</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          You&apos;ll become this company&apos;s admin. Already have a company on the platform? Ask its admin to add you using <span className="font-medium text-foreground">{profile?.email}</span>.
         </p>
 
-        <form className="mt-lg flex flex-col gap-md" onSubmit={handleSubmit(onSubmit)} noValidate>
-          <div>
-            <label htmlFor="name" className="mb-xs block text-sm font-medium text-text-primary">
-              Company name
-            </label>
-            <input id="name" type="text" className={inputClasses} {...register('name')} />
-            {errors.name && <p className="mt-xs text-sm text-danger">{errors.name.message}</p>}
-          </div>
+        <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
+          <Field>
+            <FieldLabel htmlFor="name">Company name</FieldLabel>
+            <Input id="name" {...register('name')} />
+            <FieldError errors={[errors.name]} />
+          </Field>
 
-          <div>
-            <label htmlFor="legalEntityType" className="mb-xs block text-sm font-medium text-text-primary">
-              Legal entity type
-            </label>
-            <select id="legalEntityType" className={inputClasses} {...register('legalEntityType')}>
+          <Field>
+            <FieldLabel htmlFor="legalEntityType">Legal entity type</FieldLabel>
+            <select id="legalEntityType" className={selectClassName} {...register('legalEntityType')}>
               {legalEntityOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
             </select>
+          </Field>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field>
+              <FieldLabel htmlFor="financialYearEndMonth">Year-end month</FieldLabel>
+              <Input id="financialYearEndMonth" type="number" min={1} max={12} {...register('financialYearEndMonth')} />
+              <FieldError errors={[errors.financialYearEndMonth]} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="financialYearEndDay">Year-end day</FieldLabel>
+              <Input id="financialYearEndDay" type="number" min={1} max={31} {...register('financialYearEndDay')} />
+              <FieldError errors={[errors.financialYearEndDay]} />
+            </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-md">
-            <div>
-              <label htmlFor="financialYearEndMonth" className="mb-xs block text-sm font-medium text-text-primary">
-                Year-end month
-              </label>
-              <input
-                id="financialYearEndMonth"
-                type="number"
-                min={1}
-                max={12}
-                className={inputClasses}
-                {...register('financialYearEndMonth')}
-              />
-              {errors.financialYearEndMonth && (
-                <p className="mt-xs text-sm text-danger">{errors.financialYearEndMonth.message}</p>
-              )}
-            </div>
-            <div>
-              <label htmlFor="financialYearEndDay" className="mb-xs block text-sm font-medium text-text-primary">
-                Year-end day
-              </label>
-              <input
-                id="financialYearEndDay"
-                type="number"
-                min={1}
-                max={31}
-                className={inputClasses}
-                {...register('financialYearEndDay')}
-              />
-              {errors.financialYearEndDay && <p className="mt-xs text-sm text-danger">{errors.financialYearEndDay.message}</p>}
-            </div>
-          </div>
+          {serverError && (
+            <p role="alert" className="text-sm text-destructive">
+              {serverError}
+            </p>
+          )}
 
-          {serverError && <p className="text-sm text-danger">{serverError}</p>}
-
-          <Button type="submit" className="mt-sm w-full" disabled={isSubmitting}>
-            {isSubmitting ? 'Creating company…' : 'Create company'}
+          <Button type="submit" className="mt-1 w-full" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="animate-spin" data-icon="inline-start" />
+                Creating company…
+              </>
+            ) : (
+              'Create company'
+            )}
           </Button>
         </form>
-      </Card>
+      </div>
     </div>
   );
 }

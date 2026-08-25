@@ -9,12 +9,13 @@ import { Toaster } from '@/components/ui/shadcn/sonner';
  * Shell for every protected route (see docs/ROUTES.md). Phase M0
  * (docs/V0_DESIGN_SYSTEM_PORT.md): swapped the old horizontal Topbar-only
  * chrome for the ported v0 sidebar+topbar shell. The old Topbar.tsx and
- * its siblings (MobileNavMenu/TopNavTabs/ThemeToggle) are kept, unused,
- * until this is verified — not deleted. <PermissionsLoader /> and
- * <Outlet /> are untouched: same auth-gating, same routed page content,
- * only the chrome around them changed. "app-shell" is v0's own class name
- * (see globals.css) and doubles as this app's CSS scope for the v0-token
- * overrides in src/styles/tokens.css.
+ * its siblings (MobileNavMenu/TopNavTabs/ThemeToggle, plus the
+ * config/navigation.ts model they read from) were confirmed unused and
+ * removed in M12 — see docs/V0_DESIGN_SYSTEM_PORT.md. <PermissionsLoader />
+ * and <Outlet /> are untouched: same auth-gating, same routed page
+ * content, only the chrome around them changed. "app-shell" is v0's own
+ * class name (see globals.css) and doubles as this app's CSS scope for
+ * the v0-token overrides in src/styles/tokens.css.
  */
 export function AppLayout() {
   return (

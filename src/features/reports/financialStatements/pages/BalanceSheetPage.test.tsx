@@ -130,14 +130,15 @@ describe('BalanceSheetPage', () => {
 
     render(<BalanceSheetPage />);
 
-    expect(screen.getByRole('heading', { name: 'Balance Sheet' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Balance sheet' })).toBeInTheDocument();
     expect(screen.getByText(/Cash and Bank/)).toBeInTheDocument();
     expect(screen.getByText('Total Assets')).toBeInTheDocument();
     expect(screen.getByText('Total Equity')).toBeInTheDocument();
     expect(screen.getByText('Balanced')).toBeInTheDocument();
 
-    // Two "Total Assets"-equal rows share the "+15,000.00" figure (Total
-    // Assets and Total Liabilities + Equity) — assert it renders at least once.
-    expect(screen.getAllByText('+15,000.00').length).toBeGreaterThanOrEqual(1);
+    // Two "Total Assets"-equal rows share the same figure (Total Assets and
+    // Total Liabilities + Equity) — assert it renders at least once.
+    // Locale-agnostic regex (en-ZA formatCurrency) rather than an exact string.
+    expect(screen.getAllByText(/15.?000,00/).length).toBeGreaterThanOrEqual(1);
   });
 });

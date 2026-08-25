@@ -1,75 +1,103 @@
-import type { Employee, EmployeeStatus } from '@/types';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { cn } from '@/utils/cn';
-import { EMPLOYMENT_TYPE_LABELS, EMPLOYEE_STATUS_LABELS, PAY_FREQUENCY_LABELS } from '../constants';
-
-const STATUS_STYLES: Record<EmployeeStatus, string> = {
-  active: 'bg-positive/10 text-positive',
-  inactive: 'bg-text-muted/10 text-text-secondary',
-  terminated: 'bg-danger/10 text-danger',
-};
+import type { Employee } from '@/types';
+import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { Amount } from '@/components/app/figure';
+import { StatusBadge } from '@/components/app/status-badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { EMPLOYMENT_TYPE_LABELS, PAY_FREQUENCY_LABELS } from '../constants';
 
 export interface EmployeesTableProps {
   employees: Employee[];
-  onEdit: (employee: Employee) => void;
-  onDelete: (employee: Employee) => void;
+  /** Omit either (gated by payroll:update / payroll:delete) to hide that row action. */
+  onEdit?: (employee: Employee) => void;
+  onDelete?: (employee: Employee) => void;
 }
 
+/** Employee master directory, re-skinned onto v0's DataTable (M13) — real Employee fields only, no payroll math performed here. */
 export function EmployeesTable({ employees, onEdit, onDelete }: EmployeesTableProps) {
+  const columns: DataTableColumn<Employee>[] = [
+    {
+      key: 'name',
+      header: 'Employee',
+      sortValue: (e) => `${e.firstName} ${e.lastName}`,
+      cell: (e) => (
+        <div className="flex flex-col">
+          <span className="font-medium text-foreground">
+            {e.firstName} {e.lastName}
+          </span>
+          <span className="figure text-xs text-muted-foreground tabular-nums">{e.employeeNumber}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Employment type',
+      hideBelowMd: true,
+      sortValue: (e) => e.employmentType,
+      cell: (e) => <span className="text-xs">{EMPLOYMENT_TYPE_LABELS[e.employmentType]}</span>,
+    },
+    {
+      key: 'frequency',
+      header: 'Pay frequency',
+      hideBelowMd: true,
+      sortValue: (e) => e.payFrequency,
+      cell: (e) => <span className="text-xs text-muted-foreground">{PAY_FREQUENCY_LABELS[e.payFrequency]}</span>,
+    },
+    {
+      key: 'salary',
+      header: 'Basic salary',
+      align: 'right',
+      sortValue: (e) => e.basicSalary,
+      cell: (e) => <Amount value={e.basicSalary} plain className="text-sm font-medium" />,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortValue: (e) => e.status,
+      cell: (e) => <StatusBadge status={e.status} />,
+    },
+    {
+      key: 'actions',
+      header: '',
+      cell: (e) =>
+        onEdit || onDelete ? (
+          <div className="flex justify-end gap-1">
+            {onEdit && (
+              <Button variant="ghost" size="sm" onClick={() => onEdit(e)}>
+                Edit
+              </Button>
+            )}
+            {onDelete && (
+              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(e)}>
+                Delete
+              </Button>
+            )}
+          </div>
+        ) : null,
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[820px] border-collapse text-left text-sm">
-        <thead className="bg-background">
-          <tr>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Employee #</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Name</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Type</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Pay Frequency</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Basic Salary</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Status</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary" />
-          </tr>
-        </thead>
-        <tbody>
-          {employees.map((employee) => (
-            <tr key={employee.id} className="border-t border-border hover:bg-background">
-              <td className="whitespace-nowrap px-md py-sm font-mono text-text-primary">{employee.employeeNumber}</td>
-              <td className="whitespace-nowrap px-md py-sm text-text-primary">
-                {employee.firstName} {employee.lastName}
-              </td>
-              <td className="whitespace-nowrap px-md py-sm text-text-primary">{EMPLOYMENT_TYPE_LABELS[employee.employmentType]}</td>
-              <td className="whitespace-nowrap px-md py-sm text-text-primary">{PAY_FREQUENCY_LABELS[employee.payFrequency]}</td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={employee.basicSalary} format={formatCurrency} showFlash={false} />
-              </td>
-              <td className="whitespace-nowrap px-md py-sm">
-                <span className={cn('inline-flex items-center rounded-full px-sm py-0.5 text-xs font-medium', STATUS_STYLES[employee.status])}>
-                  {EMPLOYEE_STATUS_LABELS[employee.status]}
-                </span>
-              </td>
-              <td className="whitespace-nowrap px-md py-sm">
-                <div className="flex justify-end gap-sm">
-                  <button
-                    type="button"
-                    onClick={() => onEdit(employee)}
-                    className="rounded-md px-sm py-xs text-xs font-medium text-primary hover:underline"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(employee)}
-                    className="rounded-md px-sm py-xs text-xs font-medium text-danger hover:underline"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      rows={employees}
+      columns={columns}
+      getRowKey={(e) => e.id}
+      searchable={(e) => [e.employeeNumber, e.firstName, e.lastName, e.idNumber ?? '', e.taxNumber ?? ''].join(' ')}
+      searchPlaceholder="Search by number or name"
+      initialSortKey="name"
+      filters={[
+        {
+          key: 'status',
+          label: 'All statuses',
+          options: [
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+            { value: 'terminated', label: 'Terminated' },
+          ],
+          match: (e, value) => e.status === value,
+        },
+      ]}
+      emptyTitle="No employees yet"
+      emptyDescription="Add an employee to start running payroll."
+    />
   );
 }

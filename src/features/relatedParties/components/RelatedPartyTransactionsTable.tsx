@@ -1,6 +1,8 @@
 import type { RelatedParty, RelatedPartyTransaction } from '@/types/relatedParty';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { Amount } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { formatDate } from '@/lib/app/format';
 
 export interface RelatedPartyTransactionsTableProps {
   transactions: RelatedPartyTransaction[];
@@ -9,55 +11,46 @@ export interface RelatedPartyTransactionsTableProps {
   onDelete: (transaction: RelatedPartyTransaction) => void;
 }
 
-/** Related Party Transactions table — mirrors RelatedPartiesTable.tsx's shape. */
+/** Related Party Transactions register, re-skinned onto v0's DataTable (M13) — mirrors RelatedPartiesTable.tsx's shape. */
 export function RelatedPartyTransactionsTable({ transactions, relatedPartiesById, onEdit, onDelete }: RelatedPartyTransactionsTableProps) {
+  const columns: DataTableColumn<RelatedPartyTransaction>[] = [
+    { key: 'date', header: 'Date', sortValue: (t) => t.transactionDate, cell: (t) => formatDate(t.transactionDate) },
+    {
+      key: 'party',
+      header: 'Related party',
+      sortValue: (t) => relatedPartiesById.get(t.relatedPartyId)?.name ?? '',
+      cell: (t) => relatedPartiesById.get(t.relatedPartyId)?.name ?? 'Unknown',
+    },
+    { key: 'nature', header: 'Nature', sortValue: (t) => t.natureOfTransaction, cell: (t) => t.natureOfTransaction },
+    { key: 'amount', header: 'Amount', align: 'right', sortValue: (t) => t.amount, cell: (t) => <Amount value={t.amount} className="text-sm font-medium" /> },
+    { key: 'description', header: 'Description', hideBelowMd: true, cell: (t) => <span className="max-w-xs truncate text-muted-foreground">{t.description ?? '—'}</span> },
+    {
+      key: 'actions',
+      header: '',
+      cell: (t) => (
+        <div className="flex justify-end gap-1">
+          <Button variant="ghost" size="sm" onClick={() => onEdit(t)}>
+            Edit
+          </Button>
+          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(t)}>
+            Delete
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[860px] border-collapse text-left text-sm">
-        <thead className="bg-background">
-          <tr>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Date</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Related Party</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Nature</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Amount</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Description</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary" />
-          </tr>
-        </thead>
-        <tbody>
-          {transactions.map((transaction) => (
-            <tr key={transaction.id} className="border-t border-border hover:bg-background">
-              <td className="whitespace-nowrap px-md py-sm text-text-primary">{transaction.transactionDate}</td>
-              <td className="whitespace-nowrap px-md py-sm text-text-primary">
-                {relatedPartiesById.get(transaction.relatedPartyId)?.name ?? 'Unknown'}
-              </td>
-              <td className="whitespace-nowrap px-md py-sm text-text-primary">{transaction.natureOfTransaction}</td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={transaction.amount} format={formatCurrency} showFlash={false} />
-              </td>
-              <td className="max-w-xs truncate px-md py-sm text-text-secondary">{transaction.description ?? '—'}</td>
-              <td className="whitespace-nowrap px-md py-sm">
-                <div className="flex justify-end gap-sm">
-                  <button
-                    type="button"
-                    onClick={() => onEdit(transaction)}
-                    className="rounded-md px-sm py-xs text-xs font-medium text-primary hover:underline"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(transaction)}
-                    className="rounded-md px-sm py-xs text-xs font-medium text-danger hover:underline"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      rows={transactions}
+      columns={columns}
+      getRowKey={(t) => t.id}
+      searchable={(t) => [relatedPartiesById.get(t.relatedPartyId)?.name ?? '', t.natureOfTransaction, t.description ?? ''].join(' ')}
+      searchPlaceholder="Search by related party or nature"
+      initialSortKey="date"
+      initialSortDirection="desc"
+      emptyTitle="No related party transactions yet"
+      emptyDescription="Record a transaction to start building the disclosure history."
+    />
   );
 }

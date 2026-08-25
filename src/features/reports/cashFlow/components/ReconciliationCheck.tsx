@@ -1,6 +1,6 @@
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { Icon } from '@/components/ui/Icon';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { CheckCircle2, TriangleAlert } from 'lucide-react';
+import { Amount } from '@/components/app/figure';
+import { cn } from '@/lib/utils';
 import type { CashFlowStatement } from '../services';
 
 export interface ReconciliationCheckProps {
@@ -13,32 +13,34 @@ export interface ReconciliationCheckProps {
  * side by side, against the independently-computed net movement on Cash and
  * Bank (actualCashMovement) for the same period. A variance means the three
  * classified sections above did not capture every real cash movement in
- * this period's GL data (see cashFlowStatementService.ts's module doc
- * comment on working-capital scope) — it is not silently assumed away.
+ * this period's GL data — it is not silently assumed away. Re-skinned onto
+ * v0's visual language (M9); the comparison itself is unchanged.
  */
 export function ReconciliationCheck({ statement }: ReconciliationCheckProps) {
-  const toneClass = statement.reconciles
-    ? 'border-positive/40 bg-positive/10 text-positive'
-    : 'border-negative/40 bg-negative/10 text-negative';
-
   return (
-    <div className={`rounded-md border p-md ${toneClass}`} role="status">
-      <div className="flex items-center gap-xs text-sm font-semibold">
-        <Icon name={statement.reconciles ? 'reconciliation' : 'error'} size={16} />
+    <div
+      role="status"
+      className={cn(
+        'flex flex-col gap-3 rounded-lg border px-4 py-3',
+        statement.reconciles ? 'border-positive/30 bg-positive/10' : 'border-destructive/30 bg-destructive/10',
+      )}
+    >
+      <div className={cn('flex items-center gap-2 text-sm font-semibold', statement.reconciles ? 'text-positive' : 'text-destructive')}>
+        {statement.reconciles ? <CheckCircle2 className="size-4" aria-hidden="true" /> : <TriangleAlert className="size-4" aria-hidden="true" />}
         {statement.reconciles ? 'Reconciles to actual cash movement' : 'Does not reconcile — investigate'}
       </div>
-      <div className="mt-sm grid grid-cols-1 gap-sm tabular-nums sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
-          <p className="text-xs text-text-secondary">Net Cash Movement (Operating + Investing + Financing)</p>
-          <FinancialNumber value={statement.netCashMovement} format={formatCurrency} showFlash={false} className="text-lg" />
+          <p className="text-xs text-muted-foreground">Net Cash Movement (Operating + Investing + Financing)</p>
+          <Amount value={statement.netCashMovement} statement className="text-lg font-semibold" />
         </div>
         <div>
-          <p className="text-xs text-text-secondary">Actual Cash and Bank Movement</p>
-          <FinancialNumber value={statement.actualCashMovement} format={formatCurrency} showFlash={false} className="text-lg" />
+          <p className="text-xs text-muted-foreground">Actual Cash and Bank Movement</p>
+          <Amount value={statement.actualCashMovement} statement className="text-lg font-semibold" />
         </div>
         <div>
-          <p className="text-xs text-text-secondary">Variance</p>
-          <FinancialNumber value={statement.variance} format={formatCurrency} showFlash={false} className="text-lg" />
+          <p className="text-xs text-muted-foreground">Variance</p>
+          <Amount value={statement.variance} statement className="text-lg font-semibold" />
         </div>
       </div>
     </div>

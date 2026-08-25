@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import type { FinancialYear } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { fieldError, fieldHint, fieldInput, fieldLabel } from './formStyles';
+import { Button } from '@/components/ui/shadcn/button';
+import { Checkbox } from '@/components/ui/shadcn/checkbox';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
 import type { CalculateScoreFormInput } from '../hooks/usePublicInterestScore';
+
+const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface CalculateScoreFormProps {
   financialYears: FinancialYear[];
@@ -15,8 +19,9 @@ export interface CalculateScoreFormProps {
  * reg 26(2)). Employees/turnover/third-party-liabilities are computed
  * automatically from real posted data — only the number of shareholders/
  * members (no shareholder register exists anywhere in this codebase) and
- * whether the company holds fiduciary assets exceeding R5 million are asked
- * for here, since nothing else in this app knows either figure.
+ * whether the company holds fiduciary assets exceeding R5 million are
+ * asked for here. Re-skinned onto v0's Field/Input/Checkbox (M7);
+ * validation logic unchanged.
  */
 export function CalculateScoreForm({ financialYears, onSubmit, onCancel }: CalculateScoreFormProps) {
   const [financialYearId, setFinancialYearId] = useState(financialYears[0]?.id ?? '');
@@ -45,17 +50,10 @@ export function CalculateScoreForm({ financialYears, onSubmit, onCancel }: Calcu
   };
 
   return (
-    <div className="flex flex-col gap-md">
-      <div>
-        <label className={fieldLabel} htmlFor="pisFinancialYear">
-          Financial Year
-        </label>
-        <select
-          id="pisFinancialYear"
-          className={fieldInput}
-          value={financialYearId}
-          onChange={(e) => setFinancialYearId(e.target.value)}
-        >
+    <div className="flex flex-col gap-4">
+      <Field>
+        <FieldLabel htmlFor="pisFinancialYear">Financial Year</FieldLabel>
+        <select id="pisFinancialYear" className={selectClassName} value={financialYearId} onChange={(e) => setFinancialYearId(e.target.value)}>
           {financialYears.length === 0 && <option value="">No financial years configured</option>}
           {financialYears.map((fy) => (
             <option key={fy.id} value={fy.id}>
@@ -63,37 +61,27 @@ export function CalculateScoreForm({ financialYears, onSubmit, onCancel }: Calcu
             </option>
           ))}
         </select>
-        <p className={fieldHint}>Turnover and third-party liabilities are computed from real posted GL data for this year.</p>
-      </div>
-      <div>
-        <label className={fieldLabel} htmlFor="pisShareholders">
-          Number of shareholders / members
-        </label>
-        <input
-          id="pisShareholders"
-          type="number"
-          min={0}
-          step={1}
-          className={fieldInput}
-          value={shareholdersOrMembersCount}
-          onChange={(e) => setShareholdersOrMembersCount(e.target.value)}
-        />
-        <p className={fieldHint}>
-          One point per individual with a beneficial interest in the company&apos;s securities at year end (or per CC
-          member) — reg 26(2). No shareholder register exists in this system, so this figure is entered manually.
-        </p>
-      </div>
-      <label className="flex items-center gap-sm text-sm text-text-primary">
-        <input
-          type="checkbox"
-          checked={holdsFiduciaryAssetsOverThreshold}
-          onChange={(e) => setHoldsFiduciaryAssetsOverThreshold(e.target.checked)}
-        />
+        <FieldDescription>Turnover and third-party liabilities are computed from real posted GL data for this year.</FieldDescription>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="pisShareholders">Number of shareholders / members</FieldLabel>
+        <Input id="pisShareholders" type="number" min={0} step={1} value={shareholdersOrMembersCount} onChange={(e) => setShareholdersOrMembersCount(e.target.value)} />
+        <FieldDescription>
+          One point per individual with a beneficial interest in the company&apos;s securities at year end (or per CC member) — reg 26(2). No shareholder register exists in this system,
+          so this figure is entered manually.
+        </FieldDescription>
+      </Field>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox checked={holdsFiduciaryAssetsOverThreshold} onCheckedChange={(value) => setHoldsFiduciaryAssetsOverThreshold(value === true)} />
         Holds assets exceeding R5 million in a fiduciary capacity
       </label>
-      {validationError && <p className={fieldError}>{validationError}</p>}
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+      {validationError && (
+        <p role="alert" className="text-sm text-destructive">
+          {validationError}
+        </p>
+      )}
+      <div className="flex justify-end gap-2 pt-1">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" onClick={submit} disabled={submitting || financialYears.length === 0}>

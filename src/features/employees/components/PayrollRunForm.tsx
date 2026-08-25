@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { fieldHint, fieldInput, fieldLabel } from './formStyles';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
 
 export interface PayrollRunFormProps {
   defaultPeriodStart: string;
@@ -10,7 +11,11 @@ export interface PayrollRunFormProps {
   onCancel: () => void;
 }
 
-/** Creates a new draft PayrollRun covering every active employee for the chosen period — see PayrollRunsPage for how the resulting draft is reviewed. */
+/**
+ * Creates a new draft PayrollRun covering every active employee for the
+ * chosen period — see PayrollRunsPage for how the resulting draft is
+ * reviewed. Re-skinned onto v0's Field/Input (M13); no payroll math here.
+ */
 export function PayrollRunForm({ defaultPeriodStart, defaultPeriodEnd, defaultPayDate, onSubmit, onCancel }: PayrollRunFormProps) {
   const [payPeriodStart, setPayPeriodStart] = useState(defaultPeriodStart);
   const [payPeriodEnd, setPayPeriodEnd] = useState(defaultPeriodEnd);
@@ -27,37 +32,31 @@ export function PayrollRunForm({ defaultPeriodStart, defaultPeriodEnd, defaultPa
   };
 
   return (
-    <div className="flex flex-col gap-md">
-      <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-        <div>
-          <label className={fieldLabel} htmlFor="payPeriodStart">
-            Pay Period Start
-          </label>
-          <input id="payPeriodStart" type="date" className={fieldInput} value={payPeriodStart} onChange={(e) => setPayPeriodStart(e.target.value)} />
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="payPeriodEnd">
-            Pay Period End
-          </label>
-          <input id="payPeriodEnd" type="date" className={fieldInput} value={payPeriodEnd} onChange={(e) => setPayPeriodEnd(e.target.value)} />
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="payPeriodStart">Pay Period Start</FieldLabel>
+          <Input id="payPeriodStart" type="date" value={payPeriodStart} onChange={(e) => setPayPeriodStart(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="payPeriodEnd">Pay Period End</FieldLabel>
+          <Input id="payPeriodEnd" type="date" value={payPeriodEnd} onChange={(e) => setPayPeriodEnd(e.target.value)} />
+        </Field>
       </div>
-      <div>
-        <label className={fieldLabel} htmlFor="payDate">
-          Pay Date
-        </label>
-        <input id="payDate" type="date" className={fieldInput} value={payDate} onChange={(e) => setPayDate(e.target.value)} />
-        <p className={fieldHint}>
+      <Field>
+        <FieldLabel htmlFor="payDate">Pay Date</FieldLabel>
+        <Input id="payDate" type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+        <FieldDescription>
           Computes a draft payslip for every active employee from their standard salary/allowances/deductions, using
-          whichever SARS tax year's PAYE/UIF/SDL configuration covers this pay date. Nothing posts to the GL until
-          you review and post the run.
-        </p>
-      </div>
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+          whichever SARS tax year&apos;s PAYE/UIF/SDL configuration covers this pay date. Nothing posts to the GL
+          until you review and post the run.
+        </FieldDescription>
+      </Field>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="button" onClick={submit} disabled={submitting || !payPeriodStart || !payPeriodEnd || !payDate}>
+        <Button type="button" disabled={submitting || !payPeriodStart || !payPeriodEnd || !payDate} onClick={() => void submit()}>
           Create Draft Run
         </Button>
       </div>

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { CgtDisposalComputation } from '@/types';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { fieldInput } from './formStyles';
+import { Input } from '@/components/ui/shadcn/input';
+import { formatCurrency } from '@/lib/app/format';
 
 export interface CapitalGainsTableProps {
   disposals: CgtDisposalComputation[];
@@ -23,24 +22,16 @@ function SellingCostsCell({ disposal, onSellingCostsChange }: { disposal: CgtDis
   };
 
   return (
-    <input
-      aria-label={`Selling costs for ${disposal.assetNumber}`}
-      type="number"
-      step="0.01"
-      min="0"
-      className={fieldInput}
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
-    />
+    <Input aria-label={`Selling costs for ${disposal.assetNumber}`} type="number" step="0.01" min="0" className="text-right tabular-nums" value={value} onChange={(e) => setValue(e.target.value)} onBlur={commit} />
   );
 }
 
 /**
  * Reconciliation table — accounting figures (Proceeds, Carrying Value,
  * Accounting Gain/Loss) side by side with tax figures (Base Cost, Selling
- * Costs, Capital Gain/Loss) so §55's "separate accounting profit from
- * taxable capital gain" is visually obvious.
+ * Costs, Capital Gain/Loss) so accounting profit stays visibly separate
+ * from taxable capital gain. Re-skinned onto shadcn table styling (M7);
+ * logic unchanged.
  */
 export function CapitalGainsTable({ disposals, onSellingCostsChange }: CapitalGainsTableProps) {
   const sorted = [...disposals].sort((a, b) => b.disposalDate.localeCompare(a.disposalDate));
@@ -48,43 +39,33 @@ export function CapitalGainsTable({ disposals, onSellingCostsChange }: CapitalGa
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full min-w-[1080px] border-collapse text-left text-sm">
-        <thead className="bg-background">
+        <thead className="bg-muted/40">
           <tr>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Disposal Date</th>
-            <th className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">Asset</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Proceeds</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Carrying Value</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Accounting Gain / Loss</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Base Cost</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Selling Costs</th>
-            <th className="whitespace-nowrap px-md py-sm text-right font-medium text-text-secondary">Capital Gain / Loss</th>
+            <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground">Disposal Date</th>
+            <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground">Asset</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Proceeds</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Carrying Value</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Accounting Gain / Loss</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Base Cost</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Selling Costs</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Capital Gain / Loss</th>
           </tr>
         </thead>
         <tbody>
           {sorted.map((disposal) => (
             <tr key={disposal.disposalId} className="border-t border-border">
-              <td className="whitespace-nowrap px-md py-sm text-text-primary">{disposal.disposalDate.slice(0, 10)}</td>
-              <td className="whitespace-nowrap px-md py-sm text-text-primary">
+              <td className="whitespace-nowrap px-4 py-2.5">{disposal.disposalDate.slice(0, 10)}</td>
+              <td className="whitespace-nowrap px-4 py-2.5">
                 {disposal.assetNumber} - {disposal.assetName}
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={disposal.proceeds} format={formatCurrency} showFlash={false} />
-              </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={disposal.accountingCarryingValue} format={formatCurrency} showFlash={false} />
-              </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={disposal.accountingGainLoss} format={formatCurrency} showFlash={false} />
-              </td>
-              <td className="whitespace-nowrap px-md py-sm text-right tabular-nums">
-                <FinancialNumber value={disposal.baseCost} format={formatCurrency} showFlash={false} />
-              </td>
-              <td className="whitespace-nowrap px-md py-sm text-right">
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(disposal.proceeds)}</td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(disposal.accountingCarryingValue)}</td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(disposal.accountingGainLoss)}</td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(disposal.baseCost)}</td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right">
                 <SellingCostsCell disposal={disposal} onSellingCostsChange={onSellingCostsChange} />
               </td>
-              <td className="whitespace-nowrap px-md py-sm text-right font-semibold tabular-nums">
-                <FinancialNumber value={disposal.capitalGainLoss} format={formatCurrency} showFlash={false} />
-              </td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums">{formatCurrency(disposal.capitalGainLoss)}</td>
             </tr>
           ))}
         </tbody>

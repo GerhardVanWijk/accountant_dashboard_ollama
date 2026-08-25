@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import type { Customer, SalesOrder } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Amount } from '@/components/app/figure';
 import type { CreateSalesOrderDTO } from '../services';
-import { LineItemsEditor } from './LineItemsEditor';
+import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 
-const inputClass =
-  'w-full rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface SalesOrderFormProps {
   customers: Customer[];
@@ -25,9 +27,14 @@ function today(): string {
 }
 
 /**
- * Sales Order create/edit form. Sales Orders never post to the GL — this
+ * Sales Order create/edit form — same fields/validation/submit shape as
+ * before the port, JSX re-skinned onto v0's Field/Input primitives and the
+ * v0-styled SalesLineItemsEditor. Sales Orders never post to the GL — this
  * only builds and validates the CreateSalesOrderDTO payload for
- * salesOrderService.createSalesOrder() / updateSalesOrder().
+ * salesOrderService.createSalesOrder()/updateSalesOrder(). `quoteId` is
+ * carried over unchanged when editing an order that came from a converted
+ * quote; there is no picker for it here since a sales order is never
+ * manually linked to a quote after the fact.
  */
 export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSubmit, onCancel }: SalesOrderFormProps) {
   const { taxRates } = useTaxRates();
@@ -47,7 +54,8 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
   const taxTotal = lineItems.reduce((sum, item) => sum + item.taxAmount, 0);
   const total = subtotal + taxTotal;
 
-  async function handleSubmit() {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setFormError(null);
     if (!orderNumber.trim()) return setFormError('Order number is required.');
     if (!customerId) return setFormError('Select a customer.');
@@ -78,64 +86,90 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
   }
 
   return (
-    <div className="flex flex-col gap-lg">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       {formError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-sm py-xs text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {formError}
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-md md:grid-cols-2">
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Order Number</span>
-          <input className={`${inputClass} font-mono`} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Customer</span>
-          <select className={inputClass} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="order-number">Order number</FieldLabel>
+          <Input
+            id="order-number"
+            className="figure"
+            value={orderNumber}
+            onChange={(e) => setOrderNumber(e.target.value)}
+            disabled={isSubmitting}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="order-customer">Customer</FieldLabel>
+          <select
+            id="order-customer"
+            className={selectClassName}
+            value={customerId}
+            onChange={(e) => setCustomerId(e.target.value)}
+            disabled={isSubmitting}
+          >
+            <option value="">Select customer</option>
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-xs text-sm">
-          <span className="font-medium text-text-primary">Order Date</span>
-          <input type="date" className={inputClass} value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
-        </label>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="order-date">Order date</FieldLabel>
+          <Input
+            id="order-date"
+            type="date"
+            value={orderDate}
+            onChange={(e) => setOrderDate(e.target.value)}
+            disabled={isSubmitting}
+          />
+        </Field>
       </div>
 
-      <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} products={products} warehouses={warehouses} />
+      <SalesLineItemsEditor
+        lineItems={lineItems}
+        onChange={setLineItems}
+        taxRates={taxRates}
+        products={products}
+        warehouses={warehouses}
+        disabled={isSubmitting}
+      />
 
-      <div className="grid grid-cols-3 gap-md rounded-md border border-border bg-background p-md text-sm">
+      <div className="grid grid-cols-3 gap-4 rounded-xl border border-border bg-muted/20 p-4 text-sm">
         <div>
-          <div className="text-xs text-text-muted">Subtotal</div>
-          <FinancialNumber value={subtotal} format={formatCurrency} className="text-base font-semibold" />
+          <div className="text-xs text-muted-foreground">Subtotal</div>
+          <Amount value={subtotal} className="text-base font-semibold" />
         </div>
         <div>
-          <div className="text-xs text-text-muted">Tax</div>
-          <FinancialNumber value={taxTotal} format={formatCurrency} className="text-base font-semibold" />
+          <div className="text-xs text-muted-foreground">Tax</div>
+          <Amount value={taxTotal} className="text-base font-semibold" />
         </div>
         <div>
-          <div className="text-xs text-text-muted">Total</div>
-          <FinancialNumber value={total} format={formatCurrency} className="text-base font-semibold" />
+          <div className="text-xs text-muted-foreground">Total</div>
+          <Amount value={total} className="text-base font-semibold" />
         </div>
       </div>
 
-      <label className="flex flex-col gap-xs text-sm">
-        <span className="font-medium text-text-primary">Notes (optional)</span>
-        <textarea className={inputClass} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </label>
+      <Field>
+        <FieldLabel htmlFor="order-notes">Notes (optional)</FieldLabel>
+        <Textarea id="order-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={isSubmitting} />
+      </Field>
 
-      <div className="flex justify-end gap-sm border-t border-border pt-md">
-        <Button variant="ghost" type="button" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button variant="outline" type="button" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button variant="primary" type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
-          {isSubmitting ? 'Saving…' : salesOrder ? 'Save Sales Order' : 'Create Sales Order'}
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Saving…' : salesOrder ? 'Save sales order' : 'Create sales order'}
         </Button>
       </div>
-    </div>
+    </form>
   );
 }

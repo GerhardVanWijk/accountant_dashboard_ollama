@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import type { LeaseContract } from '@/types/lease';
-import { Button } from '@/components/ui/Button';
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { formatCurrency } from '@/utils/formatFinancial';
-import { fieldHint, fieldInput, fieldLabel } from './formStyles';
+import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Amount, FigureBlock } from '@/components/app/figure';
+import { formatCurrency } from '@/lib/app/format';
 
 export interface TerminateLeaseFormProps {
   lease: LeaseContract;
@@ -13,9 +14,10 @@ export interface TerminateLeaseFormProps {
 
 /**
  * Small confirm form for terminating an active lease — the gain/loss
- * preview below is computed the same way leaseDisposalService.terminateLease()
- * computes it for real (outstandingLeaseLiability - ROU carrying value),
- * mirroring DisposeAssetForm's live preview.
+ * preview below is computed the same way
+ * leaseDisposalService.terminateLease() computes it for real
+ * (outstandingLeaseLiability - ROU carrying value), mirroring
+ * DisposeAssetForm's live preview. Re-skinned onto v0's Field (M13).
  */
 export function TerminateLeaseForm({ lease, onSubmit, onCancel }: TerminateLeaseFormProps) {
   const [terminationDate, setTerminationDate] = useState(new Date().toISOString().slice(0, 10));
@@ -34,46 +36,30 @@ export function TerminateLeaseForm({ lease, onSubmit, onCancel }: TerminateLease
   };
 
   return (
-    <div className="flex flex-col gap-md">
-      <p className="text-sm text-text-secondary">
-        Terminating <span className="font-medium text-text-primary">{lease.leaseNumber} - {lease.assetDescription}</span>.
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        Terminating <span className="font-medium text-foreground">{lease.leaseNumber} - {lease.assetDescription}</span>.
       </p>
-      <div>
-        <label className={fieldLabel} htmlFor="terminationDate">
-          Termination Date
-        </label>
-        <input
-          id="terminationDate"
-          type="date"
-          className={fieldInput}
-          value={terminationDate}
-          onChange={(e) => setTerminationDate(e.target.value)}
-        />
-        <p className={fieldHint}>
-          Clears the Right-of-Use asset and remaining lease liability and books the resulting gain or loss.
-        </p>
-      </div>
+      <Field>
+        <FieldLabel htmlFor="terminationDate">Termination Date</FieldLabel>
+        <Input id="terminationDate" type="date" value={terminationDate} onChange={(e) => setTerminationDate(e.target.value)} />
+        <FieldDescription>Clears the Right-of-Use asset and remaining lease liability and books the resulting gain or loss.</FieldDescription>
+      </Field>
 
-      <div className="rounded-md border border-border bg-background p-md text-sm">
-        <div className="flex justify-between">
-          <span className="text-text-secondary">ROU Carrying Value</span>
-          <span className="font-medium tabular-nums">{formatCurrency(rouCarryingValue)}</span>
-        </div>
-        <div className="mt-xs flex justify-between">
-          <span className="text-text-secondary">Outstanding Lease Liability</span>
-          <span className="font-medium tabular-nums">{formatCurrency(lease.outstandingLeaseLiability)}</span>
-        </div>
-        <div className="mt-xs flex justify-between">
-          <span className="text-text-secondary">{gainLoss >= 0 ? 'Gain' : 'Loss'} on Termination</span>
-          <FinancialNumber value={gainLoss} format={formatCurrency} showFlash={false} />
+      <div className="grid grid-cols-2 gap-4 rounded-lg border border-border bg-muted/30 p-4">
+        <FigureBlock label="ROU Carrying Value" value={formatCurrency(rouCarryingValue)} className="text-base" />
+        <FigureBlock label="Outstanding Lease Liability" value={formatCurrency(lease.outstandingLeaseLiability)} className="text-base" />
+        <div className="col-span-2 flex flex-col gap-1">
+          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{gainLoss >= 0 ? 'Gain' : 'Loss'} on Termination</span>
+          <Amount value={gainLoss} className="text-base font-medium" />
         </div>
       </div>
 
-      <div className="flex justify-end gap-sm pt-sm">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="button" variant="danger" onClick={submit} disabled={submitting || !terminationDate}>
+        <Button type="button" variant="destructive" disabled={submitting || !terminationDate} onClick={() => void submit()}>
           Terminate Lease
         </Button>
       </div>

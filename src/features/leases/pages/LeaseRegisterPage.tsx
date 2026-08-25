@@ -1,25 +1,25 @@
 import { useState } from 'react';
+import { Loader2, Plus } from 'lucide-react';
 import type { LeaseContract } from '@/types/lease';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useLeases } from '../hooks/useLeases';
 import { useLeaseAmortization } from '../hooks/useLeaseAmortization';
 import { LeaseForm } from '../components/LeaseForm';
 import { TerminateLeaseForm } from '../components/TerminateLeaseForm';
 import { LeasesTable } from '../components/LeasesTable';
-import { Modal } from '../components/Modal';
 import type { CreateLeaseDTO, UpdateLeaseDTO } from '../services';
 
-type DialogState =
-  | { mode: 'create' }
-  | { mode: 'edit'; lease: LeaseContract }
-  | { mode: 'terminate'; lease: LeaseContract }
-  | null;
+type DialogState = { mode: 'create' } | { mode: 'edit'; lease: LeaseContract } | { mode: 'terminate'; lease: LeaseContract } | null;
 
-/** Lease Register — route `/leases/register`. */
+/**
+ * Lease Register — route `/leases/register`. Real useLeases()/leaseService
+ * data throughout (lessee accounting only). No `leases` entry exists in
+ * the real permission catalog (M11), so this route/its actions stay
+ * ungated, same as before. Re-skinned onto v0's
+ * PageHeader/SectionCard/DataTable/Dialog (M13).
+ */
 export function LeaseRegisterPage() {
   const { leases, loading, error, refetch, createLease, updateLease, deleteLease, postCommencement, terminateLease } = useLeases();
   const { history: amortizationHistory, loading: amortizationLoading } = useLeaseAmortization();
@@ -78,58 +78,69 @@ export function LeaseRegisterPage() {
   const busy = loading || amortizationLoading;
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Lease Register</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Register, commence, and terminate leases (lessee accounting only). /leases/register
-          </p>
-        </div>
-        <Button onClick={() => setDialog({ mode: 'create' })}>New Lease</Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Lease register"
+        description="Register, commence, and terminate leases (lessee accounting only)."
+        actions={
+          <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+            <Plus data-icon="inline-start" />
+            New lease
+          </Button>
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {actionError}
         </p>
       )}
 
-      {busy && <Spinner label="Loading leases…" />}
-      {!busy && error && <ErrorState message={error.message} onRetry={refetch} />}
+      {busy && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading leases…</p>
+        </div>
+      )}
+      {!busy && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       {!busy && !error && (
-        <Card>
-          {leases.length === 0 ? (
-            <EmptyState
-              title="No leases yet"
-              message="Add a lease to start the register."
-              action={<Button onClick={() => setDialog({ mode: 'create' })}>New Lease</Button>}
-            />
-          ) : (
-            <LeasesTable
-              leases={leases}
-              completedAmortizationRunsByLease={completedAmortizationRunsByLease}
-              onEdit={(lease) => setDialog({ mode: 'edit', lease })}
-              onPostCommencement={handlePostCommencement}
-              onTerminate={(lease) => setDialog({ mode: 'terminate', lease })}
-              onDelete={handleDelete}
-            />
-          )}
-        </Card>
+        <SectionCard>
+          <LeasesTable
+            leases={leases}
+            completedAmortizationRunsByLease={completedAmortizationRunsByLease}
+            onEdit={(lease) => setDialog({ mode: 'edit', lease })}
+            onPostCommencement={(lease) => void handlePostCommencement(lease)}
+            onTerminate={(lease) => setDialog({ mode: 'terminate', lease })}
+            onDelete={(lease) => void handleDelete(lease)}
+          />
+        </SectionCard>
       )}
 
-      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
-        <Modal title={dialog.mode === 'edit' ? 'Edit Lease' : 'New Lease'} onClose={() => setDialog(null)}>
-          <LeaseForm lease={dialog.mode === 'edit' ? dialog.lease : undefined} onSubmit={handleFormSubmit} onCancel={() => setDialog(null)} />
-        </Modal>
-      )}
+      <Dialog open={dialog?.mode === 'create' || dialog?.mode === 'edit'} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{dialog?.mode === 'edit' ? 'Edit Lease' : 'New Lease'}</DialogTitle>
+          </DialogHeader>
+          {(dialog?.mode === 'create' || dialog?.mode === 'edit') && <LeaseForm lease={dialog.mode === 'edit' ? dialog.lease : undefined} onSubmit={handleFormSubmit} onCancel={() => setDialog(null)} />}
+        </DialogContent>
+      </Dialog>
 
-      {dialog?.mode === 'terminate' && (
-        <Modal title="Terminate Lease" onClose={() => setDialog(null)}>
-          <TerminateLeaseForm lease={dialog.lease} onSubmit={handleTerminate} onCancel={() => setDialog(null)} />
-        </Modal>
-      )}
+      <Dialog open={dialog?.mode === 'terminate'} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Terminate Lease</DialogTitle>
+          </DialogHeader>
+          {dialog?.mode === 'terminate' && <TerminateLeaseForm lease={dialog.lease} onSubmit={handleTerminate} onCancel={() => setDialog(null)} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import type { Customer } from '@/types';
+import type { Customer, Permission } from '@/types';
 import { CustomerListPage } from './CustomerListPage';
 import { useCustomers } from '../hooks/useCustomers';
 import { useCustomerMutations } from '../hooks/useCustomerMutations';
+import { useAuthStore } from '@/stores/authStore';
+import { usePermissionStore } from '@/features/auth/stores/permissionStore';
 
 vi.mock('../hooks/useCustomers');
 vi.mock('../hooks/useCustomerMutations');
@@ -32,8 +34,14 @@ const noopProps = {
   onEdit: vi.fn(),
 };
 
+function makePermission(overrides: Partial<Permission> = {}): Permission {
+  return { id: 'perm_1', feature: 'customer_management', action: 'create', createdAt: '2026-01-01T00:00:00.000Z', ...overrides };
+}
+
 describe('CustomerListPage', () => {
   beforeEach(() => {
+    useAuthStore.setState({ profile: { id: 'u1', role: 'viewer', companyId: 'c1', isActive: true, createdAt: '', updatedAt: '' } });
+    usePermissionStore.getState().clear();
     mockedUseCustomerMutations.mockReturnValue({
       saving: false,
       error: null,
@@ -79,5 +87,25 @@ describe('CustomerListPage', () => {
     render(<CustomerListPage {...noopProps} />);
     expect(screen.getByText('Acme Trading Co.')).toBeInTheDocument();
     expect(screen.getByText('Northwind Distribution')).toBeInTheDocument();
+  });
+
+  it('hides "New customer" for a user without customer_management:create', () => {
+    mockedUseCustomers.mockReturnValue({ customers: [baseCustomer()], loading: false, error: null, refetch: vi.fn() });
+    render(<CustomerListPage {...noopProps} />);
+    expect(screen.queryByRole('button', { name: /new customer/i })).not.toBeInTheDocument();
+  });
+
+  it('shows "New customer" once the user holds customer_management:create', () => {
+    usePermissionStore.getState().setPermissions('c1', [makePermission()]);
+    mockedUseCustomers.mockReturnValue({ customers: [baseCustomer()], loading: false, error: null, refetch: vi.fn() });
+    render(<CustomerListPage {...noopProps} />);
+    expect(screen.getByRole('button', { name: /new customer/i })).toBeInTheDocument();
+  });
+
+  it('an admin sees "New customer" regardless of fine-grained permission assignments', () => {
+    useAuthStore.setState({ profile: { id: 'u1', role: 'admin', companyId: 'c1', isActive: true, createdAt: '', updatedAt: '' } });
+    mockedUseCustomers.mockReturnValue({ customers: [baseCustomer()], loading: false, error: null, refetch: vi.fn() });
+    render(<CustomerListPage {...noopProps} />);
+    expect(screen.getByRole('button', { name: /new customer/i })).toBeInTheDocument();
   });
 });

@@ -1,27 +1,23 @@
 import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import type { DividendDeclaration } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Icon } from '@/components/ui/Icon';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useDividendDeclarations } from '../hooks/useDividendDeclarations';
 import { DividendDeclarationForm } from '../components/DividendDeclarationForm';
 import { DividendDeclarationsTable } from '../components/DividendDeclarationsTable';
-import { Modal } from '../components/Modal';
 import type { CreateDividendDeclarationInput } from '../services';
 
 /**
- * Dividends Tax — route `/tax/dividends` (SA_ACCOUNTING_MASTER_SPEC.md
- * §56). Gross, company-wide declarations only: this app has no
- * shareholder register anywhere, so there is no per-shareholder
- * allocation here — see DividendDeclaration's doc comment
- * (src/types/dividendsTax.ts) for that documented, out-of-scope gap.
+ * Dividends Tax — route `/tax/dividends`. Gross, company-wide
+ * declarations only: this app has no shareholder register anywhere, so
+ * there is no per-shareholder allocation here. Re-skinned onto v0's
+ * PageHeader/SectionCard/Dialog (M7); declare/pay/remit lifecycle wiring
+ * unchanged.
  */
 export function DividendsTaxPage() {
-  const { declarations, loading, error, refetch, createDeclaration, declare, pay, remitToSars, deleteDraft } =
-    useDividendDeclarations();
+  const { declarations, loading, error, refetch, createDeclaration, declare, pay, remitToSars, deleteDraft } = useDividendDeclarations();
   const [showCreate, setShowCreate] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -46,12 +42,7 @@ export function DividendsTaxPage() {
   };
 
   const handlePay = async (declaration: DividendDeclaration) => {
-    if (
-      !window.confirm(
-        `Record payment of ${declaration.netPayableToShareholders.toFixed(2)} net to shareholders (withholding ${declaration.dividendsTaxWithheld.toFixed(2)})?`,
-      )
-    )
-      return;
+    if (!window.confirm(`Record payment of ${declaration.netPayableToShareholders.toFixed(2)} net to shareholders (withholding ${declaration.dividendsTaxWithheld.toFixed(2)})?`)) return;
     setActionError(null);
     try {
       await pay(declaration.id);
@@ -81,61 +72,55 @@ export function DividendsTaxPage() {
   };
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="flex items-center gap-sm text-2xl font-semibold text-text-primary">
-            <Icon name="dividends" size={22} />
-            Dividends Tax
-          </h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Dividend declarations, payments, and Dividends Withholding Tax. /tax/dividends
-          </p>
-        </div>
-        <Button onClick={() => setShowCreate(true)}>New Declaration</Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Dividends Tax"
+        description="Dividend declarations, payments, and Dividends Withholding Tax."
+        actions={<Button onClick={() => setShowCreate(true)}>New Declaration</Button>}
+      />
 
-      <p className="rounded-md border border-border bg-panel px-md py-sm text-xs text-text-secondary">
-        This system has no shareholder register, so amounts here are gross/company-wide only — dividends are not
-        allocated to individual shareholders. Withholding is calculated at the statutory Dividends Withholding Tax
-        rate on the taxable (non-exempt) portion; any exemption is a manual override you enter with a reason, not a
-        computed eligibility check. Not a substitute for professional review (SA_ACCOUNTING_MASTER_SPEC.md §110/§111).
+      <p className="rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-xs text-muted-foreground">
+        This system has no shareholder register, so amounts here are gross/company-wide only — dividends are not allocated to individual shareholders. Withholding is calculated at the
+        statutory Dividends Withholding Tax rate on the taxable (non-exempt) portion; any exemption is a manual override you enter with a reason, not a computed eligibility check. Not a
+        substitute for professional review.
       </p>
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
           {actionError}
         </p>
       )}
 
-      {loading && <Spinner label="Loading dividend declarations…" />}
-      {!loading && error && <ErrorState message={error.message} onRetry={refetch} />}
-
+      {loading && (
+        <div role="status" className="flex min-h-[30vh] items-center justify-center gap-2 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <span className="text-sm">Loading dividend declarations…</span>
+        </div>
+      )}
+      {!loading && error && (
+        <SectionCard>
+          <p role="alert" className="text-sm text-destructive">
+            {error.message}
+          </p>
+          <Button variant="outline" className="mt-3" onClick={refetch}>
+            Retry
+          </Button>
+        </SectionCard>
+      )}
       {!loading && !error && (
-        <Card>
-          {declarations.length === 0 ? (
-            <EmptyState
-              title="No dividend declarations yet"
-              message="Create a declaration to start the Dividends Tax lifecycle."
-              action={<Button onClick={() => setShowCreate(true)}>New Declaration</Button>}
-            />
-          ) : (
-            <DividendDeclarationsTable
-              declarations={declarations}
-              onDeclare={handleDeclare}
-              onPay={handlePay}
-              onRemit={handleRemit}
-              onDelete={handleDelete}
-            />
-          )}
-        </Card>
+        <SectionCard>
+          <DividendDeclarationsTable declarations={declarations} onDeclare={handleDeclare} onPay={handlePay} onRemit={handleRemit} onDelete={handleDelete} />
+        </SectionCard>
       )}
 
-      {showCreate && (
-        <Modal title="New Dividend Declaration" onClose={() => setShowCreate(false)}>
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>New Dividend Declaration</DialogTitle>
+          </DialogHeader>
           <DividendDeclarationForm onSubmit={handleCreate} onCancel={() => setShowCreate(false)} />
-        </Modal>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

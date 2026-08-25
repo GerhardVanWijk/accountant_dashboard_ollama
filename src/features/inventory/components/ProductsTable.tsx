@@ -1,23 +1,17 @@
-import { useMemo, useState } from 'react';
-import {
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  useReactTable,
-  type ColumnDef,
-  type SortingState,
-} from '@tanstack/react-table';
 import type { Product } from '@/types';
-import { Icon } from '@/components/ui/Icon';
-import { formatCurrency } from '@/utils/formatCurrency';
-import { getTaxRateLabel, INVENTORY_CURRENCY } from '../constants';
+import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { Amount } from '@/components/app/figure';
+import { StatusBadge } from '@/components/app/status-badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { cn } from '@/lib/utils';
+import { getTaxRateLabel } from '../constants';
 import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
 
 export interface ProductsTableProps {
   products: Product[];
-  onEdit: (product: Product) => void;
-  onDelete: (product: Product) => void;
+  /** Omit either (M11: gated by inventory:update / inventory:delete) to hide that row action. */
+  onEdit?: (product: Product) => void;
+  onDelete?: (product: Product) => void;
 }
 
 type StockFlag = 'out' | 'low' | 'ok' | 'n/a';
@@ -30,10 +24,10 @@ function stockFlagFor(product: Product): StockFlag {
 }
 
 const flagBadgeClasses: Record<StockFlag, string> = {
-  out: 'bg-danger text-on-accent',
-  low: 'bg-warning text-on-accent',
-  ok: 'bg-success text-on-accent',
-  'n/a': 'bg-background text-text-muted',
+  out: 'bg-negative/15 text-negative',
+  low: 'bg-warning/15 text-warning',
+  ok: 'bg-positive/15 text-positive',
+  'n/a': 'bg-muted text-muted-foreground',
 };
 
 const flagLabels: Record<StockFlag, string> = {
@@ -44,205 +38,149 @@ const flagLabels: Record<StockFlag, string> = {
 };
 
 /**
- * Searchable / filterable / sortable product directory table (TanStack
- * Table). Stock-level math (stockFlagFor) mirrors
+ * Searchable / filterable / sortable product directory, re-skinned onto
+ * v0's DataTable (M8) — mirrors accounting-v0-frontend's InventoryTable
+ * shape. Stock-level math (stockFlagFor) mirrors
  * stockService.getLowStockItems/getOutOfStockItems' thresholds but reads
  * from already-loaded product data for per-row display — the authoritative
  * low/out-of-stock lists themselves come from stockService (see
- * LowStockAlertWidget.tsx), not from this table.
+ * LowStockAlertWidget.tsx), not from this table. Product.status
+ * (active/inactive) and the stock flag are two separate real axes, kept
+ * separate here — v0's own mock collapsed them into one status field,
+ * which the real Product type does not.
  */
 export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps) {
   const { taxRates } = useAllTaxRates();
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | Product['type']>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | Product['status']>('all');
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }]);
+  const categories = [...new Set(products.map((p) => p.category).filter((c): c is string => Boolean(c)))].sort();
 
-  const categories = useMemo(
-    () => Array.from(new Set(products.map((p) => p.category).filter((c): c is string => Boolean(c)))).sort(),
-    [products],
-  );
-  const [categoryFilter, setCategoryFilter] = useState<'all' | string>('all');
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return products.filter((p) => {
-      if (typeFilter !== 'all' && p.type !== typeFilter) return false;
-      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
-      if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
-      if (q && !p.sku.toLowerCase().includes(q) && !p.name.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [products, search, typeFilter, statusFilter, categoryFilter]);
-
-  const columns = useMemo<ColumnDef<Product>[]>(
-    () => [
-      { accessorKey: 'sku', header: 'SKU' },
-      { accessorKey: 'name', header: 'Name' },
-      {
-        accessorKey: 'type',
-        header: 'Type',
-        cell: ({ getValue }) => (getValue<Product['type']>() === 'good' ? 'Good' : 'Service'),
+  const columns: DataTableColumn<Product>[] = [
+    {
+      key: 'sku',
+      header: 'Item',
+      sortValue: (p) => p.sku,
+      cell: (p) => (
+        <div className="flex flex-col">
+          <span className="font-medium text-foreground">{p.name}</span>
+          <span className="figure text-xs text-muted-foreground tabular-nums">{p.sku}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      hideBelowMd: true,
+      sortValue: (p) => p.type,
+      cell: (p) => <span className="text-xs">{p.type === 'good' ? 'Good' : 'Service'}</span>,
+    },
+    {
+      key: 'category',
+      header: 'Category',
+      hideBelowMd: true,
+      sortValue: (p) => p.category ?? '',
+      cell: (p) => <span className="text-xs text-muted-foreground">{p.category ?? '—'}</span>,
+    },
+    {
+      key: 'costPrice',
+      header: 'Unit cost',
+      align: 'right',
+      hideBelowMd: true,
+      sortValue: (p) => p.costPrice,
+      cell: (p) => <Amount value={p.costPrice} plain className="text-sm text-muted-foreground" />,
+    },
+    {
+      key: 'unitPrice',
+      header: 'Sell price',
+      align: 'right',
+      hideBelowMd: true,
+      sortValue: (p) => p.unitPrice,
+      cell: (p) => <Amount value={p.unitPrice} plain className="text-sm text-muted-foreground" />,
+    },
+    {
+      key: 'taxRate',
+      header: 'Tax rate',
+      hideBelowMd: true,
+      sortValue: (p) => getTaxRateLabel(p.taxRateId, taxRates),
+      cell: (p) => <span className="text-xs text-muted-foreground">{getTaxRateLabel(p.taxRateId, taxRates)}</span>,
+    },
+    {
+      key: 'quantity',
+      header: 'On hand',
+      align: 'right',
+      sortValue: (p) => p.quantityOnHand,
+      cell: (p) => (p.trackInventory ? <span className="figure text-sm tabular-nums">{p.quantityOnHand}</span> : <span className="text-xs text-muted-foreground">—</span>),
+    },
+    {
+      key: 'stock',
+      header: 'Stock',
+      sortValue: (p) => stockFlagFor(p),
+      cell: (p) => {
+        const flag = stockFlagFor(p);
+        return <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', flagBadgeClasses[flag])}>{flagLabels[flag]}</span>;
       },
-      { accessorKey: 'uom', header: 'UOM', cell: ({ getValue }) => getValue<string | undefined>() ?? '—' },
-      {
-        accessorKey: 'costPrice',
-        header: 'Cost Price',
-        cell: ({ getValue }) => formatCurrency(getValue<number>(), INVENTORY_CURRENCY),
-      },
-      {
-        accessorKey: 'unitPrice',
-        header: 'Sell Price',
-        cell: ({ getValue }) => formatCurrency(getValue<number>(), INVENTORY_CURRENCY),
-      },
-      {
-        accessorKey: 'taxRateId',
-        header: 'Tax Rate',
-        cell: ({ getValue }) => getTaxRateLabel(getValue<string | undefined>(), taxRates),
-      },
-      {
-        accessorKey: 'quantityOnHand',
-        header: 'Qty on Hand',
-        cell: ({ row }) => (row.original.trackInventory ? row.original.quantityOnHand : '—'),
-      },
-      {
-        id: 'stockFlag',
-        header: 'Stock',
-        cell: ({ row }) => {
-          const flag = stockFlagFor(row.original);
-          return (
-            <span className={`inline-flex items-center rounded-full px-sm py-0.5 text-xs font-medium ${flagBadgeClasses[flag]}`}>
-              {flagLabels[flag]}
-            </span>
-          );
-        },
-      },
-      {
-        id: 'actions',
-        header: '',
-        cell: ({ row }) => (
-          <div className="flex justify-end gap-sm">
-            <button
-              type="button"
-              onClick={() => onEdit(row.original)}
-              className="rounded-md px-sm py-xs text-xs font-medium text-primary hover:underline"
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              onClick={() => onDelete(row.original)}
-              className="rounded-md px-sm py-xs text-xs font-medium text-danger hover:underline"
-            >
-              Delete
-            </button>
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortValue: (p) => p.status,
+      cell: (p) => <StatusBadge status={p.status} />,
+    },
+    {
+      key: 'actions',
+      header: '',
+      cell: (p) =>
+        onEdit || onDelete ? (
+          <div className="flex justify-end gap-1">
+            {onEdit && (
+              <Button variant="ghost" size="sm" onClick={() => onEdit(p)}>
+                Edit
+              </Button>
+            )}
+            {onDelete && (
+              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(p)}>
+                Delete
+              </Button>
+            )}
           </div>
-        ),
-      },
-    ],
-    [onEdit, onDelete, taxRates],
-  );
-
-  const table = useReactTable({
-    data: filtered,
-    columns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-  });
+        ) : null,
+    },
+  ];
 
   return (
-    <div className="flex flex-col gap-md">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div className="relative w-full md:max-w-xs">
-          <Icon
-            name="search"
-            size={16}
-            className="pointer-events-none absolute left-sm top-1/2 -translate-y-1/2 text-text-muted"
-          />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by SKU or name…"
-            aria-label="Search products"
-            className="w-full rounded-md border border-border bg-panel py-xs pl-2xl pr-sm text-sm text-text-primary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-          />
-        </div>
-        <div className="flex flex-wrap gap-sm">
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as 'all' | Product['type'])}
-            aria-label="Filter by type"
-            className="rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary"
-          >
-            <option value="all">All types</option>
-            <option value="good">Goods</option>
-            <option value="service">Services</option>
-          </select>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            aria-label="Filter by category"
-            className="rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary"
-          >
-            <option value="all">All categories</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'all' | Product['status'])}
-            aria-label="Filter by status"
-            className="rounded-md border border-border bg-panel px-sm py-xs text-sm text-text-primary"
-          >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full min-w-[900px] border-collapse text-left text-sm">
-          <thead className="bg-background">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="whitespace-nowrap px-md py-sm font-medium text-text-secondary">
-                    {header.isPlaceholder ? null : (
-                      <button
-                        type="button"
-                        onClick={header.column.getToggleSortingHandler()}
-                        disabled={!header.column.getCanSort()}
-                        className="inline-flex items-center gap-xs disabled:cursor-default"
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ?? ''}
-                      </button>
-                    )}
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="border-t border-border hover:bg-background">
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="whitespace-nowrap px-md py-sm text-text-primary">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <DataTable
+      rows={products}
+      columns={columns}
+      getRowKey={(p) => p.id}
+      searchable={(p) => [p.sku, p.name, p.category ?? ''].join(' ')}
+      searchPlaceholder="Search by SKU or name"
+      initialSortKey="sku"
+      filters={[
+        {
+          key: 'type',
+          label: 'All types',
+          options: [
+            { value: 'good', label: 'Goods' },
+            { value: 'service', label: 'Services' },
+          ],
+          match: (p, value) => p.type === value,
+        },
+        {
+          key: 'category',
+          label: 'All categories',
+          options: categories.map((c) => ({ value: c, label: c })),
+          match: (p, value) => p.category === value,
+        },
+        {
+          key: 'status',
+          label: 'All statuses',
+          options: [
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+          ],
+          match: (p, value) => p.status === value,
+        },
+      ]}
+      emptyTitle="No products yet"
+      emptyDescription="Add your first product or service to start tracking stock."
+    />
   );
 }

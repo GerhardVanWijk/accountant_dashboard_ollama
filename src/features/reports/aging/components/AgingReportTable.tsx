@@ -1,7 +1,5 @@
-import { FinancialNumber } from '@/components/ui/FinancialNumber';
-import { FinancialTableCell } from '@/components/tables/FinancialTableCell';
-import { EmptyState } from '@/components/feedback/EmptyState';
-import { formatCurrency } from '@/utils/formatFinancial';
+import { Amount } from '@/components/app/figure';
+import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { sumAgingBuckets } from '../utils/agingReportUtils';
 import type { AgingReportRow } from '../types';
 
@@ -14,93 +12,83 @@ export interface AgingReportTableProps {
   emptyMessage: string;
 }
 
-const GRID_COLS = 'grid-cols-[2fr_120px_120px_120px_120px_120px]';
-
 /**
  * Aged Receivables/Payables Summary table — one row per customer/supplier
  * with current/30/60/90+ buckets side by side, plus a grand-total footer
- * row (see `sumAgingBuckets`). Shared, presentational-only, driven entirely
- * by the already-computed `rows` prop: no aging math happens in this
- * component, per docs/DO_NOT_BREAK.md ("never calculate aging inside JSX").
- *
- * Not built here (out of scope, see aging-bee's task brief): drill-down
- * into individual open invoices/bills from a row, statement printing,
- * YoY/comparative aging, export/PDF/CSV, credit-limit exception flagging.
+ * row. Presentational-only, driven entirely by the already-computed `rows`
+ * prop: no aging math happens in this component. Re-skinned onto v0's
+ * table visual language (M9), matching
+ * `src/features/purchases/pages/VendorAgingPage.tsx`'s equivalent table
+ * shape for consistency across both aging reports in the app.
  */
 export function AgingReportTable({ rows, entityLabel, emptyTitle, emptyMessage }: AgingReportTableProps) {
   if (rows.length === 0) {
-    return <EmptyState title={emptyTitle} message={emptyMessage} />;
+    return (
+      <Empty>
+        <EmptyTitle>{emptyTitle}</EmptyTitle>
+        <EmptyDescription>{emptyMessage}</EmptyDescription>
+      </Empty>
+    );
   }
 
   const totals = sumAgingBuckets(rows);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      <div className={`grid ${GRID_COLS} gap-3 border-b border-border bg-primary/10 px-4 py-3 text-sm font-semibold tabular-nums`}>
-        <FinancialTableCell type="label">{entityLabel}</FinancialTableCell>
-        <FinancialTableCell type="number">Current</FinancialTableCell>
-        <FinancialTableCell type="number">1-30 Days</FinancialTableCell>
-        <FinancialTableCell type="number">31-60 Days</FinancialTableCell>
-        <FinancialTableCell type="number">90+ Days</FinancialTableCell>
-        <FinancialTableCell type="number">Total</FinancialTableCell>
-      </div>
-
-      {rows.map((row) => (
-        <div key={row.id} className={`grid ${GRID_COLS} gap-3 border-b border-border/50 px-4 py-3 tabular-nums`}>
-          <FinancialTableCell type="label" className="font-medium">
-            {row.name}
-          </FinancialTableCell>
-          <FinancialTableCell type="number">
-            <FinancialNumber value={row.buckets.current} format={formatCurrency} showFlash={false} />
-          </FinancialTableCell>
-          <FinancialTableCell type="number">
-            <FinancialNumber
-              value={row.buckets.days30}
-              format={formatCurrency}
-              showFlash={false}
-              className={row.buckets.days30 > 0 ? 'text-warning-financial' : undefined}
-            />
-          </FinancialTableCell>
-          <FinancialTableCell type="number">
-            <FinancialNumber
-              value={row.buckets.days60}
-              format={formatCurrency}
-              showFlash={false}
-              className={row.buckets.days60 > 0 ? 'text-warning-financial' : undefined}
-            />
-          </FinancialTableCell>
-          <FinancialTableCell type="number">
-            <FinancialNumber
-              value={row.buckets.days90Plus}
-              format={formatCurrency}
-              showFlash={false}
-              className={row.buckets.days90Plus > 0 ? 'text-negative' : undefined}
-            />
-          </FinancialTableCell>
-          <FinancialTableCell type="number" className="font-semibold">
-            <FinancialNumber value={row.buckets.total} format={formatCurrency} showFlash={false} />
-          </FinancialTableCell>
-        </div>
-      ))}
-
-      <div className={`grid ${GRID_COLS} gap-3 border-t-2 border-border bg-background px-4 py-3 font-bold tabular-nums`}>
-        <div className="px-2 py-2 text-left text-sm">TOTAL</div>
-        <div className="px-2 py-2 text-right text-sm">
-          <FinancialNumber value={totals.current} format={formatCurrency} showFlash={false} />
-        </div>
-        <div className="px-2 py-2 text-right text-sm">
-          <FinancialNumber value={totals.days30} format={formatCurrency} showFlash={false} />
-        </div>
-        <div className="px-2 py-2 text-right text-sm">
-          <FinancialNumber value={totals.days60} format={formatCurrency} showFlash={false} />
-        </div>
-        <div className="px-2 py-2 text-right text-sm">
-          <FinancialNumber value={totals.days90Plus} format={formatCurrency} showFlash={false} />
-        </div>
-        <div className="px-2 py-2 text-right text-sm">
-          <FinancialNumber value={totals.total} format={formatCurrency} showFlash={false} />
-        </div>
-      </div>
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+        <thead className="bg-muted/40">
+          <tr>
+            <th className="whitespace-nowrap px-4 py-2.5 font-medium text-muted-foreground">{entityLabel}</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Current</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">1-30 Days</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">31-60 Days</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">90+ Days</th>
+            <th className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-muted-foreground">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} className="border-t border-border">
+              <td className="whitespace-nowrap px-4 py-2.5 font-medium">{row.name}</td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={row.buckets.current} />
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={row.buckets.days30} className={row.buckets.days30 > 0 ? 'text-warning' : undefined} />
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={row.buckets.days60} className={row.buckets.days60 > 0 ? 'text-warning' : undefined} />
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+                <Amount value={row.buckets.days90Plus} className={row.buckets.days90Plus > 0 ? 'text-destructive' : undefined} />
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums">
+                <Amount value={row.buckets.total} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t-2 border-border font-semibold">
+            <td className="whitespace-nowrap px-4 py-2.5">Total</td>
+            <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+              <Amount value={totals.current} />
+            </td>
+            <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+              <Amount value={totals.days30} />
+            </td>
+            <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+              <Amount value={totals.days60} />
+            </td>
+            <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+              <Amount value={totals.days90Plus} />
+            </td>
+            <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
+              <Amount value={totals.total} />
+            </td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   );
 }

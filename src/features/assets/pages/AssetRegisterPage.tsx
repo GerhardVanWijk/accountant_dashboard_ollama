@@ -1,16 +1,16 @@
 import { useState } from 'react';
+import { Loader2, Plus } from 'lucide-react';
 import type { FixedAsset } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
+import { Button } from '@/components/ui/shadcn/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { formatCurrency, formatPercent } from '@/lib/app/format';
 import { useFixedAssets } from '../hooks/useFixedAssets';
 import { useAccounts } from '@/features/accounting/hooks/useAccounts';
 import { AssetForm } from '../components/AssetForm';
 import { PostAcquisitionForm } from '../components/PostAcquisitionForm';
 import { AssetsTable } from '../components/AssetsTable';
-import { Modal } from '../components/Modal';
 import type { CreateFixedAssetDTO, UpdateFixedAssetDTO } from '../services';
 
 type DialogState =
@@ -19,7 +19,14 @@ type DialogState =
   | { mode: 'post-acquisition'; asset: FixedAsset }
   | null;
 
-/** Asset Register — route `/assets/register` (docs/ROUTES.md). */
+/**
+ * Fixed Asset Register — route `/assets/register`. Real
+ * useFixedAssets()/fixedAssetService data throughout — cost, accumulated
+ * depreciation and carrying value are read straight off the FixedAsset
+ * record, never recomputed here. Re-skinned onto v0's
+ * PageHeader/SectionCard/FigureBlock/DataTable/Dialog (M8), matching
+ * accounting-v0-frontend's Fixed Assets page shape.
+ */
 export function AssetRegisterPage() {
   const { assets, loading, error, refetch, createFixedAsset, updateFixedAsset, deleteFixedAsset, postAcquisition } = useFixedAssets();
   const { accounts, loading: accountsLoading } = useAccounts();
@@ -62,58 +69,87 @@ export function AssetRegisterPage() {
   };
 
   const busy = loading || accountsLoading;
+  const totalCost = assets.reduce((sum, a) => sum + a.cost, 0);
+  const totalAccumDep = assets.reduce((sum, a) => sum + a.accumulatedDepreciation, 0);
+  const totalCarrying = totalCost - totalAccumDep;
+  const depreciatedShare = totalCost > 0 ? (totalAccumDep / totalCost) * 100 : 0;
+  const activeCount = assets.filter((a) => a.status === 'active').length;
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Fixed Asset Register</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Register, capitalize, and track fixed assets. /assets/register
-          </p>
-        </div>
-        <Button onClick={() => setDialog({ mode: 'create' })}>New Asset</Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Fixed assets"
+        description="Cost less accumulated depreciation gives the carrying value that appears on the balance sheet."
+        actions={
+          <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+            <Plus data-icon="inline-start" />
+            New asset
+          </Button>
+        }
+      />
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-danger bg-danger/10 px-md py-sm text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {actionError}
         </p>
       )}
 
-      {busy && <Spinner label="Loading fixed assets…" />}
-      {!busy && error && <ErrorState message={error.message} onRetry={refetch} />}
+      <SectionCard>
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <FigureBlock label="Cost" value={formatCurrency(totalCost)} hint={`${assets.length} assets on register`} />
+          <FigureBlock label="Accumulated depreciation" value={formatCurrency(totalAccumDep)} hint={`${formatPercent(depreciatedShare)} of cost written off`} />
+          <FigureBlock label="Carrying value" value={formatCurrency(totalCarrying)} hint="Cost less depreciation" />
+          <FigureBlock label="Active" value={String(activeCount)} hint="Currently in use" />
+        </div>
+      </SectionCard>
+
+      {busy && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading fixed assets…</p>
+        </div>
+      )}
+      {!busy && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       {!busy && !error && (
-        <Card>
-          {assets.length === 0 ? (
-            <EmptyState
-              title="No fixed assets yet"
-              message="Add an asset to start the register."
-              action={<Button onClick={() => setDialog({ mode: 'create' })}>New Asset</Button>}
-            />
-          ) : (
-            <AssetsTable
-              assets={assets}
-              onEdit={(asset) => setDialog({ mode: 'edit', asset })}
-              onPostAcquisition={(asset) => setDialog({ mode: 'post-acquisition', asset })}
-              onDelete={handleDelete}
-            />
+        <SectionCard title="Asset register" description="Every capitalized item, its depreciation to date and where it sits.">
+          <AssetsTable
+            assets={assets}
+            onEdit={(asset) => setDialog({ mode: 'edit', asset })}
+            onPostAcquisition={(asset) => setDialog({ mode: 'post-acquisition', asset })}
+            onDelete={(asset) => void handleDelete(asset)}
+          />
+        </SectionCard>
+      )}
+
+      <Dialog open={dialog?.mode === 'create' || dialog?.mode === 'edit'} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{dialog?.mode === 'edit' ? 'Edit Asset' : 'New Asset'}</DialogTitle>
+          </DialogHeader>
+          {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
+            <AssetForm asset={dialog.mode === 'edit' ? dialog.asset : undefined} onSubmit={handleFormSubmit} onCancel={() => setDialog(null)} />
           )}
-        </Card>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
-        <Modal title={dialog.mode === 'edit' ? 'Edit Asset' : 'New Asset'} onClose={() => setDialog(null)}>
-          <AssetForm asset={dialog.mode === 'edit' ? dialog.asset : undefined} onSubmit={handleFormSubmit} onCancel={() => setDialog(null)} />
-        </Modal>
-      )}
-
-      {dialog?.mode === 'post-acquisition' && (
-        <Modal title="Post Acquisition" onClose={() => setDialog(null)}>
-          <PostAcquisitionForm asset={dialog.asset} accounts={accounts} onSubmit={handlePostAcquisition} onCancel={() => setDialog(null)} />
-        </Modal>
-      )}
+      <Dialog open={dialog?.mode === 'post-acquisition'} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Post Acquisition</DialogTitle>
+          </DialogHeader>
+          {dialog?.mode === 'post-acquisition' && (
+            <PostAcquisitionForm asset={dialog.asset} accounts={accounts} onSubmit={handlePostAcquisition} onCancel={() => setDialog(null)} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

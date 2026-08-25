@@ -14,8 +14,9 @@ import { CustomerStatusBadge, CreditHoldBadge } from './CustomerStatusBadge';
 export interface CustomerTableProps {
   customers: Customer[];
   onView: (customer: Customer) => void;
-  onEdit: (customer: Customer) => void;
-  onToggleActive: (customer: Customer) => void;
+  /** Omit (M11: gated by customer_management:update) to hide the row's Edit/Inactivate menu items entirely. */
+  onEdit?: (customer: Customer) => void;
+  onToggleActive?: (customer: Customer) => void;
 }
 
 /**
@@ -91,21 +92,22 @@ export function CustomerTable({ customers, onView, onEdit, onToggleActive }: Cus
       key: 'actions',
       header: '',
       align: 'right',
-      cell: (c) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${c.name}`} />}
-          >
-            <MoreHorizontal />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEdit(c)}>Edit</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onToggleActive(c)}>
-              {c.status === 'active' ? 'Inactivate' : 'Activate'}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
+      cell: (c) =>
+        onEdit || onToggleActive ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${c.name}`} />}
+            >
+              <MoreHorizontal />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {onEdit && <DropdownMenuItem onClick={() => onEdit(c)}>Edit</DropdownMenuItem>}
+              {onToggleActive && (
+                <DropdownMenuItem onClick={() => onToggleActive(c)}>{c.status === 'active' ? 'Inactivate' : 'Activate'}</DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null,
     },
   ];
 

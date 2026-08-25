@@ -19,7 +19,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/shadcn/sidebar';
-import { navGroups, type NavGroup } from '@/lib/app/navigation';
+import type { NavGroup } from '@/lib/app/navigation';
+import { useVisibleNavGroups } from '@/features/auth/hooks/useVisibleNavGroups';
 import { CURRENT_FINANCIAL_YEAR, CURRENT_PERIOD_LABEL } from '@/lib/app/format';
 import { cn } from '@/lib/utils';
 
@@ -48,6 +49,7 @@ function groupHoldsActive(group: NavGroup, pathname: string) {
 
 export function AppSidebar() {
   const { pathname } = useLocation();
+  const navGroups = useVisibleNavGroups();
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
