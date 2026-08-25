@@ -10,6 +10,8 @@ import { ChartOfAccountsPage } from '@/features/accounting/pages/ChartOfAccounts
 import { JournalsPage } from '@/features/accounting/pages/JournalsPage';
 import { LedgerPage } from '@/features/accounting/pages/LedgerPage';
 import { TrialBalancePage } from '@/features/accounting/pages/TrialBalancePage';
+import { FinancialPeriodsPage } from '@/features/accounting/pages/FinancialPeriodsPage';
+import { CompanyPage } from '@/features/admin/pages/CompanyPage';
 import { CustomersPage } from '@/features/sales/pages/CustomersPage';
 import { QuotesPage } from '@/features/sales/pages/QuotesPage';
 import { SalesOrdersPage } from '@/features/sales/pages/SalesOrdersPage';
@@ -95,10 +97,12 @@ export const routes: RouteObject[] = [
         element: <AppLayout />,
         children: [
           { index: true, element: <DashboardPage /> },
+          { path: 'companies', element: <CompanyPage /> },
           { path: 'accounting/coa', element: <ChartOfAccountsPage /> },
           { path: 'accounting/journals', element: <JournalsPage /> },
           { path: 'accounting/ledger', element: <LedgerPage /> },
           { path: 'accounting/trial-balance', element: <TrialBalancePage /> },
+          { path: 'financial-periods', element: <FinancialPeriodsPage /> },
           { path: 'sales/customers', element: <CustomersPage /> },
           { path: 'sales/quotes', element: <QuotesPage /> },
           { path: 'sales/orders', element: <SalesOrdersPage /> },

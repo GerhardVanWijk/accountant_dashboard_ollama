@@ -1,16 +1,10 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { DashboardPage } from './DashboardPage';
 import { useDashboardData, type DashboardData } from '../hooks/useDashboardData';
 
 vi.mock('../hooks/useDashboardData');
-
-// LowStockAlertWidget is self-fetching (its own hook -> stockService ->
-// real mock repositories) — stubbed here so this test suite stays
-// isolated to DashboardPage's own loading/error/empty/data-state logic.
-vi.mock('@/features/inventory/components/LowStockAlertWidget', () => ({
-  LowStockAlertWidget: () => <div data-testid="low-stock-widget-stub" />,
-}));
 
 const mockedUseDashboardData = vi.mocked(useDashboardData);
 
@@ -24,6 +18,14 @@ beforeAll(() => {
   }
   (globalThis as unknown as { ResizeObserver: typeof ResizeObserverStub }).ResizeObserver = ResizeObserverStub;
 });
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <DashboardPage />
+    </MemoryRouter>,
+  );
+}
 
 function baseData(overrides: Partial<DashboardData> = {}): DashboardData {
   return {
@@ -55,10 +57,10 @@ function baseData(overrides: Partial<DashboardData> = {}): DashboardData {
 }
 
 describe('DashboardPage', () => {
-  it('shows a loading spinner while fetching', () => {
+  it('shows a loading state while fetching', () => {
     mockedUseDashboardData.mockReturnValue({ data: null, loading: true, error: null, refetch: vi.fn() });
-    render(<DashboardPage />);
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    renderPage();
+    expect(screen.getByText(/loading dashboard/i)).toBeInTheDocument();
   });
 
   it('shows an error state with retry when the fetch fails', () => {
@@ -68,8 +70,9 @@ describe('DashboardPage', () => {
       error: new Error('Network unavailable'),
       refetch: vi.fn(),
     });
-    render(<DashboardPage />);
+    renderPage();
     expect(screen.getByText(/network unavailable/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
 
   it('shows an empty state when there is no business data at all', () => {
@@ -85,24 +88,23 @@ describe('DashboardPage', () => {
       error: null,
       refetch: vi.fn(),
     });
-    render(<DashboardPage />);
+    renderPage();
     expect(screen.getByText(/nothing to show yet/i)).toBeInTheDocument();
   });
 
-  it('renders KPIs, charts, aging widgets, stock section, and activity feed once data loads', () => {
+  it('renders KPIs, charts, aging widgets, and activity feed once data loads', () => {
     mockedUseDashboardData.mockReturnValue({ data: baseData(), loading: false, error: null, refetch: vi.fn() });
-    render(<DashboardPage />);
+    renderPage();
 
     expect(screen.getByText('Revenue')).toBeInTheDocument();
     expect(screen.getByText('Expenses')).toBeInTheDocument();
     expect(screen.getByText('Net Profit')).toBeInTheDocument();
     expect(screen.getByText('Cash Position')).toBeInTheDocument();
-    expect(screen.getByText('Revenue vs Expenses')).toBeInTheDocument();
-    expect(screen.getByText('Cash Flow')).toBeInTheDocument();
+    expect(screen.getByText('Revenue and expenses')).toBeInTheDocument();
+    expect(screen.getByText('Cash movement')).toBeInTheDocument();
     expect(screen.getByText('Accounts Receivable')).toBeInTheDocument();
     expect(screen.getByText('Accounts Payable')).toBeInTheDocument();
     expect(screen.getByText('Inventory Valuation')).toBeInTheDocument();
-    expect(screen.getByTestId('low-stock-widget-stub')).toBeInTheDocument();
     expect(screen.getByText('Acme Trading Co.')).toBeInTheDocument();
   });
 });

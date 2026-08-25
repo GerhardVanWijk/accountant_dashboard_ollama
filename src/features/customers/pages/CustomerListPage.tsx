@@ -1,13 +1,17 @@
-import { useMemo, useState } from 'react';
+import { Loader2, Plus, Users } from 'lucide-react';
 import type { Customer } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/shadcn/empty';
 import { useCustomers } from '../hooks/useCustomers';
 import { useCustomerMutations } from '../hooks/useCustomerMutations';
-import { CustomerFilters, type CustomerFiltersState } from '../components/CustomerFilters';
 import { CustomerTable } from '../components/CustomerTable';
 
 export interface CustomerListPageProps {
@@ -16,35 +20,16 @@ export interface CustomerListPageProps {
   onEdit: (customer: Customer) => void;
 }
 
-const defaultFilters: CustomerFiltersState = { search: '', status: 'all', creditHold: 'all' };
-
-function matchesFilters(customer: Customer, filters: CustomerFiltersState): boolean {
-  if (filters.status !== 'all' && customer.status !== filters.status) return false;
-  if (filters.creditHold === 'hold' && !customer.creditHold) return false;
-  if (filters.creditHold === 'clear' && customer.creditHold) return false;
-
-  if (filters.search.trim()) {
-    const needle = filters.search.trim().toLowerCase();
-    const haystack = [customer.name, customer.customerNumber, customer.email ?? ''].join(' ').toLowerCase();
-    if (!haystack.includes(needle)) return false;
-  }
-
-  return true;
-}
-
 /**
- * Customer master directory: search, filter, sort, paginate, and quick
- * row actions. Wired into src/features/sales/pages/CustomersPage.tsx.
+ * Customer master directory: search, filter, sort, paginate (all inside
+ * the shared v0 DataTable via CustomerTable), and quick row actions.
+ * Wired into src/features/sales/pages/CustomersPage.tsx. Re-skinned onto
+ * v0's PageHeader/SectionCard shell; the real useCustomers()/
+ * useCustomerMutations() hooks are unchanged.
  */
 export function CustomerListPage({ onView, onCreate, onEdit }: CustomerListPageProps) {
   const { customers, loading, error, refetch } = useCustomers();
   const { inactivateCustomer, activateCustomer } = useCustomerMutations();
-  const [filters, setFilters] = useState<CustomerFiltersState>(defaultFilters);
-
-  const filteredCustomers = useMemo(
-    () => customers.filter((customer) => matchesFilters(customer, filters)),
-    [customers, filters],
-  );
 
   async function handleToggleActive(customer: Customer): Promise<void> {
     if (customer.status === 'active') {
@@ -56,53 +41,64 @@ export function CustomerListPage({ onView, onCreate, onEdit }: CustomerListPageP
   }
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Customer Directory</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Search, filter, and manage your accounts-receivable customer master list.
-          </p>
+    <>
+      <PageHeader
+        title="Customers"
+        description="Search, filter, and manage your accounts-receivable customer master list."
+        actions={
+          <Button size="sm" onClick={onCreate}>
+            <Plus data-icon="inline-start" />
+            New customer
+          </Button>
+        }
+      />
+
+      {loading && (
+        <div role="status" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading customers…</p>
         </div>
-        <Button onClick={onCreate}>New Customer</Button>
-      </div>
+      )}
 
-      <Card className="flex flex-col gap-lg">
-        <CustomerFilters value={filters} onChange={setFilters} />
+      {!loading && error && (
+        <div role="alert" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
+          <p className="text-sm text-destructive">{error.message}</p>
+          <Button variant="outline" size="sm" onClick={refetch}>
+            Try again
+          </Button>
+        </div>
+      )}
 
-        {loading && <Spinner label="Loading customers…" />}
-
-        {!loading && error && <ErrorState message={error.message} onRetry={refetch} />}
-
-        {!loading && !error && customers.length === 0 && (
-          <EmptyState
-            title="No customers yet"
-            message="Create your first customer to start tracking sales and receivables."
-            action={<Button onClick={onCreate}>New Customer</Button>}
-          />
-        )}
-
-        {!loading && !error && customers.length > 0 && filteredCustomers.length === 0 && (
-          <EmptyState
-            title="No matching customers"
-            message="Try a different search term or clear the status/credit filters."
-            action={
-              <Button variant="ghost" onClick={() => setFilters(defaultFilters)}>
-                Clear filters
+      {!loading && !error && customers.length === 0 && (
+        <SectionCard>
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Users />
+              </EmptyMedia>
+              <EmptyTitle>No customers yet</EmptyTitle>
+              <EmptyDescription>Create your first customer to start tracking sales and receivables.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button size="sm" onClick={onCreate}>
+                <Plus data-icon="inline-start" />
+                New customer
               </Button>
-            }
-          />
-        )}
+            </EmptyContent>
+          </Empty>
+        </SectionCard>
+      )}
 
-        {!loading && !error && filteredCustomers.length > 0 && (
+      {!loading && !error && customers.length > 0 && (
+        <SectionCard bodyClassName="p-5">
           <CustomerTable
-            customers={filteredCustomers}
+            customers={customers}
             onView={onView}
             onEdit={onEdit}
             onToggleActive={(customer) => void handleToggleActive(customer)}
           />
-        )}
-      </Card>
-    </div>
+        </SectionCard>
+      )}
+    </>
   );
 }

@@ -1,23 +1,35 @@
 import { Outlet } from 'react-router-dom';
-import { Topbar } from './Topbar';
 import { PermissionsLoader } from '@/features/auth/components/PermissionsLoader';
+import { AppSidebar } from '@/components/app/app-sidebar';
+import { AppTopbar } from '@/components/app/app-topbar';
+import { SidebarInset, SidebarProvider } from '@/components/ui/shadcn/sidebar';
+import { Toaster } from '@/components/ui/shadcn/sonner';
 
 /**
- * Shell for every protected route (see docs/ROUTES.md). Wraps the routed
- * page in the horizontal top-bar chrome (docs/DESIGN_SYSTEM.md §
- * Navigation Layout — the left Sidebar is retired); the routed page
- * itself renders via <Outlet />. <PermissionsLoader /> mounts once here
- * (Phase T) rather than per-page, so usePermission() reads an already-
- * loaded store everywhere in the app.
+ * Shell for every protected route (see docs/ROUTES.md). Phase M0
+ * (docs/V0_DESIGN_SYSTEM_PORT.md): swapped the old horizontal Topbar-only
+ * chrome for the ported v0 sidebar+topbar shell. The old Topbar.tsx and
+ * its siblings (MobileNavMenu/TopNavTabs/ThemeToggle) are kept, unused,
+ * until this is verified — not deleted. <PermissionsLoader /> and
+ * <Outlet /> are untouched: same auth-gating, same routed page content,
+ * only the chrome around them changed. "app-shell" is v0's own class name
+ * (see globals.css) and doubles as this app's CSS scope for the v0-token
+ * overrides in src/styles/tokens.css.
  */
 export function AppLayout() {
   return (
-    <div className="flex min-h-screen flex-col bg-background text-text-primary">
+    <div className="app-shell">
       <PermissionsLoader />
-      <Topbar />
-      <main className="flex-1 overflow-y-auto p-lg">
-        <Outlet />
-      </main>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset className="min-w-0 bg-background">
+          <AppTopbar />
+          <main className="flex min-w-0 flex-1 flex-col gap-6 p-4 sm:p-6">
+            <Outlet />
+          </main>
+        </SidebarInset>
+        <Toaster position="bottom-right" />
+      </SidebarProvider>
     </div>
   );
 }

@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
-import { Spinner } from '@/components/feedback/Spinner';
-import { ErrorState } from '@/components/feedback/ErrorState';
-import { EmptyState } from '@/components/feedback/EmptyState';
+import { Loader2, Plus, Truck } from 'lucide-react';
+import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/shadcn/empty';
 import type { UseSuppliersResult } from '../hooks/useSuppliers';
-import { SupplierFilters } from '../components/SupplierFilters';
 import { SupplierTable } from '../components/SupplierTable';
-import { defaultSupplierFilters, type SupplierFilters as SupplierFiltersState } from '../types/supplier.types';
 
 export interface SupplierListPageProps {
   suppliersState: UseSuppliersResult;
@@ -17,79 +20,80 @@ export interface SupplierListPageProps {
 }
 
 /**
- * Supplier Master Directory: searchable/filterable/sortable list with
- * quick row actions. Loading/error/empty/data states per
- * docs/ARCHITECTURE.md § Component State.
+ * Supplier Master Directory: v0 PageHeader/SectionCard shell around the
+ * shared v0 DataTable (via SupplierTable) — search, filter, sort and
+ * pagination all live inside that table, matching v0's organisation
+ * module pattern. Loading/error/empty states follow the same idiom M1
+ * established for the dashboard (docs/V0_DASHBOARD_INTEGRATION.md).
+ * Data comes from the real useSuppliers() hook, unchanged.
  */
 export function SupplierListPage({ suppliersState, onView, onEdit, onCreate }: SupplierListPageProps) {
   const { suppliers, loading, error, refetch, setOnHold, setStatus } = suppliersState;
-  const [filters, setFilters] = useState<SupplierFiltersState>(defaultSupplierFilters);
-
-  const filtered = useMemo(() => {
-    const search = filters.search.trim().toLowerCase();
-    return suppliers.filter((supplier) => {
-      if (search) {
-        const haystack = `${supplier.name} ${supplier.supplierNumber} ${supplier.email ?? ''}`.toLowerCase();
-        if (!haystack.includes(search)) return false;
-      }
-      if (filters.category !== 'all' && supplier.category !== filters.category) return false;
-      if (filters.status !== 'all' && supplier.status !== filters.status) return false;
-      if (filters.onHold === 'on-hold' && !supplier.onHold) return false;
-      if (filters.onHold === 'not-on-hold' && supplier.onHold) return false;
-      return true;
-    });
-  }, [suppliers, filters]);
 
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Vendor Directory</h1>
-          <p className="mt-xs text-sm text-text-secondary">
-            Manage vendor accounts, credit terms, and accounts-payable standing.
-          </p>
+    <>
+      <PageHeader
+        title="Suppliers"
+        description="Manage vendor accounts, credit terms, and accounts-payable standing."
+        actions={
+          <Button size="sm" onClick={onCreate}>
+            <Plus data-icon="inline-start" />
+            Add supplier
+          </Button>
+        }
+      />
+
+      {loading && (
+        <div role="status" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading suppliers…</p>
         </div>
-        <Button variant="primary" onClick={onCreate}>
-          <Icon name="suppliers" size={16} />
-          Add Supplier
-        </Button>
-      </div>
+      )}
 
-      <SupplierFilters filters={filters} onChange={setFilters} />
-
-      {loading && <Spinner label="Loading suppliers…" />}
-
-      {!loading && error && <ErrorState message={error.message} onRetry={refetch} />}
+      {!loading && error && (
+        <div role="alert" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
+          <p className="text-sm text-destructive">{error.message}</p>
+          <Button variant="outline" size="sm" onClick={refetch}>
+            Try again
+          </Button>
+        </div>
+      )}
 
       {!loading && !error && suppliers.length === 0 && (
-        <EmptyState
-          title="No suppliers yet"
-          message="Add your first vendor to start tracking accounts payable."
-          action={
-            <Button variant="primary" onClick={onCreate}>
-              Add Supplier
-            </Button>
-          }
-        />
+        <SectionCard>
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Truck />
+              </EmptyMedia>
+              <EmptyTitle>No suppliers yet</EmptyTitle>
+              <EmptyDescription>Add your first vendor to start tracking accounts payable.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button size="sm" onClick={onCreate}>
+                <Plus data-icon="inline-start" />
+                Add supplier
+              </Button>
+            </EmptyContent>
+          </Empty>
+        </SectionCard>
       )}
 
-      {!loading && !error && suppliers.length > 0 && filtered.length === 0 && (
-        <EmptyState title="No matching suppliers" message="Try adjusting your search or filters." />
+      {!loading && !error && suppliers.length > 0 && (
+        <SectionCard bodyClassName="p-5">
+          <SupplierTable
+            suppliers={suppliers}
+            onView={(supplier) => onView(supplier.id)}
+            onEdit={(supplier) => onEdit(supplier.id)}
+            onToggleHold={(supplier) => {
+              void setOnHold(supplier.id, !supplier.onHold);
+            }}
+            onToggleStatus={(supplier) => {
+              void setStatus(supplier.id, supplier.status === 'active' ? 'inactive' : 'active');
+            }}
+          />
+        </SectionCard>
       )}
-
-      {!loading && !error && filtered.length > 0 && (
-        <SupplierTable
-          suppliers={filtered}
-          onView={(supplier) => onView(supplier.id)}
-          onEdit={(supplier) => onEdit(supplier.id)}
-          onToggleHold={(supplier) => {
-            void setOnHold(supplier.id, !supplier.onHold);
-          }}
-          onToggleStatus={(supplier) => {
-            void setStatus(supplier.id, supplier.status === 'active' ? 'inactive' : 'active');
-          }}
-        />
-      )}
-    </div>
+    </>
   );
 }

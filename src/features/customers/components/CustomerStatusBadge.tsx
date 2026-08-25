@@ -1,37 +1,22 @@
 import type { ActiveStatus } from '@/types';
-import { cn } from '@/utils/cn';
+import { StatusBadge as V0StatusBadge } from '@/components/app/status-badge';
+import { Badge } from '@/components/ui/shadcn/badge';
 
 export interface CustomerStatusBadgeProps {
   status: ActiveStatus;
   className?: string;
 }
 
-/** Small pill showing Active/Inactive — accent-filled surfaces always use text-on-accent. */
+/** Active/Inactive badge, built on the shared v0 StatusBadge. */
 export function CustomerStatusBadge({ status, className }: CustomerStatusBadgeProps) {
-  const isActive = status === 'active';
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full px-sm py-xs text-xs font-medium',
-        isActive ? 'bg-success text-on-accent' : 'bg-border text-text-secondary',
-        className,
-      )}
-    >
-      {isActive ? 'Active' : 'Inactive'}
-    </span>
-  );
+  return <V0StatusBadge status={status} className={className} />;
 }
 
-/** Small pill flagging a customer as on credit hold. */
+/** Small pill flagging a customer as on credit hold — a separate credit-control flag, not the account status itself. */
 export function CreditHoldBadge({ className }: { className?: string }) {
   return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full bg-warning px-sm py-xs text-xs font-medium text-on-accent',
-        className,
-      )}
-    >
+    <Badge className={className ? `bg-warning/15 text-warning ${className}` : 'bg-warning/15 text-warning'}>
       Credit Hold
-    </span>
+    </Badge>
   );
 }

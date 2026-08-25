@@ -41,21 +41,6 @@ export interface SupplierFormValues {
   notes?: string;
 }
 
-/** Supplier Master Directory filter state (list page). */
-export interface SupplierFilters {
-  search: string;
-  category: SupplierCategory | 'all';
-  status: ActiveStatus | 'all';
-  onHold: 'all' | 'on-hold' | 'not-on-hold';
-}
-
-export const defaultSupplierFilters: SupplierFilters = {
-  search: '',
-  category: 'all',
-  status: 'all',
-  onHold: 'all',
-};
-
 export const SUPPLIER_CATEGORIES: SupplierCategory[] = [
   'Raw Materials',
   'Utilities',

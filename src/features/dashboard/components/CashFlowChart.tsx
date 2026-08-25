@@ -39,7 +39,7 @@ export function CashFlowChart({ data, currency }: CashFlowChartProps) {
                 tickFormatter={(value: number) => formatCurrency(value, currency, 'en-US').replace(/\.00$/, '')}
               />
               <Tooltip
-                formatter={(value: number) => formatCurrency(value, currency)}
+                formatter={(value) => formatCurrency(Number(value), currency)}
                 contentStyle={{
                   backgroundColor: 'var(--color-panel)',
                   border: '1px solid var(--color-border)',
