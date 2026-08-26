@@ -12,14 +12,16 @@ import { cn } from '@/lib/utils';
  * `--spacing()`/`(--var)` function syntax). Replaced with a plain
  * max-height transition driven by the same open/closed data-state Base UI
  * already exposes, rather than reading a CSS custom property v3 has no
- * equivalent syntax for.
+ * equivalent syntax for. Also fixed: `not-last:` (bare not-variant) and bare
+ * `data-open`/`data-closed` below are v4-only shorthand v3 silently drops —
+ * rewritten to v3's arbitrary-selector/bracket forms.
  */
 function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
   return <AccordionPrimitive.Root data-slot="accordion" className={cn('flex w-full flex-col', className)} {...props} />;
 }
 
 function AccordionItem({ className, ...props }: AccordionPrimitive.Item.Props) {
-  return <AccordionPrimitive.Item data-slot="accordion-item" className={cn('not-last:border-b', className)} {...props} />;
+  return <AccordionPrimitive.Item data-slot="accordion-item" className={cn('[&:not(:last-child)]:border-b', className)} {...props} />;
 }
 
 function AccordionTrigger({ className, children, ...props }: AccordionPrimitive.Trigger.Props) {
@@ -51,7 +53,7 @@ function AccordionContent({ className, children, ...props }: AccordionPrimitive.
   return (
     <AccordionPrimitive.Panel
       data-slot="accordion-content"
-      className="overflow-hidden text-sm transition-[max-height] duration-300 ease-in-out data-closed:max-h-0 data-open:max-h-96"
+      className="overflow-hidden text-sm transition-[max-height] duration-300 ease-in-out data-[closed]:max-h-0 data-[open]:max-h-96"
       {...props}
     >
       <div className={cn('pt-0 pb-2.5', className)}>{children}</div>

@@ -3,13 +3,20 @@ import { CheckIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
-/** Ported from accounting-v0-frontend/components/ui/checkbox.tsx — no changes needed, already Tailwind v3-compatible. */
+/**
+ * Ported from accounting-v0-frontend/components/ui/checkbox.tsx. The prior
+ * comment here claimed this file needed no v3 changes — untrue: it still had
+ * several Tailwind v4-only bare/compound variants (`has-disabled`, `not-data-
+ * checked`, bare `data-checked`) that v3's JIT scanner silently drops (no CSS
+ * generated). Rewritten to the v3-native bracket/arbitrary-selector forms;
+ * same computed CSS.
+ */
 function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
   return (
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        'peer relative flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input transition-colors outline-none group-has-disabled/field:opacity-50 group-has-[:focus-visible]/field-label:ring-0 group-has-[:focus-visible]/field-label:not-data-checked:border-input after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground group-has-[:focus-visible]/field-label:data-checked:border-primary dark:data-checked:bg-primary',
+        'peer relative flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input transition-colors outline-none group-has-[:disabled]/field:opacity-50 group-has-[:focus-visible]/field-label:ring-0 group-has-[:focus-visible]/field-label:[&:not([data-checked])]:border-input after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-[checked]:border-primary data-[checked]:bg-primary data-[checked]:text-primary-foreground group-has-[:focus-visible]/field-label:data-[checked]:border-primary dark:data-[checked]:bg-primary',
         className,
       )}
       {...props}
