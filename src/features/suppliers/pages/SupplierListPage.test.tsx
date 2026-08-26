@@ -3,6 +3,17 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { Supplier } from '@/types';
 import type { UseSuppliersResult } from '../hooks/useSuppliers';
 import { SupplierListPage } from './SupplierListPage';
+import { useBills } from '@/features/purchases/hooks';
+
+vi.mock('@/features/purchases/hooks');
+
+const mockedUseBills = vi.mocked(useBills);
+mockedUseBills.mockReturnValue({
+  bills: [],
+  isLoading: false,
+  error: null,
+  refetch: vi.fn(),
+});
 
 function buildSuppliersState(overrides: Partial<UseSuppliersResult> = {}): UseSuppliersResult {
   return {

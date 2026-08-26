@@ -17,6 +17,14 @@ export interface CustomerTableProps {
   /** Omit (M11: gated by customer_management:update) to hide the row's Edit/Inactivate menu items entirely. */
   onEdit?: (customer: Customer) => void;
   onToggleActive?: (customer: Customer) => void;
+  /**
+   * Real per-customer overdue total (Phase 3 fidelity fix), computed by
+   * the caller via `calculateFleetSummary` from real invoice data — never
+   * fabricated in this component. Matches v0's PartyTable "Overdue"
+   * extraColumn, positioned the same way (between Balance and Status).
+   * Omit to hide the column.
+   */
+  overdueByCustomerId?: Map<string, number>;
 }
 
 /**
@@ -26,7 +34,7 @@ export interface CustomerTableProps {
  * PartyTable pattern. Real Customer fields only — no v0 Party fields
  * (code, category, a single `contact` object) this domain doesn't have.
  */
-export function CustomerTable({ customers, onView, onEdit, onToggleActive }: CustomerTableProps) {
+export function CustomerTable({ customers, onView, onEdit, onToggleActive, overdueByCustomerId }: CustomerTableProps) {
   const columns: DataTableColumn<Customer>[] = [
     {
       key: 'name',
@@ -77,6 +85,24 @@ export function CustomerTable({ customers, onView, onEdit, onToggleActive }: Cus
       sortValue: (c) => c.balance,
       cell: (c) => <Amount value={c.balance} className="text-sm font-medium" />,
     },
+    ...(overdueByCustomerId
+      ? [
+          {
+            key: 'overdue',
+            header: 'Overdue',
+            align: 'right' as const,
+            sortValue: (c: Customer) => overdueByCustomerId.get(c.id) ?? 0,
+            cell: (c: Customer) => {
+              const overdue = overdueByCustomerId.get(c.id) ?? 0;
+              return overdue > 0 ? (
+                <Amount value={overdue} className="text-sm font-medium text-negative" />
+              ) : (
+                <span className="text-xs text-muted-foreground">&mdash;</span>
+              );
+            },
+          } satisfies DataTableColumn<Customer>,
+        ]
+      : []),
     {
       key: 'status',
       header: 'Status',

@@ -18,6 +18,14 @@ export interface SupplierTableProps {
   onEdit?: (supplier: Supplier) => void;
   onToggleHold?: (supplier: Supplier) => void;
   onToggleStatus?: (supplier: Supplier) => void;
+  /**
+   * Real per-supplier outstanding (overdue) total (Phase 3 fidelity fix),
+   * computed by the caller via `calculateFleetSummary` from real Bill
+   * data — never fabricated in this component. Matches v0's PartyTable
+   * "Outstanding" extraColumn, positioned the same way (between Balance
+   * and Status). Omit to hide the column.
+   */
+  outstandingBySupplierId?: Map<string, number>;
 }
 
 /**
@@ -29,7 +37,7 @@ export interface SupplierTableProps {
  * filter bar. Real Supplier fields only — no v0 Party fields (code,
  * a single `contact` object) this domain doesn't have.
  */
-export function SupplierTable({ suppliers, onView, onEdit, onToggleHold, onToggleStatus }: SupplierTableProps) {
+export function SupplierTable({ suppliers, onView, onEdit, onToggleHold, onToggleStatus, outstandingBySupplierId }: SupplierTableProps) {
   const columns: DataTableColumn<Supplier>[] = [
     {
       key: 'name',
@@ -83,6 +91,24 @@ export function SupplierTable({ suppliers, onView, onEdit, onToggleHold, onToggl
       sortValue: (s) => s.balance,
       cell: (s) => <Amount value={s.balance} className="text-sm font-medium" />,
     },
+    ...(outstandingBySupplierId
+      ? [
+          {
+            key: 'outstanding',
+            header: 'Outstanding',
+            align: 'right' as const,
+            sortValue: (s: Supplier) => outstandingBySupplierId.get(s.id) ?? 0,
+            cell: (s: Supplier) => {
+              const outstanding = outstandingBySupplierId.get(s.id) ?? 0;
+              return outstanding > 0 ? (
+                <Amount value={outstanding} className="text-sm font-medium" />
+              ) : (
+                <span className="text-xs text-muted-foreground">&mdash;</span>
+              );
+            },
+          } satisfies DataTableColumn<Supplier>,
+        ]
+      : []),
     {
       key: 'status',
       header: 'Status',

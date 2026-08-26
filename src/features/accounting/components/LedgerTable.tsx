@@ -12,6 +12,15 @@ import type { LedgerViewRow } from '../utils/buildLedgerRows';
  * cross-account sum.
  */
 export function LedgerTable({ rows }: { rows: LedgerViewRow[] }) {
+  // Real `source` values (e.g. "manual", "invoice", "bill") come straight
+  // from JournalEntry.source — a free-form string, not a fixed enum like
+  // v0's mock ("Invoice"/"Payment"/"Expense"/"Journal"/"Bank"), so the
+  // filter's options are derived from what's actually present in `rows`
+  // rather than a hardcoded list that could hide real values.
+  const sourceOptions = [...new Set(rows.map((r) => r.source).filter((s): s is string => Boolean(s)))]
+    .sort()
+    .map((s) => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }));
+
   const columns: DataTableColumn<LedgerViewRow>[] = [
     {
       key: 'date',
@@ -104,6 +113,18 @@ export function LedgerTable({ rows }: { rows: LedgerViewRow[] }) {
       initialSortKey="date"
       initialSortDirection="desc"
       pageSize={15}
+      filters={
+        sourceOptions.length > 0
+          ? [
+              {
+                key: 'source',
+                label: 'All sources',
+                options: sourceOptions,
+                match: (r, value) => r.source === value,
+              },
+            ]
+          : []
+      }
       emptyTitle="No ledger entries found"
       emptyDescription="Adjust the search or account filter to widen the view."
       caption="Account balance is only shown once the view is narrowed to a single account"

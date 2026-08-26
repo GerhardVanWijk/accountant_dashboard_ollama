@@ -55,17 +55,17 @@ export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActiv
               </tr>
               {group.rows.map(({ account, depth }) => (
                 <tr key={account.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                  <td className="figure px-4 py-3 align-top text-sm tabular-nums text-foreground">{account.code}</td>
-                  <td className="px-4 py-3 align-top">
+                  <td className="figure px-4 py-3 align-middle text-sm tabular-nums text-foreground">{account.code}</td>
+                  <td className="px-4 py-3 align-middle">
                     <div style={{ paddingLeft: depth * 16 }} className="flex flex-col">
                       <span className="text-sm font-medium text-foreground">{account.name}</span>
                       {account.subType && <span className="text-xs text-muted-foreground">{account.subType}</span>}
                     </div>
                   </td>
-                  <td className="px-4 py-3 align-top text-sm text-muted-foreground capitalize">
+                  <td className="px-4 py-3 align-middle text-sm text-muted-foreground capitalize">
                     {account.normalBalance}
                   </td>
-                  <td className="px-4 py-3 align-top">
+                  <td className="px-4 py-3 align-middle">
                     <div className="flex flex-wrap items-center gap-1.5">
                       {account.isActive ? (
                         <Badge variant="outline" className="text-positive">
@@ -83,7 +83,7 @@ export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActiv
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 align-top">
+                  <td className="px-4 py-3 align-middle">
                     <div className="flex flex-wrap items-center gap-2">
                       <Button variant="ghost" size="sm" onClick={() => onEdit(account)}>
                         Edit

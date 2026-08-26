@@ -4,14 +4,17 @@ import type { Customer, Permission } from '@/types';
 import { CustomerListPage } from './CustomerListPage';
 import { useCustomers } from '../hooks/useCustomers';
 import { useCustomerMutations } from '../hooks/useCustomerMutations';
+import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { useAuthStore } from '@/stores/authStore';
 import { usePermissionStore } from '@/features/auth/stores/permissionStore';
 
 vi.mock('../hooks/useCustomers');
 vi.mock('../hooks/useCustomerMutations');
+vi.mock('@/features/sales/hooks/useInvoices');
 
 const mockedUseCustomers = vi.mocked(useCustomers);
 const mockedUseCustomerMutations = vi.mocked(useCustomerMutations);
+const mockedUseInvoices = vi.mocked(useInvoices);
 
 function baseCustomer(overrides: Partial<Customer> = {}): Customer {
   return {
@@ -51,6 +54,7 @@ describe('CustomerListPage', () => {
       activateCustomer: vi.fn(),
       setCreditHold: vi.fn(),
     });
+    mockedUseInvoices.mockReturnValue({ invoices: [], loading: false, error: null, refetch: vi.fn() });
   });
 
   it('shows a loading spinner while fetching', () => {
