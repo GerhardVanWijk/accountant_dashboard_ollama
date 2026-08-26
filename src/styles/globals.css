@@ -7,6 +7,7 @@
 @layer base {
   * {
     @apply border-border;
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
   }
 
   html {
@@ -19,5 +20,21 @@
 
   body {
     @apply bg-background text-text-primary font-sans antialiased;
+  }
+}
+
+/* v0 design-system tokens (Phase M0, financial-typography fix — see
+   V0_VISUAL_FIDELITY.md). v0 defines this via Tailwind v4's `@utility figure`
+   at-rule (globals.css), which doesn't exist in this project's Tailwind v3.
+   src/components/app/figure.tsx's Amount/Movement/FigureBlock already apply
+   a `figure` className expecting this rule — without it, the class name
+   resolved to nothing (tabular-nums alone, applied alongside it at every
+   call site, already covers the numeral-width half; this restores the
+   font-feature-settings half for fonts that expose the OpenType tnum
+   feature, e.g. Geist). */
+@layer utilities {
+  .figure {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
   }
 }

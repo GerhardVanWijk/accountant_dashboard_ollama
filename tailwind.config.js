@@ -89,13 +89,28 @@ export default {
         'status-warning': 'var(--warning)',
         'status-info': 'var(--info)',
       },
+      /* v0 design-system tokens (Phase M0, typography fix — see
+         V0_VISUAL_FIDELITY.md). v0 sets `--font-sans: var(--font-geist-sans),
+         ui-sans-serif, system-ui, sans-serif` via next/font/google; this app
+         has no next/font equivalent, so Geist + Geist Mono are loaded from
+         Google Fonts instead (index.html) and referenced by family name here.
+         Old system-font stack kept as the fallback chain, matching v0's own
+         fallback order. */
       fontFamily: {
         sans: [
+          'Geist',
+          'ui-sans-serif',
+          'system-ui',
           '-apple-system',
           'BlinkMacSystemFont',
           '"Segoe UI"',
           'Roboto',
           'sans-serif',
+        ],
+        mono: [
+          '"Geist Mono"',
+          'ui-monospace',
+          'monospace',
         ],
       },
       fontSize: {
@@ -124,12 +139,26 @@ export default {
         '2xl': '3rem',
         '3xl': '4rem',
       },
+      /* v0 design-system tokens (Phase M0, radius fix — see
+         V0_VISUAL_FIDELITY.md). v0's Tailwind v4 `@theme inline` block
+         generates rounded-sm/md/lg/xl/2xl/3xl/4xl straight off the
+         --radius-* custom properties already defined in tokens.css. Tailwind
+         v3 needs that link spelled out explicitly — it was missing here
+         entirely for 2xl/3xl/4xl (so v0's `rounded-4xl` — the shadcn Badge's
+         pill shape — compiled to no radius at all, since v3's core scale has
+         no 4xl key) and hardcoded to different fixed values for sm/md/lg/xl
+         (off by up to 2px from the token). DEFAULT (bare `rounded`) is left
+         at Tailwind's own default, matching v0: its @theme block never
+         overrides that key either. */
       borderRadius: {
-        sm: '0.125rem',
+        sm: 'var(--radius-sm)',
         DEFAULT: '0.25rem',
-        md: '0.375rem',
-        lg: '0.5rem',
-        xl: '0.75rem',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+        xl: 'var(--radius-xl)',
+        '2xl': 'var(--radius-2xl)',
+        '3xl': 'var(--radius-3xl)',
+        '4xl': 'var(--radius-4xl)',
         full: '9999px',
       },
       boxShadow: {
