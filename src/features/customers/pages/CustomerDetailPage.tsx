@@ -18,6 +18,7 @@ import { calculateFinancialSummary } from '../utils/customerFinancials';
 import { invoicesToOpenItems } from '../mock-data/openItems';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { CustomerStatusBadge, CreditHoldBadge } from '../components/CustomerStatusBadge';
+import { CustomerInvoiceHistoryTable } from '../components/CustomerInvoiceHistoryTable';
 
 export interface CustomerDetailPageProps {
   customerId: string;
@@ -57,10 +58,12 @@ export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetai
   const navigate = useNavigate();
 
   const { invoices } = useInvoices();
-  const openItems = useMemo(
-    () => (customer ? invoicesToOpenItems(invoices.filter((inv) => inv.customerId === customer.id)) : []),
+  const customerInvoices = useMemo(
+    () => (customer ? invoices.filter((inv) => inv.customerId === customer.id) : []),
     [customer, invoices],
   );
+  const openItems = useMemo(() => invoicesToOpenItems(customerInvoices), [customerInvoices]);
+  const outstandingByInvoiceId = useMemo(() => new Map(openItems.map((item) => [item.id, item.amountOutstanding])), [openItems]);
   const aging = useMemo(() => calculateAgingForCustomer(customerId, new Date(), openItems), [customerId, openItems]);
   const summary = useMemo(
     () => (customer ? calculateFinancialSummary(customer, new Date(), openItems) : null),
@@ -238,19 +241,25 @@ export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetai
         </TabsContent>
 
         <TabsContent value="transactions" className="pt-4">
-          <SectionCard>
-            <Empty>
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <FileText />
-                </EmptyMedia>
-                <EmptyTitle>No transaction history yet</EmptyTitle>
-                <EmptyDescription>
-                  Invoices, credit notes, and receipts will appear here once posted.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          </SectionCard>
+          {customerInvoices.length > 0 ? (
+            <SectionCard bodyClassName="p-5">
+              <CustomerInvoiceHistoryTable invoices={customerInvoices} outstandingByInvoiceId={outstandingByInvoiceId} />
+            </SectionCard>
+          ) : (
+            <SectionCard>
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <FileText />
+                  </EmptyMedia>
+                  <EmptyTitle>No transaction history yet</EmptyTitle>
+                  <EmptyDescription>
+                    Invoices raised against this customer will appear here once posted.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            </SectionCard>
+          )}
         </TabsContent>
 
         <TabsContent value="statements" className="pt-4">

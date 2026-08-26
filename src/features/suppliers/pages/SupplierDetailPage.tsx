@@ -30,6 +30,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { calculateAging, billsToOpenBills } from '../utils/calculateAging';
 import { calculateFinancialSummary } from '../utils/supplierFinancials';
 import { useBills } from '@/features/purchases/hooks';
+import { SupplierBillHistoryTable } from '../components/SupplierBillHistoryTable';
 
 export interface SupplierDetailPageProps {
   supplierId: string;
@@ -87,6 +88,10 @@ export function SupplierDetailPage({ supplierId, suppliersState, onBack, onEdit 
   const aging = useMemo(
     () => calculateAging(supplierId, new Date(), billsToOpenBills(supplierBills)),
     [supplierId, supplierBills],
+  );
+  const outstandingByBillId = useMemo(
+    () => new Map(billsToOpenBills(supplierBills).map((b) => [b.id, b.amount])),
+    [supplierBills],
   );
 
   if (loading) {
@@ -262,20 +267,23 @@ export function SupplierDetailPage({ supplierId, suppliersState, onBack, onEdit 
         </TabsContent>
 
         <TabsContent value="history" className="pt-4">
-          <SectionCard>
-            <Empty>
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <ReceiptText />
-                </EmptyMedia>
-                <EmptyTitle>No transaction history yet</EmptyTitle>
-                <EmptyDescription>
-                  Purchase orders, bills, supplier credits, payments, and journal entries will appear here once
-                  posted.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          </SectionCard>
+          {supplierBills.length > 0 ? (
+            <SectionCard bodyClassName="p-5">
+              <SupplierBillHistoryTable bills={supplierBills} outstandingByBillId={outstandingByBillId} />
+            </SectionCard>
+          ) : (
+            <SectionCard>
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <ReceiptText />
+                  </EmptyMedia>
+                  <EmptyTitle>No transaction history yet</EmptyTitle>
+                  <EmptyDescription>Bills received from this supplier will appear here once posted.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            </SectionCard>
+          )}
         </TabsContent>
 
         <TabsContent value="remittance" className="pt-4">
