@@ -1,5 +1,13 @@
 "use client"
 
+/**
+ * V0_VISUAL_FIDELITY.md: the tooltip indicator swatch below used Tailwind
+ * v4's round-paren CSS-var shorthand (`border-(--color-border)
+ * bg-(--color-bg)`), which this project's Tailwind v3 silently drops
+ * (no error, no CSS generated) — same class of bug as sidebar.tsx's
+ * layout break. Rewritten to the v3-native `border-[var(--color-border)]
+ * bg-[var(--color-bg)]`; same computed styles.
+ */
 import * as React from "react"
 import * as RechartsPrimitive from "recharts"
 import type { TooltipValueType } from "recharts"
@@ -222,7 +230,7 @@ function ChartTooltipContent({
                       !hideIndicator && (
                         <div
                           className={cn(
-                            "shrink-0 rounded-[2px] border-(--color-border) bg-(--color-bg)",
+                            "shrink-0 rounded-[2px] border-[var(--color-border)] bg-[var(--color-bg)]",
                             {
                               "h-2.5 w-2.5": indicator === "dot",
                               "w-1": indicator === "line",
