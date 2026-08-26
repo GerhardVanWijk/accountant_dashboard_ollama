@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 
@@ -47,9 +48,32 @@ function groupHoldsActive(group: NavGroup, pathname: string) {
   return group.items.some((item) => isItemActive(pathname, item.href));
 }
 
+/**
+ * Only the multi-item accordion groups participate (single-item groups
+ * like Overview/Help render flat, with no expand/collapse state at all).
+ */
+function isAccordionGroup(group: NavGroup): boolean {
+  return group.items.length > 1;
+}
+
 export function AppSidebar() {
   const { pathname } = useLocation();
   const navGroups = useVisibleNavGroups();
+
+  // True accordion: at most one group open at a time. Re-synced to
+  // whichever group holds the current route on every navigation, so
+  // clicking a sidebar link (or typing a URL) always reveals the right
+  // section — a manual click on a *different* group's header (with no
+  // navigation yet) is handled separately below and isn't overridden by
+  // this effect, since it only fires when `pathname` actually changes.
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+
+  useEffect(() => {
+    const activeGroup = navGroups.find((group) => isAccordionGroup(group) && groupHoldsActive(group, pathname));
+    if (activeGroup) {
+      setOpenGroup(activeGroup.title);
+    }
+  }, [pathname, navGroups]);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
@@ -69,7 +93,7 @@ export function AppSidebar() {
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="gap-0">
+      <SidebarContent className="gap-0.5">
         {navGroups.map((group) => {
           const holdsActive = groupHoldsActive(group, pathname);
 
@@ -99,10 +123,13 @@ export function AppSidebar() {
             );
           }
 
+          const open = openGroup === group.title;
+
           return (
             <Collapsible
               key={group.title}
-              defaultOpen={group.defaultOpen || holdsActive}
+              open={open}
+              onOpenChange={(next) => setOpenGroup(next ? group.title : null)}
               className="group/nav-group"
             >
               <SidebarGroup className="py-1">
@@ -110,11 +137,17 @@ export function AppSidebar() {
                   className={cn(
                     'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium tracking-wide text-sidebar-foreground/60 uppercase transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
                     'group-data-[collapsible=icon]:hidden',
+                    // Section holding the current page: subtly brighter label,
+                    // no background fill — stays legible even while collapsed.
+                    holdsActive && 'text-sidebar-foreground font-semibold',
                   )}
                 >
                   <ChevronRight
                     aria-hidden="true"
-                    className="size-3.5 shrink-0 transition-transform duration-200 group-data-open/nav-group:rotate-90"
+                    className={cn(
+                      'size-3.5 shrink-0 transition-transform duration-200 group-data-open/nav-group:rotate-90',
+                      holdsActive && 'text-brand',
+                    )}
                   />
                   <span className="flex-1 text-left">{group.title}</span>
                 </CollapsibleTrigger>

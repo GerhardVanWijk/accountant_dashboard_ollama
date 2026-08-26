@@ -5,9 +5,13 @@ import {
   BanknoteIcon,
   BookOpenIcon,
   BuildingIcon,
+  Building2Icon,
+  CalculatorIcon,
+  CalendarClockIcon,
   CalendarRangeIcon,
   ClipboardCheckIcon,
   ClipboardListIcon,
+  CoinsIcon,
   CreditCardIcon,
   FileBarChartIcon,
   FileSignatureIcon,
@@ -16,6 +20,8 @@ import {
   GaugeIcon,
   HandCoinsIcon,
   HelpCircleIcon,
+  HourglassIcon,
+  KeyRoundIcon,
   LandmarkIcon,
   LayoutDashboardIcon,
   LibraryIcon,
@@ -26,18 +32,20 @@ import {
   ScaleIcon,
   ScrollTextIcon,
   SettingsIcon,
+  ShieldAlertIcon,
   ShieldCheckIcon,
   SlidersHorizontalIcon,
   SquareStackIcon,
+  Trash2Icon,
+  TrendingDownIcon,
   TrendingUpIcon,
   TruckIcon,
-  UsersIcon,
   UserCogIcon,
-  WalletIcon,
-  BellIcon,
+  UsersIcon,
   UsersRoundIcon,
-  Building2Icon,
-  KeyRoundIcon,
+  WalletIcon,
+  WarehouseIcon,
+  BellIcon,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -60,31 +68,55 @@ export interface NavItem {
 export interface NavGroup {
   title: string;
   items: NavItem[];
-  /** Groups start collapsed unless they hold the active route. */
-  defaultOpen?: boolean;
 }
 
 /**
- * Ported from accounting-v0-frontend/lib/app/navigation.ts. Labels, icons
- * and grouping match v0 exactly (fidelity priority); hrefs point at this
- * app's REAL existing routes (src/app/router.tsx) rather than v0's own
- * flat /app/* paths, per the agreed "keep this app's route paths, v0's
- * nav moves onto them" approach. See docs/V0_DESIGN_SYSTEM_PORT.md for the
- * full mapping and which items are comingSoon pending their module's port.
+ * Ported from accounting-v0-frontend/lib/app/navigation.ts, restructured in
+ * the navigation-UX pass (see AppSidebar's accordion logic) once every real
+ * route in src/app/router.tsx was inspected directly rather than assumed:
+ * roughly two dozen real, already-built pages (Purchase Orders, Supplier
+ * Payments, Vendor Aging, Tax Rates, Provisional/Capital Gains/Dividends/
+ * Deferred Tax, Expected Credit Losses, Reporting Standards, Public
+ * Interest Score, Related Parties, Foreign Exchange, Leases, Warehouses,
+ * Depreciation, Disposals, Asset Tax Register, and the entire Payroll
+ * module) had no nav entry at all and were unreachable except by typing
+ * the URL directly. Every href below is a real router.tsx path — none
+ * invented. "Clients" (no real backend domain — see CompanyPage.tsx's own
+ * doc comment on the single-tenant model) has been removed rather than
+ * kept as a comingSoon placeholder, since there is no module planned to
+ * ever fill it, unlike Documents/Notifications below which stay
+ * comingSoon pending a real future module.
  */
 export const navGroups: NavGroup[] = [
   {
     title: 'Overview',
-    defaultOpen: true,
     items: [{ title: 'Dashboard', href: '/', icon: LayoutDashboardIcon }],
   },
   {
     title: 'Organisation',
     items: [
-      { title: 'Companies', href: '/companies', icon: BuildingIcon },
-      { title: 'Clients', href: '/clients', icon: UsersIcon, comingSoon: true },
+      { title: 'Company', href: '/companies', icon: BuildingIcon },
       { title: 'Customers', href: '/sales/customers', icon: HandCoinsIcon },
       { title: 'Suppliers', href: '/purchases/vendors', icon: TruckIcon },
+    ],
+  },
+  {
+    title: 'Sales',
+    items: [
+      { title: 'Quotes', href: '/sales/quotes', icon: FileSignatureIcon },
+      { title: 'Sales Orders', href: '/sales/orders', icon: ClipboardListIcon },
+      { title: 'Invoices', href: '/sales/invoices', icon: FileTextIcon },
+      { title: 'Credit Notes', href: '/sales/credit-notes', icon: ReceiptIcon },
+      { title: 'Customer Receipts', href: '/sales/receipts', icon: BanknoteIcon },
+    ],
+  },
+  {
+    title: 'Purchases & Expenses',
+    items: [
+      { title: 'Bills & Expenses', href: '/purchases/bills', icon: CreditCardIcon },
+      { title: 'Purchase Orders', href: '/purchases/orders', icon: ClipboardCheckIcon },
+      { title: 'Supplier Payments', href: '/purchases/payments', icon: BanknoteIcon },
+      { title: 'Vendor Aging', href: '/purchases/aging', icon: CalendarClockIcon },
     ],
   },
   {
@@ -95,16 +127,8 @@ export const navGroups: NavGroup[] = [
       { title: 'Journal Entries', href: '/accounting/journals', icon: ScrollTextIcon },
       { title: 'Trial Balance', href: '/accounting/trial-balance', icon: ScaleIcon },
       { title: 'Financial Periods', href: '/financial-periods', icon: CalendarRangeIcon },
-    ],
-  },
-  {
-    title: 'Sales',
-    items: [
-      { title: 'Quotes', href: '/sales/quotes', icon: FileSignatureIcon },
-      { title: 'Sales Orders', href: '/sales/orders', icon: ClipboardListIcon },
-      { title: 'Invoices', href: '/sales/invoices', icon: FileTextIcon },
-      { title: 'Credit Notes', href: '/sales/credit-notes', icon: ReceiptIcon },
-      { title: 'Payments', href: '/sales/receipts', icon: BanknoteIcon },
+      { title: 'Exchange Rates', href: '/foreign-exchange/rates', icon: CoinsIcon },
+      { title: 'FX Calculator', href: '/foreign-exchange/calculator', icon: CalculatorIcon },
     ],
   },
   {
@@ -116,45 +140,64 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    title: 'Expenses',
-    items: [
-      { title: 'Bills & Expenses', href: '/purchases/bills', icon: CreditCardIcon },
-    ],
-  },
-  {
     title: 'Tax & Compliance',
     items: [
       { title: 'VAT', href: '/tax/vat-return', icon: PercentIcon },
-      { title: 'Tax', href: '/tax/income-tax', icon: ClipboardCheckIcon },
+      { title: 'Tax Rates', href: '/tax/rates', icon: SlidersHorizontalIcon },
+      { title: 'Income Tax', href: '/tax/income-tax', icon: ClipboardCheckIcon },
+      { title: 'Provisional Tax', href: '/tax/provisional-tax', icon: CalendarClockIcon },
+      { title: 'Capital Gains', href: '/tax/capital-gains', icon: TrendingUpIcon },
+      { title: 'Dividends Tax', href: '/tax/dividends', icon: HandCoinsIcon },
+      { title: 'Deferred Tax', href: '/tax/deferred-tax', icon: HourglassIcon },
+      { title: 'Expected Credit Losses', href: '/tax/expected-credit-losses', icon: ShieldAlertIcon },
       { title: 'Compliance', href: '/compliance/dashboard', icon: ShieldCheckIcon },
+      { title: 'Reporting Standards', href: '/compliance/reporting-standards', icon: LibraryIcon },
+      { title: 'Public Interest Score', href: '/compliance/public-interest-score', icon: GaugeIcon },
+      { title: 'Related Party Register', href: '/related-parties/register', icon: UsersRoundIcon },
+      { title: 'Related Party Transactions', href: '/related-parties/transactions', icon: ArrowLeftRightIcon },
     ],
   },
   {
     title: 'Assets & Inventory',
     items: [
-      { title: 'Assets', href: '/assets/register', icon: SquareStackIcon },
-      { title: 'Inventory', href: '/inventory/products', icon: PackageIcon },
+      { title: 'Fixed Assets', href: '/assets/register', icon: SquareStackIcon },
+      { title: 'Depreciation', href: '/assets/depreciation', icon: TrendingDownIcon },
+      { title: 'Disposals', href: '/assets/disposals', icon: Trash2Icon },
+      { title: 'Asset Tax Register', href: '/assets/tax-register', icon: FileTextIcon },
+      { title: 'Products', href: '/inventory/products', icon: PackageIcon },
+      { title: 'Warehouses', href: '/inventory/warehouses', icon: WarehouseIcon },
+      { title: 'Lease Register', href: '/leases/register', icon: FileSignatureIcon },
+      { title: 'Lease Amortization', href: '/leases/amortization', icon: CalendarClockIcon },
+    ],
+  },
+  {
+    title: 'Payroll',
+    items: [
+      { title: 'Employees', href: '/payroll/employees', icon: UsersIcon },
+      { title: 'Payroll Runs', href: '/payroll/runs', icon: CalendarClockIcon },
+      { title: 'EMP201', href: '/payroll/emp201', icon: FileTextIcon },
+      { title: 'EMP501', href: '/payroll/emp501', icon: ClipboardCheckIcon },
     ],
   },
   {
     title: 'Reports',
     items: [
-      { title: 'Report Library', href: '/reports', icon: LibraryIcon },
+      { title: 'Reports Centre', href: '/reports', icon: LibraryIcon },
       { title: 'Income Statement', href: '/reports/income-statement', icon: TrendingUpIcon },
       { title: 'Balance Sheet', href: '/reports/balance-sheet', icon: GaugeIcon },
       { title: 'Cash Flow', href: '/reports/cash-flow', icon: FileBarChartIcon },
-      { title: 'Accounts Receivable Aging', href: '/reports/customer-aging', icon: UsersRoundIcon },
-      { title: 'Accounts Payable Aging', href: '/reports/supplier-aging', icon: Building2Icon },
+      { title: 'Customer Aging', href: '/reports/customer-aging', icon: UsersRoundIcon },
+      { title: 'Supplier Aging', href: '/reports/supplier-aging', icon: Building2Icon },
     ],
   },
   {
     title: 'Administration',
     items: [
+      { title: 'Users & Roles', href: '/admin/users', icon: UserCogIcon },
       { title: 'Audit Trail', href: '/admin/audit-trail', icon: ArchiveIcon },
       { title: 'Access Log', href: '/admin/audit', icon: KeyRoundIcon },
       { title: 'Documents', href: '/documents', icon: FolderOpenIcon, comingSoon: true },
       { title: 'Notifications', href: '/notifications', icon: BellIcon, comingSoon: true },
-      { title: 'User Management', href: '/admin/users', icon: UserCogIcon },
       { title: 'Settings', href: '/settings', icon: SettingsIcon },
       { title: 'Accounting Settings', href: '/settings/accounting', icon: SlidersHorizontalIcon },
     ],
@@ -167,12 +210,12 @@ export const navGroups: NavGroup[] = [
 
 /** Human-readable label for a route segment, used to build breadcrumbs. */
 export const segmentLabels: Record<string, string> = {
-  companies: 'Companies',
-  clients: 'Clients',
+  companies: 'Company',
   sales: 'Sales',
   customers: 'Customers',
   purchases: 'Purchases',
   vendors: 'Suppliers',
+  payments: 'Supplier Payments',
   accounting: 'Accounting',
   coa: 'Chart of Accounts',
   ledger: 'General Ledger',
@@ -184,31 +227,38 @@ export const segmentLabels: Record<string, string> = {
   receipts: 'Customer Receipts',
   banking: 'Banking',
   accounts: 'Bank Accounts',
-  transactions: 'Bank Transactions',
   reconciliation: 'Bank Reconciliation',
   bills: 'Bills & Expenses',
   tax: 'Tax',
   'vat-return': 'VAT',
   compliance: 'Compliance',
   dashboard: 'Compliance Dashboard',
-  assets: 'Assets',
+  assets: 'Fixed Assets',
   register: 'Register',
   inventory: 'Inventory',
-  products: 'Inventory',
+  products: 'Products',
   reports: 'Reports',
   'income-statement': 'Income Statement',
   'balance-sheet': 'Balance Sheet',
   'cash-flow': 'Cash Flow',
-  'customer-aging': 'Accounts Receivable Aging',
-  'supplier-aging': 'Accounts Payable Aging',
+  'customer-aging': 'Customer Aging',
+  'supplier-aging': 'Supplier Aging',
   admin: 'Administration',
   audit: 'Access Log',
   'audit-trail': 'Audit Trail',
   documents: 'Documents',
   notifications: 'Notifications',
-  users: 'User Management',
+  users: 'Users & Roles',
   settings: 'Settings',
   help: 'Help Centre',
+  payroll: 'Payroll',
+  runs: 'Payroll Runs',
+  emp201: 'EMP201',
+  emp501: 'EMP501',
+  employees: 'Employees',
+  'related-parties': 'Related Parties',
+  'foreign-exchange': 'Foreign Exchange',
+  leases: 'Leases',
 };
 
 /** Section a route belongs to, used as the middle breadcrumb crumb. */
