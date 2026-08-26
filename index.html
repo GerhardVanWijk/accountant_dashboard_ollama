@@ -1,9 +1,41 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Accounting Suite</title>
+    <script>
+      // Pre-hydration theme bootstrap — runs synchronously before anything
+      // paints, so the correct theme is on <html> before React (and its
+      // ThemeProvider, src/app/providers.tsx) ever mounts. This is not a
+      // second theme implementation: it reads the exact same
+      // zustand-persist localStorage key as src/stores/themeStore.ts and
+      // mirrors resolveTheme()'s "system" fallback in providers.tsx —
+      // keep the two in sync if either changes. Dark is the default when
+      // there is no stored preference (or it can't be read/parsed); the
+      // static data-theme="dark" above covers the no-JS case.
+      (function () {
+        var root = document.documentElement;
+        try {
+          var raw = localStorage.getItem('accounting-suite-theme');
+          var pref = raw ? JSON.parse(raw).state.theme : undefined;
+          var resolved;
+          if (pref === 'light' || pref === 'dark') {
+            resolved = pref;
+          } else if (pref === 'system') {
+            resolved =
+              window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light';
+          } else {
+            resolved = 'dark';
+          }
+          root.setAttribute('data-theme', resolved);
+        } catch (e) {
+          root.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
