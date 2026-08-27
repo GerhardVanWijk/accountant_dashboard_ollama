@@ -9,7 +9,6 @@ import { Showcase } from '../components/Showcase';
 import { SiteFooter } from '../components/SiteFooter';
 import { SiteHeader } from '../components/SiteHeader';
 import { StatsBand } from '../components/StatsBand';
-import { Testimonials } from '../components/Testimonials';
 
 /**
  * Public marketing homepage — ported from
@@ -20,7 +19,14 @@ import { Testimonials } from '../components/Testimonials';
  * before, unchanged. Content/section order preserved verbatim per the
  * user's explicit "do not redesign/rebuild" instruction; only the CTA
  * destinations were rewired (src/features/marketing/content.ts) to this
- * app's real /login and /signup routes.
+ * app's real /login, /signup and (new) /demo routes.
+ *
+ * CONTENT INTEGRITY PASS: the Testimonials section was removed (not
+ * reworded) — its three named people/quotes were v0 template fiction and
+ * this product has no real customers yet to quote honestly, so there was
+ * no truthful way to keep the section. Confirmed with the user before
+ * removing rather than assumed. Every other section is unchanged in
+ * order/structure; see content.ts's own doc comment for the copy audit.
  */
 export function HomePage() {
   return (
@@ -34,7 +40,6 @@ export function HomePage() {
         <Showcase />
         <Comparison />
         <Pricing />
-        <Testimonials />
         <Faq />
         <FinalCta />
       </main>

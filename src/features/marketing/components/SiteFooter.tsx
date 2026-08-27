@@ -12,7 +12,7 @@ export function SiteFooter() {
         <div className="flex flex-col gap-10 lg:flex-row lg:justify-between">
           <div className="flex max-w-xs flex-col gap-4">
             <Wordmark />
-            <p className="text-sm leading-relaxed text-muted-foreground">{brand.tagline}. Made in Johannesburg for businesses that file locally.</p>
+            <p className="text-sm leading-relaxed text-muted-foreground">{brand.tagline}. Made in Cape Town for businesses that file locally.</p>
           </div>
 
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4 lg:gap-12">

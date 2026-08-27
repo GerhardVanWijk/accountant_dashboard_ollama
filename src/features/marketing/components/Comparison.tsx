@@ -48,7 +48,7 @@ export function Comparison() {
         </div>
 
         <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-          Comparison based on publicly advertised plan features at the time of writing. Sage and Xero are trademarks of their respective owners and are not affiliated with Vertex.
+          Vertex capabilities reflect the current product. Sage Pastel and Xero comparisons are based on their publicly advertised features and may not reflect their latest versions. Sage and Xero are trademarks of their respective owners and are not affiliated with Vertex.
         </p>
       </div>
     </section>

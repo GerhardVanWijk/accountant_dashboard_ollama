@@ -17,7 +17,19 @@ function formatZar(amount: number, decimals = 0) {
     .replace('.', ',')}`;
 }
 
-/** Ported from accounting-v0-frontend/components/landing/pricing.tsx — <a href> CTA swapped for react-router Link, otherwise unchanged (the calculator logic is pure client-side marketing content, not real billing). */
+/**
+ * Ported from accounting-v0-frontend/components/landing/pricing.tsx —
+ * <a href> CTA swapped for react-router Link. The calculator logic is
+ * pure client-side arithmetic, not real billing — there is no payment
+ * gateway, trial enforcement or plan-limit enforcement anywhere in this
+ * codebase (`Company.subscriptionTier` is an unenforced free-text
+ * field). Content-integrity pass added explicit "indicative only, no
+ * live billing" copy throughout this section (the plan/add-on numbers
+ * themselves were kept as indicative future packaging, per the user's
+ * direction — only claims of a capability that doesn't exist at all,
+ * like live bank feeds or an automatic Pastel import, were reworded) and
+ * repointed the CTA at the read-only /demo page instead of /signup.
+ */
 export function Pricing() {
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
   const [planId, setPlanId] = useState(plans.find((p) => p.popular)?.id ?? plans[0].id);
@@ -49,8 +61,8 @@ export function Pricing() {
     <section id="pricing" className="mx-auto w-full max-w-6xl px-5 py-16 md:py-24">
       <SectionHeading
         kicker="Pricing in rands"
-        title="Build the plan that fits your books"
-        description="Pick a tier, add only the modules you need, and see exactly what leaves your account each month — VAT included."
+        title="See what a plan could cost you"
+        description="An indicative guide only — Vertex doesn't have live billing yet, so nothing here is charged. Pick a tier and add-ons to see an estimated monthly cost, VAT included."
       />
 
       <div className="mt-10 flex flex-col items-center gap-3">
@@ -74,7 +86,7 @@ export function Pricing() {
             </span>
           </ToggleGroupItem>
         </ToggleGroup>
-        <p className="text-xs text-muted-foreground">All prices exclude VAT unless stated. Cancel or change any time.</p>
+        <p className="text-xs text-muted-foreground">All prices exclude VAT unless stated. Indicative only — there is no live billing yet.</p>
       </div>
 
       <div className="mt-10 grid gap-4 lg:grid-cols-3">
@@ -232,10 +244,10 @@ export function Pricing() {
             {annual ? <span className="text-xs text-brand/80">{formatZar(total * 12, 2)} billed once a year</span> : null}
           </div>
 
-          <Button render={<Link to={brand.signUpHref} />} nativeButton={false} className="h-11 w-full bg-brand text-brand-foreground hover:bg-brand/90">
+          <Button render={<Link to={brand.demoHref} />} nativeButton={false} className="h-11 w-full bg-brand text-brand-foreground hover:bg-brand/90">
             {brand.ctaPrimary}
           </Button>
-          <p className="text-center text-xs text-muted-foreground">No card needed. Cancel before day 30 and you pay nothing.</p>
+          <p className="text-center text-xs text-muted-foreground">This is an estimate only — nothing is charged. See the product for yourself first.</p>
         </div>
       </div>
     </section>

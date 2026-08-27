@@ -1,4 +1,4 @@
-import { CameraIcon, FileTextIcon, LandmarkIcon, ReceiptIcon, ShieldCheckIcon, UsersIcon, type LucideIcon } from 'lucide-react';
+import { FileTextIcon, LandmarkIcon, PackageIcon, ReceiptIcon, ShieldCheckIcon, UsersIcon, type LucideIcon } from 'lucide-react';
 
 import { features } from '../content';
 import { SectionHeading } from './SectionHeading';
@@ -7,7 +7,7 @@ const icons: Record<string, LucideIcon> = {
   FileText: FileTextIcon,
   Landmark: LandmarkIcon,
   Receipt: ReceiptIcon,
-  Camera: CameraIcon,
+  Package: PackageIcon,
   Users: UsersIcon,
   ShieldCheck: ShieldCheckIcon,
 };

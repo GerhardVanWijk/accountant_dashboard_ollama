@@ -2,6 +2,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { RouteGuard } from './RouteGuard';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
+import { DemoPage } from '@/features/marketing/pages/DemoPage';
 import { SignUpPage } from '@/features/auth/pages/SignUpPage';
 import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage';
@@ -102,6 +103,10 @@ export const routes: RouteObject[] = [
   {
     path: '/reset-password',
     element: <ResetPasswordPage />,
+  },
+  {
+    path: '/demo',
+    element: <DemoPage />,
   },
   {
     path: '/',

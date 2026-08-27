@@ -2,7 +2,13 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { faqs } from '../content';
 import { SectionHeading } from './SectionHeading';
 
-/** Ported verbatim from accounting-v0-frontend/components/landing/faq.tsx. */
+/**
+ * Ported from accounting-v0-frontend/components/landing/faq.tsx.
+ * Content-integrity pass: removed the "our team in Johannesburg" claim
+ * (unverifiable support-team claim, and the company is Cape Town-based,
+ * not Johannesburg — see SiteFooter.tsx). Answer text itself lives in
+ * content.ts's faqs array, audited there.
+ */
 export function Faq() {
   return (
     <section id="faq" className="border-y border-border/60 bg-card/20">
@@ -12,7 +18,7 @@ export function Faq() {
             align="left"
             kicker="Questions"
             title="The things people ask before switching"
-            description="Still unsure? Our team in Johannesburg will walk through your books with you before you commit."
+            description="Still unsure? Get in touch and we'll walk through your books with you before you commit."
           />
         </div>
 

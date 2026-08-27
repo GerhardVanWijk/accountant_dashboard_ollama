@@ -10,8 +10,11 @@ import { brand, navLinks } from '../content';
 /**
  * Ported from accounting-v0-frontend/components/landing/site-header.tsx.
  * next/link swapped for react-router-dom's Link on the two real CTAs
- * (Sign in / Start free trial); the nav items themselves are same-page
- * anchor links (#features etc.), left as plain <a>.
+ * (Sign in / View live demo); the nav items themselves are same-page
+ * anchor links (#features etc.), left as plain <a>. The primary CTA was
+ * "Start free trial" until the content-integrity pass — there is no
+ * trial/billing system to start, so it now points at the read-only /demo
+ * interim page instead of /signup.
  */
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
@@ -35,8 +38,8 @@ export function SiteHeader() {
           <Button render={<Link to={brand.signInHref} />} nativeButton={false} variant="ghost" className="h-10 px-4">
             Sign in
           </Button>
-          <Button render={<Link to={brand.signUpHref} />} nativeButton={false} className="h-10 bg-brand px-4 text-brand-foreground hover:bg-brand/90">
-            Start free trial
+          <Button render={<Link to={brand.demoHref} />} nativeButton={false} className="h-10 bg-brand px-4 text-brand-foreground hover:bg-brand/90">
+            View live demo
           </Button>
         </div>
 
@@ -68,11 +71,11 @@ export function SiteHeader() {
                 Sign in
               </Button>
               <Button
-                render={<Link to={brand.signUpHref} onClick={() => setOpen(false)} />}
+                render={<Link to={brand.demoHref} onClick={() => setOpen(false)} />}
                 nativeButton={false}
                 className="h-10 w-full bg-brand text-brand-foreground hover:bg-brand/90"
               >
-                Start free trial
+                View live demo
               </Button>
             </div>
           </SheetContent>

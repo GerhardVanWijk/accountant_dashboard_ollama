@@ -5,7 +5,14 @@ import { Button } from '@/components/ui/shadcn/button';
 import { brand, hero } from '../content';
 import { AppMock } from './AppMock';
 
-/** Ported from accounting-v0-frontend/components/landing/hero.tsx — <a href> CTAs swapped for react-router Link. */
+/**
+ * Ported from accounting-v0-frontend/components/landing/hero.tsx —
+ * <a href> CTAs swapped for react-router Link. Content-integrity pass:
+ * the primary CTA now leads to the read-only /demo page instead of
+ * /signup (no real trial/billing exists), and the secondary CTA is a
+ * real "Sign in" link instead of a second button that also silently
+ * pointed at /signup under a "Book a live demo" label.
+ */
 export function Hero() {
   return (
     <section id="top" className="relative overflow-hidden">
@@ -38,11 +45,11 @@ export function Hero() {
           <p className="max-w-2xl text-base leading-relaxed text-pretty text-muted-foreground md:text-lg">{hero.subhead}</p>
 
           <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-            <Button render={<Link to={brand.signUpHref} />} nativeButton={false} className="h-12 bg-brand px-6 text-[0.95rem] text-brand-foreground hover:bg-brand/90">
+            <Button render={<Link to={brand.demoHref} />} nativeButton={false} className="h-12 bg-brand px-6 text-[0.95rem] text-brand-foreground hover:bg-brand/90">
               {brand.ctaPrimary}
               <ArrowRightIcon data-icon="inline-end" />
             </Button>
-            <Button render={<Link to={brand.demoHref} />} nativeButton={false} variant="outline" className="h-12 px-6 text-[0.95rem]">
+            <Button render={<Link to={brand.signInHref} />} nativeButton={false} variant="outline" className="h-12 px-6 text-[0.95rem]">
               {brand.ctaSecondary}
             </Button>
           </div>
