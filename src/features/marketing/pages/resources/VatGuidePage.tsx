@@ -15,10 +15,10 @@ export function VatGuidePage() {
   return (
     <MarketingPageShell>
       <section className="mx-auto w-full max-w-6xl px-5 py-16 md:py-24">
-        <SectionHeading align="left" kicker="Resources" title="A short guide to VAT in South Africa" description="How VAT works, and how Vertex helps you stay on top of it." />
+        <SectionHeading align="left" headingTag="h1" kicker="Resources" title="A short guide to VAT in South Africa" description="How VAT works, and how Vertex helps you stay on top of it." />
 
         <div className="mt-12 flex max-w-3xl flex-col gap-8">
-          <OwnerReviewNotice>
+          <OwnerReviewNotice label="Not tax advice">
             This is general information, not tax advice. For guidance specific to your business, speak to a registered tax
             practitioner or SARS directly.
           </OwnerReviewNotice>

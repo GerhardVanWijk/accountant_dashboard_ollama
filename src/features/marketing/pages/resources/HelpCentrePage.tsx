@@ -29,7 +29,7 @@ export function HelpCentrePage() {
   return (
     <MarketingPageShell>
       <section className="mx-auto w-full max-w-6xl px-5 py-16 md:py-24">
-        <SectionHeading kicker="Resources" title="Help centre" description="Guides and answers for running your books in Vertex." />
+        <SectionHeading headingTag="h1" kicker="Resources" title="Help centre" description="Guides and answers for running your books in Vertex." />
 
         <div className="mt-14 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {topics.map((topic) => (
@@ -41,7 +41,7 @@ export function HelpCentrePage() {
               <span className="flex size-10 items-center justify-center rounded-xl border border-brand/20 bg-brand-muted text-brand">
                 <topic.icon className="size-5" aria-hidden="true" />
               </span>
-              <h3 className="text-base font-medium tracking-tight">{topic.title}</h3>
+              <h2 className="text-base font-medium tracking-tight">{topic.title}</h2>
               <p className="text-sm leading-relaxed text-muted-foreground">{topic.description}</p>
             </Link>
           ))}

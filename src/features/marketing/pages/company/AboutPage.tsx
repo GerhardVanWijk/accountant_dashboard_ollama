@@ -15,7 +15,7 @@ export function AboutPage() {
   return (
     <MarketingPageShell>
       <section className="mx-auto w-full max-w-6xl px-5 py-16 md:py-24">
-        <SectionHeading align="left" kicker="Company" title={`About ${brand.name}`} description="Cloud accounting built for South African business." />
+        <SectionHeading align="left" headingTag="h1" kicker="Company" title={`About ${brand.name}`} description="Cloud accounting built for South African business." />
 
         <div className="mt-12 flex max-w-3xl flex-col gap-8">
           <div className="flex flex-col gap-3">
@@ -35,7 +35,7 @@ export function AboutPage() {
             </p>
           </div>
 
-          <OwnerReviewNotice>
+          <OwnerReviewNotice label="Needs owner input">
             This page does not include a founding story, team information or company registration details — none of that
             exists in the application to describe accurately yet. Add real information here once it is available, rather
             than a placeholder narrative.

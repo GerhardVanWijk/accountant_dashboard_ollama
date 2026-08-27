@@ -16,10 +16,10 @@ export function TermsOfServicePage() {
   return (
     <MarketingPageShell>
       <section className="mx-auto w-full max-w-6xl px-5 py-16 md:py-24">
-        <SectionHeading align="left" kicker="Legal" title="Terms of Service" description="Last reviewed: not yet published. This page is a working draft pending legal review." />
+        <SectionHeading align="left" headingTag="h1" kicker="Legal" title="Terms of Service" description="Last reviewed: not yet published. This page is a working draft pending legal review." />
 
         <div className="mt-12 flex max-w-3xl flex-col gap-8">
-          <OwnerReviewNotice>
+          <OwnerReviewNotice label="Draft status">
             These Terms of Service have not been drafted or approved by legal counsel and are not a binding contract. Do not
             rely on this page as a complete legal agreement until it has been reviewed and finalised.
           </OwnerReviewNotice>
@@ -65,7 +65,7 @@ export function TermsOfServicePage() {
 
           <div className="flex flex-col gap-3">
             <h2 className="text-lg font-medium tracking-tight">4. Not yet drafted</h2>
-            <OwnerReviewNotice>
+            <OwnerReviewNotice label="Not yet drafted">
               The following sections require legal drafting and are not covered by this page: limitation of liability,
               indemnification, warranty disclaimers, suspension and termination conditions, governing law and dispute
               resolution, and acceptable-use restrictions. Treat none of these as agreed until published.

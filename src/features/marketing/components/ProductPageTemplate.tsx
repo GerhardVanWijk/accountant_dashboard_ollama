@@ -41,7 +41,7 @@ export function ProductPageTemplate({
   return (
     <MarketingPageShell>
       <section className="mx-auto w-full max-w-6xl px-5 py-16 md:py-24">
-        <SectionHeading kicker={kicker} title={title} description={description} />
+        <SectionHeading kicker={kicker} title={title} description={description} headingTag="h1" />
 
         <div className="mt-14 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {capabilities.map((capability) => (
@@ -49,19 +49,21 @@ export function ProductPageTemplate({
               <span className="flex size-10 items-center justify-center rounded-xl border border-brand/20 bg-brand-muted text-brand">
                 <capability.icon className="size-5" aria-hidden="true" />
               </span>
-              <h3 className="text-base font-medium tracking-tight">{capability.title}</h3>
+              <h2 className="text-base font-medium tracking-tight">{capability.title}</h2>
               <p className="text-sm leading-relaxed text-muted-foreground">{capability.body}</p>
             </div>
           ))}
         </div>
 
         {notIncluded.length > 0 ? (
-          <div className="mt-10 flex flex-col gap-3 rounded-2xl border border-border bg-card/20 p-6">
-            <h3 className="text-sm font-semibold tracking-wide text-foreground uppercase">Not part of Vertex today</h3>
+          <div className="mt-10 flex flex-col gap-3 rounded-2xl border border-border bg-card/40 p-6">
+            <h2 className="text-sm font-semibold tracking-wide text-foreground uppercase">Not part of Vertex today</h2>
             <ul className="flex flex-col gap-2">
               {notIncluded.map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                  <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center text-muted-foreground/60">—</span>
+                  <span aria-hidden="true" className="mt-0.5 flex size-4 shrink-0 items-center justify-center text-muted-foreground/60">
+                    —
+                  </span>
                   {item}
                 </li>
               ))}

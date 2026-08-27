@@ -18,10 +18,10 @@ export function ContactPage() {
   return (
     <MarketingPageShell>
       <section className="mx-auto w-full max-w-6xl px-5 py-16 md:py-24">
-        <SectionHeading align="left" kicker="Company" title="Contact" description="How to reach us." />
+        <SectionHeading align="left" headingTag="h1" kicker="Company" title="Contact" description="How to reach us." />
 
         <div className="mt-12 flex max-w-3xl flex-col gap-8">
-          <OwnerReviewNotice>
+          <OwnerReviewNotice label="No contact channel yet">
             There is no published contact email, phone number or working contact form yet — none exists anywhere in this
             application today, so nothing is listed here rather than showing an address that would not reach anyone. Add
             a real, monitored contact channel before this page goes live to real visitors.

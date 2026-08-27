@@ -17,10 +17,10 @@ export function PrivacyPolicyPage() {
   return (
     <MarketingPageShell>
       <section className="mx-auto w-full max-w-6xl px-5 py-16 md:py-24">
-        <SectionHeading align="left" kicker="Legal" title="Privacy Policy" description="Last reviewed: not yet published. This page is a working draft pending legal review." />
+        <SectionHeading align="left" headingTag="h1" kicker="Legal" title="Privacy Policy" description="Last reviewed: not yet published. This page is a working draft pending legal review." />
 
         <div className="mt-12 flex max-w-3xl flex-col gap-8">
-          <OwnerReviewNotice>
+          <OwnerReviewNotice label="Draft status">
             This Privacy Policy has not been drafted or approved by Vertex's legal counsel. It describes only what is verifiably
             true of the application today. It should not be relied on as a complete or binding privacy policy until reviewed and
             completed by the business owner and legal counsel.
@@ -46,7 +46,7 @@ export function PrivacyPolicyPage() {
 
           <div className="flex flex-col gap-3">
             <h2 className="text-lg font-medium tracking-tight">What this page does not yet cover</h2>
-            <OwnerReviewNotice>
+            <OwnerReviewNotice label="Needs confirmation">
               The following require a decision or confirmation from the business owner before they can be published as fact:
               exact data retention periods, the list of any third-party sub-processors, the physical hosting region(s) for the
               underlying database, the process for a data subject to request access, correction or deletion of their data, and

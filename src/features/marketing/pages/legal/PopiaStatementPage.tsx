@@ -18,13 +18,14 @@ export function PopiaStatementPage() {
       <section className="mx-auto w-full max-w-6xl px-5 py-16 md:py-24">
         <SectionHeading
           align="left"
+          headingTag="h1"
           kicker="Legal"
           title="POPIA statement"
           description="South Africa's Protection of Personal Information Act (POPIA) — where Vertex stands today."
         />
 
         <div className="mt-12 flex max-w-3xl flex-col gap-8">
-          <OwnerReviewNotice>
+          <OwnerReviewNotice label="Compliance status">
             Vertex does not currently claim to be POPIA compliant. This page explains what POPIA requires and is honest about
             what has and has not yet been put in place — it is not a substitute for a formal compliance assessment.
           </OwnerReviewNotice>
@@ -53,7 +54,7 @@ export function PopiaStatementPage() {
 
           <div className="flex flex-col gap-3">
             <h2 className="text-lg font-medium tracking-tight">Not yet in place</h2>
-            <OwnerReviewNotice>
+            <OwnerReviewNotice label="Not yet in place">
               The following are required for a genuine POPIA compliance position and have not yet been established: a
               registered Information Officer, a documented lawful basis for each category of processing, a data-subject
               access/correction/deletion request process, an operator agreement template for accounting firms acting on a
