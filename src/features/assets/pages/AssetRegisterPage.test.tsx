@@ -1,9 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Account, FixedAsset } from '@/types';
 import { AssetRegisterPage } from './AssetRegisterPage';
 import { fixedAssetService } from '../services';
 import { accountService } from '@/features/accounting/services';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/assets/register']}>
+      <AssetRegisterPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../services', () => ({
   fixedAssetService: {
@@ -13,6 +22,14 @@ vi.mock('../services', () => ({
     updateFixedAsset: vi.fn(),
     deleteFixedAsset: vi.fn(),
     postAcquisition: vi.fn(),
+  },
+  depreciationService: {
+    getDepreciationHistory: vi.fn().mockResolvedValue([]),
+    runDepreciation: vi.fn(),
+  },
+  assetDisposalService: {
+    getDisposals: vi.fn().mockResolvedValue([]),
+    disposeAsset: vi.fn(),
   },
 }));
 
@@ -72,25 +89,25 @@ describe('AssetRegisterPage', () => {
 
   it('shows a loading state while assets are being fetched', () => {
     mockedGetFixedAssets.mockReturnValue(new Promise(() => {}));
-    render(<AssetRegisterPage />);
+    renderPage();
     expect(screen.getByText(/loading fixed assets/i)).toBeInTheDocument();
   });
 
   it('shows an error state when the fetch fails', async () => {
     mockedGetFixedAssets.mockRejectedValue(new Error('Network unreachable'));
-    render(<AssetRegisterPage />);
+    renderPage();
     expect(await screen.findByText(/network unreachable/i)).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no assets', async () => {
     mockedGetFixedAssets.mockResolvedValue([]);
-    render(<AssetRegisterPage />);
+    renderPage();
     expect(await screen.findByText(/no fixed assets yet/i)).toBeInTheDocument();
   });
 
   it('renders asset rows once data loads', async () => {
     mockedGetFixedAssets.mockResolvedValue([makeAsset()]);
-    render(<AssetRegisterPage />);
+    renderPage();
     expect(await screen.findByText('FA-0001')).toBeInTheDocument();
     expect(screen.getByText('Test Forklift')).toBeInTheDocument();
     expect(screen.getByText('Draft')).toBeInTheDocument();
@@ -99,7 +116,7 @@ describe('AssetRegisterPage', () => {
   it('creates a new draft asset through the form', async () => {
     mockedGetFixedAssets.mockResolvedValue([]);
     mockedCreateFixedAsset.mockResolvedValue(makeAsset());
-    render(<AssetRegisterPage />);
+    renderPage();
     await screen.findByText(/no fixed assets yet/i);
 
     fireEvent.click(screen.getAllByRole('button', { name: /new asset/i })[0]);
@@ -117,7 +134,7 @@ describe('AssetRegisterPage', () => {
   it('posts an acquisition for a draft asset', async () => {
     mockedGetFixedAssets.mockResolvedValue([makeAsset()]);
     mockedPostAcquisition.mockResolvedValue(makeAsset({ status: 'active', journalEntryId: 'je_1' }));
-    render(<AssetRegisterPage />);
+    renderPage();
     await screen.findByText('FA-0001');
 
     fireEvent.click(screen.getByRole('button', { name: /post acquisition/i }));

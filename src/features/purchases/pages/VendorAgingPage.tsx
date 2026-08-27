@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Amount, FigureBlock } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { formatCurrency } from '@/lib/app/format';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
+import { SupplierDetailSheet } from '@/features/suppliers/components/SupplierDetailSheet';
 import { useBills } from '../hooks';
 import { calculateAllVendorAging, type VendorAgingRow } from '../utils/calculateVendorAging';
 
@@ -20,9 +23,29 @@ type SortKey = 'supplier' | 'total';
  */
 export function VendorAgingPage() {
   const { bills, isLoading, error } = useBills();
-  const { suppliers } = useSuppliers();
+  const suppliersState = useSuppliers();
+  const { suppliers } = suppliersState;
+  const navigate = useNavigate();
   const [sortKey, setSortKey] = useState<SortKey>('total');
   const [sortDesc, setSortDesc] = useState(true);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedSupplierId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedSupplierId);
+  function openSupplier(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeSupplier() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
 
   const suppliersMap = useMemo(() => Object.fromEntries(suppliers.map((s) => [s.id, s.name])), [suppliers]);
   const rows = useMemo(() => calculateAllVendorAging(bills), [bills]);
@@ -124,7 +147,9 @@ export function VendorAgingPage() {
                   <tbody>
                     {sortedRows.map((row: VendorAgingRow) => (
                       <tr key={row.supplierId} className="border-t border-border">
-                        <td className="whitespace-nowrap px-4 py-2.5 font-medium">{suppliersMap[row.supplierId] || row.supplierId}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 font-medium">
+                          <RecordLink onClick={() => openSupplier(row.supplierId)}>{suppliersMap[row.supplierId] || row.supplierId}</RecordLink>
+                        </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right">
                           <Amount value={row.buckets.current} />
                         </td>
@@ -169,6 +194,16 @@ export function VendorAgingPage() {
           </SectionCard>
         </>
       )}
+
+      <SupplierDetailSheet
+        supplierId={selectedSupplierId}
+        suppliersState={suppliersState}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeSupplier();
+        }}
+        onEdit={() => selectedSupplierId && navigate(`/purchases/vendors?view=edit&id=${selectedSupplierId}`)}
+      />
     </div>
   );
 }

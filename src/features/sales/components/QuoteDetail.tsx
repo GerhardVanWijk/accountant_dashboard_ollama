@@ -169,7 +169,7 @@ export function QuoteDetail({
                 <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">Tax/VAT</td>
                 <td className="px-4 py-2 text-right font-medium">{formatCurrency(quote.taxTotal)}</td>
               </tr>
-              <tr className="border-t border-border bg-positive/10">
+              <tr className="border-t border-border bg-status-positive-muted">
                 <td colSpan={4} className="px-4 py-2 text-right text-sm font-semibold uppercase">Total</td>
                 <td className="px-4 py-2 text-right text-base font-bold text-positive">{formatCurrency(quote.total)}</td>
               </tr>

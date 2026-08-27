@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import type { BankAccount } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
@@ -13,6 +14,7 @@ import {
 } from '@/components/ui/shadcn/select';
 import { useBankAccounts } from '../hooks/useBankAccounts';
 import { useBankReconciliation } from '../hooks/useBankReconciliation';
+import { useBankTransactions } from '../hooks/useBankTransactions';
 import { ReconciliationWorkspace } from '../components/ReconciliationWorkspace';
 import { ReconciliationHistory } from '../components/ReconciliationHistory';
 import { DifferenceInvestigatorPanel } from '@/features/reconciliationIntelligence/components/DifferenceInvestigatorPanel';
@@ -94,9 +96,12 @@ export function BankReconciliationPage() {
 }
 
 function ReconciliationSection({ account }: { account: BankAccount }) {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<'workspace' | 'investigator' | 'integrity' | 'history'>('workspace');
   const { history, refetchHistory, statementDate, statementBalance, clearedIds, summary } = useBankReconciliation(account.id);
   const booksIntegrity = useBooksIntegrity(tab === 'integrity' ? account.id : undefined);
+  const { transactions } = useBankTransactions(account.id);
+  const transactionsById = useMemo(() => new Map(transactions.map((t) => [t.id, t])), [transactions]);
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
@@ -125,7 +130,11 @@ function ReconciliationSection({ account }: { account: BankAccount }) {
         {!booksIntegrity.isLoading && !booksIntegrity.error && <BooksIntegrityPanel results={booksIntegrity.results} />}
       </TabsContent>
       <TabsContent value="history" className="pt-4">
-        <ReconciliationHistory history={history} />
+        <ReconciliationHistory
+          history={history}
+          transactionsById={transactionsById}
+          onSelectTransaction={(id) => navigate(`/banking/transactions?record=${id}`)}
+        />
       </TabsContent>
     </Tabs>
   );

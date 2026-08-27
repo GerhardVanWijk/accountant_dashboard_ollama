@@ -1,9 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Employee } from '@/types';
 import { EmployeesPage } from './EmployeesPage';
 import { employeeService } from '../services';
 import { useAuthStore } from '@/stores/authStore';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/payroll/employees']}>
+      <EmployeesPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../services', () => ({
   employeeService: {
@@ -50,25 +59,25 @@ describe('EmployeesPage', () => {
 
   it('shows a loading state while employees are being fetched', () => {
     mockedGetEmployees.mockReturnValue(new Promise(() => {}));
-    render(<EmployeesPage />);
+    renderPage();
     expect(screen.getByText(/loading employees/i)).toBeInTheDocument();
   });
 
   it('shows an error state when the fetch fails', async () => {
     mockedGetEmployees.mockRejectedValue(new Error('Network unreachable'));
-    render(<EmployeesPage />);
+    renderPage();
     expect(await screen.findByText(/network unreachable/i)).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no employees', async () => {
     mockedGetEmployees.mockResolvedValue([]);
-    render(<EmployeesPage />);
+    renderPage();
     expect(await screen.findByText(/no employees yet/i)).toBeInTheDocument();
   });
 
   it('renders employee rows once data loads', async () => {
     mockedGetEmployees.mockResolvedValue([makeEmployee()]);
-    render(<EmployeesPage />);
+    renderPage();
     expect(await screen.findByText('EMP-0001')).toBeInTheDocument();
     expect(screen.getByText('Thandiwe Nkosi')).toBeInTheDocument();
   });
@@ -76,7 +85,7 @@ describe('EmployeesPage', () => {
   it('creates a new employee through the form', async () => {
     mockedGetEmployees.mockResolvedValue([]);
     mockedCreateEmployee.mockResolvedValue(makeEmployee());
-    render(<EmployeesPage />);
+    renderPage();
     await screen.findByText(/no employees yet/i);
 
     fireEvent.click(screen.getAllByRole('button', { name: /new employee/i })[0]);

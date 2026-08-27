@@ -124,7 +124,7 @@ export function IncomeStatementPage() {
           {statement.revenueLines.length === 0 ? (
             <StatementRow label="No revenue posted in this period" amount={0} indent />
           ) : (
-            statement.revenueLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />)
+            statement.revenueLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent accountId={line.accountId} />)
           )}
           <StatementRow label="Total Revenue" amount={statement.revenueTotal} isTotal />
 
@@ -132,7 +132,7 @@ export function IncomeStatementPage() {
           {statement.costOfGoodsSoldLines.length === 0 ? (
             <StatementRow label="No cost of goods sold in this period" amount={0} indent />
           ) : (
-            statement.costOfGoodsSoldLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />)
+            statement.costOfGoodsSoldLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent accountId={line.accountId} />)
           )}
           <StatementRow label="Total Cost of Goods Sold" amount={statement.costOfGoodsSoldTotal} isTotal />
 
@@ -142,7 +142,7 @@ export function IncomeStatementPage() {
           {statement.operatingExpenseLines.length === 0 ? (
             <StatementRow label="No operating expenses in this period" amount={0} indent />
           ) : (
-            statement.operatingExpenseLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />)
+            statement.operatingExpenseLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent accountId={line.accountId} />)
           )}
           <StatementRow label="Total Operating Expenses" amount={statement.operatingExpenseTotal} isTotal />
 
@@ -152,7 +152,7 @@ export function IncomeStatementPage() {
           {statement.incomeTaxExpenseLines.length === 0 ? (
             <StatementRow label="No income tax expense posted in this period" amount={0} indent />
           ) : (
-            statement.incomeTaxExpenseLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />)
+            statement.incomeTaxExpenseLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent accountId={line.accountId} />)
           )}
           <StatementRow label="Total Income Tax Expense" amount={statement.incomeTaxExpenseTotal} isTotal />
 

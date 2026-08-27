@@ -32,7 +32,7 @@ export function FinancialPeriodCard({ period, isCurrent, onClose, onLock, onReop
     <li
       className={cn(
         'flex flex-col gap-3 rounded-xl border p-4',
-        isCurrent ? 'border-brand/40 bg-brand-muted/20' : 'border-border bg-card',
+        isCurrent ? 'border-brand-outline bg-brand-muted' : 'border-border bg-card',
       )}
     >
       <div className="flex items-start justify-between gap-3">

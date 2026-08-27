@@ -1,5 +1,8 @@
+import { useNavigate } from 'react-router-dom';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { cn } from '@/lib/utils';
+import { useAccountingUiStore } from '@/features/accounting/store/accountingUiStore';
 
 export interface StatementRowProps {
   label: string;
@@ -8,6 +11,8 @@ export interface StatementRowProps {
   isTotal?: boolean;
   /** Individual account lines nest under their category header. */
   indent?: boolean;
+  /** When set (an individual account line, never a total), the label drills into that account's General Ledger activity. */
+  accountId?: string;
 }
 
 /**
@@ -19,7 +24,10 @@ export interface StatementRowProps {
  * by heading/indentation rather than per-row color. Shared by the Income
  * Statement and Balance Sheet pages so both render amounts identically.
  */
-export function StatementRow({ label, amount, isTotal = false, indent = false }: StatementRowProps) {
+export function StatementRow({ label, amount, isTotal = false, indent = false, accountId }: StatementRowProps) {
+  const navigate = useNavigate();
+  const setSelectedLedgerAccountId = useAccountingUiStore((s) => s.setSelectedLedgerAccountId);
+
   return (
     <div
       className={cn(
@@ -27,7 +35,21 @@ export function StatementRow({ label, amount, isTotal = false, indent = false }:
         isTotal && 'mt-1 border-t border-border font-semibold text-foreground',
       )}
     >
-      <span className={cn(indent && !isTotal && 'pl-4 text-muted-foreground')}>{label}</span>
+      {accountId ? (
+        <span className={cn(indent && !isTotal && 'pl-4')}>
+          <RecordLink
+            onClick={() => {
+              setSelectedLedgerAccountId(accountId);
+              navigate('/accounting/ledger');
+            }}
+            className="text-sm"
+          >
+            {label}
+          </RecordLink>
+        </span>
+      ) : (
+        <span className={cn(indent && !isTotal && 'pl-4 text-muted-foreground')}>{label}</span>
+      )}
       <Amount value={amount} statement className={cn('text-sm', isTotal && 'font-semibold')} />
     </div>
   );

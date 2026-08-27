@@ -494,9 +494,11 @@ const sidebarMenuButtonVariants = cva(
   // so the active row's full-strength text reads as a clear step up, not just
   // a background tint. A permanent transparent left border (colored in only
   // on data-[active]) gives the active row a brand-green accent bar without
-  // any layout shift between states, and the active row's icon tints brand
-  // too — the "icon also reflects selected state" requirement.
-  "peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md border-l-2 border-transparent p-2 text-left text-sm text-sidebar-foreground/70 ring-sidebar-ring outline-none transition-[width,height,padding,border-color] group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[open]:hover:bg-sidebar-accent data-[open]:hover:text-sidebar-accent-foreground data-[active]:border-l-brand data-[active]:bg-sidebar-accent data-[active]:font-semibold data-[active]:text-sidebar-accent-foreground [&[data-active]_svg]:text-brand [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
+  // any layout shift between states, and the active row's icon AND label text
+  // both tint brand — "active item text should use the Vertex green" (both
+  // were text-sidebar-accent-foreground, i.e. plain near-white, before this
+  // pass; only the icon was ever actually green).
+  "peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md border-l-2 border-transparent p-2 text-left text-sm text-sidebar-foreground/70 ring-sidebar-ring outline-none transition-[width,height,padding,border-color] group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[open]:hover:bg-sidebar-accent data-[open]:hover:text-sidebar-accent-foreground data-[active]:border-l-brand data-[active]:bg-sidebar-accent data-[active]:font-semibold data-[active]:text-brand [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
   {
     variants: {
       variant: {

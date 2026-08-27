@@ -1,7 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { TrialBalancePage } from './TrialBalancePage';
 import { accountService, journalEntryService } from '../services';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/accounting/trial-balance']}>
+      <TrialBalancePage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../services', () => ({
   accountService: {
@@ -36,19 +45,19 @@ describe('TrialBalancePage', () => {
 
   it('shows a loading state while the trial balance is computing', () => {
     mockedComputeTrialBalance.mockReturnValue(new Promise(() => {}));
-    render(<TrialBalancePage />);
+    renderPage();
     expect(screen.getByText(/computing trial balance/i)).toBeInTheDocument();
   });
 
   it('shows an error state when computing fails', async () => {
     mockedComputeTrialBalance.mockRejectedValue(new Error('Network unreachable'));
-    render(<TrialBalancePage />);
+    renderPage();
     expect(await screen.findByText(/network unreachable/i)).toBeInTheDocument();
   });
 
   it('shows an empty state when nothing has posted', async () => {
     mockedComputeTrialBalance.mockResolvedValue({ rows: [], totalDebits: 0, totalCredits: 0, balanced: true });
-    render(<TrialBalancePage />);
+    renderPage();
     expect(await screen.findByText(/nothing posted yet/i)).toBeInTheDocument();
   });
 
@@ -62,7 +71,7 @@ describe('TrialBalancePage', () => {
       totalCredits: 100,
       balanced: true,
     });
-    render(<TrialBalancePage />);
+    renderPage();
     expect(await screen.findByText('Cash and Bank')).toBeInTheDocument();
     expect(screen.getByText(/balanced — total debits equal total credits/i)).toBeInTheDocument();
   });
@@ -74,7 +83,7 @@ describe('TrialBalancePage', () => {
       totalCredits: 0,
       balanced: false,
     });
-    render(<TrialBalancePage />);
+    renderPage();
     expect(await screen.findByText(/out of balance/i)).toBeInTheDocument();
   });
 });

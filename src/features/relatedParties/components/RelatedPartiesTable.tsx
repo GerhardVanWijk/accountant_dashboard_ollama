@@ -1,5 +1,7 @@
+import { useNavigate } from 'react-router-dom';
 import type { RelatedParty } from '@/types/relatedParty';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { RELATIONSHIP_TYPE_LABELS } from '../constants';
@@ -13,6 +15,8 @@ export interface RelatedPartiesTableProps {
 
 /** Related Party Register, re-skinned onto v0's DataTable (M13) — mirrors AssetsTable.tsx's shape. */
 export function RelatedPartiesTable({ relatedParties, transactionCountByPartyId, onEdit, onDelete }: RelatedPartiesTableProps) {
+  const navigate = useNavigate();
+
   const columns: DataTableColumn<RelatedParty>[] = [
     { key: 'name', header: 'Name', sortValue: (p) => p.name, cell: (p) => <span className="font-medium text-foreground">{p.name}</span> },
     { key: 'type', header: 'Relationship type', sortValue: (p) => p.relationshipType, cell: (p) => <span className="text-xs">{RELATIONSHIP_TYPE_LABELS[p.relationshipType]}</span> },
@@ -22,7 +26,16 @@ export function RelatedPartiesTable({ relatedParties, transactionCountByPartyId,
       header: 'Transactions',
       align: 'right',
       sortValue: (p) => transactionCountByPartyId.get(p.id) ?? 0,
-      cell: (p) => <span className="figure text-sm tabular-nums">{transactionCountByPartyId.get(p.id) ?? 0}</span>,
+      cell: (p) => {
+        const count = transactionCountByPartyId.get(p.id) ?? 0;
+        return count > 0 ? (
+          <RecordLink onClick={() => navigate('/related-parties/transactions')} className="figure text-sm">
+            {count}
+          </RecordLink>
+        ) : (
+          <span className="figure text-sm tabular-nums text-muted-foreground">0</span>
+        );
+      },
     },
     { key: 'status', header: 'Status', sortValue: (p) => (p.isActive ? 'active' : 'inactive'), cell: (p) => <StatusBadge status={p.isActive ? 'active' : 'inactive'} /> },
     {

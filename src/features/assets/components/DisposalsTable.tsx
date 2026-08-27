@@ -1,6 +1,8 @@
+import { useNavigate } from 'react-router-dom';
 import type { AssetDisposal, FixedAsset } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { formatDate } from '@/lib/app/format';
 
 export interface DisposalsTableProps {
@@ -10,6 +12,7 @@ export interface DisposalsTableProps {
 
 /** Asset disposal ledger, re-skinned onto v0's DataTable (M8) — gain/loss is read from the posted AssetDisposal record, not recomputed. */
 export function DisposalsTable({ disposals, assets }: DisposalsTableProps) {
+  const navigate = useNavigate();
   const assetById = new Map(assets.map((a) => [a.id, a]));
 
   const columns: DataTableColumn<AssetDisposal>[] = [
@@ -20,7 +23,11 @@ export function DisposalsTable({ disposals, assets }: DisposalsTableProps) {
       sortValue: (d) => assetById.get(d.assetId)?.assetNumber ?? d.assetId,
       cell: (d) => {
         const asset = assetById.get(d.assetId);
-        return asset ? `${asset.assetNumber} - ${asset.name}` : d.assetId;
+        return (
+          <RecordLink onClick={() => navigate(`/assets/register?record=${d.assetId}`)} className="text-sm">
+            {asset ? `${asset.assetNumber} - ${asset.name}` : d.assetId}
+          </RecordLink>
+        );
       },
     },
     {

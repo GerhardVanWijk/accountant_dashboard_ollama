@@ -1,7 +1,9 @@
 ﻿import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock, Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
@@ -24,6 +26,7 @@ const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparen
  */
 export function EclProvisionPage() {
   const { financialYears, company, computations, loading, error, refetch, createComputation, updateBuckets, deleteComputation, postComputation } = useEcl();
+  const navigate = useNavigate();
 
   const [selectedFinancialYearId, setSelectedFinancialYearId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -195,8 +198,18 @@ export function EclProvisionPage() {
           ) : (
             <p className="text-xs text-muted-foreground">
               Posted{selectedComputation.postedAt ? ` on ${formatDate(selectedComputation.postedAt)}` : ''}
-              {selectedComputation.journalEntryId ? ` — journal entry ${selectedComputation.journalEntryId}.` : ' — no journal entry (nil movement).'} A posted computation is immutable; there is
-              no reversal path yet.
+              {selectedComputation.journalEntryId ? (
+                <>
+                  {' — '}
+                  <RecordLink onClick={() => navigate(`/accounting/journals?record=${selectedComputation.journalEntryId}`)} className="text-xs">
+                    view journal entry
+                  </RecordLink>
+                  .
+                </>
+              ) : (
+                ' — no journal entry (nil movement).'
+              )}{' '}
+              A posted computation is immutable; there is no reversal path yet.
             </p>
           )}
         </>

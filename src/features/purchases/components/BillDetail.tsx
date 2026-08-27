@@ -106,7 +106,7 @@ export function BillDetail({ bill, suppliersMap = {}, onClose, onPost, onRecordP
                 <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">VAT (Input)</td>
                 <td className="px-4 py-2 text-right font-medium">{formatCurrency(bill.taxTotal)}</td>
               </tr>
-              <tr className="border-t border-border bg-positive/10">
+              <tr className="border-t border-border bg-status-positive-muted">
                 <td colSpan={5} className="px-4 py-2 text-right text-sm font-semibold uppercase">Total due</td>
                 <td className="px-4 py-2 text-right text-base font-bold text-positive">{formatCurrency(bill.total)}</td>
               </tr>

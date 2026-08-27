@@ -1,8 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Account } from '@/types';
 import { ChartOfAccountsPage } from './ChartOfAccountsPage';
 import { accountService } from '../services';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/accounting/coa']}>
+      <ChartOfAccountsPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../services', () => ({
   accountService: {
@@ -46,25 +55,25 @@ describe('ChartOfAccountsPage', () => {
 
   it('shows a loading state while accounts are being fetched', () => {
     mockedGetAccounts.mockReturnValue(new Promise(() => {}));
-    render(<ChartOfAccountsPage />);
+    renderPage();
     expect(screen.getByText(/loading chart of accounts/i)).toBeInTheDocument();
   });
 
   it('shows an error state when the fetch fails', async () => {
     mockedGetAccounts.mockRejectedValue(new Error('Network unreachable'));
-    render(<ChartOfAccountsPage />);
+    renderPage();
     expect(await screen.findByText(/network unreachable/i)).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no accounts', async () => {
     mockedGetAccounts.mockResolvedValue([]);
-    render(<ChartOfAccountsPage />);
+    renderPage();
     expect(await screen.findByText(/no accounts yet/i)).toBeInTheDocument();
   });
 
   it('renders account rows grouped by master type once data loads', async () => {
     mockedGetAccounts.mockResolvedValue([makeAccount()]);
-    render(<ChartOfAccountsPage />);
+    renderPage();
     expect(await screen.findByText('Cash and Bank')).toBeInTheDocument();
     expect(screen.getByText('1000')).toBeInTheDocument();
     expect(screen.getAllByText('Assets').length).toBeGreaterThan(0);
@@ -75,7 +84,7 @@ describe('ChartOfAccountsPage', () => {
       makeAccount(),
       makeAccount({ id: 'acc_1100', code: '1100', name: 'Accounts Receivable' }),
     ]);
-    render(<ChartOfAccountsPage />);
+    renderPage();
     await screen.findByText('Cash and Bank');
 
     const { fireEvent } = await import('@testing-library/react');

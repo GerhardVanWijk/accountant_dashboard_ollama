@@ -58,7 +58,12 @@ function DialogContent({
           // stay intact; the scroll happens in the inner wrapper below, not
           // here, so the close button (a sibling, not a descendant of that
           // wrapper) never scrolls out of reach.
-          "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100%-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-[open]:animate-in data-[open]:fade-in-0 data-[open]:zoom-in-95 data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-95",
+          // Thin brand-green ring (not the old neutral ring-foreground/10) —
+          // every dialog in this app is a form/record surface, so its outer
+          // boundary reads as an intentional, on-brand panel rather than a
+          // generic browser-chrome box. Deliberately NOT applied to
+          // AlertDialogContent (confirmation/destructive prompts, not forms).
+          "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100%-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl bg-popover text-sm text-popover-foreground ring-1 ring-brand-outline duration-100 outline-none sm:max-w-sm data-[open]:animate-in data-[open]:fade-in-0 data-[open]:zoom-in-95 data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-95",
           className
         )}
         {...props}

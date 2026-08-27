@@ -1,6 +1,8 @@
+import { useNavigate } from 'react-router-dom';
 import type { LeaseAmortizationEntry, LeaseContract } from '@/types/lease';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { formatDate } from '@/lib/app/format';
 
 export interface AmortizationHistoryTableProps {
@@ -10,6 +12,7 @@ export interface AmortizationHistoryTableProps {
 
 /** Lease amortization posting history, re-skinned onto v0's DataTable (M13) — every row is a real posted LeaseAmortizationEntry, no math performed here. */
 export function AmortizationHistoryTable({ entries, leases }: AmortizationHistoryTableProps) {
+  const navigate = useNavigate();
   const leaseById = new Map(leases.map((l) => [l.id, l]));
 
   const columns: DataTableColumn<LeaseAmortizationEntry>[] = [
@@ -20,7 +23,11 @@ export function AmortizationHistoryTable({ entries, leases }: AmortizationHistor
       sortValue: (e) => leaseById.get(e.leaseId)?.leaseNumber ?? e.leaseId,
       cell: (e) => {
         const lease = leaseById.get(e.leaseId);
-        return lease ? `${lease.leaseNumber} - ${lease.assetDescription}` : e.leaseId;
+        return (
+          <RecordLink onClick={() => navigate(`/leases/register?record=${e.leaseId}`)} className="text-sm">
+            {lease ? `${lease.leaseNumber} - ${lease.assetDescription}` : e.leaseId}
+          </RecordLink>
+        );
       },
     },
     { key: 'interest', header: 'Interest', align: 'right', sortValue: (e) => e.interestAmount, cell: (e) => <Amount value={-e.interestAmount} plain className="text-sm" /> },

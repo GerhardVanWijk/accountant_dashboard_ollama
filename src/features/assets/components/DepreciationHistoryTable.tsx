@@ -1,6 +1,8 @@
+import { useNavigate } from 'react-router-dom';
 import type { DepreciationEntry, FixedAsset } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { formatDate } from '@/lib/app/format';
 
 export interface DepreciationHistoryTableProps {
@@ -10,6 +12,7 @@ export interface DepreciationHistoryTableProps {
 
 /** Depreciation posting history, re-skinned onto v0's DataTable (M8) — every row is a real posted DepreciationEntry, no math performed here. */
 export function DepreciationHistoryTable({ entries, assets }: DepreciationHistoryTableProps) {
+  const navigate = useNavigate();
   const assetById = new Map(assets.map((a) => [a.id, a]));
 
   const columns: DataTableColumn<DepreciationEntry>[] = [
@@ -20,7 +23,11 @@ export function DepreciationHistoryTable({ entries, assets }: DepreciationHistor
       sortValue: (e) => assetById.get(e.assetId)?.assetNumber ?? e.assetId,
       cell: (e) => {
         const asset = assetById.get(e.assetId);
-        return asset ? `${asset.assetNumber} - ${asset.name}` : e.assetId;
+        return (
+          <RecordLink onClick={() => navigate(`/assets/register?record=${e.assetId}`)} className="text-sm">
+            {asset ? `${asset.assetNumber} - ${asset.name}` : e.assetId}
+          </RecordLink>
+        );
       },
     },
     { key: 'charge', header: 'Charge', align: 'right', sortValue: (e) => e.amount, cell: (e) => <Amount value={-e.amount} plain className="text-sm" /> },

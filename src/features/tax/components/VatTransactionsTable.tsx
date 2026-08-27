@@ -1,5 +1,7 @@
+import { useNavigate } from 'react-router-dom';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { formatDate } from '@/lib/app/format';
 import { treatmentLabels } from '../utils/treatmentLabels';
@@ -11,6 +13,12 @@ const DOCUMENT_TYPE_LABELS: Record<VatTransactionRow['documentType'], string> = 
   bill: 'Bill',
 };
 
+const DOCUMENT_TYPE_ROUTE: Record<VatTransactionRow['documentType'], string> = {
+  invoice: '/sales/invoices',
+  credit_note: '/sales/credit-notes',
+  bill: '/purchases/bills',
+};
+
 /**
  * Real posted Invoices/Credit Notes/Bills contributing to the selected VAT
  * period, re-skinned onto v0's DataTable (M7) — same transaction-traceability
@@ -20,6 +28,8 @@ const DOCUMENT_TYPE_LABELS: Record<VatTransactionRow['documentType'], string> = 
  * here — every figure is handed in already-computed.
  */
 export function VatTransactionsTable({ transactions }: { transactions: VatTransactionRow[] }) {
+  const navigate = useNavigate();
+
   const columns: DataTableColumn<VatTransactionRow>[] = [
     {
       key: 'date',
@@ -33,7 +43,9 @@ export function VatTransactionsTable({ transactions }: { transactions: VatTransa
       sortValue: (t) => t.documentNumber,
       cell: (t) => (
         <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-medium">{t.documentNumber}</span>
+          <RecordLink onClick={() => navigate(`${DOCUMENT_TYPE_ROUTE[t.documentType]}?record=${t.id}`)} className="text-sm font-medium">
+            {t.documentNumber}
+          </RecordLink>
           <span className="text-xs text-muted-foreground">{DOCUMENT_TYPE_LABELS[t.documentType]}</span>
         </div>
       ),

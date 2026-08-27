@@ -1,16 +1,17 @@
 ﻿import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { SalesOrderList } from '@/features/sales/components/SalesOrderList';
-import { SalesOrderDetail } from '@/features/sales/components/SalesOrderDetail';
+import { SalesOrderDetailSheet } from '@/features/sales/components/SalesOrderDetailSheet';
 import { SalesOrderFormModal } from '@/features/sales/components/SalesOrderFormModal';
 import { useSalesOrders } from '@/features/sales/hooks/useSalesOrders';
 import { useSalesOrderMutations } from '@/features/sales/hooks/useSalesOrderMutations';
 import { useQuotes } from '@/features/sales/hooks/useQuotes';
+import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
 
-type View = { type: 'list' } | { type: 'detail'; id: string };
 type FormState = { mode: 'create' } | null;
 
 /**
@@ -28,17 +29,35 @@ type FormState = { mode: 'create' } | null;
  * duplicated here.
  */
 export function SalesOrdersPage() {
-  const [view, setView] = useState<View>({ type: 'list' });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedId);
+  function openRecord(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeRecord() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
+
   const [formState, setFormState] = useState<FormState>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { salesOrders, isLoading, error, refetch } = useSalesOrders();
-  const detailOrder = view.type === 'detail' ? salesOrders.find((o) => o.id === view.id) : undefined;
+  const detailOrder = salesOrders.find((o) => o.id === selectedId);
   const { customers: customerMap } = useCustomerMap();
   const { customers: customerList } = useCustomerList();
-  // Only needed to show "Converted from quote QUO-..." on a detail view.
+  // Needed for "Source quote"/"Converted to invoice" related-record links.
   const { quotes } = useQuotes();
+  const { invoices } = useInvoices();
   const {
     createSalesOrder,
     deleteSalesOrder,
@@ -71,7 +90,7 @@ export function SalesOrdersPage() {
     setActionError(null);
     try {
       await deleteSalesOrder(id);
-      setView({ type: 'list' });
+      closeRecord();
       setNotice('Pending sales order deleted.');
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not delete sales order.');
@@ -84,7 +103,7 @@ export function SalesOrdersPage() {
       const invoice = await convertToInvoice(id);
       await refetch();
       setNotice(`Converted to draft Invoice ${invoice.invoiceNumber}. Find it on the Invoices page.`);
-      setView({ type: 'list' });
+      closeRecord();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not convert sales order to an invoice.');
     }
@@ -92,70 +111,68 @@ export function SalesOrdersPage() {
 
   return (
     <>
-      {view.type === 'list' && (
-        <div className="flex flex-col gap-6">
-          <PageHeader
-            title="Sales orders"
-            description="Confirmed customer orders — nothing here posts to the GL until converted to an invoice."
-            actions={
-              <Button size="sm" onClick={() => setFormState({ mode: 'create' })}>
-                <Plus data-icon="inline-start" />
-                New sales order
-              </Button>
-            }
-          />
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          title="Sales orders"
+          description="Confirmed customer orders — nothing here posts to the GL until converted to an invoice."
+          actions={
+            <Button size="sm" onClick={() => setFormState({ mode: 'create' })}>
+              <Plus data-icon="inline-start" />
+              New sales order
+            </Button>
+          }
+        />
 
-          {notice && (
-            <p role="status" className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">
-              {notice}
-            </p>
-          )}
+        {notice && (
+          <p role="status" className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">
+            {notice}
+          </p>
+        )}
 
+        {isLoading ? (
+          <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+            <p className="text-sm">Loading sales orders…</p>
+          </div>
+        ) : error ? (
+          <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error.message}
+          </div>
+        ) : (
           <SalesOrderList
             salesOrders={salesOrders}
             customers={customerMap}
             onSelect={(id) => {
               setNotice(null);
               setActionError(null);
-              setView({ type: 'detail', id });
+              openRecord(id);
             }}
           />
-        </div>
-      )}
+        )}
+      </div>
 
-      {isLoading && view.type === 'list' && (
-        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
-          <p className="text-sm">Loading sales orders…</p>
-        </div>
-      )}
-
-      {!isLoading && error && view.type === 'list' && (
+      {actionError && (
         <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error.message}
+          {actionError}
         </div>
       )}
 
-      {view.type === 'detail' && detailOrder && (
-        <div className="flex flex-col gap-6">
-          {actionError && (
-            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {actionError}
-            </div>
-          )}
-          <SalesOrderDetail
-            salesOrder={detailOrder}
-            customerName={customerMap.get(detailOrder.customerId) || 'Unknown Customer'}
-            quoteNumber={quotes.find((q) => q.id === detailOrder.quoteId)?.quoteNumber}
-            onBack={() => setView({ type: 'list' })}
-            onDelete={() => void handleDelete(detailOrder.id)}
-            isBusy={isMutating}
-            onConfirmOrder={(id) => void handleTransition(confirmOrder, id, 'Sales order confirmed.')}
-            onCancelOrder={(id) => void handleTransition(cancelOrder, id, 'Sales order cancelled.')}
-            onConvertToInvoice={(id) => void handleConvert(id)}
-          />
-        </div>
-      )}
+      <SalesOrderDetailSheet
+        salesOrder={detailOrder}
+        isLoading={isLoading}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeRecord();
+        }}
+        customerName={detailOrder ? customerMap.get(detailOrder.customerId) || 'Unknown Customer' : ''}
+        quotes={quotes}
+        invoices={invoices}
+        onDelete={detailOrder ? () => void handleDelete(detailOrder.id) : undefined}
+        isBusy={isMutating}
+        onConfirmOrder={(id) => void handleTransition(confirmOrder, id, 'Sales order confirmed.')}
+        onCancelOrder={(id) => void handleTransition(cancelOrder, id, 'Sales order cancelled.')}
+        onConvertToInvoice={(id) => void handleConvert(id)}
+      />
 
       {formState?.mode === 'create' && (
         <SalesOrderFormModal

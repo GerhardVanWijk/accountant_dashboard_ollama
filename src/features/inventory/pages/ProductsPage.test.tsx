@@ -1,8 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Product } from '@/types';
 import { ProductsPage } from './ProductsPage';
 import { productService } from '../services/productService';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/inventory/products']}>
+      <ProductsPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../services/productService', () => ({
   productService: {
@@ -45,25 +54,25 @@ describe('ProductsPage', () => {
 
   it('shows a loading state while products are being fetched', () => {
     mockedGetProducts.mockReturnValue(new Promise(() => {}));
-    render(<ProductsPage />);
+    renderPage();
     expect(screen.getByText(/loading products/i)).toBeInTheDocument();
   });
 
   it('shows an error state when the fetch fails', async () => {
     mockedGetProducts.mockRejectedValue(new Error('Network unreachable'));
-    render(<ProductsPage />);
+    renderPage();
     expect(await screen.findByText(/network unreachable/i)).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no products', async () => {
     mockedGetProducts.mockResolvedValue([]);
-    render(<ProductsPage />);
+    renderPage();
     expect(await screen.findByText(/no products yet/i)).toBeInTheDocument();
   });
 
   it('renders the product directory table once data loads', async () => {
     mockedGetProducts.mockResolvedValue([makeProduct()]);
-    render(<ProductsPage />);
+    renderPage();
     // Uses waitFor(getByText) rather than findByText — confirmed by
     // direct DOM inspection that findByText's own internal polling
     // wasn't reliably catching this render (the row was demonstrably
@@ -79,7 +88,7 @@ describe('ProductsPage', () => {
 
   it('flags an item at or below its reorder level as low stock', async () => {
     mockedGetProducts.mockResolvedValue([makeProduct({ quantityOnHand: 5, reorderLevel: 10 })]);
-    render(<ProductsPage />);
+    renderPage();
     await waitFor(() => {
       expect(screen.getByText(/low stock/i)).toBeInTheDocument();
     });

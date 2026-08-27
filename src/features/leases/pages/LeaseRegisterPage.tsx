@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { LeaseContract } from '@/types/lease';
 import { PageHeader } from '@/components/app/page-header';
@@ -9,6 +10,7 @@ import { useLeaseAmortization } from '../hooks/useLeaseAmortization';
 import { LeaseForm } from '../components/LeaseForm';
 import { TerminateLeaseForm } from '../components/TerminateLeaseForm';
 import { LeasesTable } from '../components/LeasesTable';
+import { LeaseDetailSheet } from '../components/LeaseDetailSheet';
 import type { CreateLeaseDTO, UpdateLeaseDTO } from '../services';
 
 type DialogState = { mode: 'create' } | { mode: 'edit'; lease: LeaseContract } | { mode: 'terminate'; lease: LeaseContract } | null;
@@ -25,6 +27,25 @@ export function LeaseRegisterPage() {
   const { history: amortizationHistory, loading: amortizationLoading } = useLeaseAmortization();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedLeaseId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedLeaseId);
+  function openRecord(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeRecord() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
+  const detailLease = leases.find((l) => l.id === selectedLeaseId);
 
   const completedAmortizationRunsByLease: Record<string, number> = {};
   for (const entry of amortizationHistory) {
@@ -119,8 +140,18 @@ export function LeaseRegisterPage() {
           onPostCommencement={(lease) => void handlePostCommencement(lease)}
           onTerminate={(lease) => setDialog({ mode: 'terminate', lease })}
           onDelete={(lease) => void handleDelete(lease)}
+          onSelect={(lease) => openRecord(lease.id)}
         />
       )}
+
+      <LeaseDetailSheet
+        lease={detailLease}
+        amortizationHistory={amortizationHistory}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeRecord();
+        }}
+      />
 
       <Dialog open={dialog?.mode === 'create' || dialog?.mode === 'edit'} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent className="max-w-2xl">

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
@@ -7,14 +7,12 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { formatCurrency } from '@/lib/app/format';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
-import { usePurchaseOrders, usePurchaseOrderMutations, useBillMutations } from '../hooks';
+import { usePurchaseOrders, usePurchaseOrderMutations, useBillMutations, useBills } from '../hooks';
 import { PurchaseOrderList } from '../components/PurchaseOrderList';
-import { PurchaseOrderDetail } from '../components/PurchaseOrderDetail';
+import { PurchaseOrderDetailSheet } from '../components/PurchaseOrderDetailSheet';
 import { PurchaseOrderForm } from '../components/PurchaseOrderForm';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 import type { CreatePurchaseOrderDTO } from '../services';
-
-type View = { type: 'list' } | { type: 'detail'; id: string };
 
 /**
  * Purchase Orders — route `/purchases/orders`. Re-skinned onto v0's
@@ -28,15 +26,33 @@ type View = { type: 'list' } | { type: 'detail'; id: string };
 export function PurchaseOrdersPage() {
   const { purchaseOrders, isLoading, error, refetch } = usePurchaseOrders();
   const { suppliers } = useSuppliers();
+  const { bills } = useBills();
   const poMutations = usePurchaseOrderMutations();
   const billMutations = useBillMutations();
   const navigate = useNavigate();
 
-  const [view, setView] = useState<View>({ type: 'list' });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedId);
+  function openRecord(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeRecord() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
+
   const [showCreate, setShowCreate] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const detailPo = view.type === 'detail' ? purchaseOrders.find((po) => po.id === view.id) : undefined;
+  const detailPo = purchaseOrders.find((po) => po.id === selectedId);
   const suppliersMap = useMemo(() => Object.fromEntries(suppliers.map((s) => [s.id, s.name])), [suppliers]);
 
   const isBusy = poMutations.isLoading || billMutations.isLoading;
@@ -74,67 +90,62 @@ export function PurchaseOrdersPage() {
 
   return (
     <>
-      {view.type === 'list' && (
-        <div className="flex flex-col gap-6">
-          <PageHeader
-            title="Purchase Orders"
-            description="Orders placed with suppliers, from draft through to a converted bill."
-            actions={
-              <Button size="sm" onClick={() => setShowCreate(true)}>
-                <Plus data-icon="inline-start" />
-                New purchase order
-              </Button>
-            }
-          />
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          title="Purchase Orders"
+          description="Orders placed with suppliers, from draft through to a converted bill."
+          actions={
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <Plus data-icon="inline-start" />
+              New purchase order
+            </Button>
+          }
+        />
 
-          <SectionCard>
-            <div className="grid gap-6 sm:grid-cols-3">
-              <FigureBlock label="Total orders" value={String(purchaseOrders.length)} />
-              <FigureBlock label="Total value" value={formatCurrency(totalValue)} hint="All orders" />
-              <FigureBlock label="Open" value={String(openOrders.length)} hint="Not yet received or cancelled" tone={openOrders.length > 0 ? 'warning' : 'default'} />
-            </div>
-          </SectionCard>
+        <SectionCard>
+          <div className="grid gap-6 sm:grid-cols-3">
+            <FigureBlock label="Total orders" value={String(purchaseOrders.length)} />
+            <FigureBlock label="Total value" value={formatCurrency(totalValue)} hint="All orders" />
+            <FigureBlock label="Open" value={String(openOrders.length)} hint="Not yet received or cancelled" tone={openOrders.length > 0 ? 'warning' : 'default'} />
+          </div>
+        </SectionCard>
 
-          {actionError && (
-            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {actionError}
-            </p>
-          )}
+        {actionError && (
+          <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {actionError}
+          </p>
+        )}
 
-          {isLoading && (
-            <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
-              <Loader2 className="size-5 animate-spin" aria-hidden="true" />
-              <p className="text-sm">Loading purchase orders…</p>
-            </div>
-          )}
-          {!isLoading && error && (
-            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {error.message}
-            </div>
-          )}
-          {!isLoading && !error && <PurchaseOrderList purchaseOrders={purchaseOrders} suppliersMap={suppliersMap} onSelect={(id) => setView({ type: 'detail', id })} />}
-        </div>
-      )}
+        {isLoading ? (
+          <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+            <p className="text-sm">Loading purchase orders…</p>
+          </div>
+        ) : error ? (
+          <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error.message}
+          </div>
+        ) : (
+          <PurchaseOrderList purchaseOrders={purchaseOrders} suppliersMap={suppliersMap} onSelect={openRecord} />
+        )}
+      </div>
 
-      {view.type === 'detail' && detailPo && (
-        <div className="flex flex-col gap-6">
-          {actionError && (
-            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {actionError}
-            </p>
-          )}
-          <PurchaseOrderDetail
-            purchaseOrder={detailPo}
-            suppliersMap={suppliersMap}
-            onClose={() => setView({ type: 'list' })}
-            onSend={(id) => void runAction(() => poMutations.sendPurchaseOrder(id))}
-            onRecordReceipt={(id) => void runAction(() => poMutations.recordReceipt(id))}
-            onCancel={(id) => void runAction(() => poMutations.updatePurchaseOrder(id, { status: 'cancelled' }))}
-            onConvertToBill={(id) => void handleConvertToBill(id)}
-            isBusy={isBusy}
-          />
-        </div>
-      )}
+      <PurchaseOrderDetailSheet
+        purchaseOrder={detailPo}
+        isLoading={isLoading}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeRecord();
+        }}
+        supplierName={detailPo ? suppliersMap[detailPo.supplierId] ?? 'Unknown supplier' : ''}
+        suppliersMap={suppliersMap}
+        bills={bills}
+        onSend={(id) => void runAction(() => poMutations.sendPurchaseOrder(id))}
+        onRecordReceipt={(id) => void runAction(() => poMutations.recordReceipt(id))}
+        onCancel={(id) => void runAction(() => poMutations.updatePurchaseOrder(id, { status: 'cancelled' }))}
+        onConvertToBill={(id) => void handleConvertToBill(id)}
+        isBusy={isBusy}
+      />
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-3xl">

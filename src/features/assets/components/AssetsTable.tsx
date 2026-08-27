@@ -1,6 +1,7 @@
 import type { FixedAsset } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatDate } from '@/lib/app/format';
 import { Button } from '@/components/ui/shadcn/button';
@@ -11,10 +12,11 @@ export interface AssetsTableProps {
   onEdit: (asset: FixedAsset) => void;
   onPostAcquisition: (asset: FixedAsset) => void;
   onDelete: (asset: FixedAsset) => void;
+  onSelect?: (asset: FixedAsset) => void;
 }
 
 /** Fixed asset register, re-skinned onto v0's DataTable (M8) — mirrors accounting-v0-frontend's AssetsTable shape, real statuses/categories only. */
-export function AssetsTable({ assets, onEdit, onPostAcquisition, onDelete }: AssetsTableProps) {
+export function AssetsTable({ assets, onEdit, onPostAcquisition, onDelete, onSelect }: AssetsTableProps) {
   const categories = [...new Set(assets.map((a) => a.category))].sort();
 
   const columns: DataTableColumn<FixedAsset>[] = [
@@ -24,7 +26,13 @@ export function AssetsTable({ assets, onEdit, onPostAcquisition, onDelete }: Ass
       sortValue: (a) => a.assetNumber,
       cell: (a) => (
         <div className="flex flex-col">
-          <span className="font-mono text-sm font-medium text-foreground">{a.assetNumber}</span>
+          {onSelect ? (
+            <RecordLink onClick={() => onSelect(a)} className="figure text-sm">
+              {a.assetNumber}
+            </RecordLink>
+          ) : (
+            <span className="font-mono text-sm font-medium text-foreground">{a.assetNumber}</span>
+          )}
           <span className="text-xs text-muted-foreground">{a.name}</span>
         </div>
       ),
@@ -129,6 +137,8 @@ export function AssetsTable({ assets, onEdit, onPostAcquisition, onDelete }: Ass
       ]}
       emptyTitle="No fixed assets yet"
       emptyDescription="Add an asset to start the register."
+      onRowClick={onSelect}
+      getRowAriaLabel={(a) => `Open asset ${a.assetNumber}`}
     />
   );
 }

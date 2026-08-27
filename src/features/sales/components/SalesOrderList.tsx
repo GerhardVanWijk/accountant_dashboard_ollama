@@ -1,5 +1,6 @@
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatDate } from '@/lib/app/format';
 import type { SalesOrder } from '@/types';
@@ -42,13 +43,9 @@ export function SalesOrderList({ salesOrders, customers, onSelect, isLoading = f
       header: 'Order',
       sortValue: (o) => o.orderNumber,
       cell: (o) => (
-        <button
-          type="button"
-          onClick={() => onSelect?.(o.id)}
-          className="figure text-sm font-medium underline-offset-4 hover:text-brand hover:underline"
-        >
+        <RecordLink onClick={() => onSelect?.(o.id)} className="figure text-sm">
           {o.orderNumber}
-        </button>
+        </RecordLink>
       ),
     },
     {
@@ -100,6 +97,8 @@ export function SalesOrderList({ salesOrders, customers, onSelect, isLoading = f
       caption="Customer sales orders"
       emptyTitle="No sales orders found"
       emptyDescription="Adjust the search or status filter, or raise a new sales order."
+      onRowClick={onSelect ? (o) => onSelect(o.id) : undefined}
+      getRowAriaLabel={(o) => `Open sales order ${o.orderNumber}`}
     />
   );
 }

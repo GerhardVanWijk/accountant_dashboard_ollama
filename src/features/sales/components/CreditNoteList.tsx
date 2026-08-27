@@ -1,5 +1,6 @@
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatDate } from '@/lib/app/format';
 import type { CreditNote } from '@/types';
@@ -53,13 +54,9 @@ export function CreditNoteList({ creditNotes, customers, onSelect, isLoading = f
       header: 'Credit note',
       sortValue: (cn) => cn.creditNoteNumber,
       cell: (cn) => (
-        <button
-          type="button"
-          onClick={() => onSelect?.(cn.id)}
-          className="figure text-sm font-medium underline-offset-4 hover:text-brand hover:underline"
-        >
+        <RecordLink onClick={() => onSelect?.(cn.id)} className="figure text-sm">
           {cn.creditNoteNumber}
-        </button>
+        </RecordLink>
       ),
     },
     {
@@ -124,6 +121,8 @@ export function CreditNoteList({ creditNotes, customers, onSelect, isLoading = f
       emptyTitle="No credit notes found"
       emptyDescription="Adjust the filters, or raise a new credit note against an invoice."
       caption="Credit note register"
+      onRowClick={onSelect ? (cn) => onSelect(cn.id) : undefined}
+      getRowAriaLabel={(cn) => `Open credit note ${cn.creditNoteNumber}`}
     />
   );
 }

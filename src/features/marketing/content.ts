@@ -151,44 +151,69 @@ export interface Plan {
  * purchased; see Pricing.tsx's section copy for the disclaimer shown to
  * visitors.
  */
+/**
+ * `features` lists the real Vertex modules included in each tier — every
+ * label matches src/lib/app/navigation.ts's own real nav-item titles (the
+ * app's one authoritative naming source), not marketing paraphrase.
+ * Public-website pricing-accuracy pass: replaced generic marketing
+ * benefits ("Unlimited invoices", "Priority support", "Dedicated account
+ * manager") with the actual accounting products each tier unlocks, so a
+ * visitor can see what they're buying. Deliberately excluded from every
+ * tier: Payroll (already its own add-on below — listing it here too
+ * would double-sell it), Foreign Exchange/Exchange Rates/FX Calculator
+ * (same reason — already the "FX toolkit" add-on; see that add-on's
+ * comment), multi-company/multi-entity (this app is single-tenant —
+ * confirmed via src/types/company.ts's own doc comment, so Premium's
+ * old "multiple entities" blurb was itself inaccurate and is fixed
+ * here), OCR/document capture, live bank feeds, and Pastel migration
+ * (none exist anywhere in this codebase). Settings/Access Log/Documents/
+ * Notifications omitted as configuration or not-yet-real, not as
+ * sellable product differentiators.
+ */
 export const plans: Plan[] = [
   {
     id: 'starter',
     name: 'Starter',
-    blurb: 'Sole proprietors and side businesses finding their feet.',
+    blurb: 'Essential bookkeeping for sole proprietors and small businesses.',
     monthly: 199,
     includedUsers: 1,
-    features: ['Unlimited invoices and quotes', 'Bank statement import', 'VAT201 report', 'Fixed asset register', 'Email support'],
+    features: ['Invoicing & Quotes', 'Customers & Suppliers', 'Bills & Expenses', 'Bank Reconciliation', 'VAT201', 'Fixed Asset Register', 'Financial Reports'],
   },
   {
     id: 'growth',
     name: 'Growth',
-    blurb: 'Growing companies with a bookkeeper and a real chart of accounts.',
+    blurb: 'Complete accounting for growing businesses and bookkeepers.',
     monthly: 449,
     includedUsers: 3,
     popular: true,
     features: [
       'Everything in Starter',
-      'Unlimited bank statement imports',
-      'VAT201 report, ready for eFiling',
-      'Smart match suggestions on import',
-      'Accountant role included',
-      'Priority email and phone support',
+      'Chart of Accounts & General Ledger',
+      'Journal Entries & Trial Balance',
+      'Financial Periods',
+      'Credit Notes & Customer Receipts',
+      'Supplier Payments & Vendor Aging',
+      'Income Statement, Balance Sheet & Cash Flow',
+      'Income Tax & Provisional Tax',
+      'Audit Trail',
+      'Users & Roles',
     ],
   },
   {
     id: 'premium',
     name: 'Premium',
-    blurb: 'Established businesses with stock, projects and multiple entities.',
+    blurb: 'Advanced accounting, reporting and operational tools for established businesses.',
     monthly: 899,
     includedUsers: 10,
     features: [
       'Everything in Growth',
-      'Inventory and job costing',
-      'Fixed asset depreciation and disposals',
-      'Full financial statements (income statement, balance sheet, cash flow)',
-      'Dedicated account manager',
-      'Named onboarding specialist',
+      'Inventory & Warehouses',
+      'Fixed Asset Depreciation & Disposals',
+      'Capital Gains & Dividends Tax',
+      'Deferred Tax & Expected Credit Losses',
+      'Related Party Register & Transactions',
+      'Lease Register & Amortisation',
+      'Compliance & Reporting Standards',
     ],
   },
 ];
@@ -204,6 +229,13 @@ export interface AddOn {
   maxUnits?: number;
 }
 
+/**
+ * Payroll and FX are deliberately absent from every plans[] tier above —
+ * both are real modules (src/features/employees/, src/features/
+ * foreignExchange/), but they're already sold here as add-ons. Listing
+ * either as tier-"included" too would contradict this list (a Premium
+ * customer would be told FX is both included and a R99/month add-on).
+ */
 export const addOns: AddOn[] = [
   {
     id: 'payroll',

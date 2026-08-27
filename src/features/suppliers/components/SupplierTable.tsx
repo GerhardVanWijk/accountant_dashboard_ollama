@@ -179,6 +179,8 @@ export function SupplierTable({ suppliers, onView, onEdit, onToggleHold, onToggl
       emptyTitle="No suppliers found"
       emptyDescription="Adjust the search or filters to widen the results, or add a new supplier."
       caption="Supplier accounts"
+      onRowClick={(s) => onView(s)}
+      getRowAriaLabel={(s) => `Open supplier ${s.name}`}
     />
   );
 }

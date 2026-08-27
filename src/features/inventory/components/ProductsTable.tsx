@@ -1,6 +1,7 @@
 ﻿import type { Product } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
@@ -12,6 +13,7 @@ export interface ProductsTableProps {
   /** Omit either (M11: gated by inventory:update / inventory:delete) to hide that row action. */
   onEdit?: (product: Product) => void;
   onDelete?: (product: Product) => void;
+  onSelect?: (product: Product) => void;
 }
 
 type StockFlag = 'out' | 'low' | 'ok' | 'n/a';
@@ -49,7 +51,7 @@ const flagLabels: Record<StockFlag, string> = {
  * separate here — v0's own mock collapsed them into one status field,
  * which the real Product type does not.
  */
-export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps) {
+export function ProductsTable({ products, onEdit, onDelete, onSelect }: ProductsTableProps) {
   const { taxRates } = useAllTaxRates();
   const categories = [...new Set(products.map((p) => p.category).filter((c): c is string => Boolean(c)))].sort();
 
@@ -60,7 +62,13 @@ export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps
       sortValue: (p) => p.sku,
       cell: (p) => (
         <div className="flex flex-col">
-          <span className="font-medium text-foreground">{p.name}</span>
+          {onSelect ? (
+            <RecordLink onClick={() => onSelect(p)} className="font-medium">
+              {p.name}
+            </RecordLink>
+          ) : (
+            <span className="font-medium text-foreground">{p.name}</span>
+          )}
           <span className="figure text-xs text-muted-foreground tabular-nums">{p.sku}</span>
         </div>
       ),
@@ -181,6 +189,8 @@ export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps
       ]}
       emptyTitle="No products yet"
       emptyDescription="Add your first product or service to start tracking stock."
+      onRowClick={onSelect}
+      getRowAriaLabel={(p) => `Open product ${p.name}`}
     />
   );
 }

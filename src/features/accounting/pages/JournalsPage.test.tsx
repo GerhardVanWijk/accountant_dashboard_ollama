@@ -1,8 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Account, JournalEntry } from '@/types';
 import { JournalsPage } from './JournalsPage';
 import { accountService, journalEntryService, accountingPeriodService } from '../services';
+
+function renderPage(initialEntries: string[] = ['/accounting/journals']) {
+  return render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <JournalsPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../services', () => ({
   accountService: {
@@ -26,6 +35,7 @@ vi.mock('../services', () => ({
   },
   SYSTEM_USER_ID: 'system',
 }));
+vi.mock('@/services/auditLogService', () => ({ auditLogService: { getForRecord: vi.fn().mockResolvedValue([]) } }));
 
 const mockedGetEntries = journalEntryService.getEntries as unknown as ReturnType<typeof vi.fn>;
 const mockedGetAccounts = accountService.getAccounts as unknown as ReturnType<typeof vi.fn>;
@@ -73,25 +83,25 @@ describe('JournalsPage', () => {
 
   it('shows a loading state while entries are being fetched', () => {
     mockedGetEntries.mockReturnValue(new Promise(() => {}));
-    render(<JournalsPage />);
+    renderPage();
     expect(screen.getByText(/loading journal entries/i)).toBeInTheDocument();
   });
 
   it('shows an error state when the fetch fails', async () => {
     mockedGetEntries.mockRejectedValue(new Error('Network unreachable'));
-    render(<JournalsPage />);
+    renderPage();
     expect(await screen.findByText(/network unreachable/i)).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no journal entries', async () => {
     mockedGetEntries.mockResolvedValue([]);
-    render(<JournalsPage />);
+    renderPage();
     expect(await screen.findByText(/no journals found/i)).toBeInTheDocument();
   });
 
   it('renders posted entries once data loads', async () => {
     mockedGetEntries.mockResolvedValue([makeEntry()]);
-    render(<JournalsPage />);
+    renderPage();
     expect(await screen.findByText('JE-0001')).toBeInTheDocument();
     expect(screen.getByText('Opening balances')).toBeInTheDocument();
     expect(screen.getByText('Posted')).toBeInTheDocument();
@@ -102,9 +112,32 @@ describe('JournalsPage', () => {
       makeEntry(),
       makeEntry({ id: 'je_0002', entryNumber: 'JE-0002', reversalOfEntryId: 'je_0001', source: 'reversal' }),
     ]);
-    render(<JournalsPage />);
+    renderPage();
     await screen.findByText('JE-0001');
     expect(screen.getByText('Reversed')).toBeInTheDocument();
     expect(screen.getByText('Reversal')).toBeInTheDocument();
+  });
+
+  it('expands the entry named by ?record= in the URL, showing its lines and audit history', async () => {
+    mockedGetEntries.mockResolvedValue([makeEntry()]);
+    renderPage(['/accounting/journals?record=je_0001']);
+    await screen.findByText('JE-0001');
+
+    expect(screen.getByText('Journal lines')).toBeInTheDocument();
+    expect(screen.getByText('Audit history')).toBeInTheDocument();
+    expect(await screen.findByText(/no audit entries recorded/i)).toBeInTheDocument();
+  });
+
+  it('clicking the expand chevron toggles the lines open and closed', async () => {
+    mockedGetEntries.mockResolvedValue([makeEntry()]);
+    renderPage();
+    await screen.findByText('JE-0001');
+
+    expect(screen.queryByText('Journal lines')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /show lines for je-0001/i }));
+    expect(await screen.findByText('Journal lines')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /hide lines for je-0001/i }));
+    expect(screen.queryByText('Journal lines')).not.toBeInTheDocument();
   });
 });

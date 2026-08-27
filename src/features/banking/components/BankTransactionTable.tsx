@@ -1,6 +1,7 @@
 import type { BankAccount } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -13,6 +14,7 @@ export interface BankTransactionTableProps {
   showAccountColumn?: boolean;
   onAllocate: (transaction: BankTransactionWithAllocations) => void;
   onDelete: (transaction: BankTransactionWithAllocations) => void;
+  onSelect?: (transaction: BankTransactionWithAllocations) => void;
 }
 
 /**
@@ -26,7 +28,7 @@ export interface BankTransactionTableProps {
  * M5 report. Money in/out split into separate columns, matching v0's
  * unambiguous-direction convention.
  */
-export function BankTransactionTable({ transactions, bankAccountsById, showAccountColumn = false, onAllocate, onDelete }: BankTransactionTableProps) {
+export function BankTransactionTable({ transactions, bankAccountsById, showAccountColumn = false, onAllocate, onDelete, onSelect }: BankTransactionTableProps) {
   const columns: DataTableColumn<BankTransactionWithAllocations>[] = [
     {
       key: 'date',
@@ -43,7 +45,11 @@ export function BankTransactionTable({ transactions, bankAccountsById, showAccou
         return (
           <div className="flex flex-col gap-0.5">
             <span className="flex items-center gap-1.5 text-sm">
-              {t.description}
+              {onSelect ? (
+                <RecordLink onClick={() => onSelect(t)}>{t.description}</RecordLink>
+              ) : (
+                t.description
+              )}
               {needsAllocation && (
                 <Badge variant="outline" className="text-status-warning">
                   Needs allocation
@@ -142,6 +148,8 @@ export function BankTransactionTable({ transactions, bankAccountsById, showAccou
       ]}
       emptyTitle="No transactions found"
       emptyDescription="Adjust the search or filters to widen the view."
+      onRowClick={onSelect}
+      getRowAriaLabel={(t) => `Open transaction ${t.description}`}
     />
   );
 }

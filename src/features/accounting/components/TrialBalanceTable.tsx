@@ -1,9 +1,12 @@
+import { useNavigate } from 'react-router-dom';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { TableCell, TableRow } from '@/components/ui/shadcn/table';
 import type { Account, AccountType } from '@/types';
 import type { TrialBalanceRow } from '../services';
 import { ACCOUNT_TYPES, accountTypeLabel } from '../types/account.types';
+import { useAccountingUiStore } from '../store/accountingUiStore';
 
 export interface TrialBalanceTableProps {
   rows: TrialBalanceRow[];
@@ -19,7 +22,14 @@ export interface TrialBalanceTableProps {
  * Sales") — see the M3 report.
  */
 export function TrialBalanceTable({ rows, totals, accountsById }: TrialBalanceTableProps) {
+  const navigate = useNavigate();
+  const setSelectedLedgerAccountId = useAccountingUiStore((s) => s.setSelectedLedgerAccountId);
   const typeOf = (accountId: string): AccountType | undefined => accountsById.get(accountId)?.type;
+
+  function openLedger(accountId: string) {
+    setSelectedLedgerAccountId(accountId);
+    navigate('/accounting/ledger');
+  }
 
   const columns: DataTableColumn<TrialBalanceRow>[] = [
     {
@@ -32,7 +42,7 @@ export function TrialBalanceTable({ rows, totals, accountsById }: TrialBalanceTa
       key: 'name',
       header: 'Description',
       sortValue: (r) => r.name,
-      cell: (r) => r.name,
+      cell: (r) => <RecordLink onClick={() => openLedger(r.accountId)}>{r.name}</RecordLink>,
     },
     {
       key: 'type',

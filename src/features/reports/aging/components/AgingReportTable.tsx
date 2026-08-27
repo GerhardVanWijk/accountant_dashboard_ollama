@@ -1,4 +1,5 @@
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { sumAgingBuckets } from '../utils/agingReportUtils';
 import type { AgingReportRow } from '../types';
@@ -10,6 +11,8 @@ export interface AgingReportTableProps {
   entityLabel: string;
   emptyTitle: string;
   emptyMessage: string;
+  /** Opens the record-detail sheet for this row's real customer/supplier id. */
+  onSelect?: (id: string) => void;
 }
 
 /**
@@ -21,7 +24,7 @@ export interface AgingReportTableProps {
  * `src/features/purchases/pages/VendorAgingPage.tsx`'s equivalent table
  * shape for consistency across both aging reports in the app.
  */
-export function AgingReportTable({ rows, entityLabel, emptyTitle, emptyMessage }: AgingReportTableProps) {
+export function AgingReportTable({ rows, entityLabel, emptyTitle, emptyMessage, onSelect }: AgingReportTableProps) {
   if (rows.length === 0) {
     return (
       <Empty>
@@ -49,7 +52,9 @@ export function AgingReportTable({ rows, entityLabel, emptyTitle, emptyMessage }
         <tbody>
           {rows.map((row) => (
             <tr key={row.id} className="border-t border-border">
-              <td className="whitespace-nowrap px-4 py-2.5 font-medium">{row.name}</td>
+              <td className="whitespace-nowrap px-4 py-2.5 font-medium">
+                {onSelect ? <RecordLink onClick={() => onSelect(row.id)}>{row.name}</RecordLink> : row.name}
+              </td>
               <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
                 <Amount value={row.buckets.current} />
               </td>

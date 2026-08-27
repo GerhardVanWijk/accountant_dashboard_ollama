@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { FixedAsset } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
@@ -7,10 +8,13 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { formatCurrency, formatPercent } from '@/lib/app/format';
 import { useFixedAssets } from '../hooks/useFixedAssets';
+import { useDepreciation } from '../hooks/useDepreciation';
+import { useAssetDisposals } from '../hooks/useAssetDisposals';
 import { useAccounts } from '@/features/accounting/hooks/useAccounts';
 import { AssetForm } from '../components/AssetForm';
 import { PostAcquisitionForm } from '../components/PostAcquisitionForm';
 import { AssetsTable } from '../components/AssetsTable';
+import { AssetDetailSheet } from '../components/AssetDetailSheet';
 import type { CreateFixedAssetDTO, UpdateFixedAssetDTO } from '../services';
 
 type DialogState =
@@ -30,8 +34,30 @@ type DialogState =
 export function AssetRegisterPage() {
   const { assets, loading, error, refetch, createFixedAsset, updateFixedAsset, deleteFixedAsset, postAcquisition } = useFixedAssets();
   const { accounts, loading: accountsLoading } = useAccounts();
+  const { history: depreciationHistory } = useDepreciation();
+  const { disposals } = useAssetDisposals();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedAssetId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedAssetId);
+  function openRecord(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeRecord() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
+  const detailAsset = assets.find((a) => a.id === selectedAssetId);
+  const detailDisposal = disposals.find((d) => d.assetId === selectedAssetId);
 
   const handleFormSubmit = async (data: CreateFixedAssetDTO | UpdateFixedAssetDTO) => {
     setActionError(null);
@@ -125,9 +151,20 @@ export function AssetRegisterPage() {
             onEdit={(asset) => setDialog({ mode: 'edit', asset })}
             onPostAcquisition={(asset) => setDialog({ mode: 'post-acquisition', asset })}
             onDelete={(asset) => void handleDelete(asset)}
+            onSelect={(asset) => openRecord(asset.id)}
           />
         </SectionCard>
       )}
+
+      <AssetDetailSheet
+        asset={detailAsset}
+        depreciationHistory={depreciationHistory}
+        disposal={detailDisposal}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeRecord();
+        }}
+      />
 
       <Dialog open={dialog?.mode === 'create' || dialog?.mode === 'edit'} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent className="max-w-3xl">

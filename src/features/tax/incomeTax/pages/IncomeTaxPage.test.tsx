@@ -1,8 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Company, FinancialYear, TaxComputation } from '@/types';
 import { IncomeTaxPage } from './IncomeTaxPage';
 import { useIncomeTax } from '../hooks/useIncomeTax';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/tax/income-tax']}>
+      <IncomeTaxPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../hooks/useIncomeTax', () => ({
   useIncomeTax: vi.fn(),
@@ -90,19 +99,19 @@ describe('IncomeTaxPage', () => {
 
   it('shows a loading state', () => {
     mockedUseIncomeTax.mockReturnValue(baseHookValue({ loading: true }));
-    render(<IncomeTaxPage />);
+    renderPage();
     expect(screen.getByText(/loading income tax data/i)).toBeInTheDocument();
   });
 
   it('shows an error state', () => {
     mockedUseIncomeTax.mockReturnValue(baseHookValue({ error: new Error('Network unreachable') }));
-    render(<IncomeTaxPage />);
+    renderPage();
     expect(screen.getByText(/network unreachable/i)).toBeInTheDocument();
   });
 
   it('offers to create a tax computation when none exists for the selected financial year', () => {
     mockedUseIncomeTax.mockReturnValue(baseHookValue({ computations: [] }));
-    render(<IncomeTaxPage />);
+    renderPage();
     expect(screen.getByText(/no tax computation yet for fy2026/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /create tax computation/i })).toBeInTheDocument();
   });
@@ -110,7 +119,7 @@ describe('IncomeTaxPage', () => {
   it('calls createComputation when the create button is clicked', async () => {
     const createComputation = vi.fn().mockResolvedValue(makeComputation());
     mockedUseIncomeTax.mockReturnValue(baseHookValue({ computations: [], createComputation }));
-    render(<IncomeTaxPage />);
+    renderPage();
 
     fireEvent.click(screen.getByRole('button', { name: /create tax computation/i }));
     await waitFor(() => expect(createComputation).toHaveBeenCalledWith('fy_2026'));
@@ -128,7 +137,7 @@ describe('IncomeTaxPage', () => {
         ],
       }),
     );
-    render(<IncomeTaxPage />);
+    renderPage();
 
     expect(screen.getByRole('heading', { name: /FY2026 — Draft/ })).toBeInTheDocument();
     expect(screen.getByText('Depreciation add-back')).toBeInTheDocument();
@@ -141,18 +150,18 @@ describe('IncomeTaxPage', () => {
         computations: [makeComputation({ status: 'posted', journalEntryId: 'je_99', postedAt: '2026-12-31T00:00:00.000Z' })],
       }),
     );
-    render(<IncomeTaxPage />);
+    renderPage();
 
     expect(screen.getByRole('heading', { name: /FY2026 — Posted/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /post tax computation/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete draft/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/journal entry je_99/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /view journal entry/i })).toBeInTheDocument();
   });
 
   it('calls postComputation when the Post action is clicked', async () => {
     const postComputation = vi.fn().mockResolvedValue(makeComputation({ status: 'posted' }));
     mockedUseIncomeTax.mockReturnValue(baseHookValue({ computations: [makeComputation()], postComputation }));
-    render(<IncomeTaxPage />);
+    renderPage();
 
     fireEvent.click(screen.getByRole('button', { name: /post tax computation/i }));
     await waitFor(() => expect(postComputation).toHaveBeenCalledWith('txc_1'));

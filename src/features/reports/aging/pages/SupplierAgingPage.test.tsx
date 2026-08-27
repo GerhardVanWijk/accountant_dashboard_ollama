@@ -1,8 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { SupplierAgingPage } from './SupplierAgingPage';
 import { getSupplierAgingReport } from '../services/supplierAgingReportService';
 import type { AgingReportRow } from '../types';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/reports/supplier-aging']}>
+      <SupplierAgingPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../services/supplierAgingReportService', () => ({
   getSupplierAgingReport: vi.fn(),
@@ -26,19 +35,19 @@ describe('SupplierAgingPage', () => {
 
   it('shows a loading state while the report is being computed', () => {
     mockedGetReport.mockReturnValue(new Promise(() => {}));
-    render(<SupplierAgingPage />);
+    renderPage();
     expect(screen.getByText(/computing supplier aging/i)).toBeInTheDocument();
   });
 
   it('shows an error state when the report fails to load', async () => {
     mockedGetReport.mockRejectedValue(new Error('Network unreachable'));
-    render(<SupplierAgingPage />);
+    renderPage();
     expect(await screen.findByText(/network unreachable/i)).toBeInTheDocument();
   });
 
   it('shows the zero-balance empty state when every supplier is paid up', async () => {
     mockedGetReport.mockResolvedValue([makeRow({ buckets: { current: 0, days30: 0, days60: 0, days90Plus: 0, total: 0 } })]);
-    render(<SupplierAgingPage />);
+    renderPage();
     expect(await screen.findByText(/no outstanding supplier balances/i)).toBeInTheDocument();
   });
 
@@ -48,7 +57,7 @@ describe('SupplierAgingPage', () => {
       makeRow({ id: 'sup_large', name: 'Large Payable', buckets: { current: 0, days30: 0, days60: 0, days90Plus: 900, total: 900 } }),
       makeRow({ id: 'sup_zero', name: 'Paid Up Supplier', buckets: { current: 0, days30: 0, days60: 0, days90Plus: 0, total: 0 } }),
     ]);
-    render(<SupplierAgingPage />);
+    renderPage();
 
     expect(await screen.findByText('Large Payable')).toBeInTheDocument();
     expect(screen.getByText('Small Payable')).toBeInTheDocument();

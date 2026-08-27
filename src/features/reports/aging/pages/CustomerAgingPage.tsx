@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
@@ -10,6 +11,7 @@ import { formatCurrency } from '@/lib/app/format';
 import { useCustomerAgingReport } from '../hooks/useCustomerAgingReport';
 import { AgingReportTable } from '../components/AgingReportTable';
 import { filterZeroBalance, sortByTotalDescending, sumAgingBuckets } from '../utils/agingReportUtils';
+import { CustomerDetailSheet } from '@/features/customers/components/CustomerDetailSheet';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -26,9 +28,28 @@ function today(): string {
  * (M9).
  */
 export function CustomerAgingPage() {
+  const navigate = useNavigate();
   const [asOfDate, setAsOfDate] = useState(today());
   const [showAll, setShowAll] = useState(false);
   const { rows, loading, error, refetch } = useCustomerAgingReport(asOfDate);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedCustomerId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedCustomerId);
+  function openCustomer(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeCustomer() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
 
   const visibleRows = useMemo(() => sortByTotalDescending(filterZeroBalance(rows, showAll)), [rows, showAll]);
   const withBalanceCount = useMemo(() => rows.filter((row) => row.buckets.total > 0).length, [rows]);
@@ -83,9 +104,19 @@ export function CustomerAgingPage() {
             entityLabel="Customer"
             emptyTitle={showAll ? 'No customers yet' : 'No outstanding customer balances'}
             emptyMessage={showAll ? 'Add a customer to see them listed here.' : 'Every customer is fully paid as of this date — tick "Show customers with a zero balance" to see them anyway.'}
+            onSelect={openCustomer}
           />
         </SectionCard>
       )}
+
+      <CustomerDetailSheet
+        customerId={selectedCustomerId}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeCustomer();
+        }}
+        onEdit={(customer) => navigate(`/sales/customers?record=${customer.id}`)}
+      />
     </div>
   );
 }

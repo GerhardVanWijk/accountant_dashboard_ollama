@@ -14,6 +14,7 @@ export interface BankAccountTableProps {
   lastReconciledDates: Map<string, string>;
   onEdit: (account: BankAccount) => void;
   onToggleActive: (account: BankAccount) => void;
+  onSelect?: (account: BankAccount) => void;
 }
 
 /**
@@ -25,7 +26,7 @@ export interface BankAccountTableProps {
  * finalized `BankReconciliation.finalizedAt` for that account (via
  * `bankReconciliationService.getHistory()`), not a stored field.
  */
-export function BankAccountTable({ accounts, glAccountCodes, lastReconciledDates, onEdit, onToggleActive }: BankAccountTableProps) {
+export function BankAccountTable({ accounts, glAccountCodes, lastReconciledDates, onEdit, onToggleActive, onSelect }: BankAccountTableProps) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {accounts.map((account) => {
@@ -33,7 +34,28 @@ export function BankAccountTable({ accounts, glAccountCodes, lastReconciledDates
         const maskedNumber = account.accountNumber.length > 4 ? `••••${account.accountNumber.slice(-4)}` : account.accountNumber;
 
         return (
-          <article key={account.id} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+          <article
+            key={account.id}
+            role={onSelect ? 'button' : undefined}
+            tabIndex={onSelect ? 0 : undefined}
+            aria-label={onSelect ? `Open bank account ${account.name}` : undefined}
+            onClick={onSelect ? () => onSelect(account) : undefined}
+            onKeyDown={
+              onSelect
+                ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelect(account);
+                    }
+                  }
+                : undefined
+            }
+            className={
+              onSelect
+                ? 'flex cursor-pointer flex-col gap-3 rounded-xl border border-border bg-card p-4 hover:border-brand focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+                : 'flex flex-col gap-3 rounded-xl border border-border bg-card p-4'
+            }
+          >
             <div className="flex items-start justify-between gap-2">
               <div className="flex flex-col">
                 <h2 className="text-sm font-medium">{account.name}</h2>
@@ -67,10 +89,10 @@ export function BankAccountTable({ accounts, glAccountCodes, lastReconciledDates
             </dl>
 
             <div className="flex items-center gap-2 border-t border-border pt-3">
-              <Button variant="outline" size="sm" onClick={() => onEdit(account)}>
+              <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(account); }}>
                 Edit
               </Button>
-              <Button variant="outline" size="sm" onClick={() => onToggleActive(account)}>
+              <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onToggleActive(account); }}>
                 {account.status === 'active' ? 'Deactivate' : 'Activate'}
               </Button>
             </div>

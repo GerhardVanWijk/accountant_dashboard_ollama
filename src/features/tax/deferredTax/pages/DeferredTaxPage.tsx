@@ -1,7 +1,9 @@
 ﻿import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { formatCurrency, formatDate } from '@/lib/app/format';
@@ -14,6 +16,7 @@ const selectClassName = 'h-8 rounded-lg border border-input bg-transparent px-2.
 /** Deferred Tax — route `/tax/deferred-tax`. Re-skinned onto v0's PageHeader/SectionCard (M7); data/mutation wiring unchanged. */
 export function DeferredTaxPage() {
   const { financialYears, company, computations, loading, error, refetch, createComputation, updateItems, deleteComputation, postComputation } = useDeferredTax();
+  const navigate = useNavigate();
 
   const [selectedFinancialYearId, setSelectedFinancialYearId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -185,8 +188,18 @@ export function DeferredTaxPage() {
           ) : (
             <p className="text-xs text-muted-foreground">
               Posted{selectedComputation.postedAt ? ` on ${new Date(selectedComputation.postedAt).toLocaleDateString()}` : ''}
-              {selectedComputation.journalEntryId ? ` — journal entry ${selectedComputation.journalEntryId}.` : ' — no journal entry (nil movement).'} A posted computation is immutable;
-              there is no reversal path yet.
+              {selectedComputation.journalEntryId ? (
+                <>
+                  {' — '}
+                  <RecordLink onClick={() => navigate(`/accounting/journals?record=${selectedComputation.journalEntryId}`)} className="text-xs">
+                    view journal entry
+                  </RecordLink>
+                  .
+                </>
+              ) : (
+                ' — no journal entry (nil movement).'
+              )}{' '}
+              A posted computation is immutable; there is no reversal path yet.
             </p>
           )}
         </>

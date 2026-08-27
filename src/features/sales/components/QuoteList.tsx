@@ -1,5 +1,6 @@
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatDate } from '@/lib/app/format';
 import type { Quote } from '@/types';
@@ -43,13 +44,9 @@ export function QuoteList({ quotes, customers, onSelect, isLoading = false, erro
       header: 'Quote',
       sortValue: (q) => q.quoteNumber,
       cell: (q) => (
-        <button
-          type="button"
-          onClick={() => onSelect?.(q.id)}
-          className="figure text-sm font-medium underline-offset-4 hover:text-brand hover:underline"
-        >
+        <RecordLink onClick={() => onSelect?.(q.id)} className="figure text-sm">
           {q.quoteNumber}
-        </button>
+        </RecordLink>
       ),
     },
     {
@@ -107,6 +104,8 @@ export function QuoteList({ quotes, customers, onSelect, isLoading = false, erro
       caption="Customer quotes"
       emptyTitle="No quotes found"
       emptyDescription="Adjust the search or status filter, or raise a new quote."
+      onRowClick={onSelect ? (q) => onSelect(q.id) : undefined}
+      getRowAriaLabel={(q) => `Open quote ${q.quoteNumber}`}
     />
   );
 }

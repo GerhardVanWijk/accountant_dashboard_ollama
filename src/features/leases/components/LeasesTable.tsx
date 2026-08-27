@@ -1,6 +1,7 @@
 import type { LeaseContract } from '@/types/lease';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { calculateCurrentPortionForLease } from '../services';
@@ -13,10 +14,11 @@ export interface LeasesTableProps {
   onPostCommencement: (lease: LeaseContract) => void;
   onTerminate: (lease: LeaseContract) => void;
   onDelete: (lease: LeaseContract) => void;
+  onSelect?: (lease: LeaseContract) => void;
 }
 
 /** Lease register, re-skinned onto v0's DataTable (M13) — every figure (outstanding liability, ROU carrying value, current portion) is read off the real LeaseContract record or `calculateCurrentPortionForLease()`, no lease math performed here. */
-export function LeasesTable({ leases, completedAmortizationRunsByLease, onEdit, onPostCommencement, onTerminate, onDelete }: LeasesTableProps) {
+export function LeasesTable({ leases, completedAmortizationRunsByLease, onEdit, onPostCommencement, onTerminate, onDelete, onSelect }: LeasesTableProps) {
   const columns: DataTableColumn<LeaseContract>[] = [
     {
       key: 'number',
@@ -24,7 +26,13 @@ export function LeasesTable({ leases, completedAmortizationRunsByLease, onEdit, 
       sortValue: (l) => l.leaseNumber,
       cell: (l) => (
         <div className="flex flex-col">
-          <span className="font-mono text-sm font-medium text-foreground">{l.leaseNumber}</span>
+          {onSelect ? (
+            <RecordLink onClick={() => onSelect(l)} className="figure text-sm">
+              {l.leaseNumber}
+            </RecordLink>
+          ) : (
+            <span className="font-mono text-sm font-medium text-foreground">{l.leaseNumber}</span>
+          )}
           <span className="text-xs text-muted-foreground">{l.assetDescription}</span>
         </div>
       ),
@@ -107,6 +115,8 @@ export function LeasesTable({ leases, completedAmortizationRunsByLease, onEdit, 
       ]}
       emptyTitle="No leases yet"
       emptyDescription="Add a lease to start the register."
+      onRowClick={onSelect}
+      getRowAriaLabel={(l) => `Open lease ${l.leaseNumber}`}
     />
   );
 }

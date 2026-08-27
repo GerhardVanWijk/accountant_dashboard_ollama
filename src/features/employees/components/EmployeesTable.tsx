@@ -1,6 +1,7 @@
 import type { Employee } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { EMPLOYMENT_TYPE_LABELS, PAY_FREQUENCY_LABELS } from '../constants';
@@ -10,10 +11,11 @@ export interface EmployeesTableProps {
   /** Omit either (gated by payroll:update / payroll:delete) to hide that row action. */
   onEdit?: (employee: Employee) => void;
   onDelete?: (employee: Employee) => void;
+  onSelect?: (employee: Employee) => void;
 }
 
 /** Employee master directory, re-skinned onto v0's DataTable (M13) — real Employee fields only, no payroll math performed here. */
-export function EmployeesTable({ employees, onEdit, onDelete }: EmployeesTableProps) {
+export function EmployeesTable({ employees, onEdit, onDelete, onSelect }: EmployeesTableProps) {
   const columns: DataTableColumn<Employee>[] = [
     {
       key: 'name',
@@ -21,9 +23,15 @@ export function EmployeesTable({ employees, onEdit, onDelete }: EmployeesTablePr
       sortValue: (e) => `${e.firstName} ${e.lastName}`,
       cell: (e) => (
         <div className="flex flex-col">
-          <span className="font-medium text-foreground">
-            {e.firstName} {e.lastName}
-          </span>
+          {onSelect ? (
+            <RecordLink onClick={() => onSelect(e)} className="font-medium">
+              {e.firstName} {e.lastName}
+            </RecordLink>
+          ) : (
+            <span className="font-medium text-foreground">
+              {e.firstName} {e.lastName}
+            </span>
+          )}
           <span className="figure text-xs text-muted-foreground tabular-nums">{e.employeeNumber}</span>
         </div>
       ),
@@ -98,6 +106,8 @@ export function EmployeesTable({ employees, onEdit, onDelete }: EmployeesTablePr
       ]}
       emptyTitle="No employees yet"
       emptyDescription="Add an employee to start running payroll."
+      onRowClick={onSelect}
+      getRowAriaLabel={(e) => `Open employee ${e.firstName} ${e.lastName}`}
     />
   );
 }

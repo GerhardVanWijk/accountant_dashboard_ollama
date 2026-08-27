@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus, Search } from 'lucide-react';
 import type { BankAccount } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
@@ -30,6 +31,7 @@ import { useBankAccounts } from '../hooks/useBankAccounts';
 import { useBankAccountMutations } from '../hooks/useBankAccountMutations';
 import { useGlAccounts } from '../hooks/useGlAccounts';
 import { BankAccountTable } from '../components/BankAccountTable';
+import { BankAccountDetailSheet } from '../components/BankAccountDetailSheet';
 import { BankAccountFormModal } from '../components/BankAccountFormModal';
 import { bankReconciliationService } from '../services';
 import { BANK_ACCOUNT_TYPE_LABELS } from '../constants';
@@ -70,6 +72,25 @@ export function BankAccountsPage() {
   const [lastReconciledDates, setLastReconciledDates] = useState<Map<string, string>>(new Map());
 
   const glAccountCodes = useMemo(() => buildGlAccountCodeMap(glAccounts), [glAccounts]);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedAccountId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedAccountId);
+  function openRecord(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeRecord() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
+  const detailAccount = bankAccounts.find((a) => a.id === selectedAccountId);
 
   // Most recent finalized reconciliation per account, via the real
   // bankReconciliationService.getHistory() — not a stored field on
@@ -290,8 +311,27 @@ export function BankAccountsPage() {
             setDialog({ mode: 'edit', account });
           }}
           onToggleActive={(account) => void handleToggleActive(account)}
+          onSelect={(account) => openRecord(account.id)}
         />
       )}
+
+      <BankAccountDetailSheet
+        account={detailAccount}
+        glAccountCode={detailAccount ? glAccountCodes.get(detailAccount.glAccountId) : undefined}
+        lastReconciledDate={detailAccount ? lastReconciledDates.get(detailAccount.id) : undefined}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeRecord();
+        }}
+        onEdit={
+          detailAccount
+            ? () => {
+                setFormError(null);
+                setDialog({ mode: 'edit', account: detailAccount });
+              }
+            : undefined
+        }
+      />
 
       {dialog && (
         <BankAccountFormModal

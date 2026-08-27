@@ -1,5 +1,7 @@
+import { useNavigate } from 'react-router-dom';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { formatDate } from '@/lib/app/format';
 import type { LedgerViewRow } from '../utils/buildLedgerRows';
@@ -12,6 +14,7 @@ import type { LedgerViewRow } from '../utils/buildLedgerRows';
  * cross-account sum.
  */
 export function LedgerTable({ rows }: { rows: LedgerViewRow[] }) {
+  const navigate = useNavigate();
   // Real `source` values (e.g. "manual", "invoice", "bill") come straight
   // from JournalEntry.source — a free-form string, not a fixed enum like
   // v0's mock ("Invoice"/"Payment"/"Expense"/"Journal"/"Bank"), so the
@@ -46,7 +49,9 @@ export function LedgerTable({ rows }: { rows: LedgerViewRow[] }) {
       cell: (r) => (
         <div className="flex flex-col">
           <span className="text-sm">{r.description || '—'}</span>
-          <span className="text-xs text-muted-foreground">{r.entryNumber}</span>
+          <RecordLink onClick={() => navigate(`/accounting/journals?record=${r.entryId}`)} className="figure text-xs">
+            {r.entryNumber}
+          </RecordLink>
         </div>
       ),
     },

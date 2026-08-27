@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
@@ -8,6 +9,7 @@ import { formatCurrency } from '@/lib/app/format';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { usePayments, usePaymentMutations, useBills } from '../hooks';
 import { PaymentList } from '../components/PaymentList';
+import { PaymentDetailSheet } from '../components/PaymentDetailSheet';
 import { PaymentForm } from '../components/PaymentForm';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 import type { CreatePaymentDTO } from '../services';
@@ -23,6 +25,24 @@ import type { CreatePaymentDTO } from '../services';
  * (M8); allocation/GL-posting wiring unchanged.
  */
 export function PaymentsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedId);
+  function openRecord(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeRecord() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
+
   const { payments, isLoading, error, refetch } = usePayments();
   const { bills, refetch: refetchBills } = useBills();
   const { suppliers } = useSuppliers();
@@ -32,6 +52,8 @@ export function PaymentsPage() {
 
   const suppliersMap = useMemo(() => Object.fromEntries(suppliers.map((s) => [s.id, s.name])), [suppliers]);
   const outstandingBills = useMemo(() => bills.filter((bill) => bill.status !== 'void' && bill.total > bill.amountPaid), [bills]);
+  const billNumbers = useMemo(() => new Map(bills.map((b) => [b.id, b.billNumber])), [bills]);
+  const detailPayment = payments.find((p) => p.id === selectedId);
 
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
   const totalUnallocated = payments.reduce((sum, p) => sum + p.unallocatedAmount, 0);
@@ -63,18 +85,29 @@ export function PaymentsPage() {
         </div>
       </SectionCard>
 
-      {isLoading && (
+      {isLoading ? (
         <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
           <Loader2 className="size-5 animate-spin" aria-hidden="true" />
           <p className="text-sm">Loading payments…</p>
         </div>
-      )}
-      {!isLoading && error && (
+      ) : error ? (
         <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error.message}
         </div>
+      ) : (
+        <PaymentList payments={payments} suppliersMap={suppliersMap} onSelect={openRecord} />
       )}
-      {!isLoading && !error && <PaymentList payments={payments} suppliersMap={suppliersMap} />}
+
+      <PaymentDetailSheet
+        payment={detailPayment}
+        isLoading={isLoading}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeRecord();
+        }}
+        supplierName={detailPayment ? suppliersMap[detailPayment.supplierId] ?? 'Unknown supplier' : ''}
+        billNumbers={billNumbers}
+      />
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-3xl">

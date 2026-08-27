@@ -1,8 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { VatReturnPage } from './VatReturnPage';
 import { useVatReport, type UseVatReportResult } from '../hooks/useVatReport';
 import type { VatReport, VatTransactionRow } from '../services/vatReportService';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/tax/vat-return']}>
+      <VatReturnPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../hooks/useVatReport', () => ({
   useVatReport: vi.fn(),
@@ -51,7 +60,7 @@ function mockResult(overrides: Partial<UseVatReportResult> = {}): UseVatReportRe
 describe('VatReturnPage', () => {
   it('renders the real Output/Input/Net VAT figures from the service, not mock data', () => {
     mockedUseVatReport.mockReturnValue(mockResult());
-    render(<VatReturnPage />);
+    renderPage();
 
     expect(screen.getAllByText('Output VAT').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/150[,.]00/).length).toBeGreaterThan(0);
@@ -60,7 +69,7 @@ describe('VatReturnPage', () => {
 
   it('shows the real posted document behind the VAT figures (transaction traceability)', () => {
     mockedUseVatReport.mockReturnValue(mockResult());
-    render(<VatReturnPage />);
+    renderPage();
 
     expect(screen.getByText('Supporting transactions')).toBeInTheDocument();
     expect(screen.getByText('INV-0001')).toBeInTheDocument();
@@ -68,7 +77,7 @@ describe('VatReturnPage', () => {
 
   it('does not show a persisted filing/submission status anywhere — no SARS submission concept exists', () => {
     mockedUseVatReport.mockReturnValue(mockResult());
-    render(<VatReturnPage />);
+    renderPage();
 
     expect(screen.queryByText(/submitted to sars/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^submitted$/i)).not.toBeInTheDocument();
@@ -83,7 +92,7 @@ describe('VatReturnPage', () => {
         },
       }),
     );
-    render(<VatReturnPage />);
+    renderPage();
 
     expect(screen.getByText('GL Reconciliation')).toBeInTheDocument();
     expect(screen.getAllByText('Reconciled')).toHaveLength(2);
@@ -91,20 +100,20 @@ describe('VatReturnPage', () => {
 
   it('flags unresolved line items rather than silently dropping them', () => {
     mockedUseVatReport.mockReturnValue(mockResult({ report: makeReport({ unresolvedLineCount: 2 }) }));
-    render(<VatReturnPage />);
+    renderPage();
 
     expect(screen.getByRole('alert')).toHaveTextContent(/2 line items could not be matched/i);
   });
 
   it('shows a loading state while the report is being computed', () => {
     mockedUseVatReport.mockReturnValue(mockResult({ report: null, loading: true }));
-    render(<VatReturnPage />);
+    renderPage();
     expect(screen.getByText(/computing vat report/i)).toBeInTheDocument();
   });
 
   it('shows an error state when the report fails to compute', () => {
     mockedUseVatReport.mockReturnValue(mockResult({ report: null, error: new Error('Network unreachable') }));
-    render(<VatReturnPage />);
+    renderPage();
     expect(screen.getByText('Network unreachable')).toBeInTheDocument();
   });
 });

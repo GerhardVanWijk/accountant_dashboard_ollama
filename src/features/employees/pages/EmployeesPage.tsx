@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { Employee } from '@/types';
 import { PageHeader } from '@/components/app/page-header';
@@ -7,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useEmployees } from '../hooks/useEmployees';
 import { EmployeeForm } from '../components/EmployeeForm';
 import { EmployeesTable } from '../components/EmployeesTable';
+import { EmployeeDetailSheet } from '../components/EmployeeDetailSheet';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { CreateEmployeeDTO, UpdateEmployeeDTO } from '../services';
 
@@ -26,6 +28,25 @@ export function EmployeesPage() {
   const canCreate = useCanAccess('payroll', 'create');
   const canUpdate = useCanAccess('payroll', 'update');
   const canDelete = useCanAccess('payroll', 'delete');
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedEmployeeId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedEmployeeId);
+  function openRecord(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeRecord() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
+  const detailEmployee = employees.find((e) => e.id === selectedEmployeeId);
 
   const handleFormSubmit = async (data: CreateEmployeeDTO | UpdateEmployeeDTO) => {
     setActionError(null);
@@ -92,8 +113,17 @@ export function EmployeesPage() {
           employees={employees}
           onEdit={canUpdate ? (employee) => setDialog({ mode: 'edit', employee }) : undefined}
           onDelete={canDelete ? (employee) => void handleDelete(employee) : undefined}
+          onSelect={(employee) => openRecord(employee.id)}
         />
       )}
+
+      <EmployeeDetailSheet
+        employee={detailEmployee}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeRecord();
+        }}
+      />
 
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent className="max-w-3xl">

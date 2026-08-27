@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
@@ -24,6 +26,7 @@ export interface PaymentSlotCardProps {
  * (M7); estimate/payment logic unchanged.
  */
 export function PaymentSlotCard({ title, description, slot, busy, onSaveEstimate, onPay }: PaymentSlotCardProps) {
+  const navigate = useNavigate();
   const [estimateInput, setEstimateInput] = useState(String(slot.estimatedTaxableIncome ?? ''));
   const [payAmount, setPayAmount] = useState(slot.estimatedTaxLiability !== undefined ? String(slot.estimatedTaxLiability) : '');
   const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -100,7 +103,15 @@ export function PaymentSlotCard({ title, description, slot, busy, onSaveEstimate
         ) : (
           <p className="border-t border-border pt-3 text-xs text-muted-foreground">
             Paid {formatCurrency(slot.amountPaid ?? 0)} on {formatDate(slot.paidDate as string)}
-            {slot.journalEntryId ? ` — journal entry ${slot.journalEntryId}.` : ''}
+            {slot.journalEntryId && (
+              <>
+                {' — '}
+                <RecordLink onClick={() => navigate(`/accounting/journals?record=${slot.journalEntryId}`)} className="text-xs">
+                  view journal entry
+                </RecordLink>
+                .
+              </>
+            )}
           </p>
         )}
       </div>

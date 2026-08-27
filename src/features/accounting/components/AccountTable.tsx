@@ -1,8 +1,11 @@
 import { Fragment } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Account, ID } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { RecordLink } from '@/components/app/record-link';
 import { buildAccountHierarchy } from '../utils/buildAccountHierarchy';
+import { useAccountingUiStore } from '../store/accountingUiStore';
 
 export interface AccountTableProps {
   accounts: Account[];
@@ -22,6 +25,13 @@ export interface AccountTableProps {
  */
 export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActive }: AccountTableProps) {
   const groups = buildAccountHierarchy(accounts);
+  const navigate = useNavigate();
+  const setSelectedLedgerAccountId = useAccountingUiStore((s) => s.setSelectedLedgerAccountId);
+
+  function openLedger(account: Account) {
+    setSelectedLedgerAccountId(account.id);
+    navigate('/accounting/ledger');
+  }
 
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
@@ -58,7 +68,9 @@ export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActiv
                   <td className="figure px-4 py-3 align-middle text-sm tabular-nums text-foreground">{account.code}</td>
                   <td className="px-4 py-3 align-middle">
                     <div style={{ paddingLeft: depth * 16 }} className="flex flex-col">
-                      <span className="text-sm font-medium text-foreground">{account.name}</span>
+                      <RecordLink onClick={() => openLedger(account)} className="text-sm font-medium">
+                        {account.name}
+                      </RecordLink>
                       {account.subType && <span className="text-xs text-muted-foreground">{account.subType}</span>}
                     </div>
                   </td>

@@ -1,10 +1,12 @@
 ﻿import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FileQuestion, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { RecordLink } from '@/components/app/record-link';
 import { formatCurrency } from '@/lib/app/format';
 import { SYSTEM_USER_ID } from '@/features/accounting/services';
 import { useIncomeTax } from '../hooks/useIncomeTax';
@@ -28,6 +30,7 @@ export function IncomeTaxPage() {
     postComputation,
     setSbcEligibility,
   } = useIncomeTax();
+  const navigate = useNavigate();
 
   const [selectedFinancialYearId, setSelectedFinancialYearId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -210,8 +213,18 @@ export function IncomeTaxPage() {
           ) : (
             <p className="text-xs text-muted-foreground">
               Posted{selectedComputation.postedAt ? ` on ${new Date(selectedComputation.postedAt).toLocaleDateString()}` : ''}
-              {selectedComputation.journalEntryId ? ` — journal entry ${selectedComputation.journalEntryId}.` : ' — no journal entry (nil tax liability).'} A posted computation is
-              immutable; there is no reversal path yet.
+              {selectedComputation.journalEntryId ? (
+                <>
+                  {' — '}
+                  <RecordLink onClick={() => navigate(`/accounting/journals?record=${selectedComputation.journalEntryId}`)} className="text-xs">
+                    view journal entry
+                  </RecordLink>
+                  .
+                </>
+              ) : (
+                ' — no journal entry (nil tax liability).'
+              )}{' '}
+              A posted computation is immutable; there is no reversal path yet.
             </p>
           )}
         </>

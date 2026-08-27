@@ -70,6 +70,22 @@ const alignClass = {
   center: 'text-center',
 };
 
+/**
+ * True if the click/keydown originated on an interactive element NESTED
+ * INSIDE the row (an action button, a link, a checkbox) — those must
+ * handle their own click, never also trigger the row's own onRowClick.
+ * The row itself also carries role="button" (so the whole row is a valid
+ * click/Enter/Space target) — `closest()` matches an element against
+ * itself too, so this explicitly excludes that self-match via `boundary`,
+ * or every click on the row would wrongly look like it "originated from an
+ * interactive element" and onRowClick would never fire at all.
+ */
+function originatesFromInteractiveElement(target: EventTarget | null, boundary: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const matched = target.closest('button, a, [role="button"], input, select, textarea, label');
+  return matched !== null && matched !== boundary;
+}
+
 export function DataTable<T>({
   rows,
   columns,
@@ -86,6 +102,8 @@ export function DataTable<T>({
   footerRow,
   caption,
   renderDetail,
+  onRowClick,
+  getRowAriaLabel,
 }: {
   rows: T[];
   columns: DataTableColumn<T>[];
@@ -109,6 +127,19 @@ export function DataTable<T>({
    * row collapsed — used for drill-downs such as journal double-entry lines.
    */
   renderDetail?: (row: T) => ReactNode;
+  /**
+   * Makes every row open a record (typically a detail sheet — see
+   * RecordDetailSheet) on click/Enter/Space, keyboard-focusable, with a
+   * pointer cursor and a restrained hover/focus treatment (a thin brand-green
+   * left accent, matching the sidebar's own active-row language, plus a
+   * neutral background tint). Clicking an action button, link, or form
+   * control INSIDE the row never also fires this — see
+   * originatesFromInteractiveElement above. Omit to keep a row inert, e.g. a
+   * table that's purely informational.
+   */
+  onRowClick?: (row: T) => void;
+  /** Accessible name for a clickable row — defaults to a generic "Open record" if omitted. */
+  getRowAriaLabel?: (row: T) => string;
 }) {
   const [term, setTerm] = useState('');
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
@@ -300,10 +331,37 @@ export function DataTable<T>({
             <TableBody>
               {paged.map((row) => {
                 const detail = renderDetail?.(row);
+                const clickable = Boolean(onRowClick);
                 return (
                   <Fragment key={getRowKey(row)}>
                     <TableRow
-                      className={cn(detail && 'border-b-0 bg-muted/25')}
+                      className={cn(
+                        detail && 'border-b-0 bg-muted/25',
+                        // The table's base row style already hovers to bg-muted/50 — the
+                        // addition here is the brand-green left accent (matching the
+                        // sidebar's own active-row language) plus a real focus ring for
+                        // keyboard users, not a second/competing hover background.
+                        clickable &&
+                          'cursor-pointer border-l-2 border-l-transparent outline-none transition-colors hover:border-l-brand focus-visible:border-l-brand focus-visible:bg-muted/50 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring',
+                      )}
+                      {...(clickable
+                        ? {
+                            role: 'button',
+                            tabIndex: 0,
+                            'aria-label': getRowAriaLabel?.(row),
+                            onClick: (event: React.MouseEvent<HTMLTableRowElement>) => {
+                              if (originatesFromInteractiveElement(event.target, event.currentTarget)) return;
+                              onRowClick!(row);
+                            },
+                            onKeyDown: (event: React.KeyboardEvent<HTMLTableRowElement>) => {
+                              if (originatesFromInteractiveElement(event.target, event.currentTarget)) return;
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                onRowClick!(row);
+                              }
+                            },
+                          }
+                        : {})}
                     >
                       {columns.map((column) => (
                         <TableCell

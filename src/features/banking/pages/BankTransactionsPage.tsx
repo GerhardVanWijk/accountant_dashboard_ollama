@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Download, Loader2, Plus } from 'lucide-react';
 import type { BankAccount } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
@@ -29,6 +30,7 @@ import { useBankTransactionMutations } from '../hooks/useBankTransactionMutation
 import { useGlAccounts } from '../hooks/useGlAccounts';
 import { bankTransactionService } from '../services';
 import { BankTransactionTable } from '../components/BankTransactionTable';
+import { BankTransactionDetailSheet } from '../components/BankTransactionDetailSheet';
 import { TransactionFormModal } from '../components/TransactionFormModal';
 import { AllocateTransactionFormModal } from '../components/AllocateTransactionFormModal';
 import { StatementImportModal } from '../components/StatementImportModal';
@@ -61,6 +63,25 @@ export function BankTransactionsPage() {
 
   const [dialog, setDialog] = useState<DialogState>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedTransactionId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedTransactionId);
+  function openRecord(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeRecord() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
+  const detailTransaction = transactions.find((t) => t.id === selectedTransactionId);
 
   const bankAccountsById = useMemo(() => new Map(bankAccounts.map((a) => [a.id, a] as [string, BankAccount])), [bankAccounts]);
 
@@ -170,8 +191,20 @@ export function BankTransactionsPage() {
           showAccountColumn={selectedAccountId === 'all'}
           onAllocate={(txn) => setDialog({ mode: 'allocate', transaction: txn })}
           onDelete={(txn) => setDialog({ mode: 'confirmDelete', transaction: txn })}
+          onSelect={(txn) => openRecord(txn.id)}
         />
       )}
+
+      <BankTransactionDetailSheet
+        transaction={detailTransaction}
+        isLoading={isLoading}
+        bankAccount={detailTransaction ? bankAccountsById.get(detailTransaction.bankAccountId) : undefined}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeRecord();
+        }}
+        onAllocate={detailTransaction ? () => setDialog({ mode: 'allocate', transaction: detailTransaction }) : undefined}
+      />
 
       {dialog?.mode === 'new' && (
         <TransactionFormModal

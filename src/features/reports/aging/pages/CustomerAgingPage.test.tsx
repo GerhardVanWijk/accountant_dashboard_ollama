@@ -1,8 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { CustomerAgingPage } from './CustomerAgingPage';
 import { getCustomerAgingReport } from '../services/customerAgingReportService';
 import type { AgingReportRow } from '../types';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/reports/customer-aging']}>
+      <CustomerAgingPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../services/customerAgingReportService', () => ({
   getCustomerAgingReport: vi.fn(),
@@ -26,19 +35,19 @@ describe('CustomerAgingPage', () => {
 
   it('shows a loading state while the report is being computed', () => {
     mockedGetReport.mockReturnValue(new Promise(() => {}));
-    render(<CustomerAgingPage />);
+    renderPage();
     expect(screen.getByText(/computing customer aging/i)).toBeInTheDocument();
   });
 
   it('shows an error state when the report fails to load', async () => {
     mockedGetReport.mockRejectedValue(new Error('Network unreachable'));
-    render(<CustomerAgingPage />);
+    renderPage();
     expect(await screen.findByText(/network unreachable/i)).toBeInTheDocument();
   });
 
   it('shows the zero-balance empty state when every customer is paid up', async () => {
     mockedGetReport.mockResolvedValue([makeRow({ buckets: { current: 0, days30: 0, days60: 0, days90Plus: 0, total: 0 } })]);
-    render(<CustomerAgingPage />);
+    renderPage();
     expect(await screen.findByText(/no outstanding customer balances/i)).toBeInTheDocument();
   });
 
@@ -48,7 +57,7 @@ describe('CustomerAgingPage', () => {
       makeRow({ id: 'cust_large', name: 'Large Debtor', buckets: { current: 0, days30: 0, days60: 0, days90Plus: 900, total: 900 } }),
       makeRow({ id: 'cust_zero', name: 'Paid Up Customer', buckets: { current: 0, days30: 0, days60: 0, days90Plus: 0, total: 0 } }),
     ]);
-    render(<CustomerAgingPage />);
+    renderPage();
 
     const largeRow = await screen.findByText('Large Debtor');
     expect(largeRow).toBeInTheDocument();

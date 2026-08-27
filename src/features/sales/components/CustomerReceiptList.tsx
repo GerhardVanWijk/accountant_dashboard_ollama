@@ -1,5 +1,6 @@
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatDate } from '@/lib/app/format';
 import type { CustomerReceipt } from '@/types';
@@ -50,13 +51,9 @@ export function CustomerReceiptList({ receipts, customers, onSelect, isLoading =
       header: 'Receipt',
       sortValue: (r) => r.receiptNumber,
       cell: (r) => (
-        <button
-          type="button"
-          onClick={() => onSelect?.(r.id)}
-          className="figure text-sm font-medium underline-offset-4 hover:text-brand hover:underline"
-        >
+        <RecordLink onClick={() => onSelect?.(r.id)} className="figure text-sm">
           {r.receiptNumber}
-        </button>
+        </RecordLink>
       ),
     },
     {
@@ -117,6 +114,8 @@ export function CustomerReceiptList({ receipts, customers, onSelect, isLoading =
       emptyTitle="No customer receipts found"
       emptyDescription="Adjust the filters, or record a new receipt."
       caption="Customer receipt register"
+      onRowClick={onSelect ? (r) => onSelect(r.id) : undefined}
+      getRowAriaLabel={(r) => `Open receipt ${r.receiptNumber}`}
     />
   );
 }

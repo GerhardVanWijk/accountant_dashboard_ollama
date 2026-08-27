@@ -1,8 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Account, FinancialYear, JournalEntry } from '@/types';
 import { IncomeStatementPage } from './IncomeStatementPage';
 import { useFinancialStatementsData } from '../hooks/useFinancialStatementsData';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/reports/income-statement']}>
+      <IncomeStatementPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../hooks/useFinancialStatementsData', () => ({
   useFinancialStatementsData: vi.fn(),
@@ -135,7 +144,7 @@ describe('IncomeStatementPage', () => {
       refetch: vi.fn(),
     });
 
-    render(<IncomeStatementPage />);
+    renderPage();
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
@@ -150,7 +159,7 @@ describe('IncomeStatementPage', () => {
       refetch,
     });
 
-    render(<IncomeStatementPage />);
+    renderPage();
     expect(screen.getByRole('alert')).toHaveTextContent('boom');
   });
 
@@ -164,7 +173,7 @@ describe('IncomeStatementPage', () => {
       refetch: vi.fn(),
     });
 
-    render(<IncomeStatementPage />);
+    renderPage();
     expect(screen.getByText('No financial years yet')).toBeInTheDocument();
   });
 
@@ -178,7 +187,7 @@ describe('IncomeStatementPage', () => {
       refetch: vi.fn(),
     });
 
-    render(<IncomeStatementPage />);
+    renderPage();
 
     expect(screen.getByRole('heading', { name: 'Income statement' })).toBeInTheDocument();
     expect(screen.getByText(/Sales Revenue/)).toBeInTheDocument();

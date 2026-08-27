@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
@@ -10,6 +11,8 @@ import { formatCurrency } from '@/lib/app/format';
 import { useSupplierAgingReport } from '../hooks/useSupplierAgingReport';
 import { AgingReportTable } from '../components/AgingReportTable';
 import { filterZeroBalance, sortByTotalDescending, sumAgingBuckets } from '../utils/agingReportUtils';
+import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
+import { SupplierDetailSheet } from '@/features/suppliers/components/SupplierDetailSheet';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -27,9 +30,29 @@ function today(): string {
  * onto v0's PageHeader/SectionCard/FigureBlock (M9).
  */
 export function SupplierAgingPage() {
+  const navigate = useNavigate();
   const [asOfDate, setAsOfDate] = useState(today());
   const [showAll, setShowAll] = useState(false);
   const { rows, loading, error, refetch } = useSupplierAgingReport(asOfDate);
+  const suppliersState = useSuppliers();
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedSupplierId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedSupplierId);
+  function openSupplier(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeSupplier() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
 
   const visibleRows = useMemo(() => sortByTotalDescending(filterZeroBalance(rows, showAll)), [rows, showAll]);
   const withBalanceCount = useMemo(() => rows.filter((row) => row.buckets.total > 0).length, [rows]);
@@ -84,9 +107,20 @@ export function SupplierAgingPage() {
             entityLabel="Supplier"
             emptyTitle={showAll ? 'No suppliers yet' : 'No outstanding supplier balances'}
             emptyMessage={showAll ? 'Add a supplier to see them listed here.' : 'Every supplier is fully paid as of this date — tick "Show suppliers with a zero balance" to see them anyway.'}
+            onSelect={openSupplier}
           />
         </SectionCard>
       )}
+
+      <SupplierDetailSheet
+        supplierId={selectedSupplierId}
+        suppliersState={suppliersState}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeSupplier();
+        }}
+        onEdit={() => selectedSupplierId && navigate(`/purchases/vendors?view=edit&id=${selectedSupplierId}`)}
+      />
     </div>
   );
 }

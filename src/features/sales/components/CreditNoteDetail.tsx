@@ -162,7 +162,7 @@ export function CreditNoteDetail({
                 <td colSpan={4} className="px-4 py-2 text-right text-sm text-muted-foreground">Tax/VAT</td>
                 <td className="px-4 py-2 text-right font-medium">{formatCurrency(creditNote.taxTotal)}</td>
               </tr>
-              <tr className="border-t border-border bg-negative/10">
+              <tr className="border-t border-border bg-status-negative-muted">
                 <td colSpan={4} className="px-4 py-2 text-right text-sm font-semibold uppercase">Total credit</td>
                 <td className="px-4 py-2 text-right text-base font-bold text-negative">{formatCurrency(creditNote.total)}</td>
               </tr>

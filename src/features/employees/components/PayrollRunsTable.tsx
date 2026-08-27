@@ -76,6 +76,8 @@ export function PayrollRunsTable({ runs, onView, onDelete }: PayrollRunsTablePro
       ]}
       emptyTitle="No payroll runs yet"
       emptyDescription="Create a payroll run to pay your employees."
+      onRowClick={onView}
+      getRowAriaLabel={(r) => `Open payroll run ${r.runNumber}`}
     />
   );
 }

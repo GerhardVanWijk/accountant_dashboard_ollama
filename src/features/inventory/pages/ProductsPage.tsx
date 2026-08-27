@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { Product } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
@@ -8,7 +9,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { formatCurrency } from '@/lib/app/format';
 import { useProducts } from '../hooks/useProducts';
 import { useStockAlerts } from '../hooks/useStockAlerts';
+import { useWarehouses } from '../hooks/useWarehouses';
+import { useStockMovements } from '../hooks/useStockMovements';
+import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { ProductsTable } from '../components/ProductsTable';
+import { ProductDetailSheet } from '../components/ProductDetailSheet';
 import { ProductForm } from '../components/ProductForm';
 import { calculateInventoryTotals } from '../utils/calculateInventoryTotals';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
@@ -32,10 +37,34 @@ type DialogState = { mode: 'create' } | { mode: 'edit'; product: Product } | nul
 export function ProductsPage() {
   const { products, loading, error, refetch, createProduct, updateProduct, deleteProduct } = useProducts();
   const { lowStock, outOfStock } = useStockAlerts();
+  const { warehouses } = useWarehouses();
+  const { movements } = useStockMovements();
+  const { taxRates } = useAllTaxRates();
   const [dialog, setDialog] = useState<DialogState>(null);
   const canCreate = useCanAccess('inventory', 'create');
   const canUpdate = useCanAccess('inventory', 'update');
   const canDelete = useCanAccess('inventory', 'delete');
+
+  const warehousesById = useMemo(() => new Map(warehouses.map((w) => [w.id, w])), [warehouses]);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedProductId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedProductId);
+  function openRecord(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeRecord() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
+  const detailProduct = products.find((p) => p.id === selectedProductId);
 
   const totals = calculateInventoryTotals(products);
   const belowReorderCount = lowStock.length + outOfStock.length;
@@ -100,9 +129,21 @@ export function ProductsPage() {
             products={products}
             onEdit={canUpdate ? (product) => setDialog({ mode: 'edit', product }) : undefined}
             onDelete={canDelete ? (product) => void handleDelete(product) : undefined}
+            onSelect={(product) => openRecord(product.id)}
           />
         </SectionCard>
       )}
+
+      <ProductDetailSheet
+        product={detailProduct}
+        movements={movements}
+        warehousesById={warehousesById}
+        taxRates={taxRates}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeRecord();
+        }}
+      />
 
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent className="max-w-3xl">

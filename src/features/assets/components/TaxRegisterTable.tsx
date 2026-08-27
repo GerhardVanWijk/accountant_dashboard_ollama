@@ -1,5 +1,7 @@
+import { useNavigate } from 'react-router-dom';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { CATEGORY_LABELS } from '../constants';
 import type { TaxRegisterRow } from '../services';
 
@@ -9,6 +11,8 @@ export interface TaxRegisterTableProps {
 
 /** Tax Register report, re-skinned onto v0's DataTable (M8) — every figure is read off taxRegisterService's output, no tax math performed here. */
 export function TaxRegisterTable({ rows }: TaxRegisterTableProps) {
+  const navigate = useNavigate();
+
   const columns: DataTableColumn<TaxRegisterRow>[] = [
     {
       key: 'asset',
@@ -16,7 +20,9 @@ export function TaxRegisterTable({ rows }: TaxRegisterTableProps) {
       sortValue: (r) => r.assetNumber,
       cell: (r) => (
         <div className="flex flex-col">
-          <span className="font-mono text-sm font-medium text-foreground">{r.assetNumber}</span>
+          <RecordLink onClick={() => navigate(`/assets/register?record=${r.assetId}`)} className="figure text-sm">
+            {r.assetNumber}
+          </RecordLink>
           <span className="text-xs text-muted-foreground">{r.name}</span>
         </div>
       ),

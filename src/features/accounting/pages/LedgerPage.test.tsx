@@ -1,9 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Account, JournalEntry } from '@/types';
 import { LedgerPage } from './LedgerPage';
 import { accountService, journalEntryService } from '../services';
 import { useAccountingUiStore } from '../store/accountingUiStore';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/accounting/ledger']}>
+      <LedgerPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../services', () => ({
   accountService: {
@@ -70,14 +79,14 @@ describe('LedgerPage', () => {
   it('shows an empty state when there are no posted lines yet', async () => {
     mockedGetAccounts.mockResolvedValue([]);
     mockedGetEntries.mockResolvedValue([]);
-    render(<LedgerPage />);
+    renderPage();
     expect(await screen.findByText(/no ledger entries found/i)).toBeInTheDocument();
   });
 
   it('renders flat ledger rows across accounts once data loads', async () => {
     mockedGetAccounts.mockResolvedValue([makeAccount()]);
     mockedGetEntries.mockResolvedValue([makeEntry()]);
-    render(<LedgerPage />);
+    renderPage();
     expect(await screen.findByText('JE-0001')).toBeInTheDocument();
     expect(screen.getByText('1000')).toBeInTheDocument();
   });
@@ -85,7 +94,7 @@ describe('LedgerPage', () => {
   it('shows an error state when the fetch fails', async () => {
     mockedGetAccounts.mockResolvedValue([]);
     mockedGetEntries.mockRejectedValue(new Error('Network unreachable'));
-    render(<LedgerPage />);
+    renderPage();
     expect(await screen.findByText(/network unreachable/i)).toBeInTheDocument();
   });
 });

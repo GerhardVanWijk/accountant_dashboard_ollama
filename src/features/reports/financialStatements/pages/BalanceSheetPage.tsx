@@ -103,10 +103,10 @@ export function BalanceSheetPage() {
             {balanceSheet.assetLines.length === 0 ? (
               <StatementRow label="No asset balances as of this date" amount={0} indent />
             ) : (
-              balanceSheet.assetLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />)
+              balanceSheet.assetLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent accountId={line.accountId} />)
             )}
             {balanceSheet.contraAssetLines.map((line) => (
-              <StatementRow key={line.accountId} label={`Less: ${line.code} — ${line.name}`} amount={-line.amount} indent />
+              <StatementRow key={line.accountId} label={`Less: ${line.code} — ${line.name}`} amount={-line.amount} indent accountId={line.accountId} />
             ))}
             <StatementRow label="Total Assets" amount={balanceSheet.totalAssets} isTotal />
           </SectionCard>
@@ -116,7 +116,7 @@ export function BalanceSheetPage() {
             {balanceSheet.liabilityLines.length === 0 ? (
               <StatementRow label="No liability balances as of this date" amount={0} indent />
             ) : (
-              balanceSheet.liabilityLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent />)
+              balanceSheet.liabilityLines.map((line) => <StatementRow key={line.accountId} label={`${line.code} — ${line.name}`} amount={line.amount} indent accountId={line.accountId} />)
             )}
             <StatementRow label="Total Liabilities" amount={balanceSheet.totalLiabilities} isTotal />
 

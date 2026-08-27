@@ -6,3 +6,7 @@ dist-ssr
 .env.local
 coverage
 .DS_Store
+
+# Local Claude Code "impeccable" skill install + its cache/config -- not project source
+.claude/skills/impeccable/
+.impeccable/

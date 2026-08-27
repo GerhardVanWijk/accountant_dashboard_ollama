@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { Account, AccountingPeriod, ID, JournalEntry } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordAuditHistorySection } from '@/components/app/record-audit-history';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { formatDate } from '@/lib/app/format';
@@ -92,6 +93,8 @@ function JournalLines({
         </table>
       </div>
 
+      <RecordAuditHistorySection recordType="JournalEntry" recordId={entry.id} />
+
       <div className="flex justify-end">
         <Button
           variant="ghost"
@@ -113,6 +116,9 @@ export interface JournalsTableProps {
   reversedByEntryId: Map<ID, ID>;
   onReverse: (entry: JournalEntry) => void;
   reversingEntryId: ID | null;
+  /** Which entry's lines are expanded — URL-backed (`?record=`) by JournalsPage, so a deep link opens the right journal. */
+  openId: ID | null;
+  onToggleOpen: (id: ID) => void;
 }
 
 /**
@@ -124,9 +130,7 @@ export interface JournalsTableProps {
  * JournalEntryList enforced. Period label is a pure lookup via the
  * existing findPeriodForDate() utility, not a stored field on the entry.
  */
-export function JournalsTable({ entries, accounts, periods, reversedByEntryId, onReverse, reversingEntryId }: JournalsTableProps) {
-  const [openId, setOpenId] = useState<ID | null>(null);
-
+export function JournalsTable({ entries, accounts, periods, reversedByEntryId, onReverse, reversingEntryId, openId, onToggleOpen }: JournalsTableProps) {
   const accountLabel = useMemo(() => {
     const map = new Map(accounts.map((a) => [a.id, `${a.code} — ${a.name}`]));
     return (id: ID) => map.get(id) ?? id;
@@ -146,7 +150,7 @@ export function JournalsTable({ entries, accounts, periods, reversedByEntryId, o
         return (
           <button
             type="button"
-            onClick={() => setOpenId(open ? null : entry.id)}
+            onClick={() => onToggleOpen(entry.id)}
             aria-expanded={open}
             aria-label={open ? `Hide lines for ${entry.entryNumber}` : `Show lines for ${entry.entryNumber}`}
             className="rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"

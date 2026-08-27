@@ -169,6 +169,8 @@ export function CustomerTable({ customers, onView, onEdit, onToggleActive, overd
       emptyTitle="No customers found"
       emptyDescription="Adjust the search or filters to widen the results, or create a new customer."
       caption="Customer accounts"
+      onRowClick={(c) => onView(c)}
+      getRowAriaLabel={(c) => `Open customer ${c.name}`}
     />
   );
 }

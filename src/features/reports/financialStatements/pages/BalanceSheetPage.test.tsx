@@ -1,8 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Account, FinancialYear, JournalEntry } from '@/types';
 import { BalanceSheetPage } from './BalanceSheetPage';
 import { useFinancialStatementsData } from '../hooks/useFinancialStatementsData';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/reports/balance-sheet']}>
+      <BalanceSheetPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../hooks/useFinancialStatementsData', () => ({
   useFinancialStatementsData: vi.fn(),
@@ -100,7 +109,7 @@ describe('BalanceSheetPage', () => {
       refetch: vi.fn(),
     });
 
-    render(<BalanceSheetPage />);
+    renderPage();
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
@@ -114,7 +123,7 @@ describe('BalanceSheetPage', () => {
       refetch: vi.fn(),
     });
 
-    render(<BalanceSheetPage />);
+    renderPage();
     expect(screen.getByRole('alert')).toHaveTextContent('boom');
   });
 
@@ -128,7 +137,7 @@ describe('BalanceSheetPage', () => {
       refetch: vi.fn(),
     });
 
-    render(<BalanceSheetPage />);
+    renderPage();
 
     expect(screen.getByRole('heading', { name: 'Balance sheet' })).toBeInTheDocument();
     expect(screen.getByText(/Cash and Bank/)).toBeInTheDocument();

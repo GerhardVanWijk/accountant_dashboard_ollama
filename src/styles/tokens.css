@@ -141,6 +141,14 @@
   --brand: oklch(0.76 0.15 166);
   --brand-foreground: oklch(0.16 0.03 166);
   --brand-muted: oklch(0.76 0.15 166 / 12%);
+  /* Thin-border/ring use (form surfaces, active panels) — same value as
+     --positive-outline below (brand and positive share the identical base
+     hue in this palette) but named for its actual use: brand chrome, not a
+     financial-status signal. Pre-baked alpha, matching the
+     -muted/-surface/-outline pattern already established for status colors
+     — see that block's comment for why a bare var() can't take a Tailwind
+     opacity modifier under this project's Tailwind v3. */
+  --brand-outline: oklch(0.76 0.15 166 / 30%);
   --panel: oklch(0.19 0.004 240);
   --positive: oklch(0.76 0.15 166);
   --negative: oklch(0.68 0.19 22);

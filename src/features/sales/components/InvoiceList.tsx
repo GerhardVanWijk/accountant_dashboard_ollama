@@ -1,5 +1,6 @@
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatDate, formatDueLabel } from '@/lib/app/format';
 import { invoiceService } from '@/services';
@@ -53,13 +54,9 @@ export function InvoiceList({ invoices, customers, onSelect, isLoading = false, 
       header: 'Invoice',
       sortValue: (inv) => inv.invoiceNumber,
       cell: (inv) => (
-        <button
-          type="button"
-          onClick={() => onSelect?.(inv.id)}
-          className="figure text-sm font-medium underline-offset-4 hover:text-brand hover:underline"
-        >
+        <RecordLink onClick={() => onSelect?.(inv.id)} className="figure text-sm">
           {inv.invoiceNumber}
-        </button>
+        </RecordLink>
       ),
     },
     {
@@ -135,6 +132,8 @@ export function InvoiceList({ invoices, customers, onSelect, isLoading = false, 
       caption="Customer invoices"
       emptyTitle="No invoices found"
       emptyDescription="Adjust the search or status filter, or raise a new invoice."
+      onRowClick={onSelect ? (inv) => onSelect(inv.id) : undefined}
+      getRowAriaLabel={(inv) => `Open invoice ${inv.invoiceNumber}`}
     />
   );
 }

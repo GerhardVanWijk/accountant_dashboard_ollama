@@ -1,5 +1,6 @@
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatDate } from '@/lib/app/format';
 import type { PurchaseOrder, PurchaseOrderStatus } from '@/types';
@@ -44,9 +45,9 @@ export function PurchaseOrderList({ purchaseOrders, suppliersMap = {}, onSelect,
       header: 'PO',
       sortValue: (po) => po.poNumber,
       cell: (po) => (
-        <button type="button" onClick={() => onSelect?.(po.id)} className="figure text-sm font-medium underline-offset-4 hover:text-brand hover:underline">
+        <RecordLink onClick={() => onSelect?.(po.id)} className="figure text-sm">
           {po.poNumber}
-        </button>
+        </RecordLink>
       ),
     },
     { key: 'supplier', header: 'Supplier', sortValue: (po) => suppliersMap[po.supplierId] ?? '', cell: (po) => suppliersMap[po.supplierId] ?? 'Unknown supplier' },
@@ -76,6 +77,8 @@ export function PurchaseOrderList({ purchaseOrders, suppliersMap = {}, onSelect,
       emptyTitle="No purchase orders found"
       emptyDescription="Adjust the filters, or create a new purchase order."
       caption="Purchase order register"
+      onRowClick={onSelect ? (po) => onSelect(po.id) : undefined}
+      getRowAriaLabel={(po) => `Open purchase order ${po.poNumber}`}
     />
   );
 }

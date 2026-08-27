@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { Customer } from '@/types';
 import { CustomerListPage } from '@/features/customers/pages/CustomerListPage';
-import { CustomerDetailPage } from '@/features/customers/pages/CustomerDetailPage';
+import { CustomerDetailSheet } from '@/features/customers/components/CustomerDetailSheet';
 import { CustomerFormModal } from '@/features/customers/components/CustomerFormModal';
 import { useCustomerMutations } from '@/features/customers/hooks/useCustomerMutations';
 import { useCustomers } from '@/features/customers/hooks/useCustomers';
@@ -13,22 +14,41 @@ import {
 } from '@/features/customers/utils/customerFormMapping';
 import type { CustomerFormValues } from '@/features/customers/utils/customerFormSchema';
 
-type View = { type: 'list' } | { type: 'detail'; customerId: string };
 type FormState = { mode: 'create' } | { mode: 'edit'; customer: Customer } | null;
 
 /**
- * Route target for /sales/customers (docs/ROUTES.md). Orchestrates the
- * Customer module's list/detail views and create/edit modal — there is
- * no dedicated /sales/customers/:id route (router.tsx is out of scope
- * for this bee), so navigation between list and detail is in-page state.
+ * Route target for /sales/customers (docs/ROUTES.md). The list stays
+ * mounted at all times — a customer opens as a wide overlay
+ * (CustomerDetailSheet), deep-linkable via ?record=<id>, matching the
+ * InvoicesPage reference pattern instead of the old full-page swap that
+ * used to unmount CustomerListPage (losing its search/filter state) every
+ * time a row was opened.
  */
 export function CustomersPage() {
-  const [view, setView] = useState<View>({ type: 'list' });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedCustomerId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedCustomerId);
+  function openCustomer(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeCustomer() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
+
   const [formState, setFormState] = useState<FormState>(null);
-  // Bumped after every create/edit mutation to force CustomerListPage and
-  // CustomerDetailPage to remount and refetch — they each own their data
-  // fetch via useCustomers()/useCustomer() rather than receiving props,
-  // so a remount is the simplest way to guarantee they see fresh data.
+  // Bumped after every create/edit mutation to force CustomerListPage to
+  // remount and refetch — it owns its data fetch via useCustomers() rather
+  // than receiving props, so a remount is the simplest way to guarantee it
+  // sees fresh data. CustomerDetailSheet's own CustomerDetailPage refetches
+  // itself independently (useCustomer(customerId)) and stays mounted.
   const [dataVersion, setDataVersion] = useState(0);
   const { customers, refetch: refetchList } = useCustomers();
   const { createCustomer, updateCustomer, saving, error } = useCustomerMutations();
@@ -54,23 +74,21 @@ export function CustomersPage() {
 
   return (
     <>
-      {view.type === 'list' && (
-        <CustomerListPage
-          key={dataVersion}
-          onView={(customer) => setView({ type: 'detail', customerId: customer.id })}
-          onCreate={() => setFormState({ mode: 'create' })}
-          onEdit={(customer) => setFormState({ mode: 'edit', customer })}
-        />
-      )}
+      <CustomerListPage
+        key={dataVersion}
+        onView={(customer) => openCustomer(customer.id)}
+        onCreate={() => setFormState({ mode: 'create' })}
+        onEdit={(customer) => setFormState({ mode: 'edit', customer })}
+      />
 
-      {view.type === 'detail' && (
-        <CustomerDetailPage
-          key={`${view.customerId}-${dataVersion}`}
-          customerId={view.customerId}
-          onBack={() => setView({ type: 'list' })}
-          onEdit={(customer) => setFormState({ mode: 'edit', customer })}
-        />
-      )}
+      <CustomerDetailSheet
+        customerId={selectedCustomerId}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeCustomer();
+        }}
+        onEdit={(customer) => setFormState({ mode: 'edit', customer })}
+      />
 
       {formState && (
         <CustomerFormModal

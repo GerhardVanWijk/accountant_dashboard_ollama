@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { ID, JournalEntry } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
@@ -29,6 +30,17 @@ export function JournalsPage() {
   const [showForm, setShowForm] = useState(false);
   const [reversingEntryId, setReversingEntryId] = useState<ID | null>(null);
   const [reverseError, setReverseError] = useState<string | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openEntryId = searchParams.get('record');
+  function toggleOpen(id: ID) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (next.get('record') === id) next.delete('record');
+      else next.set('record', id);
+      return next;
+    });
+  }
 
   const posted = entries.filter((e) => e.status === 'posted' && !reversedByEntryId.has(e.id));
   const reversed = entries.filter((e) => reversedByEntryId.has(e.id));
@@ -98,6 +110,8 @@ export function JournalsPage() {
           reversedByEntryId={reversedByEntryId}
           onReverse={handleReverse}
           reversingEntryId={reversingEntryId}
+          openId={openEntryId}
+          onToggleOpen={toggleOpen}
         />
       )}
 

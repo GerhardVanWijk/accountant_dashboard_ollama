@@ -1,11 +1,12 @@
 ﻿import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
 import { formatCurrency } from '@/lib/app/format';
 import { CustomerReceiptList } from '@/features/sales/components/CustomerReceiptList';
-import { CustomerReceiptDetail } from '@/features/sales/components/CustomerReceiptDetail';
+import { CustomerReceiptDetailSheet } from '@/features/sales/components/CustomerReceiptDetailSheet';
 import { CustomerReceiptFormModal } from '@/features/sales/components/CustomerReceiptFormModal';
 import { AllocationFormModal, type OpenInvoiceOption } from '@/features/sales/components/AllocationFormModal';
 import { useCustomerReceipts } from '@/features/sales/hooks/useCustomerReceipts';
@@ -13,8 +14,6 @@ import { useCustomerReceiptMutations } from '@/features/sales/hooks/useCustomerR
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
 import { receiptAllocationState } from '@/features/sales/utils/receiptAllocationState';
-
-type View = { type: 'list' } | { type: 'detail'; id: string };
 
 /** Outstanding-balance epsilon, matching CustomerReceiptService.BALANCE_EPSILON. */
 const EPSILON = 0.01;
@@ -29,13 +28,30 @@ const EPSILON = 0.01;
  * entirely — Payment/PaymentRepository) — out of M4 scope, see the report.
  */
 export function CustomerReceiptsPage() {
-  const [view, setView] = useState<View>({ type: 'list' });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedId = searchParams.get('record') ?? undefined;
+  const detailOpen = Boolean(selectedId);
+  function openRecord(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeRecord() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
+
   const [showForm, setShowForm] = useState(false);
   const [showAllocate, setShowAllocate] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const { receipts, isLoading, error, refetch } = useCustomerReceipts();
-  const detailReceipt = view.type === 'detail' ? receipts.find((r) => r.id === view.id) : undefined;
+  const detailReceipt = receipts.find((r) => r.id === selectedId);
   const { customers: customerMap } = useCustomerMap();
   const { customers: customerList } = useCustomerList();
   const { invoices, refetch: refetchInvoices } = useInvoices();
@@ -76,85 +92,73 @@ export function CustomerReceiptsPage() {
 
   return (
     <>
-      {view.type === 'list' && (
-        <div className="flex flex-col gap-6">
-          <PageHeader
-            title="Payments"
-            description="Money received from customers, with allocation status against open invoices."
-            actions={
-              <Button size="sm" onClick={() => setShowForm(true)}>
-                <Plus data-icon="inline-start" />
-                Record receipt
-              </Button>
-            }
-          />
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          title="Payments"
+          description="Money received from customers, with allocation status against open invoices."
+          actions={
+            <Button size="sm" onClick={() => setShowForm(true)}>
+              <Plus data-icon="inline-start" />
+              Record receipt
+            </Button>
+          }
+        />
 
-          <SectionCard>
-            <div className="grid gap-6 sm:grid-cols-3">
-              <FigureBlock label="Received" value={formatCurrency(receivedTotal)} hint={`${receipts.length} customer receipts`} tone="positive" />
-              <FigureBlock
-                label="Unallocated"
-                value={formatCurrency(unallocatedTotal)}
-                hint={`${unallocated.length} awaiting matching`}
-                tone={unallocated.length > 0 ? 'warning' : 'default'}
-              />
-              <FigureBlock label="Fully allocated" value={String(receipts.length - unallocated.length)} hint="Matched to invoices" />
-            </div>
-          </SectionCard>
-
-          {notice && (
-            <p className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">{notice}</p>
-          )}
-          {mutationError && (
-            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {mutationError.message}
-            </p>
-          )}
-
-          {isLoading && (
-            <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
-              <Loader2 className="size-5 animate-spin" aria-hidden="true" />
-              <p className="text-sm">Loading customer receipts…</p>
-            </div>
-          )}
-          {!isLoading && error && (
-            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {error.message}
-            </div>
-          )}
-          {!isLoading && !error && (
-            <CustomerReceiptList
-              receipts={receipts}
-              customers={customerMap}
-              onSelect={(id) => {
-                setNotice(null);
-                setView({ type: 'detail', id });
-              }}
+        <SectionCard>
+          <div className="grid gap-6 sm:grid-cols-3">
+            <FigureBlock label="Received" value={formatCurrency(receivedTotal)} hint={`${receipts.length} customer receipts`} tone="positive" />
+            <FigureBlock
+              label="Unallocated"
+              value={formatCurrency(unallocatedTotal)}
+              hint={`${unallocated.length} awaiting matching`}
+              tone={unallocated.length > 0 ? 'warning' : 'default'}
             />
-          )}
-        </div>
-      )}
+            <FigureBlock label="Fully allocated" value={String(receipts.length - unallocated.length)} hint="Matched to invoices" />
+          </div>
+        </SectionCard>
 
-      {view.type === 'detail' && detailReceipt && (
-        <div className="flex flex-col gap-6">
-          {notice && (
-            <p className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">{notice}</p>
-          )}
-          {mutationError && (
-            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {mutationError.message}
-            </p>
-          )}
-          <CustomerReceiptDetail
-            receipt={detailReceipt}
-            customerName={customerMap.get(detailReceipt.customerId) || 'Unknown Customer'}
-            invoiceNumbers={invoiceNumbers}
-            onBack={() => setView({ type: 'list' })}
-            isBusy={isMutating}
-            onAllocate={() => setShowAllocate(true)}
+        {notice && (
+          <p className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">{notice}</p>
+        )}
+        {mutationError && (
+          <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {mutationError.message}
+          </p>
+        )}
+
+        {isLoading ? (
+          <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+            <p className="text-sm">Loading customer receipts…</p>
+          </div>
+        ) : error ? (
+          <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error.message}
+          </div>
+        ) : (
+          <CustomerReceiptList
+            receipts={receipts}
+            customers={customerMap}
+            onSelect={(id) => {
+              setNotice(null);
+              openRecord(id);
+            }}
           />
-        </div>
-      )}
+        )}
+      </div>
+
+      <CustomerReceiptDetailSheet
+        receipt={detailReceipt}
+        isLoading={isLoading}
+        open={detailOpen}
+        onOpenChange={(next) => {
+          if (!next) closeRecord();
+        }}
+        customerName={detailReceipt ? customerMap.get(detailReceipt.customerId) || 'Unknown Customer' : ''}
+        invoiceNumbers={invoiceNumbers}
+        isBusy={isMutating}
+        onAllocate={() => setShowAllocate(true)}
+      />
 
       {showForm && (
         <CustomerReceiptFormModal

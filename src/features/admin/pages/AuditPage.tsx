@@ -3,8 +3,9 @@ import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { useAuthStore } from '@/stores/authStore';
-import type { AuditLogAccessEntry } from '@/types';
-import { auditLogAccessService } from '@/features/auth/services';
+import type { AuditLogAccessEntry, Profile } from '@/types';
+import { auditLogAccessService, profileService } from '@/features/auth/services';
+import { AccessLogTable } from '../components/AccessLogTable';
 
 /**
  * Real content for the access-audit log (Phase T's `audit_logs_access`
@@ -13,18 +14,20 @@ import { auditLogAccessService } from '@/features/auth/services';
  * src/features/admin/pages/AuditTrailPage.tsx — who changed a posted
  * document's fields) is a different log entirely. See
  * src/types/accessAudit.ts for why this log is best-effort, not a complete
- * record of every access. Re-skinned onto v0's PageHeader/SectionCard
- * (M14) — this page was missed by every earlier phase (M10 built the newer
- * AuditTrailPage.tsx alongside it but left this pre-existing page
- * untouched); same auditLogAccessService call, unchanged. Phase 6 fixed the
- * loading/error states themselves to match every other page's established
- * Loader2/role="status"/retry-button convention — this page never got that
- * pass and was still on a plain "Loading…" string with no error handling
- * at all (a rejected fetch left the table silently empty forever).
+ * record of every access.
+ *
+ * `actorId` is now resolved to a real Profile (same pattern as
+ * useAuditTrail.ts's profilesById) — the prior version of this page never
+ * showed who the access checkpoint was for at all. Table swapped for the
+ * shared DataTable (search/filter/sort, previously entirely absent here)
+ * and each row expands to its raw `detail` payload (real captured context,
+ * not fabricated) rather than gaining a fake record-detail link — an access
+ * checkpoint isn't itself a financial record with relationships to trace.
  */
 export function AuditPage() {
   const companyId = useAuthStore((s) => s.profile?.companyId);
   const [entries, setEntries] = useState<AuditLogAccessEntry[]>([]);
+  const [profilesById, setProfilesById] = useState<Map<string, Profile>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -32,9 +35,11 @@ export function AuditPage() {
     if (!companyId) return;
     setLoading(true);
     setError(null);
-    auditLogAccessService
-      .getByCompany(companyId)
-      .then(setEntries)
+    Promise.all([auditLogAccessService.getByCompany(companyId), profileService.getByCompany(companyId)])
+      .then(([accessEntries, profiles]) => {
+        setEntries(accessEntries);
+        setProfilesById(new Map(profiles.map((p) => [p.id, p])));
+      })
       .catch((err) => setError(err instanceof Error ? err : new Error('Failed to load the access log.')))
       .finally(() => setLoading(false));
   }, [companyId]);
@@ -65,38 +70,8 @@ export function AuditPage() {
       )}
 
       {!loading && !error && (
-        <SectionCard bodyClassName="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/40">
-                  <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">When</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Action</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Table</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((entry) => (
-                  <tr key={entry.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-2 text-muted-foreground">{new Date(entry.occurredAt).toLocaleString()}</td>
-                    <td className="px-4 py-2">{entry.action}</td>
-                    <td className="px-4 py-2">{entry.tableName}</td>
-                    <td className="px-4 py-2">
-                      <span className={entry.result === 'allowed' ? 'text-status-positive' : 'text-status-negative'}>{entry.result}</span>
-                    </td>
-                  </tr>
-                ))}
-                {entries.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-4 text-center text-muted-foreground">
-                      No access log entries yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+        <SectionCard>
+          <AccessLogTable entries={entries} profilesById={profilesById} />
         </SectionCard>
       )}
     </div>

@@ -1,5 +1,6 @@
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatDate } from '@/lib/app/format';
 import type { Bill, BillStatus } from '@/types';
@@ -51,9 +52,9 @@ export function BillList({ bills, suppliersMap = {}, onSelect, isLoading = false
       header: 'Bill',
       sortValue: (b) => b.billNumber,
       cell: (b) => (
-        <button type="button" onClick={() => onSelect?.(b.id)} className="figure text-sm font-medium underline-offset-4 hover:text-brand hover:underline">
+        <RecordLink onClick={() => onSelect?.(b.id)} className="figure text-sm">
           {b.billNumber}
-        </button>
+        </RecordLink>
       ),
     },
     {
@@ -90,6 +91,8 @@ export function BillList({ bills, suppliersMap = {}, onSelect, isLoading = false
       emptyTitle="No bills found"
       emptyDescription="Adjust the filters, or create a new bill."
       caption="Supplier bill register"
+      onRowClick={onSelect ? (b) => onSelect(b.id) : undefined}
+      getRowAriaLabel={(b) => `Open bill ${b.billNumber}`}
     />
   );
 }

@@ -1,9 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { FinancialYear } from '@/types';
 import type { ProvisionalTaxPeriod } from '@/types/provisionalTax';
 import { ProvisionalTaxPage } from './ProvisionalTaxPage';
 import { useProvisionalTax } from '../hooks/useProvisionalTax';
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/tax/provisional-tax']}>
+      <ProvisionalTaxPage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../hooks/useProvisionalTax', () => ({
   useProvisionalTax: vi.fn(),
@@ -63,19 +72,19 @@ describe('ProvisionalTaxPage', () => {
 
   it('shows a loading state', () => {
     mockedUseProvisionalTax.mockReturnValue(baseHookValue({ loading: true }));
-    render(<ProvisionalTaxPage />);
+    renderPage();
     expect(screen.getByText(/loading provisional tax data/i)).toBeInTheDocument();
   });
 
   it('shows an error state', () => {
     mockedUseProvisionalTax.mockReturnValue(baseHookValue({ error: new Error('Network unreachable') }));
-    render(<ProvisionalTaxPage />);
+    renderPage();
     expect(screen.getByText(/network unreachable/i)).toBeInTheDocument();
   });
 
   it('offers to create a provisional tax period when none exists for the selected financial year', () => {
     mockedUseProvisionalTax.mockReturnValue(baseHookValue({ periods: [] }));
-    render(<ProvisionalTaxPage />);
+    renderPage();
     expect(screen.getByText(/no provisional tax period yet for fy2026/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /create provisional tax period/i })).toBeInTheDocument();
   });
@@ -83,7 +92,7 @@ describe('ProvisionalTaxPage', () => {
   it('calls getOrCreatePeriod when the create button is clicked', async () => {
     const getOrCreatePeriod = vi.fn().mockResolvedValue(makePeriod());
     mockedUseProvisionalTax.mockReturnValue(baseHookValue({ periods: [], getOrCreatePeriod }));
-    render(<ProvisionalTaxPage />);
+    renderPage();
 
     fireEvent.click(screen.getByRole('button', { name: /create provisional tax period/i }));
     await waitFor(() => expect(getOrCreatePeriod).toHaveBeenCalledWith('fy_2026'));
@@ -91,7 +100,7 @@ describe('ProvisionalTaxPage', () => {
 
   it('renders the three payment slot cards for an existing period', () => {
     mockedUseProvisionalTax.mockReturnValue(baseHookValue({ periods: [makePeriod()] }));
-    render(<ProvisionalTaxPage />);
+    renderPage();
 
     expect(screen.getByText('First Payment')).toBeInTheDocument();
     expect(screen.getByText('Second Payment')).toBeInTheDocument();
@@ -101,7 +110,7 @@ describe('ProvisionalTaxPage', () => {
   it('calls recordEstimate when an estimate is saved for a slot', async () => {
     const recordEstimate = vi.fn().mockResolvedValue(makePeriod());
     mockedUseProvisionalTax.mockReturnValue(baseHookValue({ periods: [makePeriod()], recordEstimate }));
-    render(<ProvisionalTaxPage />);
+    renderPage();
 
     const estimateInput = screen.getByLabelText('Estimated Taxable Income', { selector: '#estimate-first-payment' });
     fireEvent.change(estimateInput, { target: { value: '300000' } });
@@ -118,7 +127,7 @@ describe('ProvisionalTaxPage', () => {
       variance: 11000,
     });
     mockedUseProvisionalTax.mockReturnValue(baseHookValue({ periods: [makePeriod()], getReconciliation }));
-    render(<ProvisionalTaxPage />);
+    renderPage();
 
     await waitFor(() => expect(screen.getByText('Final Tax Liability')).toBeInTheDocument());
     expect(screen.getByText('Still Owed')).toBeInTheDocument();
@@ -126,7 +135,7 @@ describe('ProvisionalTaxPage', () => {
 
   it('mentions the no-interest-rate gap explicitly', () => {
     mockedUseProvisionalTax.mockReturnValue(baseHookValue({ periods: [makePeriod()] }));
-    render(<ProvisionalTaxPage />);
+    renderPage();
     expect(screen.getByText(/underpayment interest\/penalties are not calculated here/i)).toBeInTheDocument();
   });
 });

@@ -1,10 +1,35 @@
+import { useNavigate } from 'react-router-dom';
 import type { AuditLogEntry, Profile } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { RecordLink } from '@/components/app/record-link';
 import { formatDateTime } from '@/lib/app/format';
 
 export interface AuditTrailTableProps {
   entries: AuditLogEntry[];
   profilesById: Map<string, Profile>;
+}
+
+/**
+ * `AuditLogEntry.recordType`/`recordId` are free `text` columns, not
+ * database-enforced FKs (SupabaseAuditLogRepository's doc comment) — never
+ * assume a record type resolves to a real route. This maps only the
+ * `recordType` strings that (a) are actually written by
+ * `auditLogService.log()` calls in this codebase today (grepped, not
+ * guessed) AND (b) have a genuine `?record=`-deep-linkable detail view to
+ * send them to. Every other recordType (Company, TaxRate, Profile, Role,
+ * UserRoleAssignment, FinancialYear, AccountingPeriod, BankReconciliation,
+ * ReconciliationIssue, ReportingStandardVersion, PublicInterestScore) has
+ * no such view yet, so those rows correctly stay plain text below rather
+ * than link to something that doesn't exist.
+ */
+const RECORD_TYPE_ROUTES: Record<string, string> = {
+  JournalEntry: '/accounting/journals',
+};
+
+function resolveRecordLink(recordType: string, recordId: string): string | null {
+  const base = RECORD_TYPE_ROUTES[recordType];
+  if (!base || !recordId) return null;
+  return `${base}?record=${recordId}`;
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -46,6 +71,7 @@ function displayName(userId: string, profilesById: Map<string, Profile>): string
  * `accounting-v0-frontend/components/app/admin/audit-trail-table.tsx`.
  */
 export function AuditTrailTable({ entries, profilesById }: AuditTrailTableProps) {
+  const navigate = useNavigate();
   const modules = [...new Set(entries.map((e) => e.module))].sort();
   const actions = [...new Set(entries.map((e) => e.action))].sort();
 
@@ -85,14 +111,23 @@ export function AuditTrailTable({ entries, profilesById }: AuditTrailTableProps)
       header: 'Module',
       hideBelowMd: true,
       sortValue: (e) => e.module,
-      cell: (e) => (
-        <div className="flex flex-col">
-          <span className="capitalize">{e.module}</span>
-          <span className="figure text-xs text-muted-foreground">
-            {e.recordType} {e.recordId}
-          </span>
-        </div>
-      ),
+      cell: (e) => {
+        const href = resolveRecordLink(e.recordType, e.recordId);
+        return (
+          <div className="flex flex-col">
+            <span className="capitalize">{e.module}</span>
+            {href ? (
+              <RecordLink onClick={() => navigate(href)} className="figure text-xs">
+                {e.recordType} {e.recordId}
+              </RecordLink>
+            ) : (
+              <span className="figure text-xs text-muted-foreground">
+                {e.recordType} {e.recordId}
+              </span>
+            )}
+          </div>
+        );
+      },
     },
   ];
 

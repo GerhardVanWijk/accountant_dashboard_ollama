@@ -123,14 +123,17 @@ export function Pricing() {
 
               <Separator />
 
-              <ul className="flex flex-1 flex-col gap-3">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5 text-sm">
-                    <CheckIcon className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
-                    <span className="leading-relaxed text-muted-foreground">{feature}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="flex flex-1 flex-col gap-3">
+                <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Included products</span>
+                <ul className="flex flex-col gap-3">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2.5 text-sm">
+                      <CheckIcon className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+                      <span className="leading-relaxed text-muted-foreground">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
               <Button onClick={() => setPlanId(plan.id)} variant={active ? 'default' : 'outline'} className={cn('h-11 w-full', active && 'bg-brand text-brand-foreground hover:bg-brand/90')} aria-pressed={active}>
                 {active ? 'Selected' : `Choose ${plan.name}`}
