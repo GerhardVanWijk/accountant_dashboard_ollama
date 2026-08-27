@@ -99,9 +99,7 @@ export function RelatedPartyTransactionsPage() {
 
       {!busy && !error && (
         <>
-          <SectionCard>
-            <RelatedPartyTransactionsTable transactions={transactions} relatedPartiesById={relatedPartiesById} onEdit={(transaction) => setDialog({ mode: 'edit', transaction })} onDelete={(transaction) => void handleDelete(transaction)} />
-          </SectionCard>
+          <RelatedPartyTransactionsTable transactions={transactions} relatedPartiesById={relatedPartiesById} onEdit={(transaction) => setDialog({ mode: 'edit', transaction })} onDelete={(transaction) => void handleDelete(transaction)} />
 
           <SectionCard title="Disclosure summary">
             <DisclosureSummaryTable rows={disclosureSummary} />

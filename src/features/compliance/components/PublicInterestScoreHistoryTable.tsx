@@ -1,6 +1,7 @@
 import type { PublicInterestScore } from '@/types';
+import { Amount } from '@/components/app/figure';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { formatCurrency, formatDate } from '@/lib/app/format';
+import { formatDate } from '@/lib/app/format';
 import { cn } from '@/lib/utils';
 
 const ASSURANCE_LABELS = {
@@ -36,8 +37,12 @@ export function PublicInterestScoreHistoryTable({ history, financialYearName }: 
               <td className="whitespace-nowrap px-4 py-2.5">{financialYearName(score.financialYearId)}</td>
               <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">{formatDate(score.calculatedAt)}</td>
               <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{score.employeePoints}</td>
-              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(score.components.turnover)}</td>
-              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(score.components.thirdPartyLiabilities)}</td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                <Amount value={score.components.turnover} plain />
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                <Amount value={score.components.thirdPartyLiabilities} plain />
+              </td>
               <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{score.shareholderPoints}</td>
               <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums">{score.totalScore}</td>
               <td className="whitespace-nowrap px-4 py-2.5">

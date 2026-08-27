@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import type { PayrollRun } from '@/types';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useAccounts } from '@/features/accounting/hooks/useAccounts';
@@ -122,9 +122,7 @@ export function PayrollRunsPage() {
       )}
 
       {!busy && !error && (
-        <SectionCard>
-          <PayrollRunsTable runs={runs} onView={(run) => setDialog({ mode: 'view', run })} onDelete={canDelete ? (run) => void handleDelete(run) : undefined} />
-        </SectionCard>
+        <PayrollRunsTable runs={runs} onView={(run) => setDialog({ mode: 'view', run })} onDelete={canDelete ? (run) => void handleDelete(run) : undefined} />
       )}
 
       <Dialog open={dialog?.mode === 'create'} onOpenChange={(open) => !open && setDialog(null)}>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import type { Employee } from '@/types';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useEmployees } from '../hooks/useEmployees';
@@ -88,13 +88,11 @@ export function EmployeesPage() {
       )}
 
       {!loading && !error && (
-        <SectionCard>
-          <EmployeesTable
-            employees={employees}
-            onEdit={canUpdate ? (employee) => setDialog({ mode: 'edit', employee }) : undefined}
-            onDelete={canDelete ? (employee) => void handleDelete(employee) : undefined}
-          />
-        </SectionCard>
+        <EmployeesTable
+          employees={employees}
+          onEdit={canUpdate ? (employee) => setDialog({ mode: 'edit', employee }) : undefined}
+          onDelete={canDelete ? (employee) => void handleDelete(employee) : undefined}
+        />
       )}
 
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>

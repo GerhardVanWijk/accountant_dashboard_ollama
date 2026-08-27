@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import type { TaxRate } from '@/types';
@@ -91,9 +91,7 @@ export function TaxRatesPage() {
         </p>
       )}
       {!loading && !error && (
-        <SectionCard>
-          <TaxRateTable taxRates={taxRates} onSupersede={(rate) => setDialog({ mode: 'supersede', rate })} onDeactivate={(rate) => void handleDeactivate(rate)} />
-        </SectionCard>
+        <TaxRateTable taxRates={taxRates} onSupersede={(rate) => setDialog({ mode: 'supersede', rate })} onDeactivate={(rate) => void handleDeactivate(rate)} />
       )}
 
       <Dialog open={dialog?.mode === 'create'} onOpenChange={(open) => { if (!open) setDialog(null); }}>

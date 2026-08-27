@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { PageHeader } from '@/components/app/page-header';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
@@ -59,11 +59,7 @@ export function TaxRegisterPage() {
         </div>
       )}
 
-      {!loading && !error && (
-        <SectionCard>
-          <TaxRegisterTable rows={rows} />
-        </SectionCard>
-      )}
+      {!loading && !error && <TaxRegisterTable rows={rows} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import type { RelatedParty } from '@/types/relatedParty';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useRelatedParties } from '../hooks/useRelatedParties';
@@ -97,14 +97,12 @@ export function RelatedPartyRegisterPage() {
       )}
 
       {!busy && !error && (
-        <SectionCard>
-          <RelatedPartiesTable
-            relatedParties={relatedParties}
-            transactionCountByPartyId={transactionCountByPartyId}
-            onEdit={(relatedParty) => setDialog({ mode: 'edit', relatedParty })}
-            onDelete={(relatedParty) => void handleDelete(relatedParty)}
-          />
-        </SectionCard>
+        <RelatedPartiesTable
+          relatedParties={relatedParties}
+          transactionCountByPartyId={transactionCountByPartyId}
+          onEdit={(relatedParty) => setDialog({ mode: 'edit', relatedParty })}
+          onDelete={(relatedParty) => void handleDelete(relatedParty)}
+        />
       )}
 
       <Dialog open={dialog?.mode === 'create' || dialog?.mode === 'edit'} onOpenChange={(open) => !open && setDialog(null)}>

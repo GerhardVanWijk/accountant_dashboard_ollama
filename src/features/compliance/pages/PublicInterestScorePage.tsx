@@ -158,13 +158,13 @@ export function PublicInterestScorePage() {
                     </div>
                     <div>
                       <dt className="text-xs tracking-wide text-muted-foreground uppercase">Turnover</dt>
-                      <dd className="mt-1 font-mono tabular-nums">
+                      <dd className="figure mt-1 tabular-nums">
                         {formatCurrency(latest.components.turnover)} → {latest.turnoverPoints} pt{latest.turnoverPoints === 1 ? '' : 's'}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-xs tracking-wide text-muted-foreground uppercase">3rd-Party Liabilities</dt>
-                      <dd className="mt-1 font-mono tabular-nums">
+                      <dd className="figure mt-1 tabular-nums">
                         {formatCurrency(latest.components.thirdPartyLiabilities)} → {latest.thirdPartyLiabilityPoints} pt{latest.thirdPartyLiabilityPoints === 1 ? '' : 's'}
                       </dd>
                     </div>

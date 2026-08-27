@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { CgtDisposalComputation } from '@/types';
 import { Input } from '@/components/ui/shadcn/input';
-import { formatCurrency } from '@/lib/app/format';
+import { Amount } from '@/components/app/figure';
 
 export interface CapitalGainsTableProps {
   disposals: CgtDisposalComputation[];
@@ -58,14 +58,24 @@ export function CapitalGainsTable({ disposals, onSellingCostsChange }: CapitalGa
               <td className="whitespace-nowrap px-4 py-2.5">
                 {disposal.assetNumber} - {disposal.assetName}
               </td>
-              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(disposal.proceeds)}</td>
-              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(disposal.accountingCarryingValue)}</td>
-              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(disposal.accountingGainLoss)}</td>
-              <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(disposal.baseCost)}</td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                <Amount value={disposal.proceeds} plain />
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                <Amount value={disposal.accountingCarryingValue} plain />
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                <Amount value={disposal.accountingGainLoss} />
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                <Amount value={disposal.baseCost} plain />
+              </td>
               <td className="whitespace-nowrap px-4 py-2.5 text-right">
                 <SellingCostsCell disposal={disposal} onSellingCostsChange={onSellingCostsChange} />
               </td>
-              <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums">{formatCurrency(disposal.capitalGainLoss)}</td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold">
+                <Amount value={disposal.capitalGainLoss} className="font-semibold" />
+              </td>
             </tr>
           ))}
         </tbody>

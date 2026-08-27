@@ -107,7 +107,7 @@ export function ComplianceDashboardPage() {
                 </div>
                 <div>
                   <dt className="text-xs tracking-wide text-muted-foreground uppercase">This Month</dt>
-                  <dd className="mt-1 font-mono tabular-nums">
+                  <dd className="figure mt-1 tabular-nums">
                     {data.vatReport ? formatCurrency(Math.abs(data.vatReport.netVatPayable)) : '—'}
                     <span className="ml-1 text-xs text-muted-foreground">{data.vatReport && data.vatReport.netVatPayable >= 0 ? 'payable' : 'refundable'}</span>
                   </dd>
@@ -142,7 +142,7 @@ export function ComplianceDashboardPage() {
               </div>
               <div>
                 <dt className="text-xs tracking-wide text-muted-foreground uppercase">Estimated Liability</dt>
-                <dd className="mt-1 font-mono tabular-nums">{data.latestTaxComputation ? formatCurrency(data.latestTaxComputation.taxLiability) : 'Not yet computed'}</dd>
+                <dd className="figure mt-1 tabular-nums">{data.latestTaxComputation ? formatCurrency(data.latestTaxComputation.taxLiability) : 'Not yet computed'}</dd>
               </div>
               <div>
                 <dt className="text-xs tracking-wide text-muted-foreground uppercase">Status</dt>
@@ -156,15 +156,15 @@ export function ComplianceDashboardPage() {
               <dl className="grid grid-cols-3 gap-3 text-sm">
                 <div>
                   <dt className="text-xs tracking-wide text-muted-foreground uppercase">PAYE (month)</dt>
-                  <dd className="mt-1 font-mono tabular-nums">{data.emp201 ? formatCurrency(data.emp201.paye) : '—'}</dd>
+                  <dd className="figure mt-1 tabular-nums">{data.emp201 ? formatCurrency(data.emp201.paye) : '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-xs tracking-wide text-muted-foreground uppercase">UIF (month)</dt>
-                  <dd className="mt-1 font-mono tabular-nums">{data.emp201 ? formatCurrency(data.emp201.totalUif) : '—'}</dd>
+                  <dd className="figure mt-1 tabular-nums">{data.emp201 ? formatCurrency(data.emp201.totalUif) : '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-xs tracking-wide text-muted-foreground uppercase">SDL (month)</dt>
-                  <dd className="mt-1 font-mono tabular-nums">{data.emp201 ? formatCurrency(data.emp201.sdl) : '—'}</dd>
+                  <dd className="figure mt-1 tabular-nums">{data.emp201 ? formatCurrency(data.emp201.sdl) : '—'}</dd>
                 </div>
               </dl>
               <div className="flex flex-wrap items-center gap-2">

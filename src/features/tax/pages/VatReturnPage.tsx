@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { Amount, FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
 import { formatCurrency } from '@/lib/app/format';
 import { cn } from '@/lib/utils';
@@ -42,8 +42,12 @@ function BreakdownTable({ title, rows, emptyLabel }: { title: string; rows: VatT
               {rows.map((row) => (
                 <tr key={row.treatment} className="border-t border-border">
                   <td className="whitespace-nowrap px-4 py-2.5">{treatmentLabels[row.treatment]}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(row.taxBase)}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium tabular-nums">{formatCurrency(row.vatAmount)}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                    <Amount value={row.taxBase} plain />
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium">
+                    <Amount value={row.vatAmount} plain className="font-medium" />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -67,15 +71,15 @@ function ReconciliationCard({ label, check }: { label: string; check: VatControl
       <dl className="grid grid-cols-3 gap-4 text-sm">
         <div>
           <dt className="text-xs tracking-wide text-muted-foreground uppercase">GL Posted This Period</dt>
-          <dd className="mt-1 font-mono tabular-nums">{formatCurrency(check.controlAccountMovement)}</dd>
+          <dd className="figure mt-1 tabular-nums">{formatCurrency(check.controlAccountMovement)}</dd>
         </div>
         <div>
           <dt className="text-xs tracking-wide text-muted-foreground uppercase">Report Total</dt>
-          <dd className="mt-1 font-mono tabular-nums">{formatCurrency(check.reportTotal)}</dd>
+          <dd className="figure mt-1 tabular-nums">{formatCurrency(check.reportTotal)}</dd>
         </div>
         <div>
           <dt className="text-xs tracking-wide text-muted-foreground uppercase">Variance</dt>
-          <dd className={cn('mt-1 font-mono tabular-nums', !check.isReconciled && 'font-semibold text-negative')}>{formatCurrency(check.variance)}</dd>
+          <dd className={cn('figure mt-1 tabular-nums', !check.isReconciled && 'font-semibold text-negative')}>{formatCurrency(check.variance)}</dd>
         </div>
       </dl>
     </SectionCard>

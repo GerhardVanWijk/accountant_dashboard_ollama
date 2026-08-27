@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import type { LeaseContract } from '@/types/lease';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useLeases } from '../hooks/useLeases';
@@ -112,16 +112,14 @@ export function LeaseRegisterPage() {
       )}
 
       {!busy && !error && (
-        <SectionCard>
-          <LeasesTable
-            leases={leases}
-            completedAmortizationRunsByLease={completedAmortizationRunsByLease}
-            onEdit={(lease) => setDialog({ mode: 'edit', lease })}
-            onPostCommencement={(lease) => void handlePostCommencement(lease)}
-            onTerminate={(lease) => setDialog({ mode: 'terminate', lease })}
-            onDelete={(lease) => void handleDelete(lease)}
-          />
-        </SectionCard>
+        <LeasesTable
+          leases={leases}
+          completedAmortizationRunsByLease={completedAmortizationRunsByLease}
+          onEdit={(lease) => setDialog({ mode: 'edit', lease })}
+          onPostCommencement={(lease) => void handlePostCommencement(lease)}
+          onTerminate={(lease) => setDialog({ mode: 'terminate', lease })}
+          onDelete={(lease) => void handleDelete(lease)}
+        />
       )}
 
       <Dialog open={dialog?.mode === 'create' || dialog?.mode === 'edit'} onOpenChange={(open) => !open && setDialog(null)}>

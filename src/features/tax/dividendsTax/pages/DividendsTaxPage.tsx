@@ -108,9 +108,7 @@ export function DividendsTaxPage() {
         </SectionCard>
       )}
       {!loading && !error && (
-        <SectionCard>
-          <DividendDeclarationsTable declarations={declarations} onDeclare={handleDeclare} onPay={handlePay} onRemit={handleRemit} onDelete={handleDelete} />
-        </SectionCard>
+        <DividendDeclarationsTable declarations={declarations} onDeclare={handleDeclare} onPay={handlePay} onRemit={handleRemit} onDelete={handleDelete} />
       )}
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>

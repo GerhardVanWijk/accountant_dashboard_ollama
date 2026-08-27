@@ -2,11 +2,15 @@ import { useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import type { Product } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { formatCurrency } from '@/lib/app/format';
 import { useProducts } from '../hooks/useProducts';
+import { useStockAlerts } from '../hooks/useStockAlerts';
 import { ProductsTable } from '../components/ProductsTable';
 import { ProductForm } from '../components/ProductForm';
+import { calculateInventoryTotals } from '../utils/calculateInventoryTotals';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
@@ -16,14 +20,25 @@ type DialogState = { mode: 'create' } | { mode: 'edit'; product: Product } | nul
  * Products & Services directory — route `/inventory/products`. Real
  * useProducts()/productService data throughout. Re-skinned onto v0's
  * PageHeader/SectionCard/DataTable/Dialog (M8), matching
- * accounting-v0-frontend's Inventory page shape.
+ * accounting-v0-frontend's Inventory page shape. Summary row restored in
+ * the Phase 5 audit — it was dropped during the original re-skin; figures
+ * come from the pure `calculateInventoryTotals()` rollup over already-
+ * fetched Products (tracked-inventory only, matching the real
+ * `Product.trackInventory` distinction v0's mock has no equivalent of) and
+ * the already-existing `useStockAlerts()` (same service methods
+ * LowStockAlertWidget uses) for "Below reorder level" — no new calculation
+ * logic invented.
  */
 export function ProductsPage() {
   const { products, loading, error, refetch, createProduct, updateProduct, deleteProduct } = useProducts();
+  const { lowStock, outOfStock } = useStockAlerts();
   const [dialog, setDialog] = useState<DialogState>(null);
   const canCreate = useCanAccess('inventory', 'create');
   const canUpdate = useCanAccess('inventory', 'update');
   const canDelete = useCanAccess('inventory', 'delete');
+
+  const totals = calculateInventoryTotals(products);
+  const belowReorderCount = lowStock.length + outOfStock.length;
 
   const handleSubmit = async (data: CreateProductDTO | UpdateProductDTO) => {
     if (dialog?.mode === 'edit') {
@@ -54,6 +69,15 @@ export function ProductsPage() {
           ) : undefined
         }
       />
+
+      <SectionCard>
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <FigureBlock label="Stock at cost" value={formatCurrency(totals.stockValueAtCost)} hint={`${totals.lineCount} stock lines`} />
+          <FigureBlock label="Stock at selling price" value={formatCurrency(totals.stockValueAtSelling)} hint="If sold at list price" />
+          <FigureBlock label="Potential margin" value={formatCurrency(totals.potentialMargin)} hint="Selling less cost" tone="positive" />
+          <FigureBlock label="Below reorder level" value={String(belowReorderCount)} hint="Needing replenishment" tone={belowReorderCount > 0 ? 'warning' : 'default'} />
+        </div>
+      </SectionCard>
 
       {loading && (
         <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
