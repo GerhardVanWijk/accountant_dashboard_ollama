@@ -3,6 +3,20 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { RouteGuard } from './RouteGuard';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { DemoPage } from '@/features/marketing/pages/DemoPage';
+import { PrivacyPolicyPage } from '@/features/marketing/pages/legal/PrivacyPolicyPage';
+import { PopiaStatementPage } from '@/features/marketing/pages/legal/PopiaStatementPage';
+import { TermsOfServicePage } from '@/features/marketing/pages/legal/TermsOfServicePage';
+import { SecurityPage } from '@/features/marketing/pages/legal/SecurityPage';
+import { InvoicingPage } from '@/features/marketing/pages/product/InvoicingPage';
+import { BankingPage } from '@/features/marketing/pages/product/BankingPage';
+import { TaxPage } from '@/features/marketing/pages/product/TaxPage';
+import { ExpensesPage } from '@/features/marketing/pages/product/ExpensesPage';
+import { PayrollPage } from '@/features/marketing/pages/product/PayrollPage';
+import { ReportingPage } from '@/features/marketing/pages/product/ReportingPage';
+import { AboutPage } from '@/features/marketing/pages/company/AboutPage';
+import { ContactPage } from '@/features/marketing/pages/company/ContactPage';
+import { HelpCentrePage } from '@/features/marketing/pages/resources/HelpCentrePage';
+import { VatGuidePage } from '@/features/marketing/pages/resources/VatGuidePage';
 import { SignUpPage } from '@/features/auth/pages/SignUpPage';
 import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage';
@@ -108,6 +122,20 @@ export const routes: RouteObject[] = [
     path: '/demo',
     element: <DemoPage />,
   },
+  { path: '/legal/privacy', element: <PrivacyPolicyPage /> },
+  { path: '/legal/popia', element: <PopiaStatementPage /> },
+  { path: '/legal/terms', element: <TermsOfServicePage /> },
+  { path: '/legal/security', element: <SecurityPage /> },
+  { path: '/product/invoicing', element: <InvoicingPage /> },
+  { path: '/product/banking', element: <BankingPage /> },
+  { path: '/product/tax', element: <TaxPage /> },
+  { path: '/product/expenses', element: <ExpensesPage /> },
+  { path: '/product/payroll', element: <PayrollPage /> },
+  { path: '/product/reporting', element: <ReportingPage /> },
+  { path: '/company/about', element: <AboutPage /> },
+  { path: '/company/contact', element: <ContactPage /> },
+  { path: '/resources/help', element: <HelpCentrePage /> },
+  { path: '/resources/vat-guide', element: <VatGuidePage /> },
   {
     path: '/',
     element: <RouteGuard />,

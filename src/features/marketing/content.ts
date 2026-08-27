@@ -272,21 +272,58 @@ export const faqs = [
   },
 ] as const;
 
-export const footerColumns = [
+export interface FooterLink {
+  label: string;
+  /** Omitted for links whose page hasn't been built yet — SiteFooter.tsx renders those as "#". */
+  href?: string;
+}
+
+/**
+ * Public-website-completion pass: `href` is only set once the real page
+ * behind a link exists. Links with no `href` still render, just
+ * pointing at "#", exactly as v0's original template did for every
+ * link — this only narrows that set as real pages get built, per the
+ * explicit "update footer links only when their corresponding real page
+ * has been created" instruction. "Bank feeds" was also renamed to
+ * "Banking" — the real page describes statement import and
+ * reconciliation, not live feeds, and the old label would have
+ * reintroduced the exact overclaim already corrected everywhere else on
+ * this site.
+ */
+export const footerColumns: { heading: string; links: FooterLink[] }[] = [
   {
     heading: 'Product',
-    links: ['Invoicing', 'Bank feeds', 'VAT and tax', 'Expenses', 'Payroll', 'Reporting'],
+    links: [
+      { label: 'Invoicing', href: '/product/invoicing' },
+      { label: 'Banking', href: '/product/banking' },
+      { label: 'VAT and tax', href: '/product/tax' },
+      { label: 'Expenses', href: '/product/expenses' },
+      { label: 'Payroll', href: '/product/payroll' },
+      { label: 'Reporting', href: '/product/reporting' },
+    ],
   },
   {
     heading: 'Solutions',
-    links: ['Sole proprietors', 'Retail and hospitality', 'Construction', 'Professional services', 'Accountants and bookkeepers'],
+    links: [
+      { label: 'Sole proprietors' },
+      { label: 'Retail and hospitality' },
+      { label: 'Construction' },
+      { label: 'Professional services' },
+      { label: 'Accountants and bookkeepers' },
+    ],
   },
   {
     heading: 'Resources',
-    links: ['Help centre', 'VAT guide', 'Switching from Pastel', 'Webinars', 'System status'],
+    links: [
+      { label: 'Help centre', href: '/resources/help' },
+      { label: 'VAT guide', href: '/resources/vat-guide' },
+      { label: 'Switching from Pastel' },
+      { label: 'Webinars' },
+      { label: 'System status' },
+    ],
   },
   {
     heading: 'Company',
-    links: ['About Vertex', 'Careers', 'Partner programme', 'Contact sales', 'Press'],
+    links: [{ label: 'About Vertex', href: '/company/about' }, { label: 'Careers' }, { label: 'Partner programme' }, { label: 'Contact sales', href: '/company/contact' }, { label: 'Press' }],
   },
 ] as const;

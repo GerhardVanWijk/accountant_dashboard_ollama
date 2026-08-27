@@ -1,10 +1,24 @@
+import { Link } from 'react-router-dom';
+
 import { Separator } from '@/components/ui/shadcn/separator';
 import { Wordmark } from '@/components/app/wordmark';
-import { brand, footerColumns } from '../content';
+import { brand, footerColumns, type FooterLink } from '../content';
 
-const legal = ['Terms of service', 'Privacy policy', 'POPIA statement', 'Security'];
+const legal: FooterLink[] = [
+  { label: 'Terms of service', href: '/legal/terms' },
+  { label: 'Privacy policy', href: '/legal/privacy' },
+  { label: 'POPIA statement', href: '/legal/popia' },
+  { label: 'Security', href: '/legal/security' },
+];
 
-/** Ported verbatim from accounting-v0-frontend/components/landing/site-footer.tsx (footer links are marketing placeholders in v0 too — all "#"). */
+/**
+ * Ported from accounting-v0-frontend/components/landing/site-footer.tsx.
+ * v0's original had every link as a "#" placeholder. Public-website-
+ * completion pass: a link renders as a real react-router Link once its
+ * page exists (footerColumns/`legal` above carry an `href`), and still
+ * renders as a plain "#" anchor otherwise — same visual treatment
+ * either way, only the destination differs.
+ */
 export function SiteFooter() {
   return (
     <footer className="border-t border-border/60 bg-card/20">
@@ -20,13 +34,21 @@ export function SiteFooter() {
               <nav key={column.heading} aria-label={column.heading} className="flex flex-col gap-3">
                 <h3 className="text-xs font-semibold tracking-[0.12em] text-foreground uppercase">{column.heading}</h3>
                 <ul className="flex flex-col gap-2.5">
-                  {column.links.map((link) => (
-                    <li key={link}>
-                      <a href="#" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
-                        {link}
-                      </a>
-                    </li>
-                  ))}
+                  {column.links.map((link) =>
+                    link.href ? (
+                      <li key={link.label}>
+                        <Link to={link.href} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                          {link.label}
+                        </Link>
+                      </li>
+                    ) : (
+                      <li key={link.label}>
+                        <a href="#" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                          {link.label}
+                        </a>
+                      </li>
+                    ),
+                  )}
                 </ul>
               </nav>
             ))}
@@ -41,10 +63,16 @@ export function SiteFooter() {
           </p>
           <ul className="flex flex-wrap items-center gap-x-6 gap-y-2">
             {legal.map((item) => (
-              <li key={item}>
-                <a href="#" className="text-xs text-muted-foreground transition-colors hover:text-foreground">
-                  {item}
-                </a>
+              <li key={item.label}>
+                {item.href ? (
+                  <Link to={item.href} className="text-xs text-muted-foreground transition-colors hover:text-foreground">
+                    {item.label}
+                  </Link>
+                ) : (
+                  <a href="#" className="text-xs text-muted-foreground transition-colors hover:text-foreground">
+                    {item.label}
+                  </a>
+                )}
               </li>
             ))}
           </ul>
