@@ -93,7 +93,7 @@ export function AppSidebar() {
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="gap-0.5">
+      <SidebarContent className="gap-1">
         {navGroups.map((group) => {
           const holdsActive = groupHoldsActive(group, pathname);
 
@@ -135,11 +135,15 @@ export function AppSidebar() {
               <SidebarGroup className="py-1">
                 <CollapsibleTrigger
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium tracking-wide text-sidebar-foreground/60 uppercase transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
+                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium tracking-wider text-sidebar-foreground/60 uppercase transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
                     'group-data-[collapsible=icon]:hidden',
-                    // Section holding the current page: subtly brighter label,
-                    // no background fill — stays legible even while collapsed.
-                    holdsActive && 'text-sidebar-foreground font-semibold',
+                    // Section holding the current page reads as its own row
+                    // (soft accent fill, full-strength label) so the active
+                    // category is legible at a glance, not just implied by
+                    // its children — distinct from an ordinary collapsed
+                    // group (muted label, no fill) and from a group a user
+                    // merely expanded to browse (rotated chevron only).
+                    holdsActive && 'bg-sidebar-accent/60 font-semibold text-sidebar-foreground',
                   )}
                 >
                   <ChevronRight
