@@ -21,12 +21,13 @@ export interface SalesLineItemsEditorProps {
 }
 
 /**
- * v0-styled re-skin of `LineItemsEditor.tsx` for the Invoice/Credit Note
- * forms — same `computeLine()` calculation (now shared via
+ * v0-styled line-item editor shared by every Sales document form (Invoice,
+ * Credit Note, and — since Phase 4 — Quote and Sales Order too). Same
+ * `computeLine()` calculation throughout (shared via
  * utils/lineItemCalculations.ts), same product-select/warehouse-select/
- * tax-rate behavior, only the JSX and layout differ (v0's card-grid rows
- * instead of the old table). `LineItemsEditor.tsx` itself is untouched and
- * still serves the out-of-M4-scope Quote/SalesOrder forms.
+ * tax-rate behavior; only the JSX/layout is v0's card-grid rows. Purchases'
+ * own `LineItemsEditor.tsx` is a separate component (PO/Bill forms have
+ * fixed-asset capitalization that Sales doesn't) — not this file re-used.
  */
 export function SalesLineItemsEditor({
   lineItems,

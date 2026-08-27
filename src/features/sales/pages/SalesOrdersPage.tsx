@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { SalesOrderList } from '@/features/sales/components/SalesOrderList';
 import { SalesOrderDetail } from '@/features/sales/components/SalesOrderDetail';
@@ -15,9 +15,11 @@ type FormState = { mode: 'create' } | null;
 
 /**
  * Route target for /sales/orders — real useSalesOrders()/SalesOrderService
- * data throughout, v0 page shell (PageHeader/SectionCard), list/detail
- * views and create modal in-page-state, matching InvoicesPage.tsx's/
- * QuotesPage.tsx's convention (M13). No `sales`/`sales_orders` entry
+ * data throughout, v0 page shell (PageHeader), list/detail views and
+ * create modal in-page-state, matching InvoicesPage.tsx's/QuotesPage.tsx's
+ * convention (M13) — the DataTable-based SalesOrderList renders bare, same
+ * as every sibling module's list (fixed in the Phase 4 audit, see
+ * QuotesPage.tsx). No `sales`/`sales_orders` entry
  * exists in the real permission catalog (M11) — docs/PERMISSIONS.md
  * already documented Quotes/Orders as ungated alongside Credit Notes/
  * Receipts, so this route/its actions stay ungated, same as before the
@@ -109,17 +111,15 @@ export function SalesOrdersPage() {
             </p>
           )}
 
-          <SectionCard>
-            <SalesOrderList
-              salesOrders={salesOrders}
-              customers={customerMap}
-              onSelect={(id) => {
-                setNotice(null);
-                setActionError(null);
-                setView({ type: 'detail', id });
-              }}
-            />
-          </SectionCard>
+          <SalesOrderList
+            salesOrders={salesOrders}
+            customers={customerMap}
+            onSelect={(id) => {
+              setNotice(null);
+              setActionError(null);
+              setView({ type: 'detail', id });
+            }}
+          />
         </div>
       )}
 

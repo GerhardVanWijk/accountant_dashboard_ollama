@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { QuoteList } from '@/features/sales/components/QuoteList';
 import { QuoteDetail } from '@/features/sales/components/QuoteDetail';
@@ -14,8 +14,11 @@ type FormState = { mode: 'create' } | null;
 
 /**
  * Route target for /sales/quotes — real useQuotes()/QuoteService data
- * throughout, v0 page shell (PageHeader/SectionCard), list/detail views and
- * create modal in-page-state, matching InvoicesPage.tsx's convention (M13).
+ * throughout, v0 page shell (PageHeader), list/detail views and create
+ * modal in-page-state, matching InvoicesPage.tsx's convention (M13) — the
+ * DataTable-based QuoteList renders bare, same as every sibling module's
+ * list (it already draws its own card border; wrapping it in a second
+ * SectionCard double-bordered it, fixed in the Phase 4 audit).
  * No `quotes` (or `sales`) entry exists in the real permission catalog
  * (M11) — docs/PERMISSIONS.md already documented Quotes/Orders as ungated
  * alongside Credit Notes/Receipts, so this route/its actions stay ungated,
@@ -106,17 +109,15 @@ export function QuotesPage() {
             </p>
           )}
 
-          <SectionCard>
-            <QuoteList
-              quotes={quotes}
-              customers={customerMap}
-              onSelect={(id) => {
-                setNotice(null);
-                setActionError(null);
-                setView({ type: 'detail', id });
-              }}
-            />
-          </SectionCard>
+          <QuoteList
+            quotes={quotes}
+            customers={customerMap}
+            onSelect={(id) => {
+              setNotice(null);
+              setActionError(null);
+              setView({ type: 'detail', id });
+            }}
+          />
         </div>
       )}
 

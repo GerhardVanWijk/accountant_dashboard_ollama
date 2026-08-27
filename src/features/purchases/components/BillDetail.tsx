@@ -2,7 +2,6 @@ import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/shadcn/table';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import type { Bill } from '@/types';
 
@@ -20,7 +19,11 @@ export interface BillDetailProps {
  * same action gating as before the port: Post only while draft, Record
  * Payment only once posted with an outstanding balance. No delete/void
  * action here — matches BillService's own real capabilities (a posted
- * bill has no void/reverse method).
+ * bill has no void/reverse method). Line-items table uses the same flush
+ * (bodyClassName="p-0") raw-table treatment as InvoiceDetail/QuoteDetail/
+ * SalesOrderDetail/CreditNoteDetail, not the shadcn Table wrapped in its
+ * own bordered box — that double-bordered it inside the already-bordered
+ * SectionCard (Phase 4 audit fix).
  */
 export function BillDetail({ bill, suppliersMap = {}, onClose, onPost, onRecordPayment }: BillDetailProps) {
   const outstandingAmount = bill.total - bill.amountPaid;
@@ -69,52 +72,46 @@ export function BillDetail({ bill, suppliersMap = {}, onClose, onPost, onRecordP
         </div>
       </SectionCard>
 
-      <SectionCard title="Line items">
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Description</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Unit Price</TableHead>
-                <TableHead className="text-right">Line Total</TableHead>
-                <TableHead className="text-right">VAT</TableHead>
-                <TableHead className="text-right">Gross Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+      <SectionCard title="Line items" bodyClassName="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">Description</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Qty</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Unit price</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Line total</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">VAT</th>
+                <th className="px-4 py-2 text-right text-xs font-medium tracking-wide text-muted-foreground uppercase">Gross total</th>
+              </tr>
+            </thead>
+            <tbody>
               {bill.lineItems.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.description}</TableCell>
-                  <TableCell className="text-right tabular-nums">{item.quantity.toFixed(2)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatCurrency(item.unitPrice)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatCurrency(item.lineTotal)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatCurrency(item.taxAmount)}</TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">{formatCurrency(item.lineTotal + item.taxAmount)}</TableCell>
-                </TableRow>
+                <tr key={item.id} className="border-b border-border last:border-0">
+                  <td className="px-4 py-2">{item.description}</td>
+                  <td className="px-4 py-2 text-right text-muted-foreground">{item.quantity.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(item.lineTotal)}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(item.taxAmount)}</td>
+                  <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.lineTotal + item.taxAmount)}</td>
+                </tr>
               ))}
-            </TableBody>
-            <TableFooter>
-              <TableRow>
-                <TableCell colSpan={5} className="text-right">
-                  Subtotal
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{formatCurrency(bill.subtotal)}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell colSpan={5} className="text-right">
-                  VAT (Input)
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{formatCurrency(bill.taxTotal)}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell colSpan={5} className="text-right font-semibold">
-                  Total due
-                </TableCell>
-                <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(bill.total)}</TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-border bg-muted/20">
+                <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
+                <td className="px-4 py-2 text-right font-medium">{formatCurrency(bill.subtotal)}</td>
+              </tr>
+              <tr className="bg-muted/20">
+                <td colSpan={5} className="px-4 py-2 text-right text-sm text-muted-foreground">VAT (Input)</td>
+                <td className="px-4 py-2 text-right font-medium">{formatCurrency(bill.taxTotal)}</td>
+              </tr>
+              <tr className="border-t border-border bg-positive/10">
+                <td colSpan={5} className="px-4 py-2 text-right text-sm font-semibold uppercase">Total due</td>
+                <td className="px-4 py-2 text-right text-base font-bold text-positive">{formatCurrency(bill.total)}</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       </SectionCard>
 

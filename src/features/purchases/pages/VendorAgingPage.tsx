@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { Amount, FigureBlock } from '@/components/app/figure';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { formatCurrency } from '@/lib/app/format';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
@@ -125,22 +125,42 @@ export function VendorAgingPage() {
                     {sortedRows.map((row: VendorAgingRow) => (
                       <tr key={row.supplierId} className="border-t border-border">
                         <td className="whitespace-nowrap px-4 py-2.5 font-medium">{suppliersMap[row.supplierId] || row.supplierId}</td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(row.buckets.current)}</td>
-                        <td className={`whitespace-nowrap px-4 py-2.5 text-right tabular-nums ${row.buckets.days30 > 0 ? 'text-warning' : ''}`}>{formatCurrency(row.buckets.days30)}</td>
-                        <td className={`whitespace-nowrap px-4 py-2.5 text-right tabular-nums ${row.buckets.days60 > 0 ? 'text-warning' : ''}`}>{formatCurrency(row.buckets.days60)}</td>
-                        <td className={`whitespace-nowrap px-4 py-2.5 text-right tabular-nums ${row.buckets.days90Plus > 0 ? 'text-destructive' : ''}`}>{formatCurrency(row.buckets.days90Plus)}</td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums">{formatCurrency(row.buckets.total)}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                          <Amount value={row.buckets.current} />
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                          <Amount value={row.buckets.days30} className={row.buckets.days30 > 0 ? 'text-warning' : undefined} />
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                          <Amount value={row.buckets.days60} className={row.buckets.days60 > 0 ? 'text-warning' : undefined} />
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                          <Amount value={row.buckets.days90Plus} className={row.buckets.days90Plus > 0 ? 'text-destructive' : undefined} />
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold">
+                          <Amount value={row.buckets.total} />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-border font-semibold">
                       <td className="whitespace-nowrap px-4 py-2.5">Total</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(totals.current)}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(totals.days30)}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(totals.days60)}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(totals.days90Plus)}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{formatCurrency(totals.total)}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                        <Amount value={totals.current} />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                        <Amount value={totals.days30} />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                        <Amount value={totals.days60} />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                        <Amount value={totals.days90Plus} />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                        <Amount value={totals.total} />
+                      </td>
                     </tr>
                   </tfoot>
                 </table>
