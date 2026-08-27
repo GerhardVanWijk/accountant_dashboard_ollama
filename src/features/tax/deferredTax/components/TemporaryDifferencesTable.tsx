@@ -127,7 +127,7 @@ export function TemporaryDifferencesTable({ items, taxRatePercent, editable, onS
                       Recognize
                     </label>
                   ) : (
-                    <span className={cn('text-xs', row.recognized ? 'text-positive' : 'text-muted-foreground')}>{row.recognized ? 'Recognized' : 'Not recognized'}</span>
+                    <span className={cn('text-xs', row.recognized ? 'text-status-positive' : 'text-muted-foreground')}>{row.recognized ? 'Recognized' : 'Not recognized'}</span>
                   )}
                   {row.classification === 'deductible' && row.recognized && editable && (
                     <Input aria-label="Recognition reason" className="mt-1" placeholder="Reason (required to post)" value={row.recognitionReason ?? ''} onChange={(e) => updateRow(row.id, { recognitionReason: e.target.value })} />

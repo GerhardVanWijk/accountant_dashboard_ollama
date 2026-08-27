@@ -88,12 +88,12 @@ export function DeferredTaxPage() {
         </p>
       )}
       {statusMessage && (
-        <p role="status" className="rounded-lg border border-positive/40 bg-positive/10 px-4 py-2.5 text-sm text-positive">
+        <p role="status" className="rounded-lg border border-status-positive/40 bg-status-positive/10 px-4 py-2.5 text-sm text-status-positive">
           {statusMessage}
         </p>
       )}
 
-      <p role="note" className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
+      <p role="note" className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-2.5 text-sm text-status-warning">
         Not calculated as accounting profit × tax rate — every figure below is a real temporary difference (carrying amount vs. tax base). A Deferred Tax Asset only counts once you
         confirm it&apos;s probable future taxable profit will be available to use it — that judgment is never made automatically. Requires professional/accounting review before relying
         on it for a statutory filing.

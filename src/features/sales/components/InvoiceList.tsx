@@ -83,7 +83,7 @@ export function InvoiceList({ invoices, customers, onSelect, isLoading = false, 
         <div className="flex flex-col gap-0.5">
           <span className="figure text-sm">{formatDate(inv.dueDate)}</span>
           {inv.status !== 'paid' && inv.status !== 'void' ? (
-            <span className={invoiceService.isOverdue(inv) ? 'text-xs text-negative' : 'text-xs text-muted-foreground'}>
+            <span className={invoiceService.isOverdue(inv) ? 'text-xs text-status-negative' : 'text-xs text-muted-foreground'}>
               {formatDueLabel(inv.dueDate)}
             </span>
           ) : null}

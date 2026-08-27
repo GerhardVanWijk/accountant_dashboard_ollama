@@ -104,7 +104,7 @@ export function QuotesPage() {
           />
 
           {notice && (
-            <p role="status" className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">
+            <p role="status" className="rounded-lg border border-status-positive/30 bg-status-positive/10 px-3 py-2 text-sm text-status-positive">
               {notice}
             </p>
           )}

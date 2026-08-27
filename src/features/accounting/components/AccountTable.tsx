@@ -68,7 +68,7 @@ export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActiv
                   <td className="px-4 py-3 align-middle">
                     <div className="flex flex-wrap items-center gap-1.5">
                       {account.isActive ? (
-                        <Badge variant="outline" className="text-positive">
+                        <Badge variant="outline" className="text-status-positive">
                           Active
                         </Badge>
                       ) : (
@@ -77,7 +77,7 @@ export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActiv
                         </Badge>
                       )}
                       {postedAccountIds.has(account.id) && (
-                        <Badge variant="outline" className="text-info">
+                        <Badge variant="outline" className="text-status-info">
                           Has postings
                         </Badge>
                       )}

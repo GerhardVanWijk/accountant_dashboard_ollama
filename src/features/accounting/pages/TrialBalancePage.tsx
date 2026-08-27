@@ -83,14 +83,14 @@ export function TrialBalancePage() {
               role="status"
               className={
                 trialBalance.balanced
-                  ? 'flex items-start gap-3 rounded-lg border border-positive/30 bg-positive/10 p-4'
-                  : 'flex items-start gap-3 rounded-lg border border-negative/30 bg-negative/10 p-4'
+                  ? 'flex items-start gap-3 rounded-lg border border-status-positive/30 bg-status-positive/10 p-4'
+                  : 'flex items-start gap-3 rounded-lg border border-status-negative/30 bg-status-negative/10 p-4'
               }
             >
               {trialBalance.balanced ? (
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-positive" aria-hidden="true" />
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-status-positive" aria-hidden="true" />
               ) : (
-                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-negative" aria-hidden="true" />
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-status-negative" aria-hidden="true" />
               )}
               <p className="text-sm leading-relaxed">
                 {trialBalance.balanced ? (

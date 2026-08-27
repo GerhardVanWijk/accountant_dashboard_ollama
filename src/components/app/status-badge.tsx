@@ -4,7 +4,18 @@
  * Every status string used by the data layer maps to one of four tones, so the
  * same state always looks the same whichever module renders it.
  *
- * Ported verbatim from accounting-v0-frontend/components/app/status-badge.tsx.
+ * Ported verbatim from accounting-v0-frontend/components/app/status-badge.tsx,
+ * with one deliberate deviation from a literal copy: v0's own class names
+ * (bg-positive/15, text-warning, etc.) are bare Tailwind keys that in v0's
+ * own project resolve to its oklch design tokens. In THIS app those exact
+ * bare names were already claimed, before the v0 port, by an unrelated
+ * pre-existing color system (financial P&L RGB-triplet colors for
+ * positive/negative, general pastel UI accents for warning/info) —
+ * tailwind.config.js's own "v0's general-status colors" comment documents
+ * this collision and exposes v0's actual tokens under a separate status-*
+ * namespace specifically to avoid it. Every tone below uses that
+ * namespace, so a status badge here renders the same colors v0 designed
+ * for it — not the older, unrelated ones the bare names collide with.
  */
 
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -14,10 +25,10 @@ type Tone = 'neutral' | 'positive' | 'warning' | 'critical' | 'info';
 
 const toneClass: Record<Tone, string> = {
   neutral: 'bg-muted text-muted-foreground',
-  positive: 'bg-positive/15 text-positive',
-  warning: 'bg-warning/15 text-warning',
-  critical: 'bg-negative/15 text-negative',
-  info: 'bg-info/15 text-info',
+  positive: 'bg-status-positive/15 text-status-positive',
+  warning: 'bg-status-warning/15 text-status-warning',
+  critical: 'bg-status-negative/15 text-status-negative',
+  info: 'bg-status-info/15 text-status-info',
 };
 
 /** Maps every status value in the data layer to a tone and a display label. */

@@ -138,18 +138,18 @@ export function BalanceSheetPage() {
               role="status"
               className={cn(
                 'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-3',
-                balanceSheet.isBalanced ? 'border-positive/30 bg-positive/10' : 'border-destructive/30 bg-destructive/10',
+                balanceSheet.isBalanced ? 'border-status-positive/30 bg-status-positive/10' : 'border-destructive/30 bg-destructive/10',
               )}
             >
               <span className="flex items-center gap-2 text-sm font-semibold">
                 {balanceSheet.isBalanced ? (
-                  <CheckCircle2 className="size-4 text-positive" aria-hidden="true" />
+                  <CheckCircle2 className="size-4 text-status-positive" aria-hidden="true" />
                 ) : (
                   <TriangleAlert className="size-4 text-destructive" aria-hidden="true" />
                 )}
                 Assets = Liabilities + Equity check
               </span>
-              <span className={cn('text-sm font-semibold', balanceSheet.isBalanced ? 'text-positive' : 'text-destructive')}>
+              <span className={cn('text-sm font-semibold', balanceSheet.isBalanced ? 'text-status-positive' : 'text-destructive')}>
                 {balanceSheet.isBalanced ? 'Balanced' : `Out of balance by ${balanceSheet.difference.toFixed(2)} — this indicates a data or calculation bug.`}
               </span>
             </div>

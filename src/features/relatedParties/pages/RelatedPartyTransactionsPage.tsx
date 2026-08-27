@@ -71,7 +71,7 @@ export function RelatedPartyTransactionsPage() {
       />
 
       {relatedParties.length === 0 && !relatedPartiesLoading && (
-        <p role="alert" className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
+        <p role="alert" className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-2.5 text-sm text-status-warning">
           No related parties exist yet — add one on the Related Party Register before recording a transaction.
         </p>
       )}

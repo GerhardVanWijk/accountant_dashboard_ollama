@@ -15,7 +15,7 @@ export function CustomerStatusBadge({ status, className }: CustomerStatusBadgePr
 /** Small pill flagging a customer as on credit hold — a separate credit-control flag, not the account status itself. */
 export function CreditHoldBadge({ className }: { className?: string }) {
   return (
-    <Badge className={className ? `bg-warning/15 text-warning ${className}` : 'bg-warning/15 text-warning'}>
+    <Badge className={className ? `bg-status-warning/15 text-status-warning ${className}` : 'bg-status-warning/15 text-status-warning'}>
       Credit Hold
     </Badge>
   );

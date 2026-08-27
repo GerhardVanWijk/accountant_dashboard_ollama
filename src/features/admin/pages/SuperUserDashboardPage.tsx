@@ -175,7 +175,7 @@ function TenantDetail({ company, actorId }: { company: Company; actorId: string 
                   <td className="px-4 py-2">{entry.action}</td>
                   <td className="px-4 py-2">{entry.tableName}</td>
                   <td className="px-4 py-2">
-                    <span className={entry.result === 'allowed' ? 'text-positive' : 'text-negative'}>{entry.result}</span>
+                    <span className={entry.result === 'allowed' ? 'text-status-positive' : 'text-status-negative'}>{entry.result}</span>
                   </td>
                 </tr>
               ))}

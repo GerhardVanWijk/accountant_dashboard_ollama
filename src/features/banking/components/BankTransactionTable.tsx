@@ -45,7 +45,7 @@ export function BankTransactionTable({ transactions, bankAccountsById, showAccou
             <span className="flex items-center gap-1.5 text-sm">
               {t.description}
               {needsAllocation && (
-                <Badge variant="outline" className="text-warning">
+                <Badge variant="outline" className="text-status-warning">
                   Needs allocation
                 </Badge>
               )}

@@ -99,7 +99,7 @@ export function BillsPage() {
             </div>
           </SectionCard>
 
-          {notice && <p className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{notice}</p>}
+          {notice && <p className="rounded-lg border border-status-positive/30 bg-status-positive/10 px-3 py-2 text-sm text-status-positive">{notice}</p>}
           {actionError && (
             <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {actionError}
@@ -132,7 +132,7 @@ export function BillsPage() {
 
       {view.type === 'detail' && detailBill && (
         <div className="flex flex-col gap-6">
-          {notice && <p className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{notice}</p>}
+          {notice && <p className="rounded-lg border border-status-positive/30 bg-status-positive/10 px-3 py-2 text-sm text-status-positive">{notice}</p>}
           {actionError && (
             <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {actionError}

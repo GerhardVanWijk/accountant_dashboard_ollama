@@ -24,7 +24,7 @@ export function SubledgerReconciliationCard({ label, reconciliation }: Subledger
     <SectionCard
       title={label}
       actions={
-        <Badge variant="outline" className={cn(isReconciled ? 'text-positive' : 'text-negative')}>
+        <Badge variant="outline" className={cn(isReconciled ? 'text-status-positive' : 'text-status-negative')}>
           {isReconciled ? 'Reconciled' : 'Variance detected'}
         </Badge>
       }

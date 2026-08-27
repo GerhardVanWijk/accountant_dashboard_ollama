@@ -35,7 +35,7 @@ export function ReconciliationHistory({ history }: ReconciliationHistoryProps) {
                 Finalized {formatDateTime(r.finalizedAt)} by {r.finalizedByUserId}
               </span>
             </div>
-            <span className="flex items-center gap-1.5 text-xs font-medium text-positive">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-status-positive">
               <CircleCheck className="size-3.5" aria-hidden="true" />
               Balanced
             </span>

@@ -120,7 +120,7 @@ export function CreditNotesPage() {
           </SectionCard>
 
           {notice && (
-            <p className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{notice}</p>
+            <p className="rounded-lg border border-status-positive/30 bg-status-positive/10 px-3 py-2 text-sm text-status-positive">{notice}</p>
           )}
           {mutationError && (
             <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -155,7 +155,7 @@ export function CreditNotesPage() {
       {view.type === 'detail' && detailCreditNote && (
         <div className="flex flex-col gap-6">
           {notice && (
-            <p className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{notice}</p>
+            <p className="rounded-lg border border-status-positive/30 bg-status-positive/10 px-3 py-2 text-sm text-status-positive">{notice}</p>
           )}
           {mutationError && (
             <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

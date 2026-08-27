@@ -46,7 +46,7 @@ export function BankAccountTable({ accounts, glAccountCodes, lastReconciledDates
 
             <div className="flex flex-col gap-0.5">
               <Amount value={account.currentBalance} className="text-lg font-semibold" />
-              <Badge variant={account.status === 'active' ? 'outline' : 'secondary'} className={account.status === 'active' ? 'w-fit text-positive' : 'w-fit text-muted-foreground'}>
+              <Badge variant={account.status === 'active' ? 'outline' : 'secondary'} className={account.status === 'active' ? 'w-fit text-status-positive' : 'w-fit text-muted-foreground'}>
                 {account.status === 'active' ? 'Active' : 'Inactive'}
               </Badge>
             </div>

@@ -80,12 +80,12 @@ export function EclProvisionPage() {
         </p>
       )}
       {statusMessage && (
-        <p role="status" className="rounded-lg border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">
+        <p role="status" className="rounded-lg border border-status-positive/30 bg-status-positive/10 px-3 py-2 text-sm text-status-positive">
           {statusMessage}
         </p>
       )}
 
-      <p role="note" className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
+      <p role="note" className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-2.5 text-sm text-status-warning">
         Gross receivables per bucket come from the real Customer Aging Report. Loss rates per bucket are ALWAYS a
         manual entry — this system has no historical default-rate data to derive them from, and does not guess one.
         Requires professional/accounting review before relying on it for a statutory filing.

@@ -22,10 +22,10 @@ export function ReconciliationCheck({ statement }: ReconciliationCheckProps) {
       role="status"
       className={cn(
         'flex flex-col gap-3 rounded-lg border px-4 py-3',
-        statement.reconciles ? 'border-positive/30 bg-positive/10' : 'border-destructive/30 bg-destructive/10',
+        statement.reconciles ? 'border-status-positive/30 bg-status-positive/10' : 'border-destructive/30 bg-destructive/10',
       )}
     >
-      <div className={cn('flex items-center gap-2 text-sm font-semibold', statement.reconciles ? 'text-positive' : 'text-destructive')}>
+      <div className={cn('flex items-center gap-2 text-sm font-semibold', statement.reconciles ? 'text-status-positive' : 'text-destructive')}>
         {statement.reconciles ? <CheckCircle2 className="size-4" aria-hidden="true" /> : <TriangleAlert className="size-4" aria-hidden="true" />}
         {statement.reconciles ? 'Reconciles to actual cash movement' : 'Does not reconcile — investigate'}
       </div>

@@ -113,13 +113,13 @@ export function CapitalGainsPage() {
       {!busy && !error && report && (
         <>
           {report.configWarnings.map((warning, i) => (
-            <p key={i} role="alert" className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
+            <p key={i} role="alert" className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-2.5 text-sm text-status-warning">
               {warning}
             </p>
           ))}
 
           {report.unresolvedDisposalCount > 0 && (
-            <p role="alert" className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
+            <p role="alert" className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-2.5 text-sm text-status-warning">
               {report.unresolvedDisposalCount} disposal{report.unresolvedDisposalCount === 1 ? '' : 's'} in this period could not be matched to a Fixed Asset record and{' '}
               {report.unresolvedDisposalCount === 1 ? 'was' : 'were'} excluded from this report.
             </p>

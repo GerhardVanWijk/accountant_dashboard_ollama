@@ -80,7 +80,7 @@ export function TaxRateTable({ taxRates, onSupersede, onDeactivate }: TaxRateTab
                       {!rate.isActive ? (
                         <Badge variant="outline">Deactivated</Badge>
                       ) : isCurrentlyOpen(rate) ? (
-                        <Badge className="bg-positive/15 text-positive">Current</Badge>
+                        <Badge className="bg-status-positive/15 text-status-positive">Current</Badge>
                       ) : (
                         <Badge variant="outline">Superseded</Badge>
                       )}

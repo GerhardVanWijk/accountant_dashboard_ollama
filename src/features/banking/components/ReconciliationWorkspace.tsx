@@ -98,15 +98,15 @@ export function ReconciliationWorkspace({ bankAccount, onFinalized }: Reconcilia
       {isLoading && <p className="text-sm text-muted-foreground">Calculating…</p>}
 
       {summary && (
-        <SectionCard className={summary.isBalanced ? 'border-positive/40 bg-positive/5' : 'border-negative/40 bg-negative/5'}>
+        <SectionCard className={summary.isBalanced ? 'border-status-positive/40 bg-status-positive/5' : 'border-status-negative/40 bg-status-negative/5'}>
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-2">
               {summary.isBalanced ? (
-                <CheckCircle2 className="size-5 text-positive" aria-hidden="true" />
+                <CheckCircle2 className="size-5 text-status-positive" aria-hidden="true" />
               ) : (
-                <TriangleAlert className="size-5 text-negative" aria-hidden="true" />
+                <TriangleAlert className="size-5 text-status-negative" aria-hidden="true" />
               )}
-              <span className={summary.isBalanced ? 'text-lg font-semibold text-positive' : 'text-lg font-semibold text-negative'}>
+              <span className={summary.isBalanced ? 'text-lg font-semibold text-status-positive' : 'text-lg font-semibold text-status-negative'}>
                 {summary.isBalanced ? 'Balanced — ready to finalize' : 'Out of balance'}
               </span>
             </div>
@@ -117,7 +117,7 @@ export function ReconciliationWorkspace({ bankAccount, onFinalized }: Reconcilia
               <FigureBlock label="Variance" value={formatCurrency(summary.variance)} tone={summary.isBalanced ? 'positive' : 'negative'} />
             </div>
             {summary.unallocatedItems.length > 0 && (
-              <p className="rounded-lg bg-warning/15 px-3 py-2 text-xs text-warning">
+              <p className="rounded-lg bg-status-warning/15 px-3 py-2 text-xs text-status-warning">
                 {summary.unallocatedItems.length} transaction(s) still need a GL allocation before they can be cleared —
                 allocate them from the Bank Transactions page first.
               </p>
@@ -153,7 +153,7 @@ export function ReconciliationWorkspace({ bankAccount, onFinalized }: Reconcilia
                 <span className="flex items-center gap-1.5">
                   {txn.description}
                   {unallocated && (
-                    <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">Needs allocation</span>
+                    <span className="rounded-full bg-status-warning/15 px-2 py-0.5 text-xs font-medium text-status-warning">Needs allocation</span>
                   )}
                 </span>
                 <span className="figure text-xs text-muted-foreground">{txn.reference ?? '—'}</span>

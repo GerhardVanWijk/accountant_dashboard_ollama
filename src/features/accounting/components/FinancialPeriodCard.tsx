@@ -46,7 +46,7 @@ export function FinancialPeriodCard({ period, isCurrent, onClose, onLock, onReop
         </div>
         <div className="flex items-center gap-1.5">
           {isCurrent && (
-            <span className="rounded-full bg-info/15 px-2 py-0.5 text-xs font-medium text-info">Current</span>
+            <span className="rounded-full bg-status-info/15 px-2 py-0.5 text-xs font-medium text-status-info">Current</span>
           )}
           <StatusBadge status={period.status} />
         </div>

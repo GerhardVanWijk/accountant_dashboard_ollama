@@ -25,7 +25,7 @@ function ReconciliationCard({ label, check }: { label: string; check: PayrollCon
     <SectionCard
       title={label}
       actions={
-        <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', check.isReconciled ? 'bg-positive/15 text-positive' : 'bg-destructive/15 text-destructive')}>
+        <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', check.isReconciled ? 'bg-status-positive/15 text-status-positive' : 'bg-destructive/15 text-destructive')}>
           {check.isReconciled ? 'Reconciled' : 'Variance detected'}
         </span>
       }

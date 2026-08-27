@@ -105,7 +105,7 @@ export function IncomeTaxPage() {
         </p>
       )}
       {statusMessage && (
-        <p role="status" className="rounded-lg border border-positive/40 bg-positive/10 px-4 py-2.5 text-sm text-positive">
+        <p role="status" className="rounded-lg border border-status-positive/40 bg-status-positive/10 px-4 py-2.5 text-sm text-status-positive">
           {statusMessage}
         </p>
       )}

@@ -67,7 +67,7 @@ export function LowStockAlertWidget({ maxItemsPerSection = 5 }: LowStockAlertWid
 
           {lowStock.length > 0 && (
             <div>
-              <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-warning">
+              <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-status-warning">
                 <AlertTriangle className="size-3.5" aria-hidden="true" />
                 Low stock ({lowStock.length})
               </p>

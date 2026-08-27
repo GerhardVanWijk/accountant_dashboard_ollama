@@ -117,7 +117,7 @@ export function InvoiceDetail({
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={invoice.status} />
         {overdue && invoice.status !== 'paid' && invoice.status !== 'void' && (
-          <span className="text-xs font-medium text-negative">Past due date</span>
+          <span className="text-xs font-medium text-status-negative">Past due date</span>
         )}
       </div>
 

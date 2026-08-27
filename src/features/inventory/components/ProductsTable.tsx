@@ -24,9 +24,9 @@ function stockFlagFor(product: Product): StockFlag {
 }
 
 const flagBadgeClasses: Record<StockFlag, string> = {
-  out: 'bg-negative/15 text-negative',
-  low: 'bg-warning/15 text-warning',
-  ok: 'bg-positive/15 text-positive',
+  out: 'bg-status-negative/15 text-status-negative',
+  low: 'bg-status-warning/15 text-status-warning',
+  ok: 'bg-status-positive/15 text-status-positive',
   'n/a': 'bg-muted text-muted-foreground',
 };
 

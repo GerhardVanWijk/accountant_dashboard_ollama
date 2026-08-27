@@ -142,7 +142,7 @@ export function AllocationRows({ allocations, onChange, glAccounts, taxRates, gr
 
       <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm">
         <span className="text-muted-foreground">Allocated total vs. transaction amount</span>
-        <span className={isBalanced ? 'font-semibold text-positive' : 'font-semibold text-negative'}>
+        <span className={isBalanced ? 'font-semibold text-status-positive' : 'font-semibold text-status-negative'}>
           <Amount value={total} plain className="mr-2" />
           {isBalanced ? '— balanced' : `— ${remaining > 0 ? 'short by' : 'over by'} ${Math.abs(remaining).toFixed(2)}`}
         </span>
