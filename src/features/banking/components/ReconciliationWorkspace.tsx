@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { CheckCircle2, TriangleAlert } from 'lucide-react';
 import type { BankAccount } from '@/types';
 import { SectionCard } from '@/components/app/page-header';
@@ -98,7 +98,7 @@ export function ReconciliationWorkspace({ bankAccount, onFinalized }: Reconcilia
       {isLoading && <p className="text-sm text-muted-foreground">Calculating…</p>}
 
       {summary && (
-        <SectionCard className={summary.isBalanced ? 'border-status-positive/40 bg-status-positive/5' : 'border-status-negative/40 bg-status-negative/5'}>
+        <SectionCard className={summary.isBalanced ? 'border-status-positive-outline bg-status-positive-surface' : 'border-status-negative-outline bg-status-negative-surface'}>
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-2">
               {summary.isBalanced ? (
@@ -117,7 +117,7 @@ export function ReconciliationWorkspace({ bankAccount, onFinalized }: Reconcilia
               <FigureBlock label="Variance" value={formatCurrency(summary.variance)} tone={summary.isBalanced ? 'positive' : 'negative'} />
             </div>
             {summary.unallocatedItems.length > 0 && (
-              <p className="rounded-lg bg-status-warning/15 px-3 py-2 text-xs text-status-warning">
+              <p className="rounded-lg bg-status-warning-muted px-3 py-2 text-xs text-status-warning">
                 {summary.unallocatedItems.length} transaction(s) still need a GL allocation before they can be cleared —
                 allocate them from the Bank Transactions page first.
               </p>
@@ -153,7 +153,7 @@ export function ReconciliationWorkspace({ bankAccount, onFinalized }: Reconcilia
                 <span className="flex items-center gap-1.5">
                   {txn.description}
                   {unallocated && (
-                    <span className="rounded-full bg-status-warning/15 px-2 py-0.5 text-xs font-medium text-status-warning">Needs allocation</span>
+                    <span className="rounded-full bg-status-warning-muted px-2 py-0.5 text-xs font-medium text-status-warning">Needs allocation</span>
                   )}
                 </span>
                 <span className="figure text-xs text-muted-foreground">{txn.reference ?? '—'}</span>

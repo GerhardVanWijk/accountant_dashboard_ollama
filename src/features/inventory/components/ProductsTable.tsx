@@ -1,4 +1,4 @@
-import type { Product } from '@/types';
+﻿import type { Product } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
 import { StatusBadge } from '@/components/app/status-badge';
@@ -24,9 +24,9 @@ function stockFlagFor(product: Product): StockFlag {
 }
 
 const flagBadgeClasses: Record<StockFlag, string> = {
-  out: 'bg-status-negative/15 text-status-negative',
-  low: 'bg-status-warning/15 text-status-warning',
-  ok: 'bg-status-positive/15 text-status-positive',
+  out: 'bg-status-negative-muted text-status-negative',
+  low: 'bg-status-warning-muted text-status-warning',
+  ok: 'bg-status-positive-muted text-status-positive',
   'n/a': 'bg-muted text-muted-foreground',
 };
 

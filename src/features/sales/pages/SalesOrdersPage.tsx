@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
@@ -106,7 +106,7 @@ export function SalesOrdersPage() {
           />
 
           {notice && (
-            <p role="status" className="rounded-lg border border-status-positive/30 bg-status-positive/10 px-3 py-2 text-sm text-status-positive">
+            <p role="status" className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">
               {notice}
             </p>
           )}

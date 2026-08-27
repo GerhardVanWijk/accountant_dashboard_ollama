@@ -1,4 +1,4 @@
-import type { PublicInterestScore } from '@/types';
+﻿import type { PublicInterestScore } from '@/types';
 import { Amount } from '@/components/app/figure';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { formatDate } from '@/lib/app/format';
@@ -46,7 +46,7 @@ export function PublicInterestScoreHistoryTable({ history, financialYearName }: 
               <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{score.shareholderPoints}</td>
               <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums">{score.totalScore}</td>
               <td className="whitespace-nowrap px-4 py-2.5">
-                <Badge className={cn(score.suggestedAssuranceLevel === 'audit_required' ? 'bg-status-warning/15 text-status-warning' : 'bg-status-positive/15 text-status-positive')}>
+                <Badge className={cn(score.suggestedAssuranceLevel === 'audit_required' ? 'bg-status-warning-muted text-status-warning' : 'bg-status-positive-muted text-status-positive')}>
                   {ASSURANCE_LABELS[score.suggestedAssuranceLevel]}
                 </Badge>
               </td>

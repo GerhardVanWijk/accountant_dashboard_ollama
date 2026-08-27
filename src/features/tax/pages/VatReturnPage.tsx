@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Amount, FigureBlock } from '@/components/app/figure';
@@ -63,7 +63,7 @@ function ReconciliationCard({ label, check }: { label: string; check: VatControl
     <SectionCard
       title={label}
       actions={
-        <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', check.isReconciled ? 'bg-status-positive/15 text-status-positive' : 'bg-status-negative/15 text-status-negative')}>
+        <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', check.isReconciled ? 'bg-status-positive-muted text-status-positive' : 'bg-status-negative-muted text-status-negative')}>
           {check.isReconciled ? 'Reconciled' : 'Variance detected'}
         </span>
       }
@@ -180,7 +180,7 @@ export function VatReturnPage() {
           </SectionCard>
 
           {report.unresolvedLineCount > 0 && (
-            <p role="alert" className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-2.5 text-sm text-status-warning">
+            <p role="alert" className="rounded-lg border border-status-warning-outline bg-status-warning-surface px-4 py-2.5 text-sm text-status-warning">
               {report.unresolvedLineCount} line item{report.unresolvedLineCount === 1 ? '' : 's'} could not be matched to a known tax rate and{' '}
               {report.unresolvedLineCount === 1 ? 'was' : 'were'} excluded from this report — check for a deleted or incorrectly-referenced tax code.
             </p>

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import type { ReportingFramework } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
@@ -17,7 +17,7 @@ const FRAMEWORK_LABELS: Record<ReportingFramework, string> = {
 
 function StatusPill({ ok, okLabel, badLabel }: { ok: boolean; okLabel: string; badLabel: string }) {
   return (
-    <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', ok ? 'bg-status-positive/15 text-status-positive' : 'bg-status-warning/15 text-status-warning')}>{ok ? okLabel : badLabel}</span>
+    <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', ok ? 'bg-status-positive-muted text-status-positive' : 'bg-status-warning-muted text-status-warning')}>{ok ? okLabel : badLabel}</span>
   );
 }
 
@@ -90,7 +90,7 @@ export function ComplianceDashboardPage() {
                 </div>
               </dl>
               {data.latestPiScore?.frameworkDiffersFromCurrent && (
-                <p role="alert" className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-xs text-status-warning">
+                <p role="alert" className="rounded-lg border border-status-warning-outline bg-status-warning-surface px-3 py-2 text-xs text-status-warning">
                   Suggested reporting framework differs from the current one — review on the Public Interest Score page.
                 </p>
               )}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { Loader2, CalendarClock } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
@@ -101,7 +101,7 @@ export function ProvisionalTaxPage() {
         </p>
       )}
       {statusMessage && (
-        <p role="status" className="rounded-lg border border-status-positive/40 bg-status-positive/10 px-4 py-2.5 text-sm text-status-positive">
+        <p role="status" className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-4 py-2.5 text-sm text-status-positive">
           {statusMessage}
         </p>
       )}

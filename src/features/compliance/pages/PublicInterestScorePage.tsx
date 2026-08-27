@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { ReportingFramework } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
@@ -84,12 +84,12 @@ export function PublicInterestScorePage() {
         </p>
       )}
       {actionMessage && (
-        <p role="status" className="rounded-lg border border-status-positive/40 bg-status-positive/10 px-4 py-2.5 text-sm text-status-positive">
+        <p role="status" className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-4 py-2.5 text-sm text-status-positive">
           {actionMessage}
         </p>
       )}
 
-      <p role="note" className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-2.5 text-sm text-status-warning">
+      <p role="note" className="rounded-lg border border-status-warning-outline bg-status-warning-surface px-4 py-2.5 text-sm text-status-warning">
         This calculation and its suggestions are cross-checked against secondary summaries of the Companies Regulations, 2011 (not a single verified primary-source quote — see the
         source citation on each calculation) and do not replace professional/accounting review before relying on them for a statutory filing.
       </p>
@@ -136,7 +136,7 @@ export function PublicInterestScorePage() {
               </SectionCard>
 
               {latest.frameworkDiffersFromCurrent && (
-                <div className="flex flex-col gap-3 rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 rounded-lg border border-status-warning-outline bg-status-warning-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <p role="alert" className="text-sm text-status-warning">
                     The suggested reporting framework ({FRAMEWORK_LABELS[latest.suggestedReportingFramework]}) differs from the company&apos;s current framework (
                     {company ? FRAMEWORK_LABELS[company.reportingFramework] : '—'}). This is a warning only — nothing changes automatically.

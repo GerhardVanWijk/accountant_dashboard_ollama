@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Loader2, TriangleAlert } from 'lucide-react';
 import type { FinancialYear } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
@@ -138,7 +138,7 @@ export function BalanceSheetPage() {
               role="status"
               className={cn(
                 'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-3',
-                balanceSheet.isBalanced ? 'border-status-positive/30 bg-status-positive/10' : 'border-destructive/30 bg-destructive/10',
+                balanceSheet.isBalanced ? 'border-status-positive-outline bg-status-positive-surface' : 'border-destructive/30 bg-destructive/10',
               )}
             >
               <span className="flex items-center gap-2 text-sm font-semibold">

@@ -1,4 +1,4 @@
-import { CircleCheck, CircleDot, Lock, PencilLine } from 'lucide-react';
+﻿import { CircleCheck, CircleDot, Lock, PencilLine } from 'lucide-react';
 import type { AccountingPeriod, AccountingPeriodStatus } from '@/types';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -46,7 +46,7 @@ export function FinancialPeriodCard({ period, isCurrent, onClose, onLock, onReop
         </div>
         <div className="flex items-center gap-1.5">
           {isCurrent && (
-            <span className="rounded-full bg-status-info/15 px-2 py-0.5 text-xs font-medium text-status-info">Current</span>
+            <span className="rounded-full bg-status-info-muted px-2 py-0.5 text-xs font-medium text-status-info">Current</span>
           )}
           <StatusBadge status={period.status} />
         </div>

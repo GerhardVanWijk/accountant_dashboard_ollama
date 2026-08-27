@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Loader2, Play } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
@@ -66,7 +66,7 @@ export function LeaseAmortizationPage() {
         </p>
       )}
       {lastRunMessage && (
-        <p role="status" className="rounded-lg border border-status-positive/30 bg-status-positive/10 px-3 py-2 text-sm text-status-positive">
+        <p role="status" className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">
           {lastRunMessage}
         </p>
       )}

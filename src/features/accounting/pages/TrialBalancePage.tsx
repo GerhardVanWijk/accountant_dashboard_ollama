@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+﻿import { useMemo } from 'react';
 import { CheckCircle2, Loader2, TriangleAlert } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
@@ -83,8 +83,8 @@ export function TrialBalancePage() {
               role="status"
               className={
                 trialBalance.balanced
-                  ? 'flex items-start gap-3 rounded-lg border border-status-positive/30 bg-status-positive/10 p-4'
-                  : 'flex items-start gap-3 rounded-lg border border-status-negative/30 bg-status-negative/10 p-4'
+                  ? 'flex items-start gap-3 rounded-lg border border-status-positive-outline bg-status-positive-surface p-4'
+                  : 'flex items-start gap-3 rounded-lg border border-status-negative-outline bg-status-negative-surface p-4'
               }
             >
               {trialBalance.balanced ? (

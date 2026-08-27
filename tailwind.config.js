@@ -88,6 +88,24 @@ export default {
         'status-negative': 'var(--negative)',
         'status-warning': 'var(--warning)',
         'status-info': 'var(--info)',
+
+        /* Pre-baked status alpha tokens — see tokens.css for why bare
+           status-{name}/NN opacity modifiers never compiled under Tailwind v3.
+           No <alpha-value> here on purpose: the alpha is already baked into
+           the CSS custom property, so `/NN` must never be appended to these
+           utilities (it would be silently ignored). */
+        'status-positive-muted': 'var(--positive-muted)',
+        'status-negative-muted': 'var(--negative-muted)',
+        'status-warning-muted': 'var(--warning-muted)',
+        'status-info-muted': 'var(--info-muted)',
+        'status-positive-surface': 'var(--positive-surface)',
+        'status-negative-surface': 'var(--negative-surface)',
+        'status-warning-surface': 'var(--warning-surface)',
+        'status-info-surface': 'var(--info-surface)',
+        'status-positive-outline': 'var(--positive-outline)',
+        'status-negative-outline': 'var(--negative-outline)',
+        'status-warning-outline': 'var(--warning-outline)',
+        'status-info-outline': 'var(--info-outline)',
       },
       /* v0 design-system tokens (Phase M0, typography fix — see
          V0_VISUAL_FIDELITY.md). v0 sets `--font-sans: var(--font-geist-sans),

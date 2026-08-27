@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/app/page-header';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
@@ -37,7 +37,7 @@ export function TaxRegisterPage() {
         }
       />
 
-      <p role="note" className="rounded-lg border border-status-warning/30 bg-status-warning/10 px-4 py-3 text-sm text-status-warning">
+      <p role="note" className="rounded-lg border border-status-warning-outline bg-status-warning-surface px-4 py-3 text-sm text-status-warning">
         Wear-and-tear rates are typical/indicative values, not independently verified against SARS Binding General
         Practice Note 7 for any specific asset — confirm with a tax practitioner before relying on the tax
         written-down values below. This register does not compute deferred tax (SA_ACCOUNTING_MASTER_SPEC.md §116

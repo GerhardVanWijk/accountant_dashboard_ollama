@@ -146,6 +146,36 @@
   --negative: oklch(0.68 0.19 22);
   --warning: oklch(0.79 0.14 78);
   --info: oklch(0.72 0.1 234);
+
+  /* Pre-baked status alpha tokens (fix/v0-shell-dashboard-fidelity follow-up).
+     bg-status-{name}/NN and border-status-{name}/NN never compiled under
+     Tailwind v3: the status colors above are bare var(--token) values, and
+     v3 can only apply an opacity modifier to a color defined via the
+     `rgb(var(--x) / <alpha-value>)` pattern (see --positive/--negative above)
+     or an actual hex/rgb literal — not a bare `var()`. Same fix as
+     --brand-muted: bake the alpha into the custom property itself instead of
+     relying on a runtime modifier.
+
+     Values are verbatim from accounting-v0-frontend's two real alpha usages
+     (components/app/status-badge.tsx, app/app/trial-balance/page.tsx), not
+     eyeballed:
+       - "-muted"   15% — standalone badge/chip backgrounds (no border)
+       - "-surface" 10% — banner/card background paired with a "-outline" border
+       - "-outline" 30% — banner/card border (the fork's own 40% instances were
+         drift introduced during the port, not a real v0 value; normalized to
+         v0's actual 30%) */
+  --positive-muted: oklch(0.76 0.15 166 / 15%);
+  --negative-muted: oklch(0.68 0.19 22 / 15%);
+  --warning-muted: oklch(0.79 0.14 78 / 15%);
+  --info-muted: oklch(0.72 0.1 234 / 15%);
+  --positive-surface: oklch(0.76 0.15 166 / 10%);
+  --negative-surface: oklch(0.68 0.19 22 / 10%);
+  --warning-surface: oklch(0.79 0.14 78 / 10%);
+  --info-surface: oklch(0.72 0.1 234 / 10%);
+  --positive-outline: oklch(0.76 0.15 166 / 30%);
+  --negative-outline: oklch(0.68 0.19 22 / 30%);
+  --warning-outline: oklch(0.79 0.14 78 / 30%);
+  --info-outline: oklch(0.72 0.1 234 / 30%);
 }
 
 /* App shell surfaces: the authenticated product uses the same dark,

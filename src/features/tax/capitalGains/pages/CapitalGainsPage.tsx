@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
@@ -113,13 +113,13 @@ export function CapitalGainsPage() {
       {!busy && !error && report && (
         <>
           {report.configWarnings.map((warning, i) => (
-            <p key={i} role="alert" className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-2.5 text-sm text-status-warning">
+            <p key={i} role="alert" className="rounded-lg border border-status-warning-outline bg-status-warning-surface px-4 py-2.5 text-sm text-status-warning">
               {warning}
             </p>
           ))}
 
           {report.unresolvedDisposalCount > 0 && (
-            <p role="alert" className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-2.5 text-sm text-status-warning">
+            <p role="alert" className="rounded-lg border border-status-warning-outline bg-status-warning-surface px-4 py-2.5 text-sm text-status-warning">
               {report.unresolvedDisposalCount} disposal{report.unresolvedDisposalCount === 1 ? '' : 's'} in this period could not be matched to a Fixed Asset record and{' '}
               {report.unresolvedDisposalCount === 1 ? 'was' : 'were'} excluded from this report.
             </p>

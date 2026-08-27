@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
@@ -88,12 +88,12 @@ export function DeferredTaxPage() {
         </p>
       )}
       {statusMessage && (
-        <p role="status" className="rounded-lg border border-status-positive/40 bg-status-positive/10 px-4 py-2.5 text-sm text-status-positive">
+        <p role="status" className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-4 py-2.5 text-sm text-status-positive">
           {statusMessage}
         </p>
       )}
 
-      <p role="note" className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-2.5 text-sm text-status-warning">
+      <p role="note" className="rounded-lg border border-status-warning-outline bg-status-warning-surface px-4 py-2.5 text-sm text-status-warning">
         Not calculated as accounting profit × tax rate — every figure below is a real temporary difference (carrying amount vs. tax base). A Deferred Tax Asset only counts once you
         confirm it&apos;s probable future taxable profit will be available to use it — that judgment is never made automatically. Requires professional/accounting review before relying
         on it for a statutory filing.

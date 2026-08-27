@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { FileQuestion, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
@@ -105,7 +105,7 @@ export function IncomeTaxPage() {
         </p>
       )}
       {statusMessage && (
-        <p role="status" className="rounded-lg border border-status-positive/40 bg-status-positive/10 px-4 py-2.5 text-sm text-status-positive">
+        <p role="status" className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-4 py-2.5 text-sm text-status-positive">
           {statusMessage}
         </p>
       )}

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Single source of truth for how a status reads across the app.
  *
  * Every status string used by the data layer maps to one of four tones, so the
@@ -25,10 +25,10 @@ type Tone = 'neutral' | 'positive' | 'warning' | 'critical' | 'info';
 
 const toneClass: Record<Tone, string> = {
   neutral: 'bg-muted text-muted-foreground',
-  positive: 'bg-status-positive/15 text-status-positive',
-  warning: 'bg-status-warning/15 text-status-warning',
-  critical: 'bg-status-negative/15 text-status-negative',
-  info: 'bg-status-info/15 text-status-info',
+  positive: 'bg-status-positive-muted text-status-positive',
+  warning: 'bg-status-warning-muted text-status-warning',
+  critical: 'bg-status-negative-muted text-status-negative',
+  info: 'bg-status-info-muted text-status-info',
 };
 
 /** Maps every status value in the data layer to a tone and a display label. */

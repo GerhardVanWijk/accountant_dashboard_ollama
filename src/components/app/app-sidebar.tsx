@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 
@@ -35,8 +35,8 @@ import { cn } from '@/lib/utils';
  */
 const badgeToneClass = {
   brand: 'bg-brand-muted text-brand',
-  warning: 'bg-status-warning/15 text-status-warning',
-  negative: 'bg-status-negative/15 text-status-negative',
+  warning: 'bg-status-warning-muted text-status-warning',
+  negative: 'bg-status-negative-muted text-status-negative',
 };
 
 function isItemActive(pathname: string, href: string) {

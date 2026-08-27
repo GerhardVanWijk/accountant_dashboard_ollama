@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
@@ -73,12 +73,12 @@ export function ReportingStandardsPage() {
         </p>
       )}
       {statusMessage && (
-        <p role="status" className="rounded-lg border border-status-positive/40 bg-status-positive/10 px-4 py-2.5 text-sm text-status-positive">
+        <p role="status" className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-4 py-2.5 text-sm text-status-positive">
           {statusMessage}
         </p>
       )}
 
-      <p role="note" className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-4 py-2.5 text-sm text-status-warning">
+      <p role="note" className="rounded-lg border border-status-warning-outline bg-status-warning-surface px-4 py-2.5 text-sm text-status-warning">
         This resolves which EDITION of a framework applies to a period — it does not enumerate that edition&apos;s actual disclosure requirements (no verified, complete clause-level
         checklist exists for this system to encode). Requires professional/accounting review before relying on it for a statutory filing.
       </p>

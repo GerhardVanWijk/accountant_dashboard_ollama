@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock, Amount } from '@/components/app/figure';
@@ -25,7 +25,7 @@ function ReconciliationCard({ label, check }: { label: string; check: PayrollCon
     <SectionCard
       title={label}
       actions={
-        <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', check.isReconciled ? 'bg-status-positive/15 text-status-positive' : 'bg-destructive/15 text-destructive')}>
+        <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', check.isReconciled ? 'bg-status-positive-muted text-status-positive' : 'bg-destructive/15 text-destructive')}>
           {check.isReconciled ? 'Reconciled' : 'Variance detected'}
         </span>
       }

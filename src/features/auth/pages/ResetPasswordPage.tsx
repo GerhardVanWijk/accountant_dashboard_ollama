@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -67,7 +67,7 @@ export function ResetPasswordPage() {
       <AuthShell title="Password updated" description="You can sign in with your new password.">
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-status-positive/10 text-status-positive">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-status-positive-surface text-status-positive">
               <ShieldCheck className="size-4.5" aria-hidden="true" />
             </span>
             <p className="text-sm font-medium">Password updated</p>
