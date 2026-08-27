@@ -1,4 +1,4 @@
-import type { CurrencyCode, ID } from '@/types';
+import type { CurrencyCode } from '@/types';
 
 /**
  * Reporting currency for Banking's display formatting. Same
@@ -8,17 +8,6 @@ import type { CurrencyCode, ID } from '@/types';
  * one exists, not a value scattered inline across components.
  */
 export const BANKING_CURRENCY: CurrencyCode = 'ZAR';
-
-/**
- * Chart of Accounts ids for VAT control accounts (src/mock-data/accounts.ts,
- * owned by the Accounting module). Receipts post VAT to the Output account,
- * payments post VAT to the Input account — see
- * src/features/banking/utils/taxCalculations.ts. Named constants rather than
- * magic strings scattered across services/components, per
- * docs/DO_NOT_BREAK.md "Tax & Accounting Logic".
- */
-export const VAT_OUTPUT_ACCOUNT_ID: ID = 'acc_2100';
-export const VAT_INPUT_ACCOUNT_ID: ID = 'acc_2110';
 
 /** Common SA retail/business banks, for the Bank Name select. "Other" allows a free-text entry. */
 export const SA_BANKS: readonly string[] = [

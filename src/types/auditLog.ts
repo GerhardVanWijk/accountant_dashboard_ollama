@@ -22,7 +22,10 @@ export type AuditAction =
   | 'tax_return_finalised'
   | 'tax_rate_superseded'
   | 'permission_changed'
-  | 'public_interest_score_calculated';
+  | 'public_interest_score_calculated'
+  | 'reconciliation_issue_reviewed'
+  | 'reconciliation_issue_dismissed'
+  | 'reconciliation_issue_resolved';
 
 /**
  * One append-only audit log row. `userId` is supplied by the caller — this

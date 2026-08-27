@@ -1,7 +1,6 @@
 import type { BankAccount, DebitCredit, ID, JournalEntry, TaxRate } from '@/types';
-import type { NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 import { seedTaxRates } from '@/mock-data/taxRates';
-import { VAT_INPUT_ACCOUNT_ID, VAT_OUTPUT_ACCOUNT_ID } from '../constants';
 import type { IBankAccountRepository } from '../repositories/IBankAccountRepository';
 import type { IBankTransactionRepository } from '../repositories/IBankTransactionRepository';
 import type { BankTransactionAllocation, BankTransactionWithAllocations, MatchCandidate, ParsedStatementLine } from '../types';
@@ -84,6 +83,16 @@ export class BankTransactionService {
     private readonly bankTransactionRepository: IBankTransactionRepository,
     private readonly bankAccountRepository: IBankAccountRepository,
     private readonly journalEntryService: JournalPoster,
+    /**
+     * Resolves VAT Output/Input to a real Chart of Accounts id — see
+     * accountMappingService.ts. Never a hardcoded `acc_XXXX` constant (that
+     * was this file's own pre-existing bug: `VAT_OUTPUT_ACCOUNT_ID =
+     * 'acc_2100'` only ever worked against Mock's in-memory ids, and threw
+     * `22P02: invalid input syntax for type uuid` against the real Supabase
+     * schema, same class of defect Phase E.5/F-Preamble already fixed for
+     * every other posting service — docs/SUPABASE_MIGRATION_GUIDE.md).
+     */
+    private readonly accounts: AccountMapper,
     private readonly taxRates: TaxRate[] = seedTaxRates,
   ) {}
 
@@ -172,7 +181,7 @@ export class BankTransactionService {
     }
 
     if (vatTotal > 0) {
-      const vatAccountId = params.direction === 'debit' ? VAT_OUTPUT_ACCOUNT_ID : VAT_INPUT_ACCOUNT_ID;
+      const vatAccountId = await this.accounts.getAccountId(params.direction === 'debit' ? 'VAT_OUTPUT' : 'VAT_INPUT');
       lines.push({
         accountId: vatAccountId,
         description: 'VAT',

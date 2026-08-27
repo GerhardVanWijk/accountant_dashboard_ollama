@@ -39,3 +39,4 @@ export * from './relatedParty';
 export * from './foreignExchange';
 export * from './lease';
 export * from './accessAudit';
+export * from './reconciliationIssue';

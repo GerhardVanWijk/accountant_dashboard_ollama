@@ -8,10 +8,12 @@ import { MockAccountRepository } from '@/features/accounting/repositories/MockAc
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
 import { AuditLogService } from '@/services/auditLogService';
 import { MockAuditLogRepository } from '@/repositories/mock/MockAuditLogRepository';
+import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
+import { AccountService } from '@/features/accounting/services/accountService';
 import { seedAccounts } from '@/mock-data/accounts';
 import { seedBankAccounts } from '@/mock-data/bankAccounts';
 import { seedTaxRates } from '@/mock-data/taxRates';
-import type { AccountingPeriod } from '@/types';
+import type { Account, AccountingPeriod } from '@/types';
 
 /** A single accounting period wide open enough to cover every date these tests use. */
 function makeOpenPeriod(): AccountingPeriod {
@@ -36,12 +38,23 @@ function makeOpenPeriod(): AccountingPeriod {
  * is real evidence of a correct double-entry mapping, not a mocked
  * assertion.
  */
-function setup() {
+/**
+ * `accountsOverride` lets a test exercise AccountMappingService's real
+ * "no Chart of Accounts entry with this code exists yet" failure path
+ * (e.g. omit the VAT Output account) — defaults to the full seed chart so
+ * every other test resolves every mapping normally.
+ */
+function setup(accountsOverride: Account[] = seedAccounts) {
   const journalRepository = new MockJournalEntryRepository([]);
-  const accountRepository = new MockAccountRepository(seedAccounts);
+  const accountRepository = new MockAccountRepository(accountsOverride);
   const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
   const auditLog = new AuditLogService(new MockAuditLogRepository());
   const journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
+  // Real AccountMappingService (not a stub) — proves BankTransactionService
+  // actually resolves VAT Output/Input through the same code-based lookup
+  // every other posting service uses, not a hardcoded id (this is the exact
+  // regression this constructor param exists to prevent).
+  const accountMappingService = new AccountMappingService(new AccountService(accountRepository, journalRepository));
 
   const bankAccountRepository = new MockBankAccountRepository(seedBankAccounts.map((a) => ({ ...a })));
   const bankTransactionRepository = new MockBankTransactionRepository([]);
@@ -49,10 +62,11 @@ function setup() {
     bankTransactionRepository,
     bankAccountRepository,
     journalEntryService,
+    accountMappingService,
     seedTaxRates,
   );
 
-  return { service, journalEntryService, bankTransactionRepository, bankAccountRepository };
+  return { service, journalEntryService, bankTransactionRepository, bankAccountRepository, accountMappingService };
 }
 
 const FNB_CURRENT = 'bank_fnb_current';
@@ -158,6 +172,101 @@ describe('BankTransactionService', () => {
 
       const all = await bankTransactionRepository.getAll();
       expect(all).toHaveLength(0);
+    });
+  });
+
+  describe('VAT account mapping (regression — see docs/KNOWN_ISSUES.md)', () => {
+    it('resolves VAT Output through AccountMappingService for a standard-rated receipt (debit direction)', async () => {
+      const { service, journalEntryService, accountMappingService } = setup();
+      const expectedVatOutputId = await accountMappingService.getAccountId('VAT_OUTPUT');
+
+      const txn = await service.createDirectTransaction({
+        bankAccountId: FNB_CURRENT,
+        date: '2026-03-01T00:00:00.000Z',
+        description: 'Customer payment',
+        amount: 1150,
+        direction: 'debit',
+        allocations: [{ glAccountId: 'acc_4000', netAmount: 1000, taxRateId: 'tax_std_v2' }],
+      });
+
+      const entry = await journalEntryService.getEntry(txn.journalEntryId!);
+      const vatLine = entry!.lines.find((l) => l.accountId === expectedVatOutputId);
+      expect(vatLine?.credit).toBeCloseTo(150);
+    });
+
+    it('resolves VAT Input through AccountMappingService for a standard-rated payment (credit direction)', async () => {
+      const { service, journalEntryService, accountMappingService } = setup();
+      const expectedVatInputId = await accountMappingService.getAccountId('VAT_INPUT');
+
+      const txn = await service.createDirectTransaction({
+        bankAccountId: FNB_CURRENT,
+        date: '2026-03-01T00:00:00.000Z',
+        description: 'Supplier payment',
+        amount: 1150,
+        direction: 'credit',
+        allocations: [{ glAccountId: 'acc_5100', netAmount: 1000, taxRateId: 'tax_std_v2' }],
+      });
+
+      const entry = await journalEntryService.getEntry(txn.journalEntryId!);
+      const vatLine = entry!.lines.find((l) => l.accountId === expectedVatInputId);
+      expect(vatLine?.debit).toBeCloseTo(150);
+
+      const totalDebit = entry!.lines.reduce((s, l) => s + l.debit, 0);
+      const totalCredit = entry!.lines.reduce((s, l) => s + l.credit, 0);
+      expect(totalDebit).toBeCloseTo(totalCredit);
+    });
+
+    it('fails clearly — and posts nothing — when the VAT Output account mapping is genuinely missing, rather than silently falling back to a fake id', async () => {
+      const chartWithNoVatOutput = seedAccounts.filter((a) => a.code !== '2100');
+      const { service, bankTransactionRepository } = setup(chartWithNoVatOutput);
+
+      await expect(
+        service.createDirectTransaction({
+          bankAccountId: FNB_CURRENT,
+          date: '2026-03-01T00:00:00.000Z',
+          description: 'Customer payment',
+          amount: 1150,
+          direction: 'debit',
+          allocations: [{ glAccountId: 'acc_4000', netAmount: 1000, taxRateId: 'tax_std_v2' }],
+        }),
+      ).rejects.toThrow(/2100/);
+
+      expect(await bankTransactionRepository.getAll()).toHaveLength(0);
+    });
+
+    it('fails clearly — and posts nothing — when the VAT Input account mapping is genuinely missing', async () => {
+      const chartWithNoVatInput = seedAccounts.filter((a) => a.code !== '2110');
+      const { service, bankTransactionRepository } = setup(chartWithNoVatInput);
+
+      await expect(
+        service.createDirectTransaction({
+          bankAccountId: FNB_CURRENT,
+          date: '2026-03-01T00:00:00.000Z',
+          description: 'Supplier payment',
+          amount: 1150,
+          direction: 'credit',
+          allocations: [{ glAccountId: 'acc_5100', netAmount: 1000, taxRateId: 'tax_std_v2' }],
+        }),
+      ).rejects.toThrow(/2110/);
+
+      expect(await bankTransactionRepository.getAll()).toHaveLength(0);
+    });
+
+    it('never needs a VAT account mapping at all when nothing on the transaction carries separately-posted VAT', async () => {
+      const chartWithNoVatAccounts = seedAccounts.filter((a) => a.code !== '2100' && a.code !== '2110');
+      const { service } = setup(chartWithNoVatAccounts);
+
+      // Non-deductible VAT folds into the expense line — no VAT control account is ever touched, so this must succeed even with no VAT accounts in the chart.
+      await expect(
+        service.createDirectTransaction({
+          bankAccountId: FNB_CURRENT,
+          date: '2026-03-01T00:00:00.000Z',
+          description: 'Client entertainment',
+          amount: 500,
+          direction: 'credit',
+          allocations: [{ glAccountId: 'acc_5100', netAmount: 500, taxRateId: 'tax_nondeductible' }],
+        }),
+      ).resolves.toBeDefined();
     });
   });
 

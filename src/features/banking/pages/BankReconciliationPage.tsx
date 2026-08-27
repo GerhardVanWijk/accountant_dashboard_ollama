@@ -15,6 +15,9 @@ import { useBankAccounts } from '../hooks/useBankAccounts';
 import { useBankReconciliation } from '../hooks/useBankReconciliation';
 import { ReconciliationWorkspace } from '../components/ReconciliationWorkspace';
 import { ReconciliationHistory } from '../components/ReconciliationHistory';
+import { DifferenceInvestigatorPanel } from '@/features/reconciliationIntelligence/components/DifferenceInvestigatorPanel';
+import { BooksIntegrityPanel } from '@/features/reconciliationIntelligence/components/BooksIntegrityPanel';
+import { useBooksIntegrity } from '@/features/reconciliationIntelligence/hooks/useBooksIntegrity';
 
 /**
  * Bank Reconciliation — route `/banking/reconciliation`. Real
@@ -91,18 +94,35 @@ export function BankReconciliationPage() {
 }
 
 function ReconciliationSection({ account }: { account: BankAccount }) {
-  const [tab, setTab] = useState<'workspace' | 'history'>('workspace');
-  const { history, refetchHistory } = useBankReconciliation(account.id);
+  const [tab, setTab] = useState<'workspace' | 'investigator' | 'integrity' | 'history'>('workspace');
+  const { history, refetchHistory, statementDate, statementBalance, clearedIds, summary } = useBankReconciliation(account.id);
+  const booksIntegrity = useBooksIntegrity(tab === 'integrity' ? account.id : undefined);
 
   return (
-    <Tabs value={tab} onValueChange={(v) => setTab(v as 'workspace' | 'history')}>
+    <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
       <TabsList variant="line" className="w-full justify-start border-b border-border">
         <TabsTrigger value="workspace">Reconcile {account.name}</TabsTrigger>
+        <TabsTrigger value="investigator">Difference Investigator</TabsTrigger>
+        <TabsTrigger value="integrity">Books Integrity</TabsTrigger>
         <TabsTrigger value="history">History ({history.length})</TabsTrigger>
       </TabsList>
 
       <TabsContent value="workspace" className="pt-4">
         <ReconciliationWorkspace bankAccount={account} onFinalized={() => void refetchHistory()} />
+      </TabsContent>
+      <TabsContent value="investigator" className="pt-4">
+        <DifferenceInvestigatorPanel
+          bankAccountId={account.id}
+          statementDate={new Date(statementDate).toISOString()}
+          statementBalance={statementBalance}
+          clearedTransactionIds={Array.from(clearedIds)}
+          variance={summary?.variance ?? 0}
+        />
+      </TabsContent>
+      <TabsContent value="integrity" className="pt-4">
+        {booksIntegrity.isLoading && <p className="text-sm text-muted-foreground">Checking…</p>}
+        {booksIntegrity.error && <p className="text-sm text-status-negative">{booksIntegrity.error.message}</p>}
+        {!booksIntegrity.isLoading && !booksIntegrity.error && <BooksIntegrityPanel results={booksIntegrity.results} />}
       </TabsContent>
       <TabsContent value="history" className="pt-4">
         <ReconciliationHistory history={history} />

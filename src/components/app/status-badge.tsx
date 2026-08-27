@@ -128,6 +128,11 @@ const statusMap: Record<string, { tone: Tone; label: string }> = {
   declared: { tone: 'info', label: 'Declared' },
   remitted: { tone: 'positive', label: 'Remitted' },
 
+  /* Reconciliation issues (src/types/reconciliationIssue.ts) — `open` above already fits (reused from Periods). */
+  reviewed: { tone: 'info', label: 'Reviewed' },
+  dismissed: { tone: 'neutral', label: 'Dismissed' },
+  resolved: { tone: 'positive', label: 'Resolved' },
+
   /* Periods */
   current: { tone: 'info', label: 'Current' },
   closed: { tone: 'neutral', label: 'Closed' },

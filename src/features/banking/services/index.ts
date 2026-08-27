@@ -4,7 +4,7 @@ import { BankReconciliationService } from './bankReconciliationService';
 import { SupabaseBankAccountRepository } from '../repositories/SupabaseBankAccountRepository';
 import { SupabaseBankTransactionRepository } from '../repositories/SupabaseBankTransactionRepository';
 import { SupabaseBankReconciliationRepository } from '../repositories/SupabaseBankReconciliationRepository';
-import { journalEntryService } from '@/features/accounting/services';
+import { accountMappingService, journalEntryService } from '@/features/accounting/services';
 import { auditLogService } from '@/services/auditLogService';
 import { supabase } from '@/config/supabase';
 
@@ -46,6 +46,7 @@ export const bankTransactionService = new BankTransactionService(
   bankTransactionRepository,
   bankAccountRepository,
   journalEntryService,
+  accountMappingService,
 );
 export const bankReconciliationService = new BankReconciliationService(
   bankReconciliationRepository,
