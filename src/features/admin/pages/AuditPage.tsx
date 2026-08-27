@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { Button } from '@/components/ui/shadcn/button';
 import { useAuthStore } from '@/stores/authStore';
 import type { AuditLogAccessEntry } from '@/types';
 import { auditLogAccessService } from '@/features/auth/services';
@@ -14,20 +16,32 @@ import { auditLogAccessService } from '@/features/auth/services';
  * record of every access. Re-skinned onto v0's PageHeader/SectionCard
  * (M14) — this page was missed by every earlier phase (M10 built the newer
  * AuditTrailPage.tsx alongside it but left this pre-existing page
- * untouched); no data/behavior change, same auditLogAccessService call.
+ * untouched); same auditLogAccessService call, unchanged. Phase 6 fixed the
+ * loading/error states themselves to match every other page's established
+ * Loader2/role="status"/retry-button convention — this page never got that
+ * pass and was still on a plain "Loading…" string with no error handling
+ * at all (a rejected fetch left the table silently empty forever).
  */
 export function AuditPage() {
   const companyId = useAuthStore((s) => s.profile?.companyId);
   const [entries, setEntries] = useState<AuditLogAccessEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
+  const refetch = useCallback(() => {
     if (!companyId) return;
+    setLoading(true);
+    setError(null);
     auditLogAccessService
       .getByCompany(companyId)
       .then(setEntries)
+      .catch((err) => setError(err instanceof Error ? err : new Error('Failed to load the access log.')))
       .finally(() => setLoading(false));
   }, [companyId]);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
 
   if (!companyId) return null;
 
@@ -35,10 +49,23 @@ export function AuditPage() {
     <div className="flex flex-col gap-6">
       <PageHeader title="Access log" description="Best-effort record of access checkpoints logged by the app, not a complete interception of every query." />
 
-      <SectionCard bodyClassName="p-0">
-        {loading ? (
-          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
-        ) : (
+      {loading && (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading access log…</p>
+        </div>
+      )}
+      {!loading && error && (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={refetch}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {!loading && !error && (
+        <SectionCard bodyClassName="p-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] border-collapse text-sm">
               <thead>
@@ -70,8 +97,8 @@ export function AuditPage() {
               </tbody>
             </table>
           </div>
-        )}
-      </SectionCard>
+        </SectionCard>
+      )}
     </div>
   );
 }

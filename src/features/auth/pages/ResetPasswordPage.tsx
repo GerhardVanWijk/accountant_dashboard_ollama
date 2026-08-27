@@ -67,7 +67,7 @@ export function ResetPasswordPage() {
       <AuthShell title="Password updated" description="You can sign in with your new password.">
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-status-positive/10 text-status-positive">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-positive/15 text-positive">
               <ShieldCheck className="size-4.5" aria-hidden="true" />
             </span>
             <p className="text-sm font-medium">Password updated</p>
@@ -94,7 +94,7 @@ export function ResetPasswordPage() {
           {rules.map((rule) => {
             const ok = rule.test(password);
             return (
-              <li key={rule.label} className={cn('flex items-center gap-2 text-xs', ok ? 'text-status-positive' : 'text-muted-foreground')}>
+              <li key={rule.label} className={cn('flex items-center gap-2 text-xs', ok ? 'text-positive' : 'text-muted-foreground')}>
                 <Check className={cn('size-3.5', !ok && 'opacity-30')} aria-hidden="true" />
                 {rule.label}
               </li>

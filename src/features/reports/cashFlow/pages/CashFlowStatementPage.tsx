@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { Amount, FigureBlock } from '@/components/app/figure';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
@@ -91,7 +91,7 @@ export function CashFlowStatementPage() {
 
             <div className="mt-3 grid grid-cols-[1fr_auto] items-baseline gap-2 border-t-2 border-foreground/30 py-2 font-semibold">
               <span>Net Increase / (Decrease) in Cash</span>
-              <span className="figure text-sm font-semibold tabular-nums">{formatCurrency(statement.netCashMovement)}</span>
+              <Amount value={statement.netCashMovement} statement className="text-sm font-semibold" />
             </div>
           </SectionCard>
 

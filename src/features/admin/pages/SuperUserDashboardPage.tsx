@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { LogOutIcon, SearchIcon } from 'lucide-react';
+import { Loader2, LogOutIcon, SearchIcon } from 'lucide-react';
 import { SectionCard } from '@/components/app/page-header';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -101,7 +101,10 @@ function TenantDetail({ company, actorId }: { company: Company; actorId: string 
         bodyClassName="p-0"
       >
         {loading ? (
-          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
+          <div role="status" className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            Loading users…
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] border-collapse text-sm">
@@ -256,7 +259,10 @@ export function SuperUserDashboardPage() {
           />
         </div>
         {loading ? (
-          <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
+          <div role="status" className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            Loading companies…
+          </div>
         ) : (
           <ul className="mt-4 flex flex-col gap-1">
             {filtered.map((company) => (
