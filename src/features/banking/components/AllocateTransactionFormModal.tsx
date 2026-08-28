@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
+import { wideFormDialogClass } from '@/components/app/form-surface';
 import { AllocateTransactionForm, type AllocateTransactionFormProps } from './AllocateTransactionForm';
 
 export interface AllocateTransactionFormModalProps extends Omit<AllocateTransactionFormProps, 'onCancel'> {
@@ -14,7 +15,7 @@ export interface AllocateTransactionFormModalProps extends Omit<AllocateTransact
 export function AllocateTransactionFormModal({ onClose, ...formProps }: AllocateTransactionFormModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className={wideFormDialogClass}>
         <DialogHeader>
           <DialogTitle>Allocate transaction</DialogTitle>
         </DialogHeader>

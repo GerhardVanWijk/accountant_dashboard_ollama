@@ -3,10 +3,9 @@ import type { TaxAppliesTo, VatTreatment } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import type { CreateTaxRateDTO } from '../services';
 import { treatmentLabels, VAT_TREATMENTS } from '../utils/treatmentLabels';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface TaxRateFormProps {
   onSubmit: (data: CreateTaxRateDTO) => Promise<void>;
@@ -75,13 +74,13 @@ export function TaxRateForm({ onSubmit, onCancel, isLoading = false }: TaxRateFo
         </Field>
         <Field>
           <FieldLabel htmlFor="rate-treatment">VAT Treatment</FieldLabel>
-          <select id="rate-treatment" className={selectClassName} value={treatment} onChange={(e) => setTreatment(e.target.value as VatTreatment)}>
+          <NativeSelect id="rate-treatment" value={treatment} onChange={(e) => setTreatment(e.target.value as VatTreatment)}>
             {VAT_TREATMENTS.map((t) => (
               <option key={t} value={t}>
                 {treatmentLabels[t]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="rate-percent">Rate (%)</FieldLabel>
@@ -89,11 +88,11 @@ export function TaxRateForm({ onSubmit, onCancel, isLoading = false }: TaxRateFo
         </Field>
         <Field>
           <FieldLabel htmlFor="rate-applies-to">Applies To</FieldLabel>
-          <select id="rate-applies-to" className={selectClassName} value={appliesTo} onChange={(e) => setAppliesTo(e.target.value as TaxAppliesTo)}>
+          <NativeSelect id="rate-applies-to" value={appliesTo} onChange={(e) => setAppliesTo(e.target.value as TaxAppliesTo)}>
             <option value="both">Sales &amp; Purchases</option>
             <option value="sales">Sales Only</option>
             <option value="purchases">Purchases Only</option>
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="rate-effective-from">Effective From</FieldLabel>

@@ -3,10 +3,9 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/shadcn/table';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
 import type { TaxAdjustment, TaxAdjustmentCategory, TaxAdjustmentDirection } from '@/types';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const CATEGORY_LABELS: Record<TaxAdjustmentCategory, string> = {
   non_deductible_expense: 'Non-deductible expense',
@@ -108,13 +107,13 @@ export function AdjustmentsTable({ adjustments, editable, onSave }: AdjustmentsT
               <TableRow key={row.id}>
                 <TableCell>
                   {editable ? (
-                    <select aria-label="Adjustment category" className={selectClassName} value={row.category} onChange={(e) => updateRow(row.id, { category: e.target.value as TaxAdjustmentCategory })}>
+                    <NativeSelect aria-label="Adjustment category" value={row.category} onChange={(e) => updateRow(row.id, { category: e.target.value as TaxAdjustmentCategory })}>
                       {CATEGORY_OPTIONS.map(([value, label]) => (
                         <option key={value} value={value}>
                           {label}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   ) : (
                     CATEGORY_LABELS[row.category]
                   )}
@@ -143,10 +142,10 @@ export function AdjustmentsTable({ adjustments, editable, onSave }: AdjustmentsT
                 </TableCell>
                 <TableCell>
                   {editable ? (
-                    <select aria-label="Adjustment direction" className={selectClassName} value={row.direction} onChange={(e) => updateRow(row.id, { direction: e.target.value as TaxAdjustmentDirection })}>
+                    <NativeSelect aria-label="Adjustment direction" value={row.direction} onChange={(e) => updateRow(row.id, { direction: e.target.value as TaxAdjustmentDirection })}>
                       <option value="add">+ Add</option>
                       <option value="subtract">- Subtract</option>
-                    </select>
+                    </NativeSelect>
                   ) : (
                     <span className="text-xs text-muted-foreground">{row.direction === 'add' ? '+' : '-'}</span>
                   )}

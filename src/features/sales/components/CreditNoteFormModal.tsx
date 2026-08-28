@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
+import { wideFormDialogClass } from '@/components/app/form-surface';
 import { CreditNoteForm, type CreditNoteFormProps } from './CreditNoteForm';
 
 export interface CreditNoteFormModalProps extends Omit<CreditNoteFormProps, 'onCancel'> {
@@ -14,7 +15,7 @@ export interface CreditNoteFormModalProps extends Omit<CreditNoteFormProps, 'onC
 export function CreditNoteFormModal({ onClose, ...formProps }: CreditNoteFormModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className={wideFormDialogClass}>
         <DialogHeader>
           <DialogTitle>New credit note</DialogTitle>
         </DialogHeader>

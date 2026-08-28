@@ -4,12 +4,10 @@ import type { Account } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
 import { cn } from '@/lib/utils';
 import type { JournalValidationResult, NewJournalEntryInput, NewJournalLineInput } from '../services';
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 interface DraftLine {
   key: string;
@@ -164,9 +162,8 @@ export function JournalEntryForm({ accounts, validateLines, onSubmit, onCancel }
               {lines.map((line) => (
                 <tr key={line.key} className="border-b border-border last:border-0">
                   <td className="px-3 py-2 align-top">
-                    <select
+                    <NativeSelect
                       aria-label="Account"
-                      className={selectClassName}
                       value={line.accountId}
                       onChange={(e) => updateLine(line.key, { accountId: e.target.value })}
                     >
@@ -176,7 +173,7 @@ export function JournalEntryForm({ accounts, validateLines, onSubmit, onCancel }
                           {a.code} — {a.name}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </td>
                   <td className="px-3 py-2 align-top">
                     <Input

@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
+import { compactDialogClass } from '@/components/app/form-surface';
 import { AllocationForm, type AllocationFormProps, type OpenInvoiceOption } from './AllocationForm';
 
 export type { OpenInvoiceOption };
@@ -17,7 +18,7 @@ export interface AllocationFormModalProps extends Omit<AllocationFormProps, 'onC
 export function AllocationFormModal({ title, onClose, ...formProps }: AllocationFormModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className={compactDialogClass}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

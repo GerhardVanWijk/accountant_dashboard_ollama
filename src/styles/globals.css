@@ -21,6 +21,56 @@
   body {
     @apply bg-background text-text-primary font-sans antialiased;
   }
+
+  /*
+   * Native <select> dark-theme readability fix (docs/CURRENT_TASKS.md #1).
+   *
+   * ~34 forms across the app use a bare native <select> (styled with
+   * `bg-transparent` like Input). Closed, that looks right — the dark page
+   * shows through and the value inherits --foreground. OPEN, the option
+   * list is painted by the browser widget: on Windows Chromium a
+   * transparent-background <select> renders its popup near-white while the
+   * option text keeps the inherited near-white --foreground, so most
+   * options are unreadable in dark mode (the exact bug reported on
+   * "Legal entity type").
+   *
+   * <option>/<optgroup> can't take Tailwind classes, so pin their colours
+   * here deterministically. This is theme-aware (both --popover tokens flip
+   * with [data-theme]) and can't be overridden by a utility class on the
+   * <select> because nothing targets <option> from the utilities layer.
+   * `color-scheme` is already set on <html> (below) — this backs it up for
+   * engines that ignore it for <select> popups.
+   */
+  select {
+    color-scheme: inherit;
+  }
+
+  select:not([size]):not([multiple]) {
+    /* Solid trigger background so the closed control and (Chromium) the
+       open popup both have a real surface, not the transparent fallback. */
+    background-color: var(--input);
+  }
+
+  html:not([data-theme='dark']) select:not([size]):not([multiple]) {
+    background-color: var(--color-panel);
+  }
+
+  select option,
+  select optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
+
+  select option:disabled {
+    color: var(--muted-foreground);
+  }
+
+  select option:checked,
+  select option:hover {
+    /* Brand-green tinted selected/hover row, matching the shadcn Select. */
+    background-color: var(--brand-muted);
+    color: var(--popover-foreground);
+  }
 }
 
 /* v0 design-system tokens (Phase M0, financial-typography fix — see
@@ -36,5 +86,65 @@
   .figure {
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum';
+  }
+
+  /* Referenced by sidebar.tsx (now replaced by .sidebar-scroll) and
+     command.tsx — kept so the command palette stays scrollbar-free. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /*
+   * Sidebar scroll area (docs/CURRENT_TASKS.md #2). Narrow, dark track,
+   * brand-green-accented thumb — visible while scrolling, does not clash
+   * with the green edge on the container's right border.
+   */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--brand-outline) transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--brand) 32%, transparent);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .sidebar-scroll:hover::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--brand) 55%, transparent);
+  }
+
+  /*
+   * General themed thin scrollbar for in-app scroll regions (dialogs,
+   * reconciliation panes, long tables). Neutral thumb, subtle.
+   */
+  .app-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+  }
+  .app-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .app-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .app-scroll::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--foreground) 20%, transparent);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .app-scroll:hover::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--foreground) 32%, transparent);
   }
 }

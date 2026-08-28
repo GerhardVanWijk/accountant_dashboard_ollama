@@ -6,12 +6,11 @@ import { FigureBlock } from '@/components/app/figure';
 import { RecordLink } from '@/components/app/record-link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { useDeferredTax } from '../hooks/useDeferredTax';
 import { TemporaryDifferencesTable } from '../components/TemporaryDifferencesTable';
 import { findMostRecentPostedBefore } from '../services/deferredTaxCalculations';
-
-const selectClassName = 'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /** Deferred Tax — route `/tax/deferred-tax`. Re-skinned onto v0's PageHeader/SectionCard (M7); data/mutation wiring unchanged. */
 export function DeferredTaxPage() {
@@ -74,13 +73,13 @@ export function DeferredTaxPage() {
         description="Temporary differences, Deferred Tax Assets/Liabilities, and the period movement."
         actions={
           sortedFinancialYears.length > 0 ? (
-            <select aria-label="Financial Year" className={selectClassName} value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
+            <NativeSelect aria-label="Financial Year" value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
               {sortedFinancialYears.map((year) => (
                 <option key={year.id} value={year.id}>
                   {year.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           ) : undefined
         }
       />

@@ -7,13 +7,12 @@ import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Avatar, AvatarFallback } from '@/components/ui/shadcn/avatar';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { supabase } from '@/config/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore, type ThemePreference } from '@/stores/themeStore';
 import { profileService } from '@/features/auth/services';
 import { useCompany } from '@/features/admin/hooks/useCompany';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function initials(firstName?: string, lastName?: string, email?: string): string {
   const value = [firstName?.[0], lastName?.[0]].filter(Boolean).join('');
@@ -163,13 +162,13 @@ function PreferencesTab() {
     <SectionCard title="Display" description="How the workspace looks on this device.">
       <Field className="max-w-xs">
         <FieldLabel htmlFor="theme-preference">Theme</FieldLabel>
-        <select id="theme-preference" className={selectClassName} value={theme} onChange={(e) => setTheme(e.target.value as ThemePreference)}>
+        <NativeSelect id="theme-preference" value={theme} onChange={(e) => setTheme(e.target.value as ThemePreference)}>
           {THEME_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </Field>
     </SectionCard>
   );

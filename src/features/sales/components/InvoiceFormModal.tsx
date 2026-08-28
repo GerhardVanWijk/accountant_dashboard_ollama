@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
+import { wideFormDialogClass } from '@/components/app/form-surface';
 import { InvoiceForm } from './InvoiceForm';
 import type { Invoice } from '@/types';
 
@@ -20,7 +21,7 @@ export interface InvoiceFormModalProps {
 export function InvoiceFormModal({ title, onClose, ...formProps }: InvoiceFormModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className={wideFormDialogClass}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

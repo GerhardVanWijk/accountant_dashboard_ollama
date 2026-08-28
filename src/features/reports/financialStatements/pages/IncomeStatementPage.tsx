@@ -5,11 +5,10 @@ import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { useFinancialStatementsData } from '../hooks/useFinancialStatementsData';
 import { calculateIncomeStatement } from '../services/calculateIncomeStatement';
 import { StatementRow, StatementSectionHeader } from '../components/StatementRow';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /**
  * Income Statement (Profit & Loss) — route `/reports/income-statement`.
@@ -68,9 +67,8 @@ export function IncomeStatementPage() {
             <div className="flex flex-wrap items-end gap-2">
               <Field className="w-44">
                 <FieldLabel htmlFor="incomeStatementFinancialYear">Financial year</FieldLabel>
-                <select
+                <NativeSelect
                   id="incomeStatementFinancialYear"
-                  className={selectClassName}
                   value={selectedFinancialYearId ?? ''}
                   onChange={(e) => handleFinancialYearChange(e.target.value)}
                 >
@@ -79,7 +77,7 @@ export function IncomeStatementPage() {
                       {year.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </Field>
               <Field className="w-36">
                 <FieldLabel htmlFor="incomeStatementStartDate">Start date</FieldLabel>

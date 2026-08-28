@@ -7,10 +7,9 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { EMPLOYMENT_TYPE_LABELS, EMPLOYEE_STATUS_LABELS, PAY_FREQUENCY_LABELS, PAYROLL_CURRENCY } from '../constants';
 import type { CreateEmployeeDTO, UpdateEmployeeDTO } from '../services';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function isNonNegativeNumber(value: string): boolean {
   return value.trim() !== '' && !Number.isNaN(Number(value)) && Number(value) >= 0;
@@ -124,13 +123,13 @@ export function EmployeeForm({ employee, onSubmit, onCancel }: EmployeeFormProps
         </Field>
         <Field>
           <FieldLabel htmlFor="status">Status</FieldLabel>
-          <select id="status" className={selectClassName} {...register('status')}>
+          <NativeSelect id="status" {...register('status')}>
             {Object.entries(EMPLOYEE_STATUS_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
       </div>
 
@@ -177,23 +176,23 @@ export function EmployeeForm({ employee, onSubmit, onCancel }: EmployeeFormProps
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Field>
           <FieldLabel htmlFor="employmentType">Employment Type</FieldLabel>
-          <select id="employmentType" className={selectClassName} {...register('employmentType')}>
+          <NativeSelect id="employmentType" {...register('employmentType')}>
             {Object.entries(EMPLOYMENT_TYPE_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="payFrequency">Pay Frequency</FieldLabel>
-          <select id="payFrequency" className={selectClassName} {...register('payFrequency')}>
+          <NativeSelect id="payFrequency" {...register('payFrequency')}>
             {Object.entries(PAY_FREQUENCY_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="startDate">Start Date</FieldLabel>

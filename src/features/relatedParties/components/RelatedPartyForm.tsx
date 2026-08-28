@@ -7,10 +7,9 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { RELATIONSHIP_TYPE_LABELS } from '../constants';
 import type { CreateRelatedPartyDTO, UpdateRelatedPartyDTO } from '../services';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const relatedPartySchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
@@ -72,13 +71,13 @@ export function RelatedPartyForm({ relatedParty, onSubmit, onCancel }: RelatedPa
 
       <Field>
         <FieldLabel htmlFor="relationshipType">Relationship Type</FieldLabel>
-        <select id="relationshipType" className={selectClassName} {...register('relationshipType')}>
+        <NativeSelect id="relationshipType" {...register('relationshipType')}>
           {Object.entries(RELATIONSHIP_TYPE_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </Field>
 
       <Field>

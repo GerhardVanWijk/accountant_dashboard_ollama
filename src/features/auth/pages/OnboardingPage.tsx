@@ -7,12 +7,11 @@ import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { supabase } from '@/config/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import type { SALegalEntityType } from '@/types';
 import { profileService } from '../services';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const legalEntityOptions: { value: SALegalEntityType; label: string }[] = [
   { value: 'private_company', label: '(Pty) Ltd — Private Company' },
@@ -109,13 +108,13 @@ export function OnboardingPage() {
 
           <Field>
             <FieldLabel htmlFor="legalEntityType">Legal entity type</FieldLabel>
-            <select id="legalEntityType" className={selectClassName} {...register('legalEntityType')}>
+            <NativeSelect id="legalEntityType" {...register('legalEntityType')}>
               {legalEntityOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Field>
 
           <div className="grid grid-cols-2 gap-4">

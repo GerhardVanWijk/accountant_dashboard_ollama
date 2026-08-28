@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
+import { wideFormDialogClass } from '@/components/app/form-surface';
 import { QuoteForm, type QuoteFormProps } from './QuoteForm';
 
 export interface QuoteFormModalProps extends Omit<QuoteFormProps, 'onCancel'> {
@@ -15,7 +16,7 @@ export interface QuoteFormModalProps extends Omit<QuoteFormProps, 'onCancel'> {
 export function QuoteFormModal({ title, onClose, ...formProps }: QuoteFormModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className={wideFormDialogClass}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

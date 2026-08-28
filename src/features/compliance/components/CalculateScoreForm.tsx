@@ -4,9 +4,8 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import type { CalculateScoreFormInput } from '../hooks/usePublicInterestScore';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface CalculateScoreFormProps {
   financialYears: FinancialYear[];
@@ -53,14 +52,14 @@ export function CalculateScoreForm({ financialYears, onSubmit, onCancel }: Calcu
     <div className="flex flex-col gap-4">
       <Field>
         <FieldLabel htmlFor="pisFinancialYear">Financial Year</FieldLabel>
-        <select id="pisFinancialYear" className={selectClassName} value={financialYearId} onChange={(e) => setFinancialYearId(e.target.value)}>
+        <NativeSelect id="pisFinancialYear" value={financialYearId} onChange={(e) => setFinancialYearId(e.target.value)}>
           {financialYears.length === 0 && <option value="">No financial years configured</option>}
           {financialYears.map((fy) => (
             <option key={fy.id} value={fy.id}>
               {fy.name} ({fy.startDate.slice(0, 10)} – {fy.endDate.slice(0, 10)})
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <FieldDescription>Turnover and third-party liabilities are computed from real posted GL data for this year.</FieldDescription>
       </Field>
       <Field>

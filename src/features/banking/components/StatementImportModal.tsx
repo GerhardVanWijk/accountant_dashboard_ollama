@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
+import { wideFormDialogClass } from '@/components/app/form-surface';
 import { StatementImportPanel, type StatementImportPanelProps } from './StatementImportPanel';
 
 export interface StatementImportModalProps extends Omit<StatementImportPanelProps, 'onCancel'> {
@@ -14,7 +15,7 @@ export interface StatementImportModalProps extends Omit<StatementImportPanelProp
 export function StatementImportModal({ onClose, ...panelProps }: StatementImportModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className={wideFormDialogClass}>
         <DialogHeader>
           <DialogTitle>Import bank statement</DialogTitle>
         </DialogHeader>

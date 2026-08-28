@@ -6,9 +6,8 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import type { TransferStockInput } from '../services/stockService';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const transferSchema = z
   .object({
@@ -74,40 +73,40 @@ export function StockTransferForm({ products, warehouses, onSubmit, onCancel }: 
     <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
       <Field>
         <FieldLabel htmlFor="tr-product">Product</FieldLabel>
-        <select id="tr-product" className={selectClassName} {...register('productId')}>
+        <NativeSelect id="tr-product" {...register('productId')}>
           <option value="">Select a product…</option>
           {trackedProducts.map((p) => (
             <option key={p.id} value={p.id}>
               {p.sku} — {p.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <FieldError errors={[errors.productId]} />
       </Field>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="tr-from">From Warehouse</FieldLabel>
-          <select id="tr-from" className={selectClassName} {...register('fromWarehouseId')}>
+          <NativeSelect id="tr-from" {...register('fromWarehouseId')}>
             <option value="">Select…</option>
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FieldError errors={[errors.fromWarehouseId]} />
         </Field>
         <Field>
           <FieldLabel htmlFor="tr-to">To Warehouse</FieldLabel>
-          <select id="tr-to" className={selectClassName} {...register('toWarehouseId')}>
+          <NativeSelect id="tr-to" {...register('toWarehouseId')}>
             <option value="">Select…</option>
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FieldError errors={[errors.toWarehouseId]} />
         </Field>
       </div>

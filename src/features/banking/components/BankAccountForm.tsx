@@ -4,11 +4,9 @@ import type { Account, BankAccount } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { BANK_ACCOUNT_TYPE_LABELS, SA_BANKS } from '../constants';
 import { bankAccountFormSchema, toDefaultValues, type BankAccountFormSchema } from '../utils/bankAccountFormSchema';
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface BankAccountFormProps {
   initialValues?: BankAccount;
@@ -68,25 +66,25 @@ export function BankAccountForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="bank-account-type">Account type</FieldLabel>
-          <select id="bank-account-type" className={selectClassName} {...register('accountType')}>
+          <NativeSelect id="bank-account-type" {...register('accountType')}>
             {Object.entries(BANK_ACCOUNT_TYPE_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FieldError errors={[errors.accountType]} />
         </Field>
 
         <Field>
           <FieldLabel htmlFor="bank-account-bank">Bank name</FieldLabel>
-          <select id="bank-account-bank" className={selectClassName} {...register('bankName')}>
+          <NativeSelect id="bank-account-bank" {...register('bankName')}>
             {SA_BANKS.map((bank) => (
               <option key={bank} value={bank}>
                 {bank}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FieldError errors={[errors.bankName]} />
         </Field>
         {bankName === 'Other' && (
@@ -125,22 +123,22 @@ export function BankAccountForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="bank-account-status">Status</FieldLabel>
-          <select id="bank-account-status" className={selectClassName} {...register('status')}>
+          <NativeSelect id="bank-account-status" {...register('status')}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
-          </select>
+          </NativeSelect>
         </Field>
 
         <Field className="sm:col-span-2">
           <FieldLabel htmlFor="bank-account-gl">Linked GL account (Chart of Accounts)</FieldLabel>
-          <select id="bank-account-gl" className={selectClassName} {...register('glAccountId')}>
+          <NativeSelect id="bank-account-gl" {...register('glAccountId')}>
             <option value="">Select a GL account…</option>
             {glAccounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.code} — {a.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FieldError errors={[errors.glAccountId]} />
         </Field>
       </div>

@@ -6,9 +6,8 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import type { AdjustStockInput, OpeningStockInput } from '../services/stockService';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const REASON_PRESETS = ['Write-off', 'Damage', 'Shrinkage', 'Stock take variance', 'Other'] as const;
 
@@ -97,35 +96,35 @@ export function StockAdjustmentForm({
     <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
       <Field>
         <FieldLabel htmlFor="adj-kind">Movement Type</FieldLabel>
-        <select id="adj-kind" className={selectClassName} {...register('movementKind')}>
+        <NativeSelect id="adj-kind" {...register('movementKind')}>
           <option value="adjustment">Adjustment (write-off / damage / shrinkage / count variance)</option>
           <option value="opening">Opening Stock</option>
-        </select>
+        </NativeSelect>
       </Field>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="adj-product">Product</FieldLabel>
-          <select id="adj-product" className={selectClassName} {...register('productId')}>
+          <NativeSelect id="adj-product" {...register('productId')}>
             <option value="">Select a product…</option>
             {trackedProducts.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.sku} — {p.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FieldError errors={[errors.productId]} />
         </Field>
         <Field>
           <FieldLabel htmlFor="adj-warehouse">Warehouse</FieldLabel>
-          <select id="adj-warehouse" className={selectClassName} {...register('warehouseId')}>
+          <NativeSelect id="adj-warehouse" {...register('warehouseId')}>
             <option value="">Select…</option>
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FieldError errors={[errors.warehouseId]} />
         </Field>
       </div>
@@ -134,10 +133,10 @@ export function StockAdjustmentForm({
         {movementKind === 'adjustment' && (
           <Field>
             <FieldLabel htmlFor="adj-direction">Direction</FieldLabel>
-            <select id="adj-direction" className={selectClassName} {...register('direction')}>
+            <NativeSelect id="adj-direction" {...register('direction')}>
               <option value="decrease">Decrease stock</option>
               <option value="increase">Increase stock</option>
-            </select>
+            </NativeSelect>
           </Field>
         )}
         <Field>
@@ -151,13 +150,13 @@ export function StockAdjustmentForm({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="adj-reason-preset">Reason</FieldLabel>
-            <select id="adj-reason-preset" className={selectClassName} {...register('reasonPreset')}>
+            <NativeSelect id="adj-reason-preset" {...register('reasonPreset')}>
               {REASON_PRESETS.map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Field>
           <Field>
             <FieldLabel htmlFor="adj-ref">Reference</FieldLabel>

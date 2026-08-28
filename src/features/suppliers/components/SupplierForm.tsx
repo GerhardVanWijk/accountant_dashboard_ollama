@@ -7,7 +7,7 @@ import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
-import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { SUPPLIER_CATEGORIES } from '../types/supplier.types';
 import { supplierFormSchema, type SupplierFormSchema } from '../utils/supplierFormSchema';
 
@@ -100,9 +100,19 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
       onSubmit={handleSubmit(async (values) => {
         await onSubmit(values);
       })}
-      className="flex flex-col gap-6"
+      className="flex flex-col gap-4"
     >
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+      {/*
+        Stable tab region (docs/CURRENT_TASKS.md #3). This form renders on a
+        page (SupplierFormPage), not in a fixed-height dialog, so a min-height
+        floor + internal scroll keeps the shortest tab (Contacts) from
+        collapsing the page and jumping the layout on tab switches.
+      */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as TabKey)}
+        className="flex h-[28rem] flex-col"
+      >
         <TabsList variant="line" className="w-full justify-start border-b border-border">
           {TABS.map((tab) => (
             <TabsTrigger key={tab.key} value={tab.key} className="gap-1.5">
@@ -114,7 +124,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
           ))}
         </TabsList>
 
-        <TabsContent value="general" className="pt-4">
+        <TabsContent value="general" className="app-scroll min-h-0 flex-1 overflow-y-auto pt-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="supplier-number">Supplier number</FieldLabel>
@@ -128,11 +138,8 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
             </Field>
             <Field>
               <FieldLabel htmlFor="supplier-category">Category</FieldLabel>
-              <select
+              <NativeSelect
                 id="supplier-category"
-                className={cn(
-                  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
-                )}
                 {...register('category', { setValueAs: (v) => (v === '' ? undefined : v) })}
               >
                 <option value="">Unassigned</option>
@@ -141,7 +148,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
                     {category}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
             <Field>
               <FieldLabel htmlFor="supplier-currency">Currency</FieldLabel>
@@ -150,14 +157,10 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
             </Field>
             <Field>
               <FieldLabel htmlFor="supplier-status">Status</FieldLabel>
-              <select
-                id="supplier-status"
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                {...register('status')}
-              >
+              <NativeSelect id="supplier-status" {...register('status')}>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
-              </select>
+              </NativeSelect>
             </Field>
             <Field>
               <FieldLabel htmlFor="supplier-balance">Opening balance</FieldLabel>
@@ -173,7 +176,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
           </div>
         </TabsContent>
 
-        <TabsContent value="contacts" className="pt-4">
+        <TabsContent value="contacts" className="app-scroll min-h-0 flex-1 overflow-y-auto pt-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="supplier-contact-person">Contact person</FieldLabel>
@@ -191,7 +194,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
           </div>
         </TabsContent>
 
-        <TabsContent value="addresses" className="flex flex-col gap-6 pt-4">
+        <TabsContent value="addresses" className="app-scroll flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pt-4">
           <fieldset className="flex flex-col gap-4">
             <legend className="text-sm font-semibold">Physical address</legend>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -253,7 +256,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
           </fieldset>
         </TabsContent>
 
-        <TabsContent value="financial" className="flex flex-col gap-6 pt-4">
+        <TabsContent value="financial" className="app-scroll flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pt-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="supplier-tax-number">Tax/VAT registration number</FieldLabel>
@@ -271,29 +274,27 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
             </Field>
             <Field>
               <FieldLabel htmlFor="supplier-payment-terms">Payment terms</FieldLabel>
-              <select
+              <NativeSelect
                 id="supplier-payment-terms"
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 {...register('paymentTerms', { setValueAs: (v) => (v === '' ? undefined : v) })}
               >
                 <option value="">Unassigned</option>
                 <option value="Net14">Net 14</option>
                 <option value="Net30">Net 30</option>
                 <option value="EOM">EOM</option>
-              </select>
+              </NativeSelect>
             </Field>
             <Field>
               <FieldLabel htmlFor="supplier-payment-method">Payment method</FieldLabel>
-              <select
+              <NativeSelect
                 id="supplier-payment-method"
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 {...register('paymentMethod', { setValueAs: (v) => (v === '' ? undefined : v) })}
               >
                 <option value="">Unassigned</option>
                 <option value="EFT">EFT</option>
                 <option value="Direct Debit">Direct Debit</option>
                 <option value="Credit Card">Credit Card</option>
-              </select>
+              </NativeSelect>
             </Field>
             <Field>
               <FieldLabel htmlFor="supplier-settlement-discount">Settlement discount (%)</FieldLabel>

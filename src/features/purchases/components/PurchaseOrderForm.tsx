@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { FigureBlock } from '@/components/app/figure';
 import { formatCurrency } from '@/lib/app/format';
 import type { CreatePurchaseOrderDTO } from '../services';
@@ -11,8 +12,6 @@ import { LineItemsEditor } from './LineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface PurchaseOrderFormProps {
   suppliers: Supplier[];
@@ -95,13 +94,13 @@ export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCanc
         </Field>
         <Field>
           <FieldLabel htmlFor="po-supplier">Supplier</FieldLabel>
-          <select id="po-supplier" className={selectClassName} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+          <NativeSelect id="po-supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
             {suppliers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="po-order-date">Order Date</FieldLabel>

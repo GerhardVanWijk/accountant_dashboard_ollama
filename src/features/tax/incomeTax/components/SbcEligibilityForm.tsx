@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 
 export interface SbcEligibilityFormProps {
   currentValue: boolean;
@@ -48,10 +47,10 @@ export function SbcEligibilityForm({ currentValue, onSubmit, onCancel }: SbcElig
       </p>
       <Field>
         <FieldLabel htmlFor="sbcEligible">Is SBC-eligible?</FieldLabel>
-        <select id="sbcEligible" className={selectClassName} value={isEligible ? 'yes' : 'no'} onChange={(e) => setIsEligible(e.target.value === 'yes')}>
+        <NativeSelect id="sbcEligible" value={isEligible ? 'yes' : 'no'} onChange={(e) => setIsEligible(e.target.value === 'yes')}>
           <option value="no">No — standard corporate rate applies</option>
           <option value="yes">Yes — SBC brackets apply</option>
-        </select>
+        </NativeSelect>
       </Field>
       <Field>
         <FieldLabel htmlFor="sbcReason">Reason (required)</FieldLabel>

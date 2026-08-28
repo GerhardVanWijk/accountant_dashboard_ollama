@@ -4,11 +4,10 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { FigureBlock } from '@/components/app/figure';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import type { CreatePaymentDTO } from '../services';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const PAYMENT_METHODS: PaymentMethod[] = ['eft', 'cash', 'card', 'cheque', 'other'];
 
@@ -133,13 +132,13 @@ export function PaymentForm({ suppliers, outstandingBills, defaultPaymentNumber,
         </Field>
         <Field>
           <FieldLabel htmlFor="payment-supplier">Supplier</FieldLabel>
-          <select id="payment-supplier" className={selectClassName} value={supplierId} onChange={(e) => handleSupplierChange(e.target.value)}>
+          <NativeSelect id="payment-supplier" value={supplierId} onChange={(e) => handleSupplierChange(e.target.value)}>
             {suppliers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="payment-date">Date</FieldLabel>
@@ -147,13 +146,13 @@ export function PaymentForm({ suppliers, outstandingBills, defaultPaymentNumber,
         </Field>
         <Field>
           <FieldLabel htmlFor="payment-method">Method</FieldLabel>
-          <select id="payment-method" className={selectClassName} value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
+          <NativeSelect id="payment-method" value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
             {PAYMENT_METHODS.map((m) => (
               <option key={m} value={m}>
                 {m.toUpperCase()}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="payment-reference">Reference (optional)</FieldLabel>

@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
 import { formatDate } from '@/lib/app/format';
 import type { MatchCandidate, ParsedStatementLine, StatementFileFormat } from '../types';
 import { detectStatementFormat, parseStatementFile } from '../utils/statementParsers';
-
-const selectClassName =
-  'rounded-lg border border-input bg-transparent px-2 py-1 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const FORMAT_LABELS: Record<StatementFileFormat, string> = {
   csv: 'CSV',
@@ -124,8 +122,7 @@ export function StatementImportPanel({ onImport, findMatches, onCancel }: Statem
         {fileName && <p className="text-xs text-muted-foreground">{fileName}</p>}
         <label className="mx-auto flex items-center gap-2 text-xs text-muted-foreground">
           Format override:
-          <select
-            className={selectClassName}
+          <NativeSelect
             value={formatOverride}
             onChange={(e) => setFormatOverride(e.target.value as StatementFileFormat | '')}
           >
@@ -135,7 +132,7 @@ export function StatementImportPanel({ onImport, findMatches, onCancel }: Statem
                 {FORMAT_LABELS[f]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
       </div>
 

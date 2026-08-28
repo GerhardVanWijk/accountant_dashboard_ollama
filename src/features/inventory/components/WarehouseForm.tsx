@@ -6,9 +6,8 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import type { CreateWarehouseDTO, UpdateWarehouseDTO } from '../services/warehouseService';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const warehouseSchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
@@ -120,10 +119,10 @@ export function WarehouseForm({ warehouse, onSubmit, onCancel }: WarehouseFormPr
         />
         <Field>
           <FieldLabel htmlFor="wh-status">Status</FieldLabel>
-          <select id="wh-status" className={selectClassName} {...register('status')}>
+          <NativeSelect id="wh-status" {...register('status')}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
-          </select>
+          </NativeSelect>
         </Field>
       </div>
 

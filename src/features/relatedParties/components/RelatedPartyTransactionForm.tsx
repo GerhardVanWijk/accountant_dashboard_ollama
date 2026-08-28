@@ -6,9 +6,8 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import type { CreateRelatedPartyTransactionDTO, UpdateRelatedPartyTransactionDTO } from '../services';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function isValidNumber(value: string): boolean {
   return value.trim() !== '' && !Number.isNaN(Number(value));
@@ -74,14 +73,14 @@ export function RelatedPartyTransactionForm({ transaction, relatedParties, onSub
     <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
       <Field>
         <FieldLabel htmlFor="relatedPartyId">Related Party</FieldLabel>
-        <select id="relatedPartyId" className={selectClassName} {...register('relatedPartyId')}>
+        <NativeSelect id="relatedPartyId" {...register('relatedPartyId')}>
           {relatedParties.length === 0 && <option value="">No related parties yet</option>}
           {relatedParties.map((party) => (
             <option key={party.id} value={party.id}>
               {party.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <FieldError errors={[errors.relatedPartyId]} />
       </Field>
 

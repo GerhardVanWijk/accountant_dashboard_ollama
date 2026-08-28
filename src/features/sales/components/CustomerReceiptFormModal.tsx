@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
+import { wideFormDialogClass } from '@/components/app/form-surface';
 import { CustomerReceiptForm, type CustomerReceiptFormProps } from './CustomerReceiptForm';
 
 export interface CustomerReceiptFormModalProps extends Omit<CustomerReceiptFormProps, 'onCancel'> {
@@ -15,7 +16,7 @@ export interface CustomerReceiptFormModalProps extends Omit<CustomerReceiptFormP
 export function CustomerReceiptFormModal({ title = 'Record customer receipt', onClose, ...formProps }: CustomerReceiptFormModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className={wideFormDialogClass}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

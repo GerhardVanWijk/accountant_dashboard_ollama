@@ -7,6 +7,7 @@ import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { customerFormSchema, customerFormTabs, type CustomerFormTab, type CustomerFormValues } from '../utils/customerFormSchema';
 
 export interface CustomerFormProps {
@@ -24,9 +25,6 @@ const tabLabels: Record<CustomerFormTab, string> = {
   addresses: 'Billing & shipping',
   financial: 'Financial settings',
 };
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /**
  * Multi-tab create/edit form (General Info / Contacts / Billing &
@@ -62,9 +60,18 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
       onSubmit={handleSubmit((values) => {
         void onSubmit(values);
       })}
-      className="flex flex-col gap-6"
+      className="flex min-h-0 flex-1 flex-col gap-4 md:h-full"
     >
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as CustomerFormTab)}>
+      {/*
+        Stable tab region (docs/CURRENT_TASKS.md #3): the panels scroll
+        inside this fixed-flex area so switching tabs never resizes the
+        outer dialog, and the action row below stays anchored.
+      */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as CustomerFormTab)}
+        className="flex min-h-0 flex-1 flex-col"
+      >
         <TabsList variant="line" className="w-full justify-start border-b border-border">
           {customerFormTabs.map((tab) => (
             <TabsTrigger key={tab} value={tab}>
@@ -73,7 +80,7 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
           ))}
         </TabsList>
 
-        <TabsContent value="general" className="pt-4">
+        <TabsContent value="general" className="app-scroll min-h-0 flex-1 overflow-y-auto pt-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="customer-number">Customer number</FieldLabel>
@@ -96,10 +103,10 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
             </Field>
             <Field>
               <FieldLabel htmlFor="customer-status">Status</FieldLabel>
-              <select id="customer-status" className={selectClassName} {...register('status')}>
+              <NativeSelect id="customer-status" {...register('status')}>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
-              </select>
+              </NativeSelect>
             </Field>
             <Field className="sm:col-span-2">
               <FieldLabel htmlFor="customer-notes">Notes</FieldLabel>
@@ -108,7 +115,7 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
           </div>
         </TabsContent>
 
-        <TabsContent value="contacts" className="flex flex-col gap-4 pt-4">
+        <TabsContent value="contacts" className="app-scroll flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-4">
           {contactFields.length === 0 && <p className="text-sm text-muted-foreground">No contacts added yet.</p>}
           {contactFields.map((field, index) => (
             <div key={field.id} className="grid grid-cols-1 gap-3 rounded-lg border border-border p-4 sm:grid-cols-2">
@@ -153,7 +160,7 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
           </div>
         </TabsContent>
 
-        <TabsContent value="addresses" className="flex flex-col gap-6 pt-4">
+        <TabsContent value="addresses" className="app-scroll flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pt-4">
           <fieldset className="flex flex-col gap-4">
             <legend className="text-sm font-semibold">Billing address</legend>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -225,7 +232,7 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
           </fieldset>
         </TabsContent>
 
-        <TabsContent value="financial" className="pt-4">
+        <TabsContent value="financial" className="app-scroll min-h-0 flex-1 overflow-y-auto pt-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="customer-tax-number">Tax/VAT number</FieldLabel>
@@ -233,32 +240,32 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
             </Field>
             <Field>
               <FieldLabel htmlFor="customer-tax-status">Tax status</FieldLabel>
-              <select id="customer-tax-status" className={selectClassName} {...register('taxStatus')}>
+              <NativeSelect id="customer-tax-status" {...register('taxStatus')}>
                 <option value="taxable">Taxable</option>
                 <option value="exempt">Exempt</option>
                 <option value="zero-rated">Zero-rated</option>
-              </select>
+              </NativeSelect>
             </Field>
             <Field>
               <FieldLabel htmlFor="customer-currency">Currency</FieldLabel>
-              <select id="customer-currency" className={selectClassName} {...register('currency')}>
+              <NativeSelect id="customer-currency" {...register('currency')}>
                 <option value="ZAR">ZAR — South African Rand</option>
                 <option value="USD">USD — US Dollar</option>
                 <option value="EUR">EUR — Euro</option>
                 <option value="GBP">GBP — British Pound</option>
                 <option value="BWP">BWP — Botswana Pula</option>
                 <option value="NAD">NAD — Namibian Dollar</option>
-              </select>
+              </NativeSelect>
               <FieldError errors={[errors.currency]} />
             </Field>
             <Field>
               <FieldLabel htmlFor="customer-payment-terms">Payment terms</FieldLabel>
-              <select id="customer-payment-terms" className={selectClassName} {...register('paymentTerms')}>
+              <NativeSelect id="customer-payment-terms" {...register('paymentTerms')}>
                 <option value="COD">COD</option>
                 <option value="Net14">Net 14</option>
                 <option value="Net30">Net 30</option>
                 <option value="Net60">Net 60</option>
-              </select>
+              </NativeSelect>
             </Field>
             <Field>
               <FieldLabel htmlFor="customer-credit-limit">Credit limit</FieldLabel>

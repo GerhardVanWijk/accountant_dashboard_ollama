@@ -3,10 +3,9 @@ import type { Account, FixedAsset } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount, FigureBlock } from '@/components/app/figure';
 import { formatCurrency } from '@/lib/app/format';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface DisposeAssetFormProps {
   assets: FixedAsset[];
@@ -53,13 +52,13 @@ export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel }: Dispo
     <div className="flex flex-col gap-4">
       <Field>
         <FieldLabel htmlFor="assetId">Asset</FieldLabel>
-        <select id="assetId" className={selectClassName} value={assetId} onChange={(e) => setAssetId(e.target.value)}>
+        <NativeSelect id="assetId" value={assetId} onChange={(e) => setAssetId(e.target.value)}>
           {disposable.map((a) => (
             <option key={a.id} value={a.id}>
               {a.assetNumber} - {a.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </Field>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -76,7 +75,7 @@ export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel }: Dispo
 
       <Field>
         <FieldLabel htmlFor="proceedsAccountId">Proceeds Account</FieldLabel>
-        <select id="proceedsAccountId" className={selectClassName} value={proceedsAccountId} onChange={(e) => setProceedsAccountId(e.target.value)}>
+        <NativeSelect id="proceedsAccountId" value={proceedsAccountId} onChange={(e) => setProceedsAccountId(e.target.value)}>
           {accounts
             .filter((a) => a.isActive)
             .map((account) => (
@@ -84,7 +83,7 @@ export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel }: Dispo
                 {account.code} - {account.name}
               </option>
             ))}
-        </select>
+        </NativeSelect>
         <FieldDescription>Where the disposal proceeds land — Cash and Bank, or Accounts Receivable if on credit.</FieldDescription>
       </Field>
 

@@ -4,15 +4,13 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
 import type { CreateSalesOrderDTO } from '../services';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface SalesOrderFormProps {
   customers: Customer[];
@@ -106,9 +104,8 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
         </Field>
         <Field>
           <FieldLabel htmlFor="order-customer">Customer</FieldLabel>
-          <select
+          <NativeSelect
             id="order-customer"
-            className={selectClassName}
             value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
             disabled={isSubmitting}
@@ -119,7 +116,7 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
                 {c.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="order-date">Order date</FieldLabel>

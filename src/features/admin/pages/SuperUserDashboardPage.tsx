@@ -4,15 +4,13 @@ import { SectionCard } from '@/components/app/page-header';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { useAuthStore } from '@/stores/authStore';
 import type { AuditLogAccessEntry, Company, Profile, ProfileRole } from '@/types';
 import { companyService } from '@/features/admin/services';
 import { profileService, auditLogAccessService } from '@/features/auth/services';
 
 const PROFILE_ROLES: ProfileRole[] = ['admin', 'accountant', 'manager', 'operator', 'viewer'];
-
-const selectClassName =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function TenantDetail({ company, actorId }: { company: Company; actorId: string }) {
   const [users, setUsers] = useState<Profile[]>([]);
@@ -121,8 +119,7 @@ function TenantDetail({ company, actorId }: { company: Company; actorId: string 
                   <tr key={user.id} className="border-b border-border last:border-0">
                     <td className="px-4 py-2">{user.email ?? '—'}</td>
                     <td className="px-4 py-2">
-                      <select
-                        className={selectClassName}
+                      <NativeSelect
                         value={user.role}
                         disabled={busyId === user.id}
                         onChange={(e) => void changeRole(user.id, e.target.value as ProfileRole)}
@@ -132,7 +129,7 @@ function TenantDetail({ company, actorId }: { company: Company; actorId: string 
                             {role}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </td>
                     <td className="px-4 py-2">
                       <StatusBadge status={user.isActive ? 'active' : 'suspended'} />

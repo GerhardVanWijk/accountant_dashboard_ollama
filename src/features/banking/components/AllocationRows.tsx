@@ -2,12 +2,10 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { Account, TaxRate } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
 import type { AllocationInput } from '../services';
 import { computeAllocationTax } from '../utils/taxCalculations';
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface AllocationRowsProps {
   allocations: AllocationInput[];
@@ -76,9 +74,8 @@ export function AllocationRows({ allocations, onChange, glAccounts, taxRates, gr
             const taxAmount = computeAllocationTax(row.netAmount || 0, taxRate);
             return (
               <div key={index} className="grid grid-cols-[1.4fr_1.2fr_110px_1fr_100px_32px] gap-2 border-b border-border/50 px-3 py-2 tabular-nums">
-                <select
+                <NativeSelect
                   aria-label={`Allocation ${index + 1} GL account`}
-                  className={selectClassName}
                   value={row.glAccountId}
                   onChange={(e) => updateRow(index, { glAccountId: e.target.value })}
                 >
@@ -88,7 +85,7 @@ export function AllocationRows({ allocations, onChange, glAccounts, taxRates, gr
                       {a.code} — {a.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
                 <Input
                   aria-label={`Allocation ${index + 1} description`}
                   placeholder="Line description"
@@ -103,9 +100,8 @@ export function AllocationRows({ allocations, onChange, glAccounts, taxRates, gr
                   value={row.netAmount || ''}
                   onChange={(e) => updateRow(index, { netAmount: parseFloat(e.target.value) || 0 })}
                 />
-                <select
+                <NativeSelect
                   aria-label={`Allocation ${index + 1} VAT rate`}
-                  className={selectClassName}
                   value={row.taxRateId ?? ''}
                   onChange={(e) => updateRow(index, { taxRateId: e.target.value || undefined })}
                 >
@@ -115,7 +111,7 @@ export function AllocationRows({ allocations, onChange, glAccounts, taxRates, gr
                       {rate.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
                 <span className="text-right text-sm text-muted-foreground">
                   <Amount value={taxAmount} plain />
                 </span>

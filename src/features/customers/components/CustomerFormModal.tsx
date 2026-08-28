@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
+import { formDialogClass } from '@/components/app/form-surface';
 import { CustomerForm, type CustomerFormProps } from './CustomerForm';
 
 export interface CustomerFormModalProps extends Omit<CustomerFormProps, 'onCancel'> {
@@ -15,7 +16,7 @@ export interface CustomerFormModalProps extends Omit<CustomerFormProps, 'onCance
 export function CustomerFormModal({ title, onClose, ...formProps }: CustomerFormModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className={formDialogClass}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

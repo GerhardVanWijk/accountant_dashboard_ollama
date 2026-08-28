@@ -4,11 +4,9 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import type { AllocationInput, CreateDirectTransactionInput, CreateTransferInput } from '../services';
 import { AllocationRows } from './AllocationRows';
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 type Mode = 'receipt' | 'payment' | 'transfer';
 
@@ -90,8 +88,15 @@ export function TransactionForm({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
+    <div className="flex flex-col gap-4">
+      {/* Stable tab region — docs/CURRENT_TASKS.md #3: fixed height + internal
+          scroll so switching receipt/payment/transfer (and adding allocation
+          rows) never resizes the dialog; the action row below stays anchored. */}
+      <Tabs
+        value={mode}
+        onValueChange={(v) => setMode(v as Mode)}
+        className="flex h-[30rem] flex-col"
+      >
         <TabsList variant="line" className="w-full justify-start border-b border-border">
           <TabsTrigger value="receipt">Direct receipt</TabsTrigger>
           <TabsTrigger value="payment">Direct payment</TabsTrigger>
@@ -108,17 +113,17 @@ export function TransactionForm({
             manually rather than as two near-duplicate TabsContent panels, since TabsContent's
             per-tab matching isn't meant to serve two distinct tab values from one panel. */}
         {mode !== 'transfer' && (
-          <div className="flex flex-col gap-4 pt-4">
+          <div className="app-scroll flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="txn-account">Bank account</FieldLabel>
-              <select id="txn-account" className={selectClassName} value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
+              <NativeSelect id="txn-account" value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
                 {bankAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
             <Field>
               <FieldLabel htmlFor="txn-date">Date</FieldLabel>
@@ -153,27 +158,27 @@ export function TransactionForm({
           </div>
         )}
 
-        <TabsContent value="transfer" className="flex flex-col gap-4 pt-4">
+        <TabsContent value="transfer" className="app-scroll flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="txn-from">From account (source — credited)</FieldLabel>
-              <select id="txn-from" className={selectClassName} value={fromAccountId} onChange={(e) => setFromAccountId(e.target.value)}>
+              <NativeSelect id="txn-from" value={fromAccountId} onChange={(e) => setFromAccountId(e.target.value)}>
                 {bankAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
             <Field>
               <FieldLabel htmlFor="txn-to">To account (destination — debited)</FieldLabel>
-              <select id="txn-to" className={selectClassName} value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
+              <NativeSelect id="txn-to" value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
                 {bankAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
             <Field>
               <FieldLabel htmlFor="txn-transfer-date">Date</FieldLabel>

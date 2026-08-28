@@ -4,6 +4,7 @@ import type { Company } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { companyFormSchema, companyToFormValues, type CompanyFormValues } from '../utils/companyFormSchema';
 
 export interface CompanyFormProps {
@@ -11,9 +12,6 @@ export interface CompanyFormProps {
   onSubmit: (values: CompanyFormValues) => Promise<void> | void;
   onCancel: () => void;
 }
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const legalEntityLabels: Record<CompanyFormValues['legalEntityType'], string> = {
   private_company: '(Pty) Ltd — Private company',
@@ -49,8 +47,9 @@ export function CompanyForm({ company, onSubmit, onCancel }: CompanyFormProps) {
       onSubmit={handleSubmit(async (values) => {
         await onSubmit(values);
       })}
-      className="flex flex-col gap-6"
+      className="flex min-h-0 flex-1 flex-col gap-4 md:h-full"
     >
+      <div className="app-scroll flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
       <fieldset className="flex flex-col gap-4">
         <legend className="text-sm font-semibold">Company details</legend>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -65,13 +64,13 @@ export function CompanyForm({ company, onSubmit, onCancel }: CompanyFormProps) {
           </Field>
           <Field>
             <FieldLabel htmlFor="company-legal-type">Legal entity type</FieldLabel>
-            <select id="company-legal-type" className={selectClassName} {...register('legalEntityType')}>
+            <NativeSelect id="company-legal-type" {...register('legalEntityType')}>
               {Object.entries(legalEntityLabels).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Field>
           <Field orientation="horizontal">
             <input type="checkbox" id="company-active" className="size-4 rounded border-input" {...register('isActive')} />
@@ -109,10 +108,10 @@ export function CompanyForm({ company, onSubmit, onCancel }: CompanyFormProps) {
           </Field>
           <Field>
             <FieldLabel htmlFor="company-accounting-basis">Accounting basis</FieldLabel>
-            <select id="company-accounting-basis" className={selectClassName} {...register('accountingBasis')}>
+            <NativeSelect id="company-accounting-basis" {...register('accountingBasis')}>
               <option value="accrual">Accrual</option>
               <option value="cash">Cash</option>
-            </select>
+            </NativeSelect>
           </Field>
           <Field>
             <FieldLabel htmlFor="company-functional-currency">Functional currency</FieldLabel>
@@ -142,9 +141,8 @@ export function CompanyForm({ company, onSubmit, onCancel }: CompanyFormProps) {
           </Field>
           <Field>
             <FieldLabel htmlFor="company-vat-frequency">VAT filing frequency</FieldLabel>
-            <select
+            <NativeSelect
               id="company-vat-frequency"
-              className={selectClassName}
               {...register('vatFilingFrequency', { setValueAs: (v) => (v === '' ? undefined : v) })}
             >
               <option value="">Not set</option>
@@ -152,19 +150,18 @@ export function CompanyForm({ company, onSubmit, onCancel }: CompanyFormProps) {
               <option value="bi_monthly">Bi-monthly</option>
               <option value="six_monthly">Six-monthly</option>
               <option value="annual">Annual</option>
-            </select>
+            </NativeSelect>
           </Field>
           <Field>
             <FieldLabel htmlFor="company-vat-basis">VAT accounting basis</FieldLabel>
-            <select
+            <NativeSelect
               id="company-vat-basis"
-              className={selectClassName}
               {...register('vatAccountingBasis', { setValueAs: (v) => (v === '' ? undefined : v) })}
             >
               <option value="">Not set</option>
               <option value="invoice">Invoice</option>
               <option value="payments">Payments</option>
-            </select>
+            </NativeSelect>
           </Field>
           <Field>
             <FieldLabel htmlFor="company-income-tax-number">Income tax number</FieldLabel>
@@ -172,6 +169,8 @@ export function CompanyForm({ company, onSubmit, onCancel }: CompanyFormProps) {
           </Field>
         </div>
       </fieldset>
+
+      </div>
 
       <div className="flex justify-end gap-2 border-t border-border pt-4">
         <Button variant="outline" type="button" onClick={onCancel} disabled={isSubmitting}>

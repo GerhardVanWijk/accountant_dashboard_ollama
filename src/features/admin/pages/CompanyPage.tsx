@@ -4,6 +4,7 @@ import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { formDialogClass } from '@/components/app/form-surface';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { useCompany } from '../hooks/useCompany';
 import { companyService } from '../services';
@@ -135,7 +136,7 @@ export function CompanyPage() {
           if (!open) setSaveError(null);
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className={formDialogClass}>
           <DialogHeader>
             <DialogTitle>Edit company</DialogTitle>
           </DialogHeader>

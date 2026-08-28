@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
+import { wideFormDialogClass } from '@/components/app/form-surface';
 import { JournalEntryForm, type JournalEntryFormProps } from './JournalEntryForm';
 
 export interface JournalEntryFormModalProps extends Omit<JournalEntryFormProps, 'onCancel'> {
@@ -14,7 +15,7 @@ export interface JournalEntryFormModalProps extends Omit<JournalEntryFormProps, 
 export function JournalEntryFormModal({ onClose, ...formProps }: JournalEntryFormModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className={wideFormDialogClass}>
         <DialogHeader>
           <DialogTitle>New journal entry</DialogTitle>
         </DialogHeader>

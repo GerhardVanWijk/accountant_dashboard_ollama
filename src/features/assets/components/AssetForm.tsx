@@ -7,10 +7,9 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS, ASSETS_CURRENCY } from '../constants';
 import type { CreateFixedAssetDTO, UpdateFixedAssetDTO } from '../services';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
 function isPositiveNumber(value: string): boolean {
   return value.trim() !== '' && !Number.isNaN(Number(value)) && Number(value) > 0;
@@ -157,13 +156,13 @@ export function AssetForm({ asset, onSubmit, onCancel }: AssetFormProps) {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="category">Category</FieldLabel>
-          <select id="category" className={selectClassName} {...register('category')}>
+          <NativeSelect id="category" {...register('category')}>
             {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="acquisitionDate">Acquisition Date</FieldLabel>
@@ -193,13 +192,13 @@ export function AssetForm({ asset, onSubmit, onCancel }: AssetFormProps) {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="depreciationMethod">Depreciation Method</FieldLabel>
-          <select id="depreciationMethod" className={selectClassName} disabled={locked} {...register('depreciationMethod')}>
+          <NativeSelect id="depreciationMethod" disabled={locked} {...register('depreciationMethod')}>
             {Object.entries(DEPRECIATION_METHOD_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         {depreciationMethod === 'reducing_balance' && (
           <Field>

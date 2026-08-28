@@ -4,12 +4,11 @@ import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { formatCurrency } from '@/lib/app/format';
 import type { ProvisionalTaxReconciliation } from '@/types/provisionalTax';
 import { useProvisionalTax } from '../hooks/useProvisionalTax';
 import { PaymentSlotCard } from '../components/PaymentSlotCard';
-
-const selectClassName = 'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /** Provisional Tax — route `/tax/provisional-tax`. Re-skinned onto v0's PageHeader/SectionCard (M7); data/mutation wiring unchanged. */
 export function ProvisionalTaxPage() {
@@ -84,13 +83,13 @@ export function ProvisionalTaxPage() {
         description="First, second, and voluntary top-up provisional tax payments, estimates, and reconciliation against the final Income Tax computation."
         actions={
           sortedFinancialYears.length > 0 ? (
-            <select aria-label="Financial Year" className={selectClassName} value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
+            <NativeSelect aria-label="Financial Year" value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
               {sortedFinancialYears.map((year) => (
                 <option key={year.id} value={year.id}>
                   {year.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           ) : undefined
         }
       />

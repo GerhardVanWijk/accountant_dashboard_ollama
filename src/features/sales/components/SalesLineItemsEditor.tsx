@@ -2,11 +2,9 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { DocumentLineItem, Product, TaxRate, Warehouse } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
 import { computeLine } from '../utils/lineItemCalculations';
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface SalesLineItemsEditorProps {
   lineItems: DocumentLineItem[];
@@ -121,8 +119,8 @@ export function SalesLineItemsEditor({
                 : 'sm:grid-cols-[1fr_2fr_80px_100px_140px_100px_100px_36px]'
             }`}
           >
-            <select
-              className={`col-span-2 sm:col-span-1 ${selectClassName}`}
+            <NativeSelect
+              className="col-span-2 sm:col-span-1"
               value={item.productId ?? ''}
               disabled={disabled}
               onChange={(e) => selectProduct(index, e.target.value)}
@@ -134,10 +132,9 @@ export function SalesLineItemsEditor({
                   {p.sku} — {p.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             {showWarehouseColumn && (
-              <select
-                className={selectClassName}
+              <NativeSelect
                 value={item.warehouseId ?? ''}
                 disabled={disabled || !item.productId}
                 onChange={(e) => updateLine(index, { warehouseId: e.target.value || undefined })}
@@ -149,7 +146,7 @@ export function SalesLineItemsEditor({
                     {w.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             )}
             <Input
               className="col-span-2 sm:col-span-1"
@@ -179,8 +176,7 @@ export function SalesLineItemsEditor({
               onChange={(e) => updateLine(index, { unitPrice: parseFloat(e.target.value) || 0 })}
               aria-label="Unit price"
             />
-            <select
-              className={selectClassName}
+            <NativeSelect
               value={item.taxRateId ?? ''}
               disabled={disabled}
               onChange={(e) => updateLine(index, { taxRateId: e.target.value || undefined })}
@@ -192,7 +188,7 @@ export function SalesLineItemsEditor({
                   {rate.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             <span className="figure text-right text-sm tabular-nums text-muted-foreground">
               <Amount value={item.taxAmount} plain />
             </span>

@@ -3,8 +3,7 @@ import type { ReportingFramework } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 
 const FRAMEWORK_LABELS: Record<ReportingFramework, string> = {
   full_ifrs: 'Full IFRS',
@@ -56,14 +55,14 @@ export function ReportingFrameworkOverrideForm({ currentFramework, suggestedFram
       </p>
       <Field>
         <FieldLabel htmlFor="frameworkSelect">New reporting framework</FieldLabel>
-        <select id="frameworkSelect" className={selectClassName} value={framework} onChange={(e) => setFramework(e.target.value as ReportingFramework)}>
+        <NativeSelect id="frameworkSelect" value={framework} onChange={(e) => setFramework(e.target.value as ReportingFramework)}>
           {(Object.keys(FRAMEWORK_LABELS) as ReportingFramework[]).map((value) => (
             <option key={value} value={value}>
               {FRAMEWORK_LABELS[value]}
               {value === suggestedFramework ? ' (suggested)' : ''}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </Field>
       <Field>
         <FieldLabel htmlFor="frameworkReason">Reason (required)</FieldLabel>

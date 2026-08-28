@@ -7,11 +7,10 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { UOM_OPTIONS, INVENTORY_CURRENCY } from '../constants';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function isNonNegativeNumber(value: string): boolean {
   return value.trim() !== '' && !Number.isNaN(Number(value)) && Number(value) >= 0;
@@ -135,10 +134,10 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Field>
           <FieldLabel htmlFor="type">Type</FieldLabel>
-          <select id="type" className={selectClassName} {...register('type')}>
+          <NativeSelect id="type" {...register('type')}>
             <option value="good">Physical Good</option>
             <option value="service">Service</option>
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="category">Category</FieldLabel>
@@ -146,13 +145,13 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
         </Field>
         <Field>
           <FieldLabel htmlFor="uom">Unit of Measure</FieldLabel>
-          <select id="uom" className={selectClassName} {...register('uom')}>
+          <NativeSelect id="uom" {...register('uom')}>
             {UOM_OPTIONS.map((uom) => (
               <option key={uom} value={uom}>
                 {uom}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
       </div>
 
@@ -169,14 +168,14 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
         </Field>
         <Field>
           <FieldLabel htmlFor="taxRateId">Tax Rate</FieldLabel>
-          <select id="taxRateId" className={selectClassName} {...register('taxRateId')}>
+          <NativeSelect id="taxRateId" {...register('taxRateId')}>
             <option value="">No tax rate</option>
             {taxRates.map((rate) => (
               <option key={rate.id} value={rate.id}>
                 {rate.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
       </div>
 
@@ -187,10 +186,10 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
         </Field>
         <Field>
           <FieldLabel htmlFor="status">Status</FieldLabel>
-          <select id="status" className={selectClassName} {...register('status')}>
+          <NativeSelect id="status" {...register('status')}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
-          </select>
+          </NativeSelect>
         </Field>
       </div>
 
@@ -217,10 +216,10 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
       {type !== 'service' && trackInventoryWatched && (
         <Field>
           <FieldLabel htmlFor="valuationMethod">Valuation Method</FieldLabel>
-          <select id="valuationMethod" className={selectClassName} {...register('valuationMethod')}>
+          <NativeSelect id="valuationMethod" {...register('valuationMethod')}>
             <option value="weighted_average">Weighted Average Cost</option>
             <option value="fifo">FIFO (First In, First Out)</option>
-          </select>
+          </NativeSelect>
           <FieldDescription>
             FIFO costs each sale from the oldest stock received first, instead of a blended average. Switching an
             existing product to FIFO only affects stock received from now on — it has no cost history to draw on

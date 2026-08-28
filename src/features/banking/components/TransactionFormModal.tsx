@@ -4,6 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
+import { wideFormDialogClass } from '@/components/app/form-surface';
 import { TransactionForm, type TransactionFormProps } from './TransactionForm';
 
 export interface TransactionFormModalProps extends Omit<TransactionFormProps, 'onCancel'> {
@@ -14,7 +15,7 @@ export interface TransactionFormModalProps extends Omit<TransactionFormProps, 'o
 export function TransactionFormModal({ onClose, ...formProps }: TransactionFormModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className={wideFormDialogClass}>
         <DialogHeader>
           <DialogTitle>New bank transaction</DialogTitle>
         </DialogHeader>

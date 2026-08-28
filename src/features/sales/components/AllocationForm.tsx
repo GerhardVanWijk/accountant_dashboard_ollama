@@ -3,11 +3,9 @@ import type { Invoice } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
 import { formatCurrency } from '@/lib/app/format';
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface OpenInvoiceOption {
   invoice: Invoice;
@@ -85,9 +83,8 @@ export function AllocationForm({ openInvoices, maxAmount, onSubmit, onCancel }: 
 
       <Field>
         <FieldLabel htmlFor="allocation-invoice">Invoice</FieldLabel>
-        <select
+        <NativeSelect
           id="allocation-invoice"
-          className={selectClassName}
           value={invoiceId}
           onChange={(e) => {
             setInvoiceId(e.target.value);
@@ -100,7 +97,7 @@ export function AllocationForm({ openInvoices, maxAmount, onSubmit, onCancel }: 
               {opt.invoice.invoiceNumber} — outstanding {formatCurrency(opt.outstanding)}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </Field>
 
       <Field>

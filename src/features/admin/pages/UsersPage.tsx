@@ -11,13 +11,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/shadcn/alert-dialog';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { useAuthStore } from '@/stores/authStore';
 import type { Permission, Profile, ProfileRole, Role, UserRoleAssignment } from '@/types';
 import { profileService, roleService, userRoleService, permissionService } from '@/features/auth/services';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 const PROFILE_ROLES: ProfileRole[] = ['admin', 'accountant', 'manager', 'operator', 'viewer'];
-const selectClassName = 'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function initialsFor(user: Profile): string {
   const initials = [user.firstName?.[0], user.lastName?.[0]].filter(Boolean).join('');
@@ -175,14 +175,14 @@ function AssignRoleDialog({ companyId, actorId, userId, roles, alreadyAssignedRo
         <div className="flex flex-col gap-4">
           <Field>
             <FieldLabel htmlFor="assign-role-select">Role</FieldLabel>
-            <select id="assign-role-select" className={selectClassName + ' w-full'} value={roleId} onChange={(e) => setRoleId(e.target.value)}>
+            <NativeSelect id="assign-role-select" value={roleId} onChange={(e) => setRoleId(e.target.value)}>
               <option value="">Select a role…</option>
               {assignable.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Field>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
@@ -252,8 +252,8 @@ function UsersTable({ companyId, actorId, users, roles, assignments, busyId, can
                 </td>
                 <td className="whitespace-nowrap px-4 py-2.5">
                   {canUpdate ? (
-                    <select
-                      className={selectClassName}
+                    <NativeSelect
+                      className="capitalize"
                       value={user.role}
                       disabled={busyId === user.id || user.id === actorId}
                       title={user.id === actorId ? "You can't change your own access level — ask another admin to do it, to avoid locking yourself out." : undefined}
@@ -264,7 +264,7 @@ function UsersTable({ companyId, actorId, users, roles, assignments, busyId, can
                           {role}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   ) : (
                     <span className="capitalize">{user.role}</span>
                   )}

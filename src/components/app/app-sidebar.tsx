@@ -76,7 +76,18 @@ export function AppSidebar() {
   }, [pathname, navGroups]);
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+    <Sidebar
+      collapsible="icon"
+      /*
+       * Subtle Vertex-green vertical edge on the sidebar's right boundary
+       * (docs/CURRENT_TASKS.md #2). The container is position:fixed and
+       * does not itself scroll, so this 1px line stays put while
+       * SidebarContent scrolls behind it, and sits just inside the
+       * neutral border-r so it never fights the scrollbar (which lives on
+       * the inner content, not this edge).
+       */
+      className="border-r border-sidebar-border after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-30 after:w-px after:bg-brand-outline"
+    >
       <SidebarHeader className="border-b border-sidebar-border">
         <Link
           to="/"

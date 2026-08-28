@@ -2,9 +2,8 @@ import { useState } from 'react';
 import type { Account, FixedAsset } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { formatCurrency } from '@/lib/app/format';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface PostAcquisitionFormProps {
   asset: FixedAsset;
@@ -45,13 +44,13 @@ export function PostAcquisitionForm({ asset, accounts, onSubmit, onCancel }: Pos
       </p>
       <Field>
         <FieldLabel htmlFor="contraAccountId">Funding Source</FieldLabel>
-        <select id="contraAccountId" className={selectClassName} value={contraAccountId} onChange={(e) => setContraAccountId(e.target.value)}>
+        <NativeSelect id="contraAccountId" value={contraAccountId} onChange={(e) => setContraAccountId(e.target.value)}>
           {contraCandidates.map((account) => (
             <option key={account.id} value={account.id}>
               {account.code} - {account.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <FieldDescription>
           The account credited for the acquisition — Accounts Payable if bought on credit, Cash and Bank if paid
           immediately.

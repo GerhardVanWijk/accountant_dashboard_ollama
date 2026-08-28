@@ -4,15 +4,13 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
 import type { CreateCreditNoteDTO } from '../services';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const REASON_OPTIONS: { value: CreditNoteReason; label: string }[] = [
   { value: 'return', label: 'Returned goods' },
@@ -110,9 +108,8 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
         </Field>
         <Field>
           <FieldLabel htmlFor="cn-customer">Customer</FieldLabel>
-          <select
+          <NativeSelect
             id="cn-customer"
-            className={selectClassName}
             value={customerId}
             onChange={(e) => {
               setCustomerId(e.target.value);
@@ -124,28 +121,28 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
                 {c.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="cn-invoice">Against invoice (optional)</FieldLabel>
-          <select id="cn-invoice" className={selectClassName} value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)}>
+          <NativeSelect id="cn-invoice" value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)}>
             <option value="">Standalone account credit</option>
             {customerInvoices.map((inv) => (
               <option key={inv.id} value={inv.id}>
                 {inv.invoiceNumber}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="cn-reason">Reason</FieldLabel>
-          <select id="cn-reason" className={selectClassName} value={reason} onChange={(e) => setReason(e.target.value as CreditNoteReason)}>
+          <NativeSelect id="cn-reason" value={reason} onChange={(e) => setReason(e.target.value as CreditNoteReason)}>
             {REASON_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="cn-issue-date">Issue date</FieldLabel>

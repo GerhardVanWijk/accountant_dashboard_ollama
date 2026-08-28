@@ -5,12 +5,10 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
 import { formatCurrency } from '@/lib/app/format';
 import type { CreateCustomerReceiptDTO } from '../services';
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const METHOD_OPTIONS: { value: ReceiptMethod; label: string }[] = [
   { value: 'eft', label: 'EFT' },
@@ -154,9 +152,8 @@ export function CustomerReceiptForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="receipt-customer">Customer</FieldLabel>
-          <select
+          <NativeSelect
             id="receipt-customer"
-            className={selectClassName}
             value={customerId}
             onChange={(e) => {
               setCustomerId(e.target.value);
@@ -168,7 +165,7 @@ export function CustomerReceiptForm({
                 {c.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="receipt-date">Date received</FieldLabel>
@@ -176,13 +173,13 @@ export function CustomerReceiptForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="receipt-method">Method</FieldLabel>
-          <select id="receipt-method" className={selectClassName} value={method} onChange={(e) => setMethod(e.target.value as ReceiptMethod)}>
+          <NativeSelect id="receipt-method" value={method} onChange={(e) => setMethod(e.target.value as ReceiptMethod)}>
             {METHOD_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field>
           <FieldLabel htmlFor="receipt-reference">Reference (optional)</FieldLabel>
@@ -223,8 +220,7 @@ export function CustomerReceiptForm({
             </div>
             {allocations.map((a, index) => (
               <div key={index} className="grid grid-cols-1 items-center gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_140px_36px] sm:border-0 sm:p-0">
-                <select
-                  className={selectClassName}
+                <NativeSelect
                   value={a.invoiceId}
                   onChange={(e) => updateAllocation(index, { invoiceId: e.target.value })}
                   aria-label="Invoice"
@@ -235,7 +231,7 @@ export function CustomerReceiptForm({
                       {inv.invoiceNumber} — outstanding {formatCurrency(inv.total - inv.amountPaid)}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
                 <Input
                   type="number"
                   min="0"

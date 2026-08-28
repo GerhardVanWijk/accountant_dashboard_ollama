@@ -5,12 +5,11 @@ import { Amount, FigureBlock } from '@/components/app/figure';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { useCashFlowStatement } from '../hooks/useCashFlowStatement';
 import { CashFlowSectionTable } from '../components/CashFlowSectionTable';
 import { ReconciliationCheck } from '../components/ReconciliationCheck';
-
-const selectClassName = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /**
  * Statement of Cash Flows — route `/reports/cash-flow`. Real
@@ -38,13 +37,13 @@ export function CashFlowStatementPage() {
           sortedFinancialYears.length > 0 ? (
             <Field className="w-44">
               <FieldLabel htmlFor="cashFlowFinancialYear">Financial year</FieldLabel>
-              <select id="cashFlowFinancialYear" className={selectClassName} value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
+              <NativeSelect id="cashFlowFinancialYear" value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
                 {sortedFinancialYears.map((year) => (
                   <option key={year.id} value={year.id}>
                     {year.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
           ) : undefined
         }

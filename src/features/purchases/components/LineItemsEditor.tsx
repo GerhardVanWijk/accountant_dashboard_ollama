@@ -2,11 +2,9 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { AssetCategory, DepreciationMethod, DocumentLineItem, FixedAssetLineDetails, Product, TaxRate, Warehouse } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
 import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS } from '@/features/assets/constants';
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface LineItemsEditorProps {
   lineItems: DocumentLineItem[];
@@ -217,8 +215,8 @@ export function LineItemsEditor({
         {lineItems.map((item, index) => (
           <div key={item.id} className="flex flex-col gap-0 rounded-lg border border-border sm:border-0">
             <div className={`grid grid-cols-2 gap-3 p-3 sm:items-center sm:p-0 ${gridColsClass}`}>
-              <select
-                className={`col-span-2 sm:col-span-1 ${selectClassName}`}
+              <NativeSelect
+                className="col-span-2 sm:col-span-1"
                 value={item.productId ?? ''}
                 disabled={disabled || Boolean(item.fixedAssetDetails)}
                 onChange={(e) => selectProduct(index, e.target.value)}
@@ -230,7 +228,7 @@ export function LineItemsEditor({
                     {p.sku} — {p.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               {showAssetColumn && (
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <input
@@ -245,8 +243,7 @@ export function LineItemsEditor({
                 </label>
               )}
               {showWarehouseColumn && (
-                <select
-                  className={selectClassName}
+                <NativeSelect
                   value={item.warehouseId ?? ''}
                   disabled={disabled || !item.productId}
                   onChange={(e) => updateLine(index, { warehouseId: e.target.value || undefined })}
@@ -258,7 +255,7 @@ export function LineItemsEditor({
                       {w.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               )}
               <Input
                 className="col-span-2 sm:col-span-1"
@@ -288,8 +285,7 @@ export function LineItemsEditor({
                 onChange={(e) => updateLine(index, { unitPrice: parseFloat(e.target.value) || 0 })}
                 aria-label="Unit price"
               />
-              <select
-                className={selectClassName}
+              <NativeSelect
                 value={item.taxRateId ?? ''}
                 disabled={disabled}
                 onChange={(e) => updateLine(index, { taxRateId: e.target.value || undefined })}
@@ -301,7 +297,7 @@ export function LineItemsEditor({
                     {rate.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               <span className="figure text-right text-sm tabular-nums text-muted-foreground">
                 <Amount value={item.taxAmount} plain />
               </span>
@@ -324,8 +320,7 @@ export function LineItemsEditor({
               <div className="grid grid-cols-1 gap-3 border-t border-dashed border-border bg-muted/20 p-3 sm:grid-cols-3 md:grid-cols-5">
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                   Category
-                  <select
-                    className={selectClassName}
+                  <NativeSelect
                     value={item.fixedAssetDetails.category}
                     disabled={disabled}
                     onChange={(e) => selectAssetCategory(index, e.target.value as AssetCategory)}
@@ -335,7 +330,7 @@ export function LineItemsEditor({
                         {label}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                   Useful Life (Years)
@@ -350,8 +345,7 @@ export function LineItemsEditor({
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                   Depreciation Method
-                  <select
-                    className={selectClassName}
+                  <NativeSelect
                     value={item.fixedAssetDetails.depreciationMethod}
                     disabled={disabled}
                     onChange={(e) =>
@@ -363,7 +357,7 @@ export function LineItemsEditor({
                         {label}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                   Residual Value

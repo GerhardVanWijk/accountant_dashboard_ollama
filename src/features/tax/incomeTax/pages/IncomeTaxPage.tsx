@@ -6,14 +6,13 @@ import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { RecordLink } from '@/components/app/record-link';
 import { formatCurrency } from '@/lib/app/format';
 import { SYSTEM_USER_ID } from '@/features/accounting/services';
 import { useIncomeTax } from '../hooks/useIncomeTax';
 import { AdjustmentsTable } from '../components/AdjustmentsTable';
 import { SbcEligibilityForm } from '../components/SbcEligibilityForm';
-
-const selectClassName = 'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /** Income Tax — route `/tax/income-tax` (docs/ROUTES.md). Re-skinned onto v0's PageHeader/SectionCard/Dialog (M7); data/mutation wiring unchanged. */
 export function IncomeTaxPage() {
@@ -86,9 +85,8 @@ export function IncomeTaxPage() {
         description="Corporate income tax computation, SBC eligibility, and the accounting-profit-to-taxable-income reconciliation."
         actions={
           sortedFinancialYears.length > 0 ? (
-            <select
+            <NativeSelect
               aria-label="Financial Year"
-              className={selectClassName}
               value={activeFinancialYearId ?? ''}
               onChange={(e) => setSelectedFinancialYearId(e.target.value)}
             >
@@ -97,7 +95,7 @@ export function IncomeTaxPage() {
                   {year.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           ) : undefined
         }
       />

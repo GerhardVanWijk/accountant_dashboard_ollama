@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { ACCOUNT_TYPES } from '../types/account.types';
 import {
   accountFormSchema,
@@ -12,9 +13,6 @@ import {
   toDefaultValues,
   type AccountFormSchema,
 } from '../utils/accountFormSchema';
-
-const selectClassName =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export interface AccountFormProps {
   initialValues?: Account;
@@ -90,9 +88,8 @@ export function AccountForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="account-type">Master type</FieldLabel>
-          <select
+          <NativeSelect
             id="account-type"
-            className={selectClassName}
             {...register('type', {
               onChange: (e) => {
                 const nextType = e.target.value as AccountFormSchema['type'];
@@ -106,7 +103,7 @@ export function AccountForm({
                 {t.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FieldError errors={[errors.type]} />
         </Field>
         <Field>
@@ -115,22 +112,22 @@ export function AccountForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="account-normal-balance">Normal balance</FieldLabel>
-          <select id="account-normal-balance" className={selectClassName} {...register('normalBalance')}>
+          <NativeSelect id="account-normal-balance" {...register('normalBalance')}>
             <option value="debit">Debit</option>
             <option value="credit">Credit</option>
-          </select>
+          </NativeSelect>
           <FieldError errors={[errors.normalBalance]} />
         </Field>
         <Field>
           <FieldLabel htmlFor="account-parent">Parent account (optional)</FieldLabel>
-          <select id="account-parent" className={selectClassName} {...register('parentAccountId')}>
+          <NativeSelect id="account-parent" {...register('parentAccountId')}>
             <option value="">No parent — top-level account</option>
             {parentOptions.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.code} — {a.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field orientation="horizontal" className="sm:col-span-2">
           <input type="checkbox" id="account-active" className="size-4 rounded border-input" {...register('isActive')} />
