@@ -42,9 +42,27 @@ export function TrialBalancePage() {
       />
 
       {loading && (
-        <div role="status" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
-          <p className="text-sm">Computing trial balance…</p>
+        // docs/CURRENT_TASKS.md #26 — summary-strip + table placeholder rather
+        // than a blank page and one spinner.
+        <div role="status" aria-label="Computing trial balance" className="flex flex-col gap-6">
+          <div className="grid gap-6 rounded-xl border border-border p-5 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex flex-col gap-2">
+                <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+                <div className="h-6 w-32 animate-pulse rounded bg-muted" />
+              </div>
+            ))}
+          </div>
+          <div className="overflow-hidden rounded-xl border border-border">
+            <div className="h-10 border-b border-border bg-muted/40" />
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 border-b border-border/50 px-4 py-3 last:border-0">
+                <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+                <div className="h-4 flex-1 animate-pulse rounded bg-muted" style={{ maxWidth: `${45 + ((i * 11) % 40)}%` }} />
+                <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

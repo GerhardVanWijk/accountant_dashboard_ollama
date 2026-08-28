@@ -72,7 +72,7 @@ export function JournalsPage() {
       />
 
       <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           <FigureBlock label="Posted value" value={formatCurrency(postedValue)} hint={`${posted.length} entries in the ledger`} />
           <FigureBlock label="Reversals" value={String(reversed.length)} hint="Corrected by a reversing entry" />
           <FigureBlock label="Total entries" value={String(entries.length)} hint="Across every posted period" />
