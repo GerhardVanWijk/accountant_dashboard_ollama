@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { ID } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
@@ -15,6 +15,8 @@ export interface DifferenceInvestigatorPanelProps {
   statementBalance: number;
   clearedTransactionIds: ID[];
   variance: number;
+  /** Bump this (e.g. from the workspace's "Investigate R…" button) to auto-run the investigation. */
+  runSignal?: number;
 }
 
 /**
@@ -24,11 +26,20 @@ export interface DifferenceInvestigatorPanelProps {
  * the timeline alongside it. Every action a card exposes goes through
  * reconciliationIssueResolutionService — see IssueCard's own doc comment.
  */
-export function DifferenceInvestigatorPanel({ bankAccountId, statementDate, statementBalance, clearedTransactionIds, variance }: DifferenceInvestigatorPanelProps) {
+export function DifferenceInvestigatorPanel({ bankAccountId, statementDate, statementBalance, clearedTransactionIds, variance, runSignal }: DifferenceInvestigatorPanelProps) {
   const { result, isInvestigating, error, investigate, reviewIssue, dismissIssue, markAutoSafe, resolveIssue } = useDifferenceInvestigator(bankAccountId);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const runInvestigation = () => void investigate(statementDate, statementBalance, clearedTransactionIds);
+
+  // Auto-run when triggered from the workspace ("Investigate R… difference").
+  const lastRunSignal = useRef(runSignal);
+  useEffect(() => {
+    if (runSignal !== undefined && runSignal !== lastRunSignal.current && Math.abs(variance) >= 0.005) {
+      lastRunSignal.current = runSignal;
+      void investigate(statementDate, statementBalance, clearedTransactionIds);
+    }
+  }, [runSignal, variance, investigate, statementDate, statementBalance, clearedTransactionIds]);
 
   const { ranked: rankedIssues, settled: otherIssues } = result ? selectIssuesForDisplay(result.issues) : { ranked: [], settled: [] };
   const windowIssues = filterIssuesByDate(rankedIssues, selectedDate);
@@ -62,6 +73,13 @@ export function DifferenceInvestigatorPanel({ bankAccountId, statementDate, stat
       {result && !result.fullyExplained && (
         <>
           <ReconciliationHealthCard health={result.health} />
+
+          {result.health.varianceRemaining === 0 && (
+            <p className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">
+              Every Rand of the difference now has a candidate cause below — review each and
+              action it through the normal accounting flow. Nothing here is auto-applied.
+            </p>
+          )}
 
           {result.timeline.points.length > 0 && (
             <div className="rounded-xl border border-border p-4">

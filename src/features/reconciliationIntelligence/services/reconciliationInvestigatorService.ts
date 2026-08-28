@@ -114,7 +114,7 @@ export class ReconciliationInvestigatorService {
         summary,
         fullyExplained: true,
         issues: [],
-        health: computeReconciliationHealth(0, 0, 0, 0, 0),
+        health: computeReconciliationHealth(0, 0, 0, 0, 0, 0),
         timeline: { points: [], firstAppearanceDate: undefined },
       };
     }
@@ -206,7 +206,21 @@ export class ReconciliationInvestigatorService {
     );
 
     const needsReviewCount = persisted.filter((i) => i.severity === 'high' || i.severity === 'critical').length;
-    const health = computeReconciliationHealth(bankSide.length, classification.confirmed.length, classification.probable.length, needsReviewCount, summary.variance);
+    // How much of the money gap now has a candidate cause. Summed over
+    // still-open issues only (a human-dismissed issue is no longer a
+    // candidate explanation), then capped at |variance| inside
+    // computeReconciliationHealth so overlapping candidates can't push it >100%.
+    const varianceExplainedRaw = persisted
+      .filter((i) => i.status === 'open')
+      .reduce((sum, i) => sum + Math.abs(i.effectAmount ?? 0), 0);
+    const health = computeReconciliationHealth(
+      bankSide.length,
+      classification.confirmed.length,
+      classification.probable.length,
+      needsReviewCount,
+      summary.variance,
+      varianceExplainedRaw,
+    );
 
     return { summary, fullyExplained: false, issues: persisted, health, timeline };
   }
