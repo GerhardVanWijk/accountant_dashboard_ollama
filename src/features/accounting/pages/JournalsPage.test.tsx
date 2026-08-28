@@ -21,6 +21,7 @@ vi.mock('../services', () => ({
     updateAccount: vi.fn(),
     deleteAccount: vi.fn(),
     hasPostings: vi.fn().mockResolvedValue(false),
+    getAccountIdsWithPostings: vi.fn().mockResolvedValue(new Set()),
   },
   journalEntryService: {
     getEntries: vi.fn(),

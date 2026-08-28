@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { Account } from '@/types';
 import { ChartOfAccountsPage } from './ChartOfAccountsPage';
-import { accountService } from '../services';
+import { accountService, journalEntryService } from '../services';
 
 function renderPage() {
   return render(
@@ -21,6 +21,7 @@ vi.mock('../services', () => ({
     updateAccount: vi.fn(),
     deleteAccount: vi.fn(),
     hasPostings: vi.fn().mockResolvedValue(false),
+    getAccountIdsWithPostings: vi.fn().mockResolvedValue(new Set()),
   },
   journalEntryService: {
     getEntries: vi.fn().mockResolvedValue([]),
@@ -56,7 +57,7 @@ describe('ChartOfAccountsPage', () => {
   it('shows a loading state while accounts are being fetched', () => {
     mockedGetAccounts.mockReturnValue(new Promise(() => {}));
     renderPage();
-    expect(screen.getByText(/loading chart of accounts/i)).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: /loading chart of accounts/i })).toBeInTheDocument();
   });
 
   it('shows an error state when the fetch fails', async () => {
@@ -92,5 +93,21 @@ describe('ChartOfAccountsPage', () => {
 
     expect(screen.queryByText('Cash and Bank')).not.toBeInTheDocument();
     expect(screen.getByText('Accounts Receivable')).toBeInTheDocument();
+  });
+
+  it('opens the account detail sheet on the same page instead of navigating away (docs/CURRENT_TASKS.md #6)', async () => {
+    mockedGetAccounts.mockResolvedValue([makeAccount()]);
+    (accountService.getAccount as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(makeAccount());
+    (journalEntryService.getAccountLedger as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    renderPage();
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(await screen.findByText('Cash and Bank'));
+
+    // Still on the Chart of Accounts page (its search control is still there)…
+    expect(screen.getByLabelText(/search accounts/i)).toBeInTheDocument();
+    // …with the detail sheet's own actions rendered.
+    expect(await screen.findByRole('button', { name: /view ledger/i })).toBeInTheDocument();
+    expect(screen.getByText(/no postings yet/i)).toBeInTheDocument();
   });
 });

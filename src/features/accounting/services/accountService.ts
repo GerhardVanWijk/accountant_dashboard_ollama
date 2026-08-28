@@ -40,6 +40,26 @@ export class AccountService {
   }
 
   /**
+   * The set of account ids referenced by at least one journal line — one
+   * pass over the ledger for the WHOLE chart.
+   *
+   * The Chart of Accounts page needs a "has postings" flag per account. The
+   * naive way (what it used to do) was `accounts.map(a => hasPostings(a.id))`
+   * — and since `hasPostings` itself does `journalRepository.getAll()`, that
+   * fetched the entire journal history once PER ACCOUNT (N full-ledger
+   * fetches on every load, and again after every create/edit). This does it
+   * once. See docs/CURRENT_TASKS.md #5.
+   */
+  async getAccountIdsWithPostings(): Promise<Set<ID>> {
+    const entries = await this.journalRepository.getAll();
+    const ids = new Set<ID>();
+    for (const entry of entries) {
+      for (const line of entry.lines) ids.add(line.accountId);
+    }
+    return ids;
+  }
+
+  /**
    * Deactivates rather than deletes when the account has ledger history
    * (mirrors Customers/Suppliers' inactivate-not-delete guard). Only an
    * account with zero postings can be hard-deleted from the chart.

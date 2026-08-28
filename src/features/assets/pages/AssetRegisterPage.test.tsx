@@ -37,6 +37,7 @@ vi.mock('@/features/accounting/services', () => ({
   accountService: {
     getAccounts: vi.fn().mockResolvedValue([]),
     hasPostings: vi.fn().mockResolvedValue(false),
+    getAccountIdsWithPostings: vi.fn().mockResolvedValue(new Set()),
   },
 }));
 

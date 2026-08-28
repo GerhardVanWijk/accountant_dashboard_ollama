@@ -20,6 +20,7 @@ vi.mock('../services', () => ({
     updateAccount: vi.fn(),
     deleteAccount: vi.fn(),
     hasPostings: vi.fn(),
+    getAccountIdsWithPostings: vi.fn().mockResolvedValue(new Set()),
   },
   journalEntryService: {
     getEntries: vi.fn(),
@@ -46,7 +47,7 @@ describe('TrialBalancePage', () => {
   it('shows a loading state while the trial balance is computing', () => {
     mockedComputeTrialBalance.mockReturnValue(new Promise(() => {}));
     renderPage();
-    expect(screen.getByText(/computing trial balance/i)).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: /computing trial balance/i })).toBeInTheDocument();
   });
 
   it('shows an error state when computing fails', async () => {

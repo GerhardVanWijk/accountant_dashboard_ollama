@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { ListTree, Loader2, Plus, Search } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ListTree, Plus, Search } from 'lucide-react';
 import type { Account } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
@@ -27,6 +28,8 @@ import {
 import { useAccounts } from '../hooks/useAccounts';
 import { AccountTable } from '../components/AccountTable';
 import { AccountFormModal } from '../components/AccountFormModal';
+import { AccountDetailSheet } from '../components/AccountDetailSheet';
+import { useAccountingUiStore } from '../store/accountingUiStore';
 import { ACCOUNT_TYPES, defaultAccountFilters, type AccountFilters } from '../types/account.types';
 import { mapFormValuesToAccountPatch, type AccountFormSchema } from '../utils/accountFormSchema';
 
@@ -59,6 +62,31 @@ export function ChartOfAccountsPage() {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const navigate = useNavigate();
+  const setSelectedLedgerAccountId = useAccountingUiStore((s) => s.setSelectedLedgerAccountId);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedAccountId = searchParams.get('record') ?? undefined;
+  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+
+  function openRecord(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('record', id);
+      return next;
+    });
+  }
+  function closeRecord() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('record');
+      return next;
+    });
+  }
+  function viewLedgerFor(account: Account) {
+    setSelectedLedgerAccountId(account.id);
+    navigate('/accounting/ledger');
+  }
 
   const filtered = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -173,9 +201,17 @@ export function ChartOfAccountsPage() {
       </SectionCard>
 
       {loading && (
-        <div role="status" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
-          <p className="text-sm">Loading chart of accounts…</p>
+        // docs/CURRENT_TASKS.md #26 — the page header + filter shell above stay
+        // visible; this is a table-shaped placeholder, not a blank page + spinner.
+        <div role="status" aria-label="Loading chart of accounts" className="overflow-hidden rounded-xl border border-border">
+          <div className="h-10 border-b border-border bg-muted/40" />
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 border-b border-border/50 px-4 py-3 last:border-0">
+              <div className="h-4 w-14 animate-pulse rounded bg-muted" />
+              <div className="h-4 flex-1 animate-pulse rounded bg-muted" style={{ maxWidth: `${40 + ((i * 13) % 45)}%` }} />
+              <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+            </div>
+          ))}
         </div>
       )}
 
@@ -226,6 +262,7 @@ export function ChartOfAccountsPage() {
         <AccountTable
           accounts={filtered}
           postedAccountIds={postedAccountIds}
+          onSelect={(account) => openRecord(account.id)}
           onEdit={(account) => {
             setFormError(null);
             setDialog({ mode: 'edit', account });
@@ -235,6 +272,27 @@ export function ChartOfAccountsPage() {
           }}
         />
       )}
+
+      <AccountDetailSheet
+        account={selectedAccount}
+        hasPostings={selectedAccount ? postedAccountIds.has(selectedAccount.id) : false}
+        open={Boolean(selectedAccountId)}
+        onOpenChange={(next) => {
+          if (!next) closeRecord();
+        }}
+        onEdit={
+          selectedAccount
+            ? () => {
+                setFormError(null);
+                setDialog({ mode: 'edit', account: selectedAccount });
+                closeRecord();
+              }
+            : undefined
+        }
+        onViewLedger={() => {
+          if (selectedAccount) viewLedgerFor(selectedAccount);
+        }}
+      />
 
       {dialog && (
         <AccountFormModal

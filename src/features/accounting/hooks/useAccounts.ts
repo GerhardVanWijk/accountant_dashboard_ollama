@@ -33,10 +33,14 @@ export function useAccounts(): UseAccountsResult {
     setLoading(true);
     setError(null);
     try {
-      const data = await accountService.getAccounts();
+      const [data, postedIds] = await Promise.all([
+        accountService.getAccounts(),
+        // One pass over the ledger for the whole chart — NOT one hasPostings()
+        // (= one full journal fetch) per account. See docs/CURRENT_TASKS.md #5.
+        accountService.getAccountIdsWithPostings(),
+      ]);
       setAccounts(data);
-      const flags = await Promise.all(data.map((a) => accountService.hasPostings(a.id)));
-      setPostedAccountIds(new Set(data.filter((_, i) => flags[i]).map((a) => a.id)));
+      setPostedAccountIds(postedIds);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load chart of accounts'));
     } finally {

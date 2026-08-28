@@ -1,17 +1,17 @@
 import { Fragment } from 'react';
-import { useNavigate } from 'react-router-dom';
 import type { Account, ID } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { RecordLink } from '@/components/app/record-link';
 import { buildAccountHierarchy } from '../utils/buildAccountHierarchy';
-import { useAccountingUiStore } from '../store/accountingUiStore';
 
 export interface AccountTableProps {
   accounts: Account[];
   postedAccountIds: Set<ID>;
   onEdit: (account: Account) => void;
   onToggleActive: (account: Account) => void;
+  /** Opens the Account detail sheet (docs/CURRENT_TASKS.md #6) — stays on this page. */
+  onSelect: (account: Account) => void;
 }
 
 /**
@@ -23,15 +23,8 @@ export interface AccountTableProps {
  * degrade an existing feature to fit a component). Grouping/ordering logic
  * itself is unchanged, still entirely inside buildAccountHierarchy().
  */
-export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActive }: AccountTableProps) {
+export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActive, onSelect }: AccountTableProps) {
   const groups = buildAccountHierarchy(accounts);
-  const navigate = useNavigate();
-  const setSelectedLedgerAccountId = useAccountingUiStore((s) => s.setSelectedLedgerAccountId);
-
-  function openLedger(account: Account) {
-    setSelectedLedgerAccountId(account.id);
-    navigate('/accounting/ledger');
-  }
 
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
@@ -68,7 +61,7 @@ export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActiv
                   <td className="figure px-4 py-3 align-middle text-sm tabular-nums text-foreground">{account.code}</td>
                   <td className="px-4 py-3 align-middle">
                     <div style={{ paddingLeft: depth * 16 }} className="flex flex-col">
-                      <RecordLink onClick={() => openLedger(account)} className="text-sm font-medium">
+                      <RecordLink onClick={() => onSelect(account)} className="text-sm font-medium">
                         {account.name}
                       </RecordLink>
                       {account.subType && <span className="text-xs text-muted-foreground">{account.subType}</span>}
