@@ -1,4 +1,71 @@
 import '@testing-library/jest-dom/vitest';
+import { vi } from 'vitest';
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────
+ * FAIL-CLOSED LIVE-SUPABASE GUARD — primary layer (Phase 21 incident "JE-0171")
+ * ─────────────────────────────────────────────────────────────────────────
+ * A subagent once exercised the real, live-wired `bankTransactionService`
+ * singleton from a test and posted a duplicate journal entry to the
+ * PRODUCTION Supabase project — corrupting Bank GL + AR and destroying a
+ * deliberate reconciliation training scenario. Books stayed globally
+ * balanced, so no cheap check caught it.
+ *
+ * `vi.mock` in a setup file applies to EVERY test file (Vitest docs:
+ * "Config | setupFiles"), with no per-test opt-in. Here it replaces the
+ * shared `supabase` client with a Proxy whose every property access / call
+ * THROWS a clear, actionable error. Any test — existing or future — that
+ * touches the real client (directly, or transitively via a service barrel /
+ * hook / page) fails loudly and immediately instead of silently mutating
+ * production.
+ *
+ * A test that legitimately needs the Supabase surface stubs it the normal
+ * way — a per-file `vi.mock('@/config/supabase', () => ({ supabase: {...} }))`
+ * (as the auth tests already do) overrides this global mock for that file,
+ * or it injects a `Mock*Repository` / in-memory fake into the service under
+ * test. A real LIVE integration test must go through
+ * `getTestSupabaseClient()` with `VITE_TEST_SUPABASE_URL` set.
+ */
+vi.mock('@/config/supabase', () => {
+  const message =
+    'Live Supabase client accessed from a test. Use a mock repository (Mock*Repository) or an in-memory fake, ' +
+    'or add a per-file vi.mock("@/config/supabase", ...) with just the surface you need. ' +
+    'For a genuine LIVE integration test, set VITE_TEST_SUPABASE_URL to a throwaway NON-production project ' +
+    'and go through getTestSupabaseClient() — see docs/TESTING_SUPABASE.md.';
+
+  const fail = (accessed: string): never => {
+    throw new Error(`${message} (accessed: supabase.${accessed})`);
+  };
+
+  const guard: unknown = new Proxy(
+    function liveSupabaseClientGuard() {
+      /* not callable */
+    },
+    {
+      get: (_target, prop) => {
+        if (typeof prop === 'symbol') return undefined;
+        // Let `await supabase` / thenable checks resolve to a non-thenable
+        // rather than throw an unhelpful stack.
+        if (prop === 'then') return undefined;
+        return fail(String(prop));
+      },
+      apply: () => fail('()'),
+      construct: () => fail('new'),
+    },
+  );
+
+  return {
+    supabase: guard,
+    isTestContext: () => true,
+    getTestSupabaseClient: () => {
+      throw new Error(
+        'getTestSupabaseClient() is not available under the global test mock. ' +
+          'A live integration test must import the real module (vi.importActual) with VITE_TEST_SUPABASE_URL set.',
+      );
+    },
+    __isLiveSupabaseGuard: true,
+  };
+});
 
 /**
  * Workaround for a jsdom/Node fetch interop gap: React Router's data

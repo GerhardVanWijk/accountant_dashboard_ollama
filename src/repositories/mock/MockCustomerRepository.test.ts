@@ -1,6 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MockCustomerRepository } from './MockCustomerRepository';
 import { CustomerService } from '@/services/customerService';
+
+/**
+ * `CustomerService.deleteCustomer()` calls the shared `invoiceService`
+ * singleton (`@/services/index`), which is wired to the LIVE-connected
+ * `SupabaseInvoiceRepository`. Without this mock, `deleteCustomer()` in the
+ * test below issues a real `invoices` query against production every run
+ * (it passed only because the throwaway test customer happens to have no
+ * invoices there). The fail-closed Supabase guard (tests/setup.ts,
+ * docs/TESTING_SUPABASE.md) surfaced this; stub the boundary the same way
+ * every other service test does.
+ */
+vi.mock('@/services/index', () => ({
+  invoiceService: { getInvoicesByCustomer: vi.fn().mockResolvedValue([]) },
+}));
 
 describe('MockCustomerRepository + CustomerService (repository pattern smoke test)', () => {
   it('lists seeded customers', async () => {
