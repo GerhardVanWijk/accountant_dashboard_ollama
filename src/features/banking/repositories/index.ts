@@ -1,6 +1,12 @@
 export type { IBankAccountRepository } from './IBankAccountRepository';
 export type { IBankTransactionRepository } from './IBankTransactionRepository';
 export type { IBankReconciliationRepository } from './IBankReconciliationRepository';
+export type { IBankStatementRepository } from './IBankStatementRepository';
+export type { IBankStatementLineRepository } from './IBankStatementLineRepository';
 export { MockBankAccountRepository } from './MockBankAccountRepository';
 export { MockBankTransactionRepository } from './MockBankTransactionRepository';
 export { MockBankReconciliationRepository } from './MockBankReconciliationRepository';
+export { MockBankStatementRepository } from './MockBankStatementRepository';
+export { MockBankStatementLineRepository } from './MockBankStatementLineRepository';
+export { SupabaseBankStatementRepository } from './SupabaseBankStatementRepository';
+export { SupabaseBankStatementLineRepository } from './SupabaseBankStatementLineRepository';

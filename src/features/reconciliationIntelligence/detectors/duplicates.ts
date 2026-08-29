@@ -1,5 +1,6 @@
 import type { InvestigationCandidate, ReconciliationIssueDraft } from '../types';
-import { buildConfidence } from '../utils/confidence';
+import { buildEvidence } from '../utils/evidence';
+import { renderExplanation } from '../utils/renderExplanation';
 import { fromCents } from '../utils/money';
 import { daysBetween, descriptionOverlap } from '../utils/textMatching';
 
@@ -33,25 +34,48 @@ export function detectDuplicates(pool: InvestigationCandidate[]): Reconciliation
       if (flaggedPairs.has(pairKey)) continue;
       flaggedPairs.add(pairKey);
 
-      const { value: confidence, evidence } = buildConfidence([
-        { points: 35, label: 'Identical amount', met: true },
-        { points: 25, label: daysApart === 0 ? 'Same date' : `${daysApart} day(s) apart`, met: true },
-        { points: 25, label: 'Reference matches exactly', met: refMatch },
-        { points: 15, label: 'Description text overlaps strongly', met: descOverlap >= 0.6 },
-      ]);
+      const dateFrom = a.date < b.date ? a.date : b.date;
+      const dateTo = a.date < b.date ? b.date : a.date;
+
+      const { value: confidence, evidence, evidenceData } = buildEvidence({
+        detectorType: 'duplicate_transaction',
+        factors: [
+          { key: 'identical_amount', points: 35, maxPoints: 35, label: 'Identical amount', met: true },
+          { key: 'date_proximity', points: 25, maxPoints: 25, label: daysApart === 0 ? 'Same date' : `${daysApart} day(s) apart`, met: true, observedValue: `${daysApart} days` },
+          { key: 'reference_match', points: 25, maxPoints: 25, label: 'Reference matches exactly', met: refMatch, observedValue: refMatch },
+          { key: 'description_overlap', points: 15, maxPoints: 15, label: 'Description text overlaps strongly', met: descOverlap >= 0.6, observedValue: descOverlap },
+        ],
+        fields: {
+          amountDifferenceCents: 0,
+          dateDifferenceDays: daysApart,
+          referenceSimilarity: refMatch ? 1 : descOverlap,
+          sameCounterparty: refMatch || descOverlap >= 0.6,
+          sameDirection: true,
+          sameBankAccount: a.side === 'bank' && b.side === 'bank',
+          candidateSourceType: a.kind === 'journal_entry' ? 'journal_entry' : a.kind === 'statement_line' ? 'statement_line' : 'bank_transaction',
+          candidateSourceId: b.id,
+          varianceExplainedCents: Math.abs(a.amountCents),
+          bankAmountCents: a.side === 'bank' ? a.amountCents : undefined,
+          booksAmountCents: a.side === 'books' ? a.amountCents : undefined,
+          counterpartyLabel: a.description,
+          observedDateFrom: dateFrom,
+          observedDateTo: dateTo,
+        },
+      });
 
       issues.push({
         issueType: 'duplicate_transaction',
         severity: 'medium',
         confidence,
         effectAmount: fromCents(Math.abs(a.amountCents)),
-        affectedDateFrom: a.date < b.date ? a.date : b.date,
-        affectedDateTo: a.date < b.date ? b.date : a.date,
+        affectedDateFrom: dateFrom,
+        affectedDateTo: dateTo,
         relatedBankTransactionIds: [a.bankTransactionId, b.bankTransactionId].filter((x): x is string => Boolean(x)),
         relatedJournalEntryIds: [a.journalEntryId, b.journalEntryId].filter((x): x is string => Boolean(x)),
         relatedSourceDocumentIds: [],
-        explanation: `Two ${a.side === 'bank' ? 'bank' : 'books'} entries of R${fromCents(Math.abs(a.amountCents)).toFixed(2)}, ${daysApart} day(s) apart, look like the same transaction recorded twice: "${a.description}" and "${b.description}".`,
+        explanation: renderExplanation(evidenceData, 'duplicate_transaction'),
         evidence,
+        evidenceData,
         suggestedResolution: 'Review both records — if genuinely duplicated, void/reverse one through the proper accounting flow rather than deleting it.',
         autoResolutionSafe: false,
       });

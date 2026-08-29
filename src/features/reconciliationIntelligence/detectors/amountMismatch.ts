@@ -1,7 +1,8 @@
 import type { InvestigationCandidate, ReconciliationIssueDraft } from '../types';
-import { buildConfidence } from '../utils/confidence';
+import { buildEvidence } from '../utils/evidence';
+import { renderExplanation } from '../utils/renderExplanation';
 import { centsAbs, fromCents } from '../utils/money';
-import { daysBetween, descriptionOverlap, referencesMatch } from '../utils/textMatching';
+import { daysBetween, descriptionOverlap, referencesMatch, referenceSimilarity } from '../utils/textMatching';
 
 const DEFAULT_DATE_TOLERANCE_DAYS = 3;
 
@@ -72,34 +73,66 @@ export function detectAmountMismatch(
     const transposition = isDigitTransposition(bank.amountCents, best.books.amountCents);
     const explainsWholeVariance =
       options.targetUnexplainedCents !== undefined && centsAbs(diffCents) === centsAbs(options.targetUnexplainedCents);
+    const issueType = transposition ? 'transposition_error' : 'amount_mismatch';
+    const dateFrom = bank.date < best.books.date ? bank.date : best.books.date;
+    const dateTo = bank.date < best.books.date ? best.books.date : bank.date;
 
-    const { value: confidence, evidence } = buildConfidence([
-      { points: 25, label: best.daysApart === 0 ? 'Same date' : `${best.daysApart} day(s) apart`, met: true },
-      { points: 20, label: 'Reference matches', met: best.refMatch },
-      { points: 15, label: 'Description text overlaps', met: best.descOverlap > 0 },
-      { points: 15, label: 'Looks like a transposed-digit data-entry error', met: transposition },
-      {
-        points: 40,
-        label: 'Difference exactly equals the unexplained reconciliation amount',
-        detail: `R${fromCents(centsAbs(diffCents)).toFixed(2)}`,
-        met: explainsWholeVariance,
+    const { value: confidence, evidence, evidenceData } = buildEvidence({
+      detectorType: issueType,
+      factors: [
+        {
+          key: 'date_proximity',
+          points: 25,
+          maxPoints: 25,
+          label: best.daysApart === 0 ? 'Same date' : `${best.daysApart} day(s) apart`,
+          met: true,
+          observedValue: `${best.daysApart} days`,
+        },
+        { key: 'reference_match', points: 20, maxPoints: 20, label: 'Reference matches', met: best.refMatch, observedValue: referenceSimilarity(bank.reference, best.books.reference) },
+        { key: 'description_overlap', points: 15, maxPoints: 15, label: 'Description text overlaps', met: best.descOverlap > 0, observedValue: best.descOverlap },
+        { key: 'transposition_shape', points: 15, maxPoints: 15, label: 'Looks like a transposed-digit data-entry error', met: transposition, observedValue: transposition },
+        {
+          key: 'explains_whole_variance',
+          points: 40,
+          maxPoints: 40,
+          label: 'Difference exactly equals the unexplained reconciliation amount',
+          detail: `R${fromCents(centsAbs(diffCents)).toFixed(2)}`,
+          met: explainsWholeVariance,
+          observedValue: explainsWholeVariance,
+        },
+      ],
+      fields: {
+        amountDifferenceCents: diffCents,
+        dateDifferenceDays: best.daysApart,
+        referenceSimilarity: referenceSimilarity(bank.reference, best.books.reference),
+        sameCounterparty: best.refMatch || best.descOverlap >= 0.4,
+        sameDirection: true,
+        sameBankAccount: true,
+        candidateSourceType: best.books.kind === 'journal_entry' ? 'journal_entry' : 'bank_transaction',
+        candidateSourceId: best.books.id,
+        varianceExplainedCents: centsAbs(diffCents),
+        explainsVarianceExactly: explainsWholeVariance,
+        bankAmountCents: bank.amountCents,
+        booksAmountCents: best.books.amountCents,
+        counterpartyLabel: bank.description,
+        observedDateFrom: dateFrom,
+        observedDateTo: dateTo,
       },
-    ]);
+    });
 
     issues.push({
-      issueType: transposition ? 'transposition_error' : 'amount_mismatch',
+      issueType,
       severity: explainsWholeVariance ? 'high' : 'medium',
       confidence,
       effectAmount: fromCents(diffCents),
-      affectedDateFrom: bank.date < best.books.date ? bank.date : best.books.date,
-      affectedDateTo: bank.date < best.books.date ? best.books.date : bank.date,
+      affectedDateFrom: dateFrom,
+      affectedDateTo: dateTo,
       relatedBankTransactionIds: [bank.bankTransactionId].filter((x): x is string => Boolean(x)),
       relatedJournalEntryIds: [bank.journalEntryId, best.books.journalEntryId].filter((x): x is string => Boolean(x)),
       relatedSourceDocumentIds: [],
-      explanation: transposition
-        ? `Likely transposed digits: bank shows R${fromCents(centsAbs(bank.amountCents)).toFixed(2)}, books show R${fromCents(centsAbs(best.books.amountCents)).toFixed(2)}.`
-        : `Bank shows R${fromCents(centsAbs(bank.amountCents)).toFixed(2)} for "${bank.description}", books show R${fromCents(centsAbs(best.books.amountCents)).toFixed(2)} for "${best.books.description}" — a difference of R${fromCents(centsAbs(diffCents)).toFixed(2)}.`,
+      explanation: renderExplanation(evidenceData, issueType),
       evidence,
+      evidenceData,
       suggestedResolution: transposition
         ? 'Correct the mis-typed amount through the originating document, then re-post.'
         : 'Review both records and correct the wrong one through the proper accounting flow (never edit posted history directly).',

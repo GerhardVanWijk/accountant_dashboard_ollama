@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ReconciliationInvestigatorService } from './reconciliationInvestigatorService';
 import { MockReconciliationIssueRepository } from '../repositories/MockReconciliationIssueRepository';
-import type { BankAccount, JournalEntry, ReconciliationIssue } from '@/types';
+import { MockBankStatementLineRepository } from '@/features/banking/repositories';
+import type { BankAccount, BankStatementLine, JournalEntry, ReconciliationIssue } from '@/types';
 import type { BankReconciliation, BankTransactionWithAllocations } from '@/features/banking/types';
 import type { ReconciliationSummary } from '@/features/banking/services';
 
@@ -64,10 +65,35 @@ interface Fixture {
   transactions: BankTransactionWithAllocations[];
 }
 
-function buildFixture(opts: { variance: number; transactions?: BankTransactionWithAllocations[]; entries?: JournalEntry[]; history?: BankReconciliation[] }): Fixture {
+function statementLine(overrides: Partial<BankStatementLine> = {}): BankStatementLine {
+  return {
+    id: 'sl1',
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+    bankStatementId: 'stmt1',
+    bankAccountId: 'acc1',
+    sequence: 1,
+    txnDate: '2026-08-10',
+    description: 'Statement line',
+    amount: 100,
+    direction: 'credit',
+    rawSource: {},
+    lineState: 'unmatched',
+    ...overrides,
+  };
+}
+
+function buildFixture(opts: {
+  variance: number;
+  transactions?: BankTransactionWithAllocations[];
+  entries?: JournalEntry[];
+  history?: BankReconciliation[];
+  statementLines?: BankStatementLine[];
+}): Fixture {
   const account = bankAccount();
   const transactions = opts.transactions ?? [];
   const issueRepository = new MockReconciliationIssueRepository();
+  const lineRepository = new MockBankStatementLineRepository(opts.statementLines ?? []);
 
   const service = new ReconciliationInvestigatorService(
     issueRepository,
@@ -87,6 +113,7 @@ function buildFixture(opts: { variance: number; transactions?: BankTransactionWi
     {
       computeSummary: async () => summary(opts.variance),
     },
+    lineRepository,
   );
 
   return { service, issueRepository, transactions };
@@ -185,6 +212,78 @@ describe('ReconciliationInvestigatorService — small differences are never sile
       expect(result.summary.variance).not.toBe(0);
     } else {
       expect(result.issues.every((i: ReconciliationIssue) => i.status === 'open')).toBe(true);
+    }
+  });
+});
+
+describe('ReconciliationInvestigatorService — P2.1 evidence model + sectioned output', () => {
+  it('uses persisted bank_statement_lines as the bank side when a statement covers the window', async () => {
+    const lines = [
+      statementLine({ id: 'sl_fee', txnDate: '2026-08-12', description: 'Cash handling fee', amount: 185.5, direction: 'credit' }),
+    ];
+    const { service } = buildFixture({ variance: -185.5, statementLines: lines });
+
+    const result = await service.investigate('acc1', '2026-08-27', 1000, []);
+
+    const fee = result.issues.find((i) => i.issueType === 'missing_ledger_side');
+    expect(fee).toBeDefined();
+    // The candidate came off the statement line, not a source='import' bank_transaction.
+    expect(fee!.evidenceData?.candidateSourceType).toBe('statement_line');
+    expect(fee!.evidenceData?.candidateSourceId).toBe('sl_fee');
+    expect(fee!.evidenceData?.detectorType).toBe('missing_ledger_side');
+    expect(fee!.evidenceData?.detectorVersion).toBeTruthy();
+    expect(result.health.statementLineCount).toBe(1);
+  });
+
+  it('every persisted issue carries structured evidenceData and a dedupe_key', async () => {
+    const bank = transaction({ id: 'b1', date: '2026-08-10', description: 'Bank fee', amount: 47.66, direction: 'credit', source: 'import' });
+    const { service } = buildFixture({ variance: 47.66, transactions: [bank] });
+
+    const result = await service.investigate('acc1', '2026-08-27', 1000, []);
+
+    for (const issue of result.issues) {
+      expect(issue.dedupeKey).toBeTruthy();
+      expect(issue.dedupeKey).toContain('2026-08-27');
+      expect(issue.dedupeKey!.startsWith(issue.issueType)).toBe(true);
+      expect(issue.evidenceData?.factors?.length).toBeGreaterThan(0);
+      expect(issue.explanation.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('classifies issues into the sections the workspace renders', async () => {
+    const bank = transaction({ id: 'b1', date: '2026-08-10', description: 'Bank charges', amount: 185.5, direction: 'credit', source: 'import' });
+    const { service } = buildFixture({ variance: -185.5, transactions: [bank] });
+
+    const result = await service.investigate('acc1', '2026-08-27', 1000, []);
+
+    // The R185.50 bank charge with no ledger side exactly equals the R185.50 gap.
+    expect(result.sections.exactCauses.some((i) => i.issueType === 'missing_ledger_side')).toBe(true);
+    expect(result.sections).toHaveProperty('strongCandidates');
+    expect(result.sections).toHaveProperty('timingItems');
+    expect(result.sections).toHaveProperty('structuralIssues');
+    expect(result.sections).toHaveProperty('combinationExplanations');
+  });
+
+  it('re-running updates the matching open issues in place — no duplicate rows, deterministic order', async () => {
+    const bank = transaction({ id: 'b1', date: '2026-08-10', description: 'Bank fee', amount: 47.66, direction: 'credit', source: 'import' });
+    const { service, issueRepository } = buildFixture({ variance: 47.66, transactions: [bank] });
+
+    const first = await service.investigate('acc1', '2026-08-27', 1000, []);
+    const second = await service.investigate('acc1', '2026-08-27', 1000, []);
+
+    const stored = await issueRepository.getByAccount('acc1');
+    expect(stored.length).toBe(second.issues.length);
+    expect(first.issues.map((i) => i.dedupeKey).sort()).toEqual(second.issues.map((i) => i.dedupeKey).sort());
+
+    // getIssuesForAccount is a total order: confidence DESC, then |effect| DESC, then type, then key.
+    const ranked = await service.getIssuesForAccount('acc1');
+    for (let i = 1; i < ranked.length; i++) {
+      const a = ranked[i - 1];
+      const b = ranked[i];
+      const ok =
+        a.confidence > b.confidence ||
+        (a.confidence === b.confidence && Math.abs(a.effectAmount) >= Math.abs(b.effectAmount));
+      expect(ok).toBe(true);
     }
   });
 });

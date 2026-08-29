@@ -1,7 +1,9 @@
-import type { JournalEntry, ReconciliationEvidence } from '@/types';
+import type { JournalEntry } from '@/types';
 import type { BankReconciliation, BankTransactionWithAllocations } from '@/features/banking/types';
 import type { ReconciliationIssueDraft } from '../types';
-import { buildConfidence } from '../utils/confidence';
+import { buildEvidence } from '../utils/evidence';
+import { renderExplanation } from '../utils/renderExplanation';
+import { toCents } from '../utils/money';
 
 /**
  * This app already structurally prevents editing a reconciled
@@ -41,11 +43,36 @@ export function detectEditedAfterReconciliation(
       if (!originalEntry || !reversal) continue;
       if (!reversal.postedAt || reversal.postedAt <= reconciliation.finalizedAt) continue;
 
-      const evidence: ReconciliationEvidence[] = [
-        { label: 'Cleared by a finalized reconciliation', detail: `${reconciliation.statementDate} (finalized ${reconciliation.finalizedAt})` },
-        { label: 'Its journal entry was reversed afterward', detail: `Reversal ${reversal.entryNumber}, posted ${reversal.postedAt}` },
-      ];
-      const { value: confidence } = buildConfidence(evidence.map((e) => ({ points: 50, label: e.label, detail: e.detail, met: true })));
+      const { value: confidence, evidence, evidenceData } = buildEvidence({
+        detectorType: 'edited_after_reconciliation',
+        factors: [
+          {
+            key: 'cleared_by_finalized_reconciliation',
+            points: 50,
+            maxPoints: 50,
+            label: 'Cleared by a finalized reconciliation',
+            detail: `${reconciliation.statementDate} (finalized ${reconciliation.finalizedAt})`,
+            met: true,
+          },
+          {
+            key: 'journal_entry_reversed_after',
+            points: 50,
+            maxPoints: 50,
+            label: 'Its journal entry was reversed afterward',
+            detail: `Reversal ${reversal.entryNumber}, posted ${reversal.postedAt}`,
+            met: true,
+          },
+        ],
+        fields: {
+          varianceExplainedCents: toCents(transaction.amount),
+          bankAmountCents: toCents(transaction.amount),
+          counterpartyLabel: transaction.description,
+          candidateSourceType: 'journal_entry',
+          candidateSourceId: reversal.id,
+          observedDateFrom: transaction.date,
+          observedDateTo: reversal.date,
+        },
+      });
 
       issues.push({
         issueType: 'edited_after_reconciliation',
@@ -57,8 +84,9 @@ export function detectEditedAfterReconciliation(
         relatedBankTransactionIds: [transaction.id],
         relatedJournalEntryIds: [originalEntry.id, reversal.id],
         relatedSourceDocumentIds: [],
-        explanation: `"${transaction.description}" (R${transaction.amount.toFixed(2)}) was cleared by the reconciliation finalized on ${reconciliation.finalizedAt}, but its journal entry (${originalEntry.entryNumber}) was reversed afterward on ${reversal.date} — that reconciliation's snapshot no longer reflects current posted history.`,
+        explanation: renderExplanation(evidenceData, 'edited_after_reconciliation'),
         evidence,
+        evidenceData,
         suggestedResolution: 'Review the reversal and prepare a correcting entry for the next open period — the finalized reconciliation itself cannot and should not be edited.',
         autoResolutionSafe: false,
       });

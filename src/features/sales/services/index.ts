@@ -8,7 +8,7 @@ import { SupabaseQuoteRepository } from '@/repositories/SupabaseQuoteRepository'
 import { SupabaseSalesOrderRepository } from '@/repositories/SupabaseSalesOrderRepository';
 import { SupabaseCreditNoteRepository } from '@/repositories/SupabaseCreditNoteRepository';
 import { SupabaseCustomerReceiptRepository } from '@/repositories/SupabaseCustomerReceiptRepository';
-import { journalEntryService, accountMappingService } from '@/features/accounting/services';
+import { journalEntryService, accountMappingService, categoryAccountMappingService } from '@/features/accounting/services';
 import { invoiceService } from '@/services';
 import { inventoryPoster } from '@/features/inventory/services/inventoryPostingAdapter';
 import { supabase } from '@/config/supabase';
@@ -81,6 +81,7 @@ export const creditNoteService = new CreditNoteService(
   invoiceService,
   inventoryPoster,
   accountMappingService,
+  categoryAccountMappingService,
 );
 export const customerReceiptService = new CustomerReceiptService(
   customerReceiptRepository,

@@ -1,6 +1,7 @@
 import type { ID, Invoice } from '@/types';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
-import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, CategoryAccountResolver, NewJournalLineInput } from '@/features/accounting/services';
+import { bucketByAccount, nullCategoryAccountResolver, roundToCents } from '@/features/accounting/services';
 
 export type CreateInvoiceDTO = Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -31,6 +32,12 @@ export interface JournalPoster {
 export interface InventoryMover {
   calculateCogs(productId: ID, quantity: number, warehouseId?: ID): Promise<number>;
   recordSaleMovement(productId: ID, quantity: number, reference: string, warehouseId?: ID): Promise<void>;
+  /**
+   * This product's category, for per-line revenue/COGS account resolution
+   * (Phase 21.3). Optional so existing stubs don't need it — a stub that
+   * omits it behaves exactly as before (every line → generic account).
+   */
+  getProductCategory?(productId: ID): Promise<string | undefined>;
 }
 
 /**
@@ -85,6 +92,14 @@ export class InvoiceService {
     private readonly journalEntryService: JournalPoster,
     private readonly inventoryMover: InventoryMover,
     private readonly accounts: AccountMapper,
+    /**
+     * Resolves a line's product category to granular revenue / COGS /
+     * inventory accounts (Phase 21.3). Defaults to the null resolver, so a
+     * caller that doesn't wire it keeps the pre-21.3 single-line-per-leg
+     * behaviour (every line → generic `SALES_REVENUE` / `COGS` /
+     * `INVENTORY`).
+     */
+    private readonly categoryAccounts: CategoryAccountResolver = nullCategoryAccountResolver,
   ) {}
 
   async getInvoices(): Promise<Invoice[]> {
@@ -166,14 +181,18 @@ export class InvoiceService {
    * journal entry.
    *
    * debit  Accounts Receivable for invoice.total
-   * credit Sales Revenue      for invoice.subtotal
+   * credit Sales Revenue      for invoice.subtotal — split into one line
+   *        per resolved revenue account when line items map to different
+   *        product categories (Phase 21.3); the buckets are reconciled to
+   *        invoice.subtotal so the entry still balances to the cent.
    * credit VAT Output         for invoice.taxTotal (only if > 0)
    * debit  Cost of Goods Sold  credit Inventory, for
    *        the total Cost of Sales across every tracked-inventory line
    *        item (only if > 0) — SA_ACCOUNTING_MASTER_SPEC.md §24: revenue
    *        must never post without the corresponding inventory/cost
-   *        treatment where inventory is involved. Stock itself is only
-   *        reduced AFTER this entry posts successfully.
+   *        treatment where inventory is involved. Both legs are likewise
+   *        split by the line's resolved category account. Stock itself is
+   *        only reduced AFTER this entry posts successfully.
    */
   async postInvoice(id: string, postedByUserId?: ID): Promise<Invoice> {
     const invoice = await this.repository.getById(id);
@@ -186,6 +205,33 @@ export class InvoiceService {
       );
     }
 
+    const genericRevenueId = await this.accounts.getAccountId('SALES_REVENUE');
+
+    // Per-line category -> granular account resolution (Phase 21.3). A line
+    // with no product, no category, or an unmapped category resolves to the
+    // generic account, reproducing the pre-21.3 single-line behaviour. A
+    // mixed-category invoice gets one revenue line per resolved account,
+    // the buckets reconciled to `invoice.subtotal` so the entry still
+    // balances to the cent despite per-line rounding.
+    const lineCategoryAccounts = await Promise.all(
+      invoice.lineItems.map(async (line) => {
+        const category =
+          line.productId && this.inventoryMover.getProductCategory
+            ? await this.inventoryMover.getProductCategory(line.productId)
+            : undefined;
+        return this.categoryAccounts.resolveForCategory(category);
+      }),
+    );
+
+    const revenueContributions = invoice.lineItems.map((line, index) => ({
+      accountId: lineCategoryAccounts[index].revenueAccountId ?? genericRevenueId,
+      amount: line.lineTotal,
+    }));
+    const revenueBuckets =
+      revenueContributions.length > 0
+        ? bucketByAccount(revenueContributions, invoice.subtotal)
+        : [{ accountId: genericRevenueId, amount: invoice.subtotal }];
+
     const lines: NewJournalLineInput[] = [
       {
         accountId: await this.accounts.getAccountId('AR'),
@@ -193,12 +239,12 @@ export class InvoiceService {
         debit: invoice.total,
         credit: 0,
       },
-      {
-        accountId: await this.accounts.getAccountId('SALES_REVENUE'),
+      ...revenueBuckets.map((bucket) => ({
+        accountId: bucket.accountId,
         description: `Invoice ${invoice.invoiceNumber}`,
         debit: 0,
-        credit: invoice.subtotal,
-      },
+        credit: bucket.amount,
+      })),
     ];
     if (invoice.taxTotal > 0) {
       lines.push({
@@ -210,25 +256,45 @@ export class InvoiceService {
     }
 
     const inventoryLines = invoice.lineItems.filter((line) => line.productId);
+    const inventoryLineAccounts = invoice.lineItems
+      .map((line, index) => ({ line, resolved: lineCategoryAccounts[index] }))
+      .filter((entry) => entry.line.productId);
     const cogsByLine = await Promise.all(
       inventoryLines.map((line) => this.inventoryMover.calculateCogs(line.productId!, line.quantity, line.warehouseId)),
     );
-    const totalCogs = cogsByLine.reduce((sum, c) => sum + c, 0);
+    const roundedCogs = cogsByLine.map(roundToCents);
+    const totalCogs = roundToCents(roundedCogs.reduce((sum, c) => sum + c, 0));
     if (totalCogs > 0) {
-      lines.push(
-        {
-          accountId: await this.accounts.getAccountId('COGS'),
+      const genericCogsId = await this.accounts.getAccountId('COGS');
+      const genericInventoryId = await this.accounts.getAccountId('INVENTORY');
+      const cogsBuckets = bucketByAccount(
+        inventoryLineAccounts.map((entry, i) => ({
+          accountId: entry.resolved.cogsAccountId ?? genericCogsId,
+          amount: roundedCogs[i],
+        })),
+      );
+      const inventoryBuckets = bucketByAccount(
+        inventoryLineAccounts.map((entry, i) => ({
+          accountId: entry.resolved.inventoryAccountId ?? genericInventoryId,
+          amount: roundedCogs[i],
+        })),
+      );
+      for (const bucket of cogsBuckets) {
+        lines.push({
+          accountId: bucket.accountId,
           description: `Invoice ${invoice.invoiceNumber} - Cost of Sales`,
-          debit: totalCogs,
+          debit: bucket.amount,
           credit: 0,
-        },
-        {
-          accountId: await this.accounts.getAccountId('INVENTORY'),
+        });
+      }
+      for (const bucket of inventoryBuckets) {
+        lines.push({
+          accountId: bucket.accountId,
           description: `Invoice ${invoice.invoiceNumber} - Inventory`,
           debit: 0,
-          credit: totalCogs,
-        },
-      );
+          credit: bucket.amount,
+        });
+      }
     }
 
     const entry = await this.journalEntryService.postJournalEntry({

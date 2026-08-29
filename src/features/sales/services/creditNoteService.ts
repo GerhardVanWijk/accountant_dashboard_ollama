@@ -1,6 +1,7 @@
 import type { CreditNote, ID } from '@/types';
 import type { ICreditNoteRepository } from '@/repositories/ICreditNoteRepository';
-import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, CategoryAccountResolver, NewJournalLineInput } from '@/features/accounting/services';
+import { bucketByAccount, nullCategoryAccountResolver, roundToCents } from '@/features/accounting/services';
 
 export type CreateCreditNoteDTO = Omit<CreditNote, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -40,6 +41,11 @@ export interface InvoicePaymentRecorder {
 export interface InventoryReturnMover {
   calculateCogs(productId: ID, quantity: number, warehouseId?: ID): Promise<number>;
   recordReturnMovement(productId: ID, quantity: number, reference: string, warehouseId?: ID, unitCost?: number): Promise<void>;
+  /**
+   * This product's category, for per-line revenue/COGS account resolution
+   * (Phase 21.3). Optional so existing stubs don't need it.
+   */
+  getProductCategory?(productId: ID): Promise<string | undefined>;
 }
 
 const BALANCE_EPSILON = 0.01;
@@ -58,6 +64,13 @@ export class CreditNoteService {
     private readonly invoiceService: InvoicePaymentRecorder,
     private readonly inventoryMover: InventoryReturnMover,
     private readonly accounts: AccountMapper,
+    /**
+     * Resolves a line's product category to granular revenue / COGS /
+     * inventory accounts (Phase 21.3). Defaults to the null resolver, so a
+     * caller that doesn't wire it keeps the pre-21.3 single-line-per-leg
+     * reversal behaviour.
+     */
+    private readonly categoryAccounts: CategoryAccountResolver = nullCategoryAccountResolver,
   ) {}
 
   async getCreditNotes(): Promise<CreditNote[]> {
@@ -127,14 +140,37 @@ export class CreditNoteService {
       );
     }
 
-    const lines: NewJournalLineInput[] = [
-      {
-        accountId: await this.accounts.getAccountId('SALES_REVENUE'),
-        description: `Credit Note ${creditNote.creditNoteNumber}`,
-        debit: creditNote.subtotal,
-        credit: 0,
-      },
-    ];
+    const genericRevenueId = await this.accounts.getAccountId('SALES_REVENUE');
+
+    // Per-line category -> granular account resolution (Phase 21.3), mirroring
+    // InvoiceService.postInvoice(): a return of furniture + stationery reverses
+    // revenue against 4010 and 4030 separately, buckets reconciled to
+    // creditNote.subtotal so the reversal still balances to the cent.
+    const lineCategoryAccounts = await Promise.all(
+      creditNote.lineItems.map(async (line) => {
+        const category =
+          line.productId && this.inventoryMover.getProductCategory
+            ? await this.inventoryMover.getProductCategory(line.productId)
+            : undefined;
+        return this.categoryAccounts.resolveForCategory(category);
+      }),
+    );
+
+    const revenueContributions = creditNote.lineItems.map((line, index) => ({
+      accountId: lineCategoryAccounts[index].revenueAccountId ?? genericRevenueId,
+      amount: line.lineTotal,
+    }));
+    const revenueBuckets =
+      revenueContributions.length > 0
+        ? bucketByAccount(revenueContributions, creditNote.subtotal)
+        : [{ accountId: genericRevenueId, amount: creditNote.subtotal }];
+
+    const lines: NewJournalLineInput[] = revenueBuckets.map((bucket) => ({
+      accountId: bucket.accountId,
+      description: `Credit Note ${creditNote.creditNoteNumber}`,
+      debit: bucket.amount,
+      credit: 0,
+    }));
     if (creditNote.taxTotal > 0) {
       lines.push({
         accountId: await this.accounts.getAccountId('VAT_OUTPUT'),
@@ -151,25 +187,48 @@ export class CreditNoteService {
     });
 
     const returnLines = creditNote.reason === 'return' ? creditNote.lineItems.filter((line) => line.productId) : [];
+    const returnLineAccounts =
+      creditNote.reason === 'return'
+        ? creditNote.lineItems
+            .map((line, index) => ({ line, resolved: lineCategoryAccounts[index] }))
+            .filter((entry) => entry.line.productId)
+        : [];
     const cogsByLine = await Promise.all(
       returnLines.map((line) => this.inventoryMover.calculateCogs(line.productId!, line.quantity, line.warehouseId)),
     );
-    const totalCogs = cogsByLine.reduce((sum, c) => sum + c, 0);
+    const roundedCogs = cogsByLine.map(roundToCents);
+    const totalCogs = roundToCents(roundedCogs.reduce((sum, c) => sum + c, 0));
     if (totalCogs > 0) {
-      lines.push(
-        {
-          accountId: await this.accounts.getAccountId('INVENTORY'),
+      const genericInventoryId = await this.accounts.getAccountId('INVENTORY');
+      const genericCogsId = await this.accounts.getAccountId('COGS');
+      const inventoryBuckets = bucketByAccount(
+        returnLineAccounts.map((entry, i) => ({
+          accountId: entry.resolved.inventoryAccountId ?? genericInventoryId,
+          amount: roundedCogs[i],
+        })),
+      );
+      const cogsBuckets = bucketByAccount(
+        returnLineAccounts.map((entry, i) => ({
+          accountId: entry.resolved.cogsAccountId ?? genericCogsId,
+          amount: roundedCogs[i],
+        })),
+      );
+      for (const bucket of inventoryBuckets) {
+        lines.push({
+          accountId: bucket.accountId,
           description: `Credit Note ${creditNote.creditNoteNumber} - Inventory`,
-          debit: totalCogs,
+          debit: bucket.amount,
           credit: 0,
-        },
-        {
-          accountId: await this.accounts.getAccountId('COGS'),
+        });
+      }
+      for (const bucket of cogsBuckets) {
+        lines.push({
+          accountId: bucket.accountId,
           description: `Credit Note ${creditNote.creditNoteNumber} - Cost of Sales reversal`,
           debit: 0,
-          credit: totalCogs,
-        },
-      );
+          credit: bucket.amount,
+        });
+      }
     }
 
     const entry = await this.journalEntryService.postJournalEntry({

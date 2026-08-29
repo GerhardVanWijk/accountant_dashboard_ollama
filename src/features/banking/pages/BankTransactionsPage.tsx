@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Download, Loader2, Plus } from 'lucide-react';
 import type { BankAccount } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
@@ -28,12 +28,11 @@ import { useBankAccounts } from '../hooks/useBankAccounts';
 import { useBankTransactions } from '../hooks/useBankTransactions';
 import { useBankTransactionMutations } from '../hooks/useBankTransactionMutations';
 import { useGlAccounts } from '../hooks/useGlAccounts';
-import { bankTransactionService } from '../services';
 import { BankTransactionTable } from '../components/BankTransactionTable';
 import { BankTransactionDetailSheet } from '../components/BankTransactionDetailSheet';
 import { TransactionFormModal } from '../components/TransactionFormModal';
 import { AllocateTransactionFormModal } from '../components/AllocateTransactionFormModal';
-import { StatementImportModal } from '../components/StatementImportModal';
+import { StatementImportWizard } from '../components/StatementImportWizard';
 import type { BankTransactionWithAllocations } from '../types';
 
 type DialogState =
@@ -58,8 +57,9 @@ export function BankTransactionsPage() {
 
   const filterAccountId = selectedAccountId === 'all' ? undefined : selectedAccountId;
   const { transactions, isLoading, error, refetch } = useBankTransactions(filterAccountId);
-  const { createDirectTransaction, createTransfer, allocateTransaction, deleteTransaction, importStatementLines, error: mutationError } =
+  const { createDirectTransaction, createTransfer, allocateTransaction, deleteTransaction, error: mutationError } =
     useBankTransactionMutations({ onSuccess: refetch });
+  const navigate = useNavigate();
 
   const [dialog, setDialog] = useState<DialogState>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -238,11 +238,17 @@ export function BankTransactionsPage() {
       )}
 
       {dialog?.mode === 'import' && importTargetAccountId && (
-        <StatementImportModal
-          findMatches={(line) => bankTransactionService.findMatchesForLine(importTargetAccountId, line)}
-          onImport={async (lines) => {
-            await importStatementLines(importTargetAccountId, lines);
+        <StatementImportWizard
+          bankAccounts={bankAccounts}
+          defaultBankAccountId={importTargetAccountId}
+          onImported={() => {
+            void refetch();
+          }}
+          onReconcile={() => {
             setDialog(null);
+            // P2: route to the reconciliation workspace scoped to this statement id
+            // (the /banking/reconciliation route does not read a statement param yet).
+            navigate('/banking/reconciliation');
           }}
           onClose={() => setDialog(null)}
         />

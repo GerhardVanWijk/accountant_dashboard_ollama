@@ -1,6 +1,6 @@
 import type { InvestigationCandidate, ReconciliationIssueDraft } from '../types';
-import { buildConfidence } from '../utils/confidence';
-import { fromCents } from '../utils/money';
+import { buildEvidence } from '../utils/evidence';
+import { renderExplanation } from '../utils/renderExplanation';
 import { findSubsetsSumming } from '../utils/subsetSum';
 
 function dateSpreadDays(items: InvestigationCandidate[]): number {
@@ -14,17 +14,32 @@ function buildGroupIssue(
   direction: 'one_bank_to_many_books' | 'many_bank_to_one_books',
 ): ReconciliationIssueDraft {
   const spread = dateSpreadDays([single, ...group]);
-  const { value: confidence, evidence } = buildConfidence([
-    { points: 45, label: `${group.length} entries sum exactly to R${fromCents(Math.abs(single.amountCents)).toFixed(2)}`, met: true },
-    { points: 25, label: spread <= 3 ? 'All within a few days of each other' : `Spans ${spread} days`, met: spread <= 3 },
-    { points: 15, label: 'Same direction (all money in, or all money out)', met: true },
-  ]);
+  const allDates = [single, ...group].map((i) => i.date).sort();
 
-  const groupList = group.map((g) => `R${fromCents(Math.abs(g.amountCents)).toFixed(2)} (${g.description})`).join(', ');
-  const explanation =
-    direction === 'one_bank_to_many_books'
-      ? `One bank line of R${fromCents(Math.abs(single.amountCents)).toFixed(2)} matches ${group.length} separate books entries: ${groupList}.`
-      : `One books entry of R${fromCents(Math.abs(single.amountCents)).toFixed(2)} matches ${group.length} separate bank lines: ${groupList}.`;
+  const { value: confidence, evidence, evidenceData } = buildEvidence({
+    detectorType: 'grouped_match',
+    factors: [
+      { key: 'group_sums_exactly', points: 45, maxPoints: 45, label: `${group.length} entries sum exactly to R${Math.abs(single.amountCents / 100).toFixed(2)}`, met: true },
+      { key: 'tight_date_cluster', points: 25, maxPoints: 25, label: spread <= 3 ? 'All within a few days of each other' : `Spans ${spread} days`, met: spread <= 3, observedValue: `${spread} days` },
+      { key: 'same_direction', points: 15, maxPoints: 15, label: 'Same direction (all money in, or all money out)', met: true },
+    ],
+    fields: {
+      amountDifferenceCents: 0,
+      dateDifferenceDays: spread,
+      sameDirection: true,
+      sameBankAccount: true,
+      candidateSourceType: direction === 'one_bank_to_many_books' ? 'journal_entry' : 'statement_line',
+      candidateSourceId: single.id,
+      varianceExplainedCents: 0,
+      counterpartyLabel: single.description,
+      observedDateFrom: allDates[0],
+      observedDateTo: allDates[allDates.length - 1],
+      groupSingleCents: single.amountCents,
+      groupPartCount: group.length,
+      combinationTerms: group.map((g) => ({ label: `${g.description}, ${g.date}`, amountCents: g.amountCents })),
+      combinationTotalCents: group.reduce((s, g) => s + g.amountCents, 0),
+    },
+  });
 
   const bankTxnIds =
     direction === 'one_bank_to_many_books'
@@ -40,13 +55,14 @@ function buildGroupIssue(
     severity: 'info',
     confidence,
     effectAmount: 0,
-    affectedDateFrom: [single, ...group].map((i) => i.date).sort()[0],
-    affectedDateTo: [single, ...group].map((i) => i.date).sort().slice(-1)[0],
+    affectedDateFrom: allDates[0],
+    affectedDateTo: allDates[allDates.length - 1],
     relatedBankTransactionIds: bankTxnIds.filter((x): x is string => Boolean(x)),
     relatedJournalEntryIds: journalEntryIds.filter((x): x is string => Boolean(x)),
     relatedSourceDocumentIds: [],
-    explanation,
+    explanation: renderExplanation(evidenceData, 'grouped_match'),
     evidence,
+    evidenceData,
     suggestedResolution: 'Confirm the grouping and mark all items as matched together.',
     autoResolutionSafe: true,
   };

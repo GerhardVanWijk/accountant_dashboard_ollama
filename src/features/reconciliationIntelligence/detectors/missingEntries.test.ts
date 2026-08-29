@@ -23,6 +23,13 @@ describe('detectMissingEntries', () => {
     expect(issues).toHaveLength(1);
     expect(issues[0].issueType).toBe('missing_ledger_side');
     expect(issues[0].severity).toBe('high');
+
+    const data = issues[0].evidenceData!;
+    expect(data.detectorType).toBe('missing_ledger_side');
+    expect(data.isStale).toBe(true);
+    expect(data.ageDays).toBe(26);
+    expect(data.bankAmountCents).toBe(-8500);
+    expect(data.varianceExplainedCents).toBe(8500);
   });
 
   it('flags a books entry never seen on the bank as missing_bank_side', () => {

@@ -3,7 +3,9 @@ import { JournalEntryService } from './journalEntryService';
 import { AccountingPeriodService } from './accountingPeriodService';
 import { FinancialYearService } from './financialYearService';
 import { AccountMappingService } from './accountMappingService';
+import { CategoryAccountMappingService } from './categoryAccountMappingService';
 import { SupabaseAccountRepository } from '../repositories/SupabaseAccountRepository';
+import { SupabaseCategoryAccountMappingRepository } from '../repositories/SupabaseCategoryAccountMappingRepository';
 import { SupabaseJournalEntryRepository } from '../repositories/SupabaseJournalEntryRepository';
 import { SupabaseAccountingPeriodRepository } from '../repositories/SupabaseAccountingPeriodRepository';
 import { SupabaseFinancialYearRepository } from '../repositories/SupabaseFinancialYearRepository';
@@ -25,6 +27,10 @@ export { AccountingPeriodService } from './accountingPeriodService';
 export { FinancialYearService } from './financialYearService';
 export type { AccountMappingKey, AccountMapper } from './accountMappingService';
 export { AccountMappingService } from './accountMappingService';
+export type { CategoryAccountResolver, ResolvedCategoryAccounts } from './categoryAccountMappingService';
+export { CategoryAccountMappingService, nullCategoryAccountResolver } from './categoryAccountMappingService';
+export { bucketByAccount, roundToCents } from './journalAccountSplit';
+export type { AccountBucket, AccountContribution } from './journalAccountSplit';
 
 /**
  * Wires the services to their Phase 0-style mock repositories, shared so a
@@ -59,3 +65,16 @@ export const journalEntryService = new JournalEntryService(
  * cover.
  */
 export const accountMappingService = new AccountMappingService(accountService);
+/**
+ * Phase 21.3 (docs/OFFICE_NATIONAL_DEMO_TASKS.md): resolves a
+ * `products.category` value to the granular revenue / COGS / inventory
+ * accounts its postings should use, backed by the company-scoped
+ * `category_account_mappings` table. The four posting paths
+ * (invoice / credit note / bill / their COGS+inventory legs) resolve
+ * per-line accounts through this, falling back to `accountMappingService`'s
+ * generic `SALES_REVENUE` / `COGS` / `INVENTORY` keys when a line has no
+ * product, no category, or an unmapped category.
+ */
+export const categoryAccountMappingService = new CategoryAccountMappingService(
+  new SupabaseCategoryAccountMappingRepository(supabase),
+);

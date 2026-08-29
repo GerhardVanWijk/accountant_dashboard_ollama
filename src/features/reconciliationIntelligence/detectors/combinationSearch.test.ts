@@ -41,4 +41,25 @@ describe('detectCombinations', () => {
     const pool = [candidate({ id: 'a', amountCents: 100 })];
     expect(detectCombinations(pool, 0)).toEqual([]);
   });
+
+  it('the explanation shows the literal arithmetic — "R95.00 (...) + R310.40 (...) = R405.40"', () => {
+    const pool = [
+      candidate({ id: 'rental', amountCents: -9500, description: 'card machine rental fee', date: '2026-08-08' }),
+      candidate({ id: 'sms', amountCents: -31040, description: 'SMS notification fee', date: '2026-08-09' }),
+      candidate({ id: 'noise', amountCents: -12345, description: 'Unrelated' }),
+    ];
+
+    const [issue] = detectCombinations(pool, -40540);
+
+    expect(issue.explanation).toContain('R95.00 (card machine rental fee, 2026-08-08)');
+    expect(issue.explanation).toContain('R310.40 (SMS notification fee, 2026-08-09)');
+    expect(issue.explanation).toContain('= R405.40');
+    // and the terms are kept as structured data
+    expect(issue.evidenceData?.combinationTerms).toEqual([
+      { label: 'card machine rental fee, 2026-08-08', amountCents: -9500 },
+      { label: 'SMS notification fee, 2026-08-09', amountCents: -31040 },
+    ]);
+    expect(issue.evidenceData?.combinationTotalCents).toBe(-40540);
+    expect(issue.evidenceData?.explainsVarianceExactly).toBe(true);
+  });
 });

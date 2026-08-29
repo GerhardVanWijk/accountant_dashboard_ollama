@@ -28,6 +28,11 @@ describe('detectDuplicates', () => {
     expect(issues).toHaveLength(1);
     expect(issues[0].issueType).toBe('duplicate_transaction');
     expect(issues[0].relatedBankTransactionIds).toEqual(expect.arrayContaining(['a', 'b']));
+
+    const data = issues[0].evidenceData!;
+    expect(data.detectorType).toBe('duplicate_transaction');
+    expect(data.dateDifferenceDays).toBe(1);
+    expect(data.factors!.some((f) => f.key === 'reference_match' && f.met)).toBe(true);
   });
 
   it('does not flag two same-amount entries with unrelated references/descriptions', () => {

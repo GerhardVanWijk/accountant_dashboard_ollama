@@ -11,7 +11,10 @@ import { seedAccounts } from '@/mock-data/accounts';
 import { seedJournalEntries } from '@/mock-data/journalEntries';
 import { seedInvoices } from '@/mock-data/invoices';
 import { seedBills } from '@/mock-data/bills';
-import type { AccountingPeriod, Invoice, Bill } from '@/types';
+import { seedCreditNotes } from '@/mock-data/creditNotes';
+import { seedCustomerReceipts } from '@/mock-data/customerReceipts';
+import { seedPayments } from '@/mock-data/payments';
+import type { AccountingPeriod, Invoice, Bill, CreditNote, CustomerReceipt, Payment } from '@/types';
 import { reconcileAccountsReceivable, reconcileAccountsPayable } from './subledgerReconciliation';
 
 function makeOpenPeriod(): AccountingPeriod {
@@ -94,12 +97,14 @@ describe('reconcileAccountsReceivable', () => {
       ],
     });
 
-    const result = await reconcileAccountsReceivable(journalEntryService, setupAccountMapper(), [invoice()]);
+    const result = await reconcileAccountsReceivable(journalEntryService, setupAccountMapper(), [invoice()], [], []);
 
     expect(result.controlAccountBalance).toBe(1150);
     expect(result.subledgerTotal).toBe(1150);
+    expect(result.agingSubledgerTotal).toBe(1150);
     expect(result.variance).toBe(0);
     expect(result.isReconciled).toBe(true);
+    expect(result.bridge).toEqual({ unallocatedReceipts: 0, creditNoteImpact: 0, other: 0 });
   });
 
   it('flags a variance when an invoice is in the subledger but never posted to the GL', async () => {
@@ -107,7 +112,7 @@ describe('reconcileAccountsReceivable', () => {
     // No journal entry posted at all — simulates a bug where an invoice
     // was created/sent without going through postInvoice().
 
-    const result = await reconcileAccountsReceivable(journalEntryService, setupAccountMapper(), [invoice()]);
+    const result = await reconcileAccountsReceivable(journalEntryService, setupAccountMapper(), [invoice()], [], []);
 
     expect(result.controlAccountBalance).toBe(0);
     expect(result.subledgerTotal).toBe(1150);
@@ -115,15 +120,19 @@ describe('reconcileAccountsReceivable', () => {
     expect(result.isReconciled).toBe(false);
   });
 
-  it('excludes draft and void invoices from the subledger total', async () => {
+  it('excludes draft and void invoices from both the GL-consistent and aging subledger totals', async () => {
     const journalEntryService = setupJournalEntryService();
 
-    const result = await reconcileAccountsReceivable(journalEntryService, setupAccountMapper(), [
-      invoice({ id: 'inv_draft', status: 'draft' }),
-      invoice({ id: 'inv_void', status: 'void' }),
-    ]);
+    const result = await reconcileAccountsReceivable(
+      journalEntryService,
+      setupAccountMapper(),
+      [invoice({ id: 'inv_draft', status: 'draft' }), invoice({ id: 'inv_void', status: 'void' })],
+      [],
+      [],
+    );
 
     expect(result.subledgerTotal).toBe(0);
+    expect(result.agingSubledgerTotal).toBe(0);
     expect(result.isReconciled).toBe(true);
   });
 });
@@ -141,10 +150,11 @@ describe('reconcileAccountsPayable', () => {
       ],
     });
 
-    const result = await reconcileAccountsPayable(journalEntryService, setupAccountMapper(), [bill()]);
+    const result = await reconcileAccountsPayable(journalEntryService, setupAccountMapper(), [bill()], []);
 
     expect(result.controlAccountBalance).toBe(1150);
     expect(result.subledgerTotal).toBe(1150);
+    expect(result.agingSubledgerTotal).toBe(1150);
     expect(result.variance).toBe(0);
     expect(result.isReconciled).toBe(true);
   });
@@ -160,25 +170,60 @@ describe('reconcileAccountsPayable', () => {
       ],
     });
 
-    const result = await reconcileAccountsPayable(journalEntryService, setupAccountMapper(), [bill()]);
+    const result = await reconcileAccountsPayable(journalEntryService, setupAccountMapper(), [bill()], []);
 
     expect(result.controlAccountBalance).toBe(500);
     expect(result.subledgerTotal).toBe(1150);
     expect(result.variance).toBe(-650);
     expect(result.isReconciled).toBe(false);
   });
+
+  it('adds nonBillApAdjustments to the GL-consistent subledger (e.g. an asset bought on supplier credit)', async () => {
+    const journalEntryService = setupJournalEntryService();
+    await journalEntryService.postJournalEntry({
+      date: '2026-08-21',
+      source: 'bill',
+      lines: [
+        { accountId: 'acc_5100', debit: 1000, credit: 0 },
+        { accountId: 'acc_2110', debit: 150, credit: 0 },
+        { accountId: 'acc_2000', debit: 0, credit: 1150 },
+      ],
+    });
+    await journalEntryService.postJournalEntry({
+      date: '2026-08-22',
+      source: 'fixed_asset',
+      lines: [
+        { accountId: 'acc_1500', debit: 50000, credit: 0 },
+        { accountId: 'acc_2000', debit: 0, credit: 50000 },
+      ],
+    });
+
+    const result = await reconcileAccountsPayable(journalEntryService, setupAccountMapper(), [bill()], [], 50000);
+
+    expect(result.controlAccountBalance).toBe(51150);
+    expect(result.subledgerTotal).toBe(51150);
+    expect(result.agingSubledgerTotal).toBe(1150);
+    expect(result.variance).toBe(0);
+    expect(result.isReconciled).toBe(true);
+    expect(result.bridge.other).toBeCloseTo(-50000, 2);
+  });
 });
 
 /**
- * Proves generateSeedPostings.ts's receipt/payment backfill (2026-08-22)
- * actually closes the gap it was built for — not just that nothing broke.
- * Mirrors vatReportService.test.ts's "against real seed data" integration
- * test exactly: wires the real JournalEntryService against the real seed
- * ledger and real seed Invoices/Bills (whose `amountPaid` reflects real,
- * partially/fully-paid documents), and asserts both reconcile cleanly.
+ * Wires the real JournalEntryService against the real seed ledger and real
+ * seed Invoices/Bills/CreditNotes/Receipts/Payments, and checks each side
+ * against its GL control account.
+ *
+ * AP ties to the cent. AR carries one fully-explained R2,000 gap: the
+ * Bushveld mock seed's generateSeedPostings deliberately does NOT post
+ * money-on-account receipts (unallocatedAmount > 0) to the GL — see its
+ * header comment. The GL-consistent AR subledger nets every receipt in full
+ * (matching a real recordReceipt()), so it sits R2,000 below the GL control
+ * for exactly the one such receipt (rcpt_00000003). The aging subledger, by
+ * contrast, still ties to the GL for this simple seed.
  */
 describe('subledger reconciliation against real seed data', () => {
-  it('reconciles both AR and AP cleanly — proves the receipt/payment GL backfill matches seed Invoices/Bills\' real amountPaid', async () => {
+  it('AP ties to the GL; AR carries only the documented money-on-account gap', async () => {
     const journalRepository = new MockJournalEntryRepository(seedJournalEntries);
     const accountRepository = new MockAccountRepository(seedAccounts);
     const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
@@ -186,10 +231,19 @@ describe('subledger reconciliation against real seed data', () => {
     const journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
 
     const accountMapper = setupAccountMapper();
-    const ar = await reconcileAccountsReceivable(journalEntryService, accountMapper, seedInvoices);
-    const ap = await reconcileAccountsPayable(journalEntryService, accountMapper, seedBills);
+    const ar = await reconcileAccountsReceivable(
+      journalEntryService,
+      accountMapper,
+      seedInvoices as Invoice[],
+      seedCreditNotes as CreditNote[],
+      seedCustomerReceipts as CustomerReceipt[],
+    );
+    const ap = await reconcileAccountsPayable(journalEntryService, accountMapper, seedBills as Bill[], seedPayments as Payment[]);
 
-    expect(ar.isReconciled).toBe(true);
     expect(ap.isReconciled).toBe(true);
+
+    expect(ar.bridge.unallocatedReceipts).toBeCloseTo(2000, 2);
+    expect(ar.variance).toBeCloseTo(2000, 2);
+    expect(ar.agingSubledgerTotal).toBeCloseTo(ar.controlAccountBalance, 2);
   });
 });

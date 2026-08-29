@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { journalEntryService, accountMappingService } from '../services';
 import { reconcileAccountsReceivable, reconcileAccountsPayable, type SubledgerReconciliation } from '../services/subledgerReconciliation';
 import { invoiceService } from '@/services';
-import { billService } from '@/features/purchases/services';
+import { creditNoteService, customerReceiptService } from '@/features/sales/services';
+import { billService, paymentService } from '@/features/purchases/services';
 
 export interface UseSubledgerReconciliationResult {
   ar: SubledgerReconciliation | null;
@@ -31,11 +32,17 @@ export function useSubledgerReconciliation(): UseSubledgerReconciliationResult {
     setLoading(true);
     setError(null);
 
-    Promise.all([invoiceService.getInvoices(), billService.getBills()])
-      .then(([invoices, bills]) =>
+    Promise.all([
+      invoiceService.getInvoices(),
+      billService.getBills(),
+      creditNoteService.getCreditNotes(),
+      customerReceiptService.getReceipts(),
+      paymentService.getPayments(),
+    ])
+      .then(([invoices, bills, creditNotes, receipts, payments]) =>
         Promise.all([
-          reconcileAccountsReceivable(journalEntryService, accountMappingService, invoices),
-          reconcileAccountsPayable(journalEntryService, accountMappingService, bills),
+          reconcileAccountsReceivable(journalEntryService, accountMappingService, invoices, creditNotes, receipts),
+          reconcileAccountsPayable(journalEntryService, accountMappingService, bills, payments),
         ]),
       )
       .then(([arResult, apResult]) => {

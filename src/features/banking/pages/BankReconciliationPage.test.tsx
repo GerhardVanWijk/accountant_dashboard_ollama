@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReconciliationSummary } from '../services';
 
@@ -79,10 +79,34 @@ vi.mock('../hooks/useBankTransactionMutations', () => ({
   useBankTransactionMutations: () => ({ allocateTransaction: vi.fn() }),
 }));
 vi.mock('../hooks/useGlAccounts', () => ({ useGlAccounts: () => ({ accounts: [] }) }));
+vi.mock('../hooks/useJournalIndex', () => ({
+  useJournalIndex: () => ({ isLoading: false, numberFor: () => undefined, balancedFor: () => undefined }),
+}));
+vi.mock('../hooks/useBankStatements', () => ({
+  useBankStatements: () => ({ statements: [], isLoading: false, error: null, refetch: vi.fn() }),
+  useReconciliationStatement: () => ({ statement: null, lines: [], isLoading: false, error: null, refetch: vi.fn() }),
+}));
 vi.mock('@/features/tax/hooks/useTaxRates', () => ({ useTaxRates: () => ({ taxRates: [], loading: false }) }));
 vi.mock('@/features/reconciliationIntelligence/hooks/useBooksIntegrity', () => ({
   useBooksIntegrity: () => ({ results: [], isLoading: false, error: null }),
 }));
+vi.mock('@/features/reconciliationIntelligence/hooks/useWholePeriodProof', () => ({
+  useWholePeriodProof: () => ({ proof: null, isLoading: false, error: null, refetch: vi.fn() }),
+}));
+const investigatorController = {
+  result: null,
+  isInvestigating: false,
+  error: null,
+  investigate: vi.fn(),
+  reviewIssue: vi.fn(),
+  dismissIssue: vi.fn(),
+  markAutoSafe: vi.fn(),
+  resolveIssue: vi.fn(),
+};
+vi.mock('@/features/reconciliationIntelligence/hooks/useDifferenceInvestigator', () => ({
+  useDifferenceInvestigator: () => investigatorController,
+}));
+vi.mock('@/features/reconciliationIntelligence/components/WholePeriodProofPanel', () => ({ WholePeriodProofPanel: () => <div /> }));
 
 // Prop-capturing stubs for the two children that must share state.
 const workspaceProps: Record<string, unknown>[] = [];
@@ -172,6 +196,26 @@ describe('BankReconciliationPage — shared reconciliation state', () => {
 
     expect(last(workspaceProps).statementBalance).toBe(999);
     expect(last(investigatorProps).variance).toBe(0);
+  });
+
+  it('keeps the workspace panel mounted across a tab switch (keepMounted) so its selected line / filters survive', () => {
+    renderPage();
+    expect(screen.getByTestId('workspace-stub')).toBeInTheDocument();
+
+    openInvestigatorTab();
+    // Without keepMounted, base-ui unmounts the hidden panel and the workspace's
+    // local line selection would be lost. It must still be in the DOM.
+    expect(screen.getByTestId('workspace-stub')).toBeInTheDocument();
+    expect(screen.getByTestId('investigator-stub')).toBeInTheDocument();
+  });
+
+  it('a stubbed missing-in-books action surfaces an honest "coming in a later release" notice, not silence', () => {
+    renderPage();
+    const onMissingInBooksAction = last(workspaceProps).onMissingInBooksAction as (a: string) => void;
+
+    act(() => onMissingInBooksAction('bank_charge'));
+    expect(screen.getByText(/coming in a later release/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bank Transactions page/i)).toBeInTheDocument();
   });
 
   it('scopes the reconciliation state to the selected account (hook receives the account id)', () => {

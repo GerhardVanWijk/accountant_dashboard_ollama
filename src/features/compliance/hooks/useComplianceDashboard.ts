@@ -8,8 +8,8 @@ import { publicInterestScoreService } from '../services';
 import { financialYearService, accountingPeriodService, journalEntryService, accountMappingService } from '@/features/accounting/services';
 import { reconcileAccountsReceivable, reconcileAccountsPayable } from '@/features/accounting/services/subledgerReconciliation';
 import { invoiceService } from '@/services';
-import { creditNoteService } from '@/features/sales/services';
-import { billService } from '@/features/purchases/services';
+import { creditNoteService, customerReceiptService } from '@/features/sales/services';
+import { billService, paymentService } from '@/features/purchases/services';
 import { taxRateService } from '@/features/tax/services';
 import { computeVatReport, reconcileVatControlAccounts } from '@/features/tax/services/vatReportService';
 import { employeeService, payrollRunService, computeEmp201Report, reconcilePayrollLiabilities } from '@/features/employees/services';
@@ -81,13 +81,20 @@ export function useComplianceDashboard() {
 
       const [
         latestPiScore,
-        [invoices, creditNotes, bills, taxRates],
+        [invoices, creditNotes, bills, taxRates, customerReceipts, supplierPayments],
         payrollRuns,
         provisionalTaxPeriod,
         latestTaxComputation,
       ] = await Promise.all([
         company ? publicInterestScoreService.getLatestScore(company.id) : Promise.resolve(undefined),
-        Promise.all([invoiceService.getInvoices(), creditNoteService.getCreditNotes(), billService.getBills(), taxRateService.getTaxRates()]),
+        Promise.all([
+          invoiceService.getInvoices(),
+          creditNoteService.getCreditNotes(),
+          billService.getBills(),
+          taxRateService.getTaxRates(),
+          customerReceiptService.getReceipts(),
+          paymentService.getPayments(),
+        ]),
         payrollRunService.getPayrollRuns(),
         openFinancialYear ? provisionalTaxService.getPeriodForFinancialYear(openFinancialYear.id) : Promise.resolve(undefined),
         openFinancialYear ? taxComputationService.getComputationForFinancialYear(openFinancialYear.id) : Promise.resolve(undefined),
@@ -100,8 +107,8 @@ export function useComplianceDashboard() {
       const emp201Reconciliation = await reconcilePayrollLiabilities(journalEntryService, accountMappingService, periodStart, periodEnd, emp201);
 
       const [arReconciliation, apReconciliation] = await Promise.all([
-        reconcileAccountsReceivable(journalEntryService, accountMappingService, invoices),
-        reconcileAccountsPayable(journalEntryService, accountMappingService, bills),
+        reconcileAccountsReceivable(journalEntryService, accountMappingService, invoices, creditNotes, customerReceipts),
+        reconcileAccountsPayable(journalEntryService, accountMappingService, bills, supplierPayments),
       ]);
 
       if (cancelled) return;

@@ -1,5 +1,6 @@
 import type { InvestigationCandidate, ReconciliationIssueDraft } from '../types';
-import { buildConfidence } from '../utils/confidence';
+import { buildEvidence } from '../utils/evidence';
+import { renderExplanation } from '../utils/renderExplanation';
 import { fromCents } from '../utils/money';
 import { findSubsetsSumming } from '../utils/subsetSum';
 
@@ -27,28 +28,40 @@ export function detectCombinations(leftoverPool: InvestigationCandidate[], targe
 
   return matches.map((match) => {
     const items = match.indexes.map((i) => leftoverPool[i]);
-    const { value: confidence, evidence } = buildConfidence([
-      { points: 35, label: `${items.length} item(s) sum to exactly R${fromCents(Math.abs(targetVarianceCents)).toFixed(2)}`, met: true },
-      { points: 30, label: 'Every item was otherwise fully unexplained', met: true },
-      { points: 20, label: 'Single-item explanation', met: items.length === 1 },
-      { points: 15, label: 'Two-item combination', met: items.length === 2 },
-      { points: 5, label: 'Three-item combination', met: items.length === 3 },
-    ]);
+    const sortedDates = items.map((i) => i.date).sort();
 
-    const breakdown = items.map((i) => `${i.side === 'bank' ? 'Bank' : 'Books'}: R${fromCents(Math.abs(i.amountCents)).toFixed(2)} — ${i.description} (${i.date})`).join('; ');
+    const { value: confidence, evidence, evidenceData } = buildEvidence({
+      detectorType: 'combination_match',
+      factors: [
+        { key: 'sums_to_variance_exactly', points: 35, maxPoints: 35, label: `${items.length} item(s) sum to exactly R${Math.abs(targetVarianceCents / 100).toFixed(2)}`, met: true },
+        { key: 'all_otherwise_unexplained', points: 30, maxPoints: 30, label: 'Every item was otherwise fully unexplained', met: true },
+        { key: 'single_item', points: 20, maxPoints: 20, label: 'Single-item explanation', met: items.length === 1 },
+        { key: 'two_item', points: 15, maxPoints: 15, label: 'Two-item combination', met: items.length === 2 },
+        { key: 'three_item', points: 5, maxPoints: 5, label: 'Three-item combination', met: items.length === 3 },
+      ],
+      fields: {
+        varianceExplainedCents: Math.abs(targetVarianceCents),
+        explainsVarianceExactly: true,
+        observedDateFrom: sortedDates[0],
+        observedDateTo: sortedDates[sortedDates.length - 1],
+        combinationTerms: items.map((i) => ({ label: `${i.description}, ${i.date}`, amountCents: i.amountCents })),
+        combinationTotalCents: targetVarianceCents,
+      },
+    });
 
     return {
       issueType: 'combination_match',
       severity: 'high',
       confidence,
       effectAmount: fromCents(targetVarianceCents),
-      affectedDateFrom: items.map((i) => i.date).sort()[0],
-      affectedDateTo: items.map((i) => i.date).sort().slice(-1)[0],
+      affectedDateFrom: sortedDates[0],
+      affectedDateTo: sortedDates[sortedDates.length - 1],
       relatedBankTransactionIds: items.map((i) => i.bankTransactionId).filter((x): x is string => Boolean(x)),
       relatedJournalEntryIds: items.map((i) => i.journalEntryId).filter((x): x is string => Boolean(x)),
       relatedSourceDocumentIds: [],
-      explanation: `We found a combination that explains the entire R${fromCents(Math.abs(targetVarianceCents)).toFixed(2)} difference: ${breakdown}.`,
+      explanation: renderExplanation(evidenceData, 'combination_match'),
       evidence,
+      evidenceData,
       suggestedResolution: 'Review each item — if all are confirmed as real, no unexplained difference remains once they are corrected/allocated.',
       autoResolutionSafe: false,
     };

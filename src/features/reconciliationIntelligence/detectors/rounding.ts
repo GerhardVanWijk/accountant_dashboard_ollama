@@ -1,5 +1,6 @@
 import type { InvestigationCandidate, ReconciliationIssueDraft } from '../types';
-import { buildConfidence } from '../utils/confidence';
+import { buildEvidence } from '../utils/evidence';
+import { renderExplanation } from '../utils/renderExplanation';
 import { fromCents } from '../utils/money';
 
 /** A "rounding" candidate is a residual small enough to plausibly be VAT/line-item/allocation rounding, not a real transaction. */
@@ -52,13 +53,25 @@ export function detectRounding(leftoverPool: InvestigationCandidate[], targetVar
   if (!combination) return [];
 
   const items = combination.map((i) => smallItems[i]);
-  const { value: confidence, evidence } = buildConfidence([
-    { points: 40, label: `${items.length} small item(s) sum exactly to R${fromCents(Math.abs(targetVarianceCents)).toFixed(2)}`, met: true },
-    { points: 30, label: 'Every item is small enough to be a plausible rounding artifact', met: true },
-    { points: 20, label: 'Total unexplained amount is itself small', met: Math.abs(targetVarianceCents) <= 100 },
-  ]);
+  const allDates = items.map((i) => i.date).sort();
 
-  const breakdown = items.map((i) => `${i.description}: R${i.amountCents >= 0 ? '+' : ''}${fromCents(i.amountCents).toFixed(2)}`).join(', ');
+  const { value: confidence, evidence, evidenceData } = buildEvidence({
+    detectorType: 'rounding_variance',
+    factors: [
+      { key: 'small_items_sum_exactly', points: 40, maxPoints: 40, label: `${items.length} small item(s) sum exactly to R${Math.abs(targetVarianceCents / 100).toFixed(2)}`, met: true },
+      { key: 'items_plausibly_rounding', points: 30, maxPoints: 30, label: 'Every item is small enough to be a plausible rounding artifact', met: true },
+      { key: 'target_itself_small', points: 20, maxPoints: 20, label: 'Total unexplained amount is itself small', met: Math.abs(targetVarianceCents) <= 100, observedValue: Math.abs(targetVarianceCents) },
+    ],
+    fields: {
+      amountDifferenceCents: 0,
+      varianceExplainedCents: Math.abs(targetVarianceCents),
+      explainsVarianceExactly: true,
+      observedDateFrom: allDates[0],
+      observedDateTo: allDates[allDates.length - 1],
+      combinationTerms: items.map((i) => ({ label: `${i.description}, ${i.date}`, amountCents: i.amountCents })),
+      combinationTotalCents: targetVarianceCents,
+    },
+  });
 
   return [
     {
@@ -66,13 +79,14 @@ export function detectRounding(leftoverPool: InvestigationCandidate[], targetVar
       severity: 'low',
       confidence,
       effectAmount: fromCents(targetVarianceCents),
-      affectedDateFrom: items.map((i) => i.date).sort()[0],
-      affectedDateTo: items.map((i) => i.date).sort().slice(-1)[0],
+      affectedDateFrom: allDates[0],
+      affectedDateTo: allDates[allDates.length - 1],
       relatedBankTransactionIds: items.map((i) => i.bankTransactionId).filter((x): x is string => Boolean(x)),
       relatedJournalEntryIds: items.map((i) => i.journalEntryId).filter((x): x is string => Boolean(x)),
       relatedSourceDocumentIds: [],
-      explanation: `Accumulated rounding across ${items.length} entries exactly explains the R${fromCents(Math.abs(targetVarianceCents)).toFixed(2)} difference: ${breakdown}.`,
+      explanation: renderExplanation(evidenceData, 'rounding_variance'),
       evidence,
+      evidenceData,
       suggestedResolution: 'No correction usually needed for genuine rounding — mark as explained once confirmed, per your rounding policy.',
       autoResolutionSafe: true,
     },

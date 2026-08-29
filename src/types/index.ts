@@ -12,6 +12,7 @@ export * from './bill';
 export * from './payment';
 export * from './bankAccount';
 export * from './bankTransaction';
+export * from './bankStatement';
 export * from './journalEntry';
 export * from './account';
 export * from './taxRate';

@@ -29,10 +29,36 @@ export interface ReconciliationHealth {
    * bug this replaced: "Explained 100%" next to "Unexplained R74,905").
    */
   varianceExplainedPercent: number;
+
+  /**
+   * P2.1 (PART G) — the truthful figure set the reconciliation workspace
+   * reads. Deliberately explicit, additive names alongside the originals
+   * above so nothing that already consumes this interface breaks.
+   */
+  /** How many bank statement lines were in scope (== `transactionsAnalysed`, named for the workspace). */
+  statementLineCount: number;
+  /** Confirmed 1:1 matches. */
+  confirmedCount: number;
+  /** Within-tolerance / probable matches. */
+  probableCount: number;
+  /** Issues at high/critical severity a human must look at. */
+  needsReviewCount: number;
+  /** Bank's stated closing balance for the statement, or `null` when not supplied. */
+  statementClosingBalance: number | null;
+  /** The books' bank-GL (cashbook) balance, or `null` when not supplied. */
+  booksBankBalance: number | null;
+  /** `statementClosingBalance − booksBankBalance` when both are known; otherwise the signed `variance`. */
+  statementVsBooksDifference: number;
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+export interface ReconciliationHealthExtra {
+  statementClosingBalance?: number | null;
+  booksBankBalance?: number | null;
+  statementLineCount?: number;
+}
 
 /**
  * The single top-line "how healthy is this reconciliation" summary. Two
@@ -54,6 +80,7 @@ export function computeReconciliationHealth(
   needsReview: number,
   variance: number,
   varianceExplainedRaw: number,
+  extra: ReconciliationHealthExtra = {},
 ): ReconciliationHealth {
   const matched = confirmed + probable;
   const unmatched = Math.max(0, transactionsAnalysed - confirmed - probable - needsReview);
@@ -66,6 +93,13 @@ export function computeReconciliationHealth(
   const varianceExplainedPercent =
     absVariance === 0 ? 100 : round1((varianceExplained / absVariance) * 100);
 
+  const statementClosingBalance = extra.statementClosingBalance ?? null;
+  const booksBankBalance = extra.booksBankBalance ?? null;
+  const statementVsBooksDifference =
+    statementClosingBalance !== null && booksBankBalance !== null
+      ? round2(statementClosingBalance - booksBankBalance)
+      : round2(variance);
+
   return {
     transactionsAnalysed,
     confirmed,
@@ -77,5 +111,12 @@ export function computeReconciliationHealth(
     varianceExplained,
     varianceRemaining,
     varianceExplainedPercent,
+    statementLineCount: extra.statementLineCount ?? transactionsAnalysed,
+    confirmedCount: confirmed,
+    probableCount: probable,
+    needsReviewCount: needsReview,
+    statementClosingBalance,
+    booksBankBalance,
+    statementVsBooksDifference,
   };
 }

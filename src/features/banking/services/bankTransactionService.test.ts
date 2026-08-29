@@ -377,7 +377,7 @@ describe('BankTransactionService', () => {
     it('imports lines as unreconciled, unallocated transactions', async () => {
       const { service } = setup();
       const imported = await service.importStatementLines(FNB_CURRENT, [
-        { sourceRowId: 'row1', date: '2026-03-10T00:00:00.000Z', description: 'POS settlement', amount: 250, direction: 'debit' },
+        { sourceRowId: 'row1', date: '2026-03-10T00:00:00.000Z', description: 'POS settlement', amount: 250, direction: 'debit', raw: {} },
       ]);
       expect(imported).toHaveLength(1);
       expect(imported[0].status).toBe('unreconciled');
@@ -388,10 +388,10 @@ describe('BankTransactionService', () => {
     it('skips a line whose reference already exists for the account', async () => {
       const { service } = setup();
       await service.importStatementLines(FNB_CURRENT, [
-        { sourceRowId: 'row1', date: '2026-03-10T00:00:00.000Z', description: 'A', reference: 'REF-1', amount: 100, direction: 'debit' },
+        { sourceRowId: 'row1', date: '2026-03-10T00:00:00.000Z', description: 'A', reference: 'REF-1', amount: 100, direction: 'debit', raw: {} },
       ]);
       const second = await service.importStatementLines(FNB_CURRENT, [
-        { sourceRowId: 'row2', date: '2026-03-11T00:00:00.000Z', description: 'A dup', reference: 'REF-1', amount: 100, direction: 'debit' },
+        { sourceRowId: 'row2', date: '2026-03-11T00:00:00.000Z', description: 'A dup', reference: 'REF-1', amount: 100, direction: 'debit', raw: {} },
       ]);
       expect(second).toHaveLength(0);
     });
@@ -401,7 +401,7 @@ describe('BankTransactionService', () => {
     it('allocates and posts an imported transaction that had no allocation', async () => {
       const { service, journalEntryService } = setup();
       const [imported] = await service.importStatementLines(FNB_CURRENT, [
-        { sourceRowId: 'row1', date: '2026-03-10T00:00:00.000Z', description: 'POS settlement', amount: 230, direction: 'debit' },
+        { sourceRowId: 'row1', date: '2026-03-10T00:00:00.000Z', description: 'POS settlement', amount: 230, direction: 'debit', raw: {} },
       ]);
 
       const allocated = await service.allocateTransaction(imported.id, [
@@ -420,7 +420,7 @@ describe('BankTransactionService', () => {
     it('refuses to re-allocate an already-reconciled transaction', async () => {
       const { service, bankTransactionRepository } = setup();
       const [imported] = await service.importStatementLines(FNB_CURRENT, [
-        { sourceRowId: 'row1', date: '2026-03-10T00:00:00.000Z', description: 'POS settlement', amount: 100, direction: 'debit' },
+        { sourceRowId: 'row1', date: '2026-03-10T00:00:00.000Z', description: 'POS settlement', amount: 100, direction: 'debit', raw: {} },
       ]);
       await bankTransactionRepository.update(imported.id, { status: 'reconciled' });
 

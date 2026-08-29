@@ -1,6 +1,7 @@
 import type { ID } from '@/types';
 import type { InvestigationCandidate, ReconciliationIssueDraft } from '../types';
-import { buildConfidence } from '../utils/confidence';
+import { buildEvidence } from '../utils/evidence';
+import { renderExplanation } from '../utils/renderExplanation';
 import { fromCents } from '../utils/money';
 import { daysBetween } from '../utils/textMatching';
 
@@ -29,11 +30,33 @@ export function detectWrongBankAccount(unmatchedBooksOnThisAccount: Investigatio
       if (!match) continue;
 
       const daysApart = daysBetween(match.date, books.date);
-      const { value: confidence, evidence } = buildConfidence([
-        { points: 40, label: `Matching R${fromCents(Math.abs(books.amountCents)).toFixed(2)} item found on ${other.bankAccountName}'s statement`, met: true },
-        { points: 30, label: daysApart === 0 ? 'Same date' : `${daysApart} day(s) apart`, met: true },
-        { points: 20, label: 'Not otherwise explained on this account', met: true },
-      ]);
+      const dateFrom = books.date < match.date ? books.date : match.date;
+      const dateTo = books.date < match.date ? match.date : books.date;
+
+      const { value: confidence, evidence, evidenceData } = buildEvidence({
+        detectorType: 'wrong_bank_account',
+        factors: [
+          { key: 'match_on_other_account', points: 40, maxPoints: 40, label: `Matching R${Math.abs(books.amountCents / 100).toFixed(2)} item found on ${other.bankAccountName}'s statement`, met: true },
+          { key: 'date_proximity', points: 30, maxPoints: 30, label: daysApart === 0 ? 'Same date' : `${daysApart} day(s) apart`, met: true, observedValue: `${daysApart} days` },
+          { key: 'unexplained_here', points: 20, maxPoints: 20, label: 'Not otherwise explained on this account', met: true },
+        ],
+        fields: {
+          amountDifferenceCents: 0,
+          dateDifferenceDays: daysApart,
+          sameCounterparty: true,
+          sameDirection: true,
+          sameBankAccount: false,
+          candidateSourceType: match.kind === 'statement_line' ? 'statement_line' : 'bank_transaction',
+          candidateSourceId: match.id,
+          varianceExplainedCents: Math.abs(books.amountCents),
+          booksAmountCents: books.amountCents,
+          bankAmountCents: match.amountCents,
+          counterpartyLabel: books.description,
+          observedDateFrom: dateFrom,
+          observedDateTo: dateTo,
+          otherAccountName: other.bankAccountName,
+        },
+      });
 
       issues.push({
         issueType: 'wrong_bank_account',
@@ -45,8 +68,9 @@ export function detectWrongBankAccount(unmatchedBooksOnThisAccount: Investigatio
         relatedBankTransactionIds: [books.bankTransactionId, match.bankTransactionId].filter((x): x is string => Boolean(x)),
         relatedJournalEntryIds: [books.journalEntryId].filter((x): x is string => Boolean(x)),
         relatedSourceDocumentIds: [],
-        explanation: `"${books.description}" (R${fromCents(Math.abs(books.amountCents)).toFixed(2)}) is unexplained here, but a matching item appears on ${other.bankAccountName}'s bank statement instead — likely posted to the wrong bank account.`,
+        explanation: renderExplanation(evidenceData, 'wrong_bank_account'),
         evidence,
+        evidenceData,
         suggestedResolution: 'Confirm which account the transaction actually belongs to, then correct the GL account through a proper reallocation/journal correction.',
         autoResolutionSafe: false,
       });

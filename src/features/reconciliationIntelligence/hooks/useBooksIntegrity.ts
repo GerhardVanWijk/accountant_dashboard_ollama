@@ -3,7 +3,10 @@ import type { ID } from '@/types';
 import { bankAccountService, bankTransactionService } from '@/features/banking/services';
 import { accountMappingService, journalEntryService } from '@/features/accounting/services';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
+import { useCreditNotes } from '@/features/sales/hooks/useCreditNotes';
+import { useCustomerReceipts } from '@/features/sales/hooks/useCustomerReceipts';
 import { useBills } from '@/features/purchases/hooks/useBills';
+import { usePayments } from '@/features/purchases/hooks/usePayments';
 import { runBooksIntegrityCheck } from '../booksIntegrity/runBooksIntegrityCheck';
 import { checkOrphanedPostedDocuments, checkDuplicateGlPosting, type BooksIntegrityCheckResult, type PostableDocumentLike } from '../booksIntegrity/checks';
 
@@ -24,6 +27,9 @@ export function useBooksIntegrity(bankAccountId: ID | undefined, options: { edit
   const [error, setError] = useState<Error | null>(null);
   const { invoices } = useInvoices();
   const { bills } = useBills();
+  const { creditNotes } = useCreditNotes();
+  const { receipts: customerReceipts } = useCustomerReceipts();
+  const { payments: supplierPayments } = usePayments();
 
   const load = useCallback(async () => {
     if (!bankAccountId) {
@@ -41,6 +47,9 @@ export function useBooksIntegrity(bankAccountId: ID | undefined, options: { edit
         bankTransactions: transactions,
         invoices,
         bills,
+        creditNotes,
+        customerReceipts,
+        supplierPayments,
         editedAfterReconciliationCount: options.editedAfterReconciliationCount ?? 0,
         openingBalanceIssueFound: options.openingBalanceIssueFound ?? false,
       });
@@ -60,7 +69,7 @@ export function useBooksIntegrity(bankAccountId: ID | undefined, options: { edit
     } finally {
       setIsLoading(false);
     }
-  }, [bankAccountId, invoices, bills, options.editedAfterReconciliationCount, options.openingBalanceIssueFound]);
+  }, [bankAccountId, invoices, bills, creditNotes, customerReceipts, supplierPayments, options.editedAfterReconciliationCount, options.openingBalanceIssueFound]);
 
   useEffect(() => {
     load();

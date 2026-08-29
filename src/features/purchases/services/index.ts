@@ -4,7 +4,7 @@ import { PaymentService } from './paymentService';
 import { SupabaseBillRepository } from '@/repositories/SupabaseBillRepository';
 import { SupabasePurchaseOrderRepository } from '@/repositories/SupabasePurchaseOrderRepository';
 import { SupabasePaymentRepository } from '@/repositories/SupabasePaymentRepository';
-import { journalEntryService, accountMappingService } from '@/features/accounting/services';
+import { journalEntryService, accountMappingService, categoryAccountMappingService } from '@/features/accounting/services';
 import { taxRateService } from '@/features/tax/services';
 import { inventoryPoster } from '@/features/inventory/services/inventoryPostingAdapter';
 import { fixedAssetService } from '@/features/assets/services';
@@ -48,6 +48,7 @@ export const billService = new BillService(
   purchaseOrderService,
   fixedAssetService,
   accountMappingService,
+  categoryAccountMappingService,
 );
 export const paymentService = new PaymentService(
   new SupabasePaymentRepository(supabase),

@@ -1,4 +1,4 @@
-import type { ID, ReconciliationIssue } from '@/types';
+import type { BankStatementLineState, ID, ReconciliationIssue } from '@/types';
 
 /**
  * A normalized, side-tagged item the detectors compare against each other.
@@ -17,7 +17,13 @@ import type { ID, ReconciliationIssue } from '@/types';
 export interface InvestigationCandidate {
   id: ID;
   side: 'bank' | 'books';
-  kind: 'bank_transaction' | 'journal_entry';
+  /**
+   * `'statement_line'` = a row from the real `bank_statement_lines` table
+   * (migration 0020) — the preferred bank side once a statement is persisted
+   * for the window. `'bank_transaction'` on the bank side is the documented
+   * fallback for accounts with no statement yet (`source='import'` rows).
+   */
+  kind: 'bank_transaction' | 'journal_entry' | 'statement_line';
   date: string;
   description: string;
   reference?: string;
@@ -25,6 +31,14 @@ export interface InvestigationCandidate {
   amountCents: number;
   bankTransactionId?: ID;
   journalEntryId?: ID;
+  /** Set when `kind === 'statement_line'` — the `bank_statement_lines.id` this candidate came from. */
+  bankStatementLineId?: ID;
+  /** The statement line's own matching state, carried through for the whole-period proof. */
+  lineState?: BankStatementLineState;
+  /** Value date, when the statement supplies one distinct from `date`. */
+  valueDate?: string;
+  /** Running account balance after this line, when the statement supplies it. */
+  runningBalance?: number;
   status?: string;
 }
 

@@ -30,6 +30,16 @@ export interface InventoryPoster {
   /** True if this product's cost should capitalize to the Inventory asset rather than being expensed immediately. */
   isTrackedInventory(productId: ID): Promise<boolean>;
   /**
+   * This product's `category` (`products.category`, a free-text string),
+   * or `undefined` if the product doesn't exist or has no category set.
+   * Sales/Purchases GL posting reads it to resolve the granular
+   * per-category revenue / Cost of Sales / Inventory account for each line
+   * (Phase 21.3) — the account *choice* stays in the posting service; this
+   * only exposes the category so the adapter's costing interface stays
+   * unchanged.
+   */
+  getProductCategory(productId: ID): Promise<string | undefined>;
+  /**
    * Read-only — the Cost of Sales this quantity of this product
    * represents right now (current weighted-average cost, or a FIFO
    * preview from open lots — see class doc). Never mutates stock. 0 if
@@ -118,6 +128,11 @@ export class InventoryPostingAdapter implements InventoryPoster {
   async isTrackedInventory(productId: ID): Promise<boolean> {
     const product = await this.products.getProduct(productId);
     return Boolean(product?.trackInventory);
+  }
+
+  async getProductCategory(productId: ID): Promise<string | undefined> {
+    const product = await this.products.getProduct(productId);
+    return product?.category ?? undefined;
   }
 
   async calculateCogs(productId: ID, quantity: number, warehouseId?: ID): Promise<number> {

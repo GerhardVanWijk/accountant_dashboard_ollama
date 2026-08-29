@@ -6,6 +6,9 @@ import { MockInvoiceRepository } from '@/repositories/mock/MockInvoiceRepository
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import { AccountService } from '@/features/accounting/services/accountService';
 import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
+import { CategoryAccountMappingService } from '@/features/accounting/services/categoryAccountMappingService';
+import { MockCategoryAccountMappingRepository } from '@/features/accounting/repositories/MockCategoryAccountMappingRepository';
+import type { CategoryAccountMappingRecord } from '@/features/accounting/repositories/ICategoryAccountMappingRepository';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
@@ -35,7 +38,10 @@ function makeOpenPeriod(): AccountingPeriod {
  * target invoice via InvoiceService.recordPayment() — mirrors
  * src/features/banking/services/bankTransactionService.test.ts.
  */
-async function setup(inventoryMover = fakeInventoryMover()) {
+async function setup(
+  inventoryMover = fakeInventoryMover(),
+  categoryMappings: CategoryAccountMappingRecord[] = [],
+) {
   const journalRepository = new MockJournalEntryRepository([]);
   const accountRepository = new MockAccountRepository(seedAccounts);
   const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
@@ -61,7 +67,15 @@ async function setup(inventoryMover = fakeInventoryMover()) {
   });
 
   const creditNoteRepository = new MockCreditNoteRepository([]);
-  const service = new CreditNoteService(creditNoteRepository, journalEntryService, invoiceService, inventoryMover, accountMapper);
+  const categoryAccounts = new CategoryAccountMappingService(new MockCategoryAccountMappingRepository(categoryMappings));
+  const service = new CreditNoteService(
+    creditNoteRepository,
+    journalEntryService,
+    invoiceService,
+    inventoryMover,
+    accountMapper,
+    categoryAccounts,
+  );
 
   return { service, journalEntryService, invoiceService, invoiceRepository, creditNoteRepository, invoice, inventoryMover };
 }
@@ -71,7 +85,7 @@ async function setup(inventoryMover = fakeInventoryMover()) {
  * recordReturnMovement is invoked with the right args, without depending on
  * the real InventoryPostingAdapter/productService.
  */
-function fakeInventoryMover(costPerUnit = 40) {
+function fakeInventoryMover(costPerUnit = 40, categoryByProduct: Record<string, string> = {}) {
   const returnMovements: Array<{ productId: string; quantity: number; reference: string; warehouseId?: string }> = [];
   return {
     returnMovements,
@@ -79,6 +93,7 @@ function fakeInventoryMover(costPerUnit = 40) {
     recordReturnMovement: async (productId: string, quantity: number, reference: string, warehouseId?: string) => {
       returnMovements.push({ productId, quantity, reference, warehouseId });
     },
+    getProductCategory: async (productId: string) => categoryByProduct[productId],
   };
 }
 
@@ -258,6 +273,81 @@ describe('CreditNoteService', () => {
       expect(entry!.lines.find((l) => l.accountId === 'acc_1200')).toBeUndefined();
       expect(entry!.lines.find((l) => l.accountId === 'acc_5000')).toBeUndefined();
       expect(inventoryMover.returnMovements).toEqual([]);
+    });
+
+    it('splits the reversal by product category when a mapping is provided, and still balances (Phase 21.3)', async () => {
+      const mover = fakeInventoryMover(40, { prod_fur: 'Furniture', prod_sta: 'Stationery' });
+      const { service, journalEntryService } = await setup(mover, [
+        { categoryName: 'Furniture', revenueAccountId: 'acc_4000', cogsAccountId: 'acc_5000', inventoryAccountId: 'acc_1200' },
+        { categoryName: 'Stationery', revenueAccountId: 'acc_4200', cogsAccountId: 'acc_5300', inventoryAccountId: 'acc_1200' },
+      ]);
+
+      const draft = await service.createCreditNote({
+        creditNoteNumber: 'CN-SPLIT-1',
+        customerId: 'cust_test',
+        issueDate: '2026-08-05T00:00:00.000Z',
+        reason: 'return',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_fur', description: 'Desk', quantity: 2, unitPrice: 100, taxAmount: 30, lineTotal: 200 },
+          { id: 'li_2', productId: 'prod_sta', description: 'Paper', quantity: 3, unitPrice: 100, taxAmount: 45, lineTotal: 300 },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+
+      const issued = await service.issueCreditNote(draft.id);
+      const entry = await journalEntryService.getEntry(issued.journalEntryId!);
+      const sum = (accountId: string, side: 'debit' | 'credit') =>
+        entry!.lines.filter((l) => l.accountId === accountId).reduce((s, l) => s + l[side], 0);
+
+      expect(sum('acc_4000', 'debit')).toBeCloseTo(200); // furniture revenue reversal
+      expect(sum('acc_4200', 'debit')).toBeCloseTo(300); // stationery revenue reversal
+      expect(sum('acc_5000', 'credit')).toBeCloseTo(80); // furniture COGS reversal (2 * 40)
+      expect(sum('acc_5300', 'credit')).toBeCloseTo(120); // stationery COGS reversal (3 * 40)
+      expect(sum('acc_1200', 'debit')).toBeCloseTo(200); // one lumped inventory restore
+      expect(sum('acc_1100', 'credit')).toBeCloseTo(575); // AR stays one line
+      expect(sum('acc_2100', 'debit')).toBeCloseTo(75); // VAT stays one line
+
+      const totalDebit = entry!.lines.reduce((s, l) => s + l.debit, 0);
+      const totalCredit = entry!.lines.reduce((s, l) => s + l.credit, 0);
+      expect(totalDebit).toBeCloseTo(totalCredit);
+    });
+
+    it('uses the generic revenue/COGS accounts unchanged when no category mapping applies', async () => {
+      const mover = fakeInventoryMover(40, { prod_x: 'Gadgets' });
+      const { service, journalEntryService } = await setup(mover, [
+        { categoryName: 'Furniture', revenueAccountId: 'acc_4200', cogsAccountId: 'acc_5300', inventoryAccountId: 'acc_1200' },
+      ]);
+
+      const draft = await service.createCreditNote({
+        creditNoteNumber: 'CN-SPLIT-FALLBACK',
+        customerId: 'cust_test',
+        issueDate: '2026-08-05T00:00:00.000Z',
+        reason: 'return',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_x', description: 'Gizmo', quantity: 3, unitPrice: 100, taxAmount: 45, lineTotal: 300 },
+        ],
+        subtotal: 300,
+        taxTotal: 45,
+        total: 345,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+
+      const issued = await service.issueCreditNote(draft.id);
+      const entry = await journalEntryService.getEntry(issued.journalEntryId!);
+
+      expect(entry!.lines.find((l) => l.accountId === 'acc_4000')?.debit).toBeCloseTo(300); // generic revenue
+      expect(entry!.lines.find((l) => l.accountId === 'acc_5000')?.credit).toBeCloseTo(120); // generic COGS
+      expect(entry!.lines.find((l) => l.accountId === 'acc_1200')?.debit).toBeCloseTo(120); // generic inventory
+      expect(entry!.lines.some((l) => l.accountId === 'acc_4200')).toBe(false);
     });
 
     it('rejects issuing a credit note that is not draft', async () => {

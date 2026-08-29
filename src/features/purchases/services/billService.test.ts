@@ -5,6 +5,9 @@ import { seedBills } from '@/mock-data/bills';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import { AccountService } from '@/features/accounting/services/accountService';
 import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
+import { CategoryAccountMappingService } from '@/features/accounting/services/categoryAccountMappingService';
+import { MockCategoryAccountMappingRepository } from '@/features/accounting/repositories/MockCategoryAccountMappingRepository';
+import type { CategoryAccountMappingRecord } from '@/features/accounting/repositories/ICategoryAccountMappingRepository';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
@@ -37,7 +40,7 @@ function makeOpenPeriod(): AccountingPeriod {
  * without pulling in real Product/Warehouse/StockMovement repositories
  * here (see inventoryPostingAdapter.test.ts for that).
  */
-function makeInventoryReceiverStub(trackedProductIds: string[] = []) {
+function makeInventoryReceiverStub(trackedProductIds: string[] = [], categoryByProduct: Record<string, string> = {}) {
   const recordedReceipts: { productId: string; quantity: number; unitCost: number; reference: string; warehouseId?: string }[] = [];
   return {
     isTrackedInventory: async (productId: string) => trackedProductIds.includes(productId),
@@ -50,8 +53,13 @@ function makeInventoryReceiverStub(trackedProductIds: string[] = []) {
     ) => {
       recordedReceipts.push({ productId, quantity, unitCost, reference, warehouseId });
     },
+    getProductCategory: async (productId: string) => categoryByProduct[productId],
     recordedReceipts,
   };
+}
+
+function makeCategoryAccounts(rows: CategoryAccountMappingRecord[] = []) {
+  return new CategoryAccountMappingService(new MockCategoryAccountMappingRepository(rows));
 }
 
 /**
@@ -642,6 +650,97 @@ describe('BillService', () => {
       expect(fixedAssetLedger.find((row) => row.entryId === posted.journalEntryId)?.debit).toBe(15000);
       expect(apLedger.find((row) => row.entryId === posted.journalEntryId)?.credit).toBe(18055);
       expect(capitalizer.capitalized).toHaveLength(1);
+    });
+
+    it('splits the capitalized Inventory debit by product category when a mapping is provided (Phase 21.3)', async () => {
+      const trackedReceiver = makeInventoryReceiverStub(['prod_fur', 'prod_sta'], {
+        prod_fur: 'Furniture',
+        prod_sta: 'Stationery',
+      });
+      const categoryAccounts = makeCategoryAccounts([
+        { categoryName: 'Furniture', revenueAccountId: 'acc_4000', cogsAccountId: 'acc_5000', inventoryAccountId: 'acc_1200' },
+        { categoryName: 'Stationery', revenueAccountId: 'acc_4200', cogsAccountId: 'acc_5300', inventoryAccountId: 'acc_1500' },
+      ]);
+      const localBillService = new BillService(
+        repository,
+        journalEntryService,
+        taxRateService,
+        trackedReceiver,
+        makePurchaseOrderLookupStub(),
+        makeFixedAssetCapitalizerStub(),
+        accountMapper,
+        categoryAccounts,
+      );
+
+      const bill = await localBillService.createBill({
+        billNumber: 'BILL-INV-SPLIT',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_fur', description: 'Desks', quantity: 10, unitPrice: 50, taxRateId: 'tax_std_v2', taxAmount: 75, lineTotal: 500 },
+          { id: 'li_2', productId: 'prod_sta', description: 'Paper', quantity: 3, unitPrice: 100, taxRateId: 'tax_std_v2', taxAmount: 45, lineTotal: 300 },
+        ],
+        subtotal: 800,
+        taxTotal: 120,
+        total: 920,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const posted = await localBillService.postBill(bill.id);
+      const entry = (await journalEntryService.getEntry(posted.journalEntryId!))!;
+      const sum = (accountId: string) =>
+        entry.lines.filter((l) => l.accountId === accountId).reduce((s, l) => s + l.debit, 0);
+
+      expect(sum('acc_1200')).toBe(500); // furniture -> mapped inventory account
+      expect(sum('acc_1500')).toBe(300); // stationery -> different mapped inventory account
+      expect(entry.lines.find((l) => l.accountId === 'acc_5100')).toBeUndefined(); // nothing expensed
+
+      const apLine = entry.lines.find((l) => l.accountId === 'acc_2000');
+      expect(apLine?.credit).toBe(920);
+      const totalDebit = entry.lines.reduce((s, l) => s + l.debit, 0);
+      const totalCredit = entry.lines.reduce((s, l) => s + l.credit, 0);
+      expect(totalDebit).toBeCloseTo(totalCredit);
+    });
+
+    it('falls back to the generic Inventory account for a tracked line whose category is unmapped', async () => {
+      const trackedReceiver = makeInventoryReceiverStub(['prod_x'], { prod_x: 'Gadgets' });
+      const categoryAccounts = makeCategoryAccounts([
+        { categoryName: 'Furniture', revenueAccountId: 'acc_4000', cogsAccountId: 'acc_5000', inventoryAccountId: 'acc_1500' },
+      ]);
+      const localBillService = new BillService(
+        repository,
+        journalEntryService,
+        taxRateService,
+        trackedReceiver,
+        makePurchaseOrderLookupStub(),
+        makeFixedAssetCapitalizerStub(),
+        accountMapper,
+        categoryAccounts,
+      );
+
+      const bill = await localBillService.createBill({
+        billNumber: 'BILL-INV-SPLIT-FALLBACK',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_x', description: 'Gizmos', quantity: 4, unitPrice: 100, taxRateId: 'tax_std_v2', taxAmount: 60, lineTotal: 400 },
+        ],
+        subtotal: 400,
+        taxTotal: 60,
+        total: 460,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const posted = await localBillService.postBill(bill.id);
+      const entry = (await journalEntryService.getEntry(posted.journalEntryId!))!;
+      expect(entry.lines.find((l) => l.accountId === 'acc_1200')?.debit).toBe(400); // generic INVENTORY
+      expect(entry.lines.some((l) => l.accountId === 'acc_1500')).toBe(false);
     });
 
     it('does not record a stock receipt if GL posting fails', async () => {

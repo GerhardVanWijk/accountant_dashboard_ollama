@@ -32,4 +32,11 @@ export interface BankTransaction extends BaseEntity {
   transferPairId?: ID;
   /** Set once this transaction is cleared by a finalized BankReconciliation snapshot — immutable after that. */
   reconciliationId?: ID;
+  /**
+   * The `BankStatementLine` this transaction was materialised from / matched
+   * to, once a first-class statement import exists for it (migration 0020).
+   * Additive/optional — every existing `source='import'` row predates the
+   * statement entity and simply leaves this unset.
+   */
+  bankStatementLineId?: ID;
 }

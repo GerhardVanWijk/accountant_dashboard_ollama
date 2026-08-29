@@ -1,5 +1,6 @@
 import type { InvestigationCandidate, ReconciliationIssueDraft } from '../types';
-import { buildConfidence } from '../utils/confidence';
+import { buildEvidence } from '../utils/evidence';
+import { renderExplanation } from '../utils/renderExplanation';
 import { fromCents } from '../utils/money';
 
 /**
@@ -16,11 +17,22 @@ export function detectOpeningBalanceProblem(windowStart: string, targetVarianceC
   if (!allBeforeWindow) return [];
 
   const earliestDate = contributingItems.map((i) => i.date).sort()[0];
-  const { value: confidence, evidence } = buildConfidence([
-    { points: 50, label: 'Every contributing item is dated before the current reconciliation period', met: true },
-    { points: 30, label: `Earliest contributing item: ${earliestDate}`, met: true },
-    { points: 20, label: 'Not introduced by any transaction inside the period being reviewed', met: true },
-  ]);
+
+  const { value: confidence, evidence, evidenceData } = buildEvidence({
+    detectorType: 'opening_balance_discrepancy',
+    factors: [
+      { key: 'all_items_predate_window', points: 50, maxPoints: 50, label: 'Every contributing item is dated before the current reconciliation period', met: true },
+      { key: 'earliest_item', points: 30, maxPoints: 30, label: `Earliest contributing item: ${earliestDate}`, met: true, observedValue: earliestDate },
+      { key: 'nothing_in_period', points: 20, maxPoints: 20, label: 'Not introduced by any transaction inside the period being reviewed', met: true },
+    ],
+    fields: {
+      varianceExplainedCents: Math.abs(targetVarianceCents),
+      combinationTotalCents: targetVarianceCents,
+      observedDateFrom: earliestDate,
+      observedDateTo: windowStart,
+      combinationTerms: contributingItems.map((i) => ({ label: `${i.description}, ${i.date}`, amountCents: i.amountCents })),
+    },
+  });
 
   return [
     {
@@ -33,8 +45,9 @@ export function detectOpeningBalanceProblem(windowStart: string, targetVarianceC
       relatedBankTransactionIds: contributingItems.map((i) => i.bankTransactionId).filter((x): x is string => Boolean(x)),
       relatedJournalEntryIds: contributingItems.map((i) => i.journalEntryId).filter((x): x is string => Boolean(x)),
       relatedSourceDocumentIds: [],
-      explanation: `The current period's own transactions reconcile — the R${fromCents(Math.abs(targetVarianceCents)).toFixed(2)} discrepancy already existed before ${windowStart}.`,
+      explanation: renderExplanation(evidenceData, 'opening_balance_discrepancy'),
       evidence,
+      evidenceData,
       suggestedResolution: 'Investigate the prior period(s) instead — reviewing this period further will not find the cause.',
       autoResolutionSafe: false,
     },

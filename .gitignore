@@ -10,3 +10,6 @@ coverage
 # Local Claude Code "impeccable" skill install + its cache/config -- not project source
 .claude/skills/impeccable/
 .impeccable/
+
+# Session scratch space -- never source
+scratchpad/

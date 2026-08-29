@@ -16,6 +16,12 @@ describe('detectWrongSign', () => {
     expect(issues).toHaveLength(1);
     expect(issues[0].issueType).toBe('wrong_sign');
     expect(Math.round(issues[0].effectAmount * 100)).toBe(100000);
+
+    const data = issues[0].evidenceData!;
+    expect(data.detectorType).toBe('wrong_sign');
+    expect(data.sameDirection).toBe(false);
+    expect(data.swingCents).toBe(100000);
+    expect(data.varianceExplainedCents).toBe(100000);
   });
 
   it('does not flag two same-sign entries', () => {

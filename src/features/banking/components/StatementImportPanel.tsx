@@ -50,16 +50,21 @@ export function StatementImportPanel({ onImport, findMatches, onCancel }: Statem
     try {
       const content = await file.text();
       const parsed = parseStatementFile(format, content);
-      if (parsed.length === 0) {
+      if (parsed.lines.length === 0) {
         setError('No transactions were found in this file.');
         setLines([]);
         return;
       }
-      setLines(parsed);
+      setLines(parsed.lines);
+      if (parsed.parseErrors.length > 0) {
+        setError(
+          `${parsed.parseErrors.length} row(s) could not be read and were skipped — the rest parsed normally.`,
+        );
+      }
 
       const matchResults = new Map<string, MatchCandidate[]>();
       const initiallySelected = new Set<string>();
-      for (const line of parsed) {
+      for (const line of parsed.lines) {
         const candidates = await findMatches(line);
         matchResults.set(line.sourceRowId, candidates);
         // Auto-uncheck lines with a very strong existing match — likely a duplicate of something already recorded.

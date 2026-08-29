@@ -1,6 +1,7 @@
 import type { MatchPair, ReconciliationIssueDraft } from '../types';
-import { buildConfidence } from '../utils/confidence';
-import { fromCents } from '../utils/money';
+import { buildEvidence } from '../utils/evidence';
+import { renderExplanation } from '../utils/renderExplanation';
+import { referenceSimilarity } from '../utils/textMatching';
 
 /**
  * Every 'probable' match from classifyMatches() IS a date-offset timing
@@ -14,25 +15,48 @@ import { fromCents } from '../utils/money';
  */
 export function detectDateOffsetTiming(pairs: MatchPair[]): ReconciliationIssueDraft[] {
   return pairs.map(({ bank, books, daysApart, referenceMatches, descriptionOverlap }) => {
-    const { value: confidence, evidence } = buildConfidence([
-      { points: 40, label: 'Amount matches exactly', met: true },
-      { points: 30, label: `${daysApart} day(s) apart`, detail: `${bank.date} vs ${books.date}`, met: true },
-      { points: 20, label: 'Reference matches', met: referenceMatches },
-      { points: 15, label: 'Description text overlaps', met: descriptionOverlap > 0 },
-    ]);
+    const dateFrom = bank.date < books.date ? bank.date : books.date;
+    const dateTo = bank.date < books.date ? books.date : bank.date;
+
+    const { value: confidence, evidence, evidenceData } = buildEvidence({
+      detectorType: 'date_offset_timing',
+      factors: [
+        { key: 'amount_matches_exactly', points: 40, maxPoints: 40, label: 'Amount matches exactly', met: true },
+        { key: 'within_date_tolerance', points: 30, maxPoints: 30, label: `${daysApart} day(s) apart`, detail: `${bank.date} vs ${books.date}`, met: true, observedValue: `${daysApart} days` },
+        { key: 'reference_match', points: 20, maxPoints: 20, label: 'Reference matches', met: referenceMatches, observedValue: referenceMatches },
+        { key: 'description_overlap', points: 15, maxPoints: 15, label: 'Description text overlaps', met: descriptionOverlap > 0, observedValue: descriptionOverlap },
+      ],
+      fields: {
+        amountDifferenceCents: 0,
+        dateDifferenceDays: daysApart,
+        referenceSimilarity: referenceSimilarity(bank.reference, books.reference),
+        sameCounterparty: referenceMatches || descriptionOverlap > 0,
+        sameDirection: true,
+        sameBankAccount: true,
+        candidateSourceType: bank.kind === 'statement_line' ? 'statement_line' : 'bank_transaction',
+        candidateSourceId: books.id,
+        varianceExplainedCents: 0,
+        bankAmountCents: bank.amountCents,
+        booksAmountCents: books.amountCents,
+        counterpartyLabel: bank.description,
+        observedDateFrom: bank.date,
+        observedDateTo: books.date,
+      },
+    });
 
     return {
       issueType: 'date_offset_timing',
       severity: 'info',
       confidence,
       effectAmount: 0,
-      affectedDateFrom: bank.date < books.date ? bank.date : books.date,
-      affectedDateTo: bank.date < books.date ? books.date : bank.date,
+      affectedDateFrom: dateFrom,
+      affectedDateTo: dateTo,
       relatedBankTransactionIds: [bank.bankTransactionId, books.bankTransactionId].filter((x): x is string => Boolean(x)),
       relatedJournalEntryIds: [bank.journalEntryId, books.journalEntryId].filter((x): x is string => Boolean(x)),
       relatedSourceDocumentIds: [],
-      explanation: `Bank shows this ${bank.date}, books record it ${books.date} — same amount (R${fromCents(Math.abs(bank.amountCents)).toFixed(2)}), ${daysApart} day(s) apart. This is a normal timing difference, not a real discrepancy.`,
+      explanation: renderExplanation(evidenceData, 'date_offset_timing'),
       evidence,
+      evidenceData,
       suggestedResolution: 'Mark as a valid timing difference.',
       autoResolutionSafe: true,
     };

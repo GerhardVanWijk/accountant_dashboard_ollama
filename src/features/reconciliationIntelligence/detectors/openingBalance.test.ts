@@ -15,6 +15,9 @@ describe('detectOpeningBalanceProblem', () => {
     expect(issues).toHaveLength(1);
     expect(issues[0].issueType).toBe('opening_balance_discrepancy');
     expect(issues[0].explanation).toContain('2026-08-01');
+    expect(issues[0].evidenceData!.detectorType).toBe('opening_balance_discrepancy');
+    expect(issues[0].evidenceData!.observedDateTo).toBe('2026-08-01');
+    expect(issues[0].evidenceData!.combinationTotalCents).toBe(35218);
   });
 
   it('does not fire when a contributing item falls inside the current period', () => {

@@ -1,5 +1,6 @@
 import type { InvestigationCandidate, ReconciliationIssueDraft } from '../types';
-import { buildConfidence } from '../utils/confidence';
+import { buildEvidence } from '../utils/evidence';
+import { renderExplanation } from '../utils/renderExplanation';
 import { fromCents } from '../utils/money';
 import { daysBetween } from '../utils/textMatching';
 
@@ -32,24 +33,47 @@ export function detectWrongSign(unmatchedBank: InvestigationCandidate[], unmatch
     claimedBooks.add(best.books.id);
 
     const swingCents = 2 * Math.abs(bank.amountCents);
-    const { value: confidence, evidence } = buildConfidence([
-      { points: 40, label: 'Identical amount, opposite direction', met: true },
-      { points: 30, label: best.daysApart === 0 ? 'Same date' : `${best.daysApart} day(s) apart`, met: true },
-      { points: 15, label: 'Likely a debit/credit reversal at data entry', met: true },
-    ]);
+    const dateFrom = bank.date < best.books.date ? bank.date : best.books.date;
+    const dateTo = bank.date < best.books.date ? best.books.date : bank.date;
+
+    const { value: confidence, evidence, evidenceData } = buildEvidence({
+      detectorType: 'wrong_sign',
+      factors: [
+        { key: 'identical_magnitude_opposite_direction', points: 40, maxPoints: 40, label: 'Identical amount, opposite direction', met: true },
+        { key: 'date_proximity', points: 30, maxPoints: 30, label: best.daysApart === 0 ? 'Same date' : `${best.daysApart} day(s) apart`, met: true, observedValue: `${best.daysApart} days` },
+        { key: 'reversal_shape', points: 15, maxPoints: 15, label: 'Likely a debit/credit reversal at data entry', met: true },
+      ],
+      fields: {
+        amountDifferenceCents: bank.amountCents - best.books.amountCents,
+        dateDifferenceDays: best.daysApart,
+        sameCounterparty: true,
+        sameDirection: false,
+        sameBankAccount: true,
+        candidateSourceType: best.books.kind === 'journal_entry' ? 'journal_entry' : 'bank_transaction',
+        candidateSourceId: best.books.id,
+        varianceExplainedCents: swingCents,
+        bankAmountCents: bank.amountCents,
+        booksAmountCents: best.books.amountCents,
+        counterpartyLabel: bank.description,
+        observedDateFrom: dateFrom,
+        observedDateTo: dateTo,
+        swingCents,
+      },
+    });
 
     issues.push({
       issueType: 'wrong_sign',
       severity: 'high',
       confidence,
       effectAmount: fromCents(swingCents),
-      affectedDateFrom: bank.date < best.books.date ? bank.date : best.books.date,
-      affectedDateTo: bank.date < best.books.date ? best.books.date : bank.date,
+      affectedDateFrom: dateFrom,
+      affectedDateTo: dateTo,
       relatedBankTransactionIds: [bank.bankTransactionId].filter((x): x is string => Boolean(x)),
       relatedJournalEntryIds: [bank.journalEntryId, best.books.journalEntryId].filter((x): x is string => Boolean(x)),
       relatedSourceDocumentIds: [],
-      explanation: `Bank shows ${bank.amountCents > 0 ? '+' : '-'}R${fromCents(Math.abs(bank.amountCents)).toFixed(2)}, books show the same amount the opposite way — a likely debit/credit reversal. Reconciliation effect: R${fromCents(swingCents).toFixed(2)} (double the transaction amount).`,
+      explanation: renderExplanation(evidenceData, 'wrong_sign'),
       evidence,
+      evidenceData,
       suggestedResolution: 'Reverse the incorrectly-signed posting and re-post it with the correct debit/credit, through the proper accounting flow.',
       autoResolutionSafe: false,
     });

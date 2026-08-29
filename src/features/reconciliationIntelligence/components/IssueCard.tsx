@@ -6,6 +6,14 @@ import { Textarea } from '@/components/ui/shadcn/textarea';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Amount } from '@/components/app/figure';
 import { formatDate } from '@/lib/app/format';
+import { EvidenceFactors } from './EvidenceFactors';
+
+/** "R95.00 + R310.40 = R405.40" — the literal arithmetic behind a combination / rounding issue. */
+function combinationArithmetic(terms: { label: string; amountCents: number }[], totalCents?: number): string {
+  const parts = terms.map((t) => `R${Math.abs(t.amountCents / 100).toFixed(2)}`);
+  const total = totalCents ?? terms.reduce((s, t) => s + t.amountCents, 0);
+  return `${parts.join(' + ')} = R${Math.abs(total / 100).toFixed(2)}`;
+}
 
 const SEVERITY_LABEL: Record<ReconciliationIssue['severity'], string> = {
   info: 'Info',
@@ -84,17 +92,27 @@ export function IssueCard({ issue, onReview, onDismiss, onMarkAutoSafe, onResolv
         </div>
       )}
 
-      <div>
-        <p className="mb-1 text-xs font-medium text-muted-foreground">Why we think this:</p>
-        <ul className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-          {issue.evidence.map((e, i) => (
-            <li key={i}>
-              • {e.label}
-              {e.detail ? ` — ${e.detail}` : ''}
-            </li>
-          ))}
-        </ul>
-      </div>
+      {issue.evidenceData?.combinationTerms && issue.evidenceData.combinationTerms.length > 0 && (
+        <p className="figure rounded-md bg-muted/50 px-2 py-1 text-sm tabular-nums" data-testid="combination-arithmetic">
+          {combinationArithmetic(issue.evidenceData.combinationTerms, issue.evidenceData.combinationTotalCents)}
+        </p>
+      )}
+
+      {issue.evidenceData?.factors && issue.evidenceData.factors.length > 0 ? (
+        <EvidenceFactors factors={issue.evidenceData.factors} />
+      ) : (
+        <div>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Why we think this:</p>
+          <ul className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+            {issue.evidence.map((e, i) => (
+              <li key={i}>
+                • {e.label}
+                {e.detail ? ` — ${e.detail}` : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <p className="text-xs text-muted-foreground">
         Suggested: {issue.suggestedResolution}

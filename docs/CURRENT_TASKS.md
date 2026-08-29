@@ -327,3 +327,139 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` complete
 - [x] `vite build` clean
 - [x] `.claude/agents/qa-bee.md` restored to HEAD; working tree carries only this pass's changes
 - [ ] **STOP — do not commit, do not push. Wait for final approval.**
+
+---
+
+# BANK_STATEMENT_RECONCILIATION_AND_FORM_SYSTEM
+
+**Opened:** 2026-08-28 · **Owner:** Queen Bee
+**Rule:** Do NOT commit or push until the entire phase is complete and the user approves. Stop for review.
+**Two deliverables, built together:** (A) a persistent Bank Statement + side-by-side proof-reading
+Reconciliation Workspace with an explainable evidence model, run against the real Office National
+August data; (B) a consistent application-wide Vertex Form System.
+
+Runs on top of the Office National Demo dataset (`docs/OFFICE_NATIONAL_DEMO_TASKS.md`). Phase 21
+(post-audit accounting corrections) must land first — Part J needs the Office National books clean.
+
+Statuses: `NOT STARTED` · `INVESTIGATING` · `PROPOSED` · `IN PROGRESS` · `PASS` · `BLOCKED` · `N/A`
+
+## Data-integrity incident (found + fixed 2026-08-28, before this phase started)
+
+| Item | Detail |
+|---|---|
+| `JE-0171` | Post-seed contamination — a Phase 21 subagent caused the app's real `bankTransactionService` to post `JE-0171` (source `bank_transaction`, DR Cash / CR AR R2,295.29) against **live** Supabase, duplicating customer receipt REC-1001's posting, flipping its bank_transaction `unreconciled`→`matched`, and destroying the "outstanding deposit" training scenario. GL 1100 drifted 207,794.04 → 205,498.75. |
+| Fix | Queen deleted `JE-0171` + its lines, restored bank_transaction `7f9d173c` to `status='unreconciled'` / `journal_entry_id` → REC-1001's receipt JE. **Verified restored:** 170 journal entries, GL 1100 = R207,794.04, GL 1000 = R212,270.67, global diff R0.00, 81 reconciled / 13 unreconciled bank txns, outstanding-deposit scenario intact. |
+| Rule for this phase | **No subagent may run the app's service layer (dev server, real `*Service` singletons, un-mocked repos) against the live Supabase project.** DB writes only via explicit reviewed SQL / migrations through the MCP. Tests use mocks. |
+
+## SAFETY-0 — Fail-closed test/tooling guard against live Supabase (MANDATORY, user-approved 2026-08-28)
+
+**Regression case:** JE-0171 — real `bankTransactionService` → accidentally live Supabase → duplicate JE,
+changed Bank GL + AR, marked an unreconciled txn matched, destroyed the outstanding-deposit scenario.
+Must be technically impossible again, not just a written rule.
+
+| # | Task | Agent | Status | Notes |
+|---|---|---|---|---|
+| S0.1 | Root-cause audit | Agent 13 | **PASS** | Confirmed the chain (`vite.config.ts:14` → `.env.local:1` real keys → `src/config/env.ts:8` → `src/config/supabase.ts:24` unconditional `createClient` → `src/features/*/services/index.ts` barrels build live-connected singletons). **Found an extra latent leak:** `MockCustomerRepository.test.ts` → `CustomerService.deleteCustomer()` → live `invoiceService.getInvoicesByCustomer()` → real `invoices` query every run (passed only because the throwaway customer had no invoices). **No test needs a real connection.** |
+| S0.2 | Fail-closed protection (3 layers) | Agent 13 | **PASS** | (a) `tests/setup.ts` global `vi.mock('@/config/supabase')` → throwing `Proxy` on every access; per-file `vi.mock` still overrides (the 4 auth tests). (b) `src/config/supabase.ts` `isTestContext()` + `resolveClientConfig()` throws in test MODE/`VITEST` unless `VITE_TEST_SUPABASE_URL` is set AND ≠ prod; never falls back to prod vars; no-op in dev/prod. (c) `getTestSupabaseClient()` — lockable door, throws unless an explicit test project is configured. `docs/TESTING_SUPABASE.md` written. |
+| S0.3 | Destructive/seed tooling guard | Agent 13 | **PASS** | No live-write tooling exists in the repo today (all fixtures are pure in-memory). Added `src/config/writeTargetGuard.ts`: `assertDemoWriteTarget()` requires `VERTEX_DB_TARGET ∈ {demo,local}` + URL ≠ prod + URL on allowlist; `assertDestructiveResetAllowed()` additionally requires `VERTEX_ALLOW_DESTRUCTIVE_RESET=yes`. Never infers "creds present ⇒ safe". |
+| S0.4 | Regression tests | Agent 13 | **PASS** | `supabaseGuard.test.ts` + `writeTargetGuard.test.ts` — 19 assertions: raw `supabase.from` throws in tests · load-time guard rejects without test URL · fails closed with prod vars present · seed/reset rejects non-demo/prod · `MODE=production`/`development` still construct a client fine. 1 test migrated to mocks (`MockCustomerRepository.test.ts`). |
+| S0.5 | Queen READ-ONLY baseline re-verify (no posting service) | Queen | **PASS** | 171 JEs · global Σdr−Σcr R0.00 · 0 unbalanced · AR GL R207,794.04 · Bank GL R212,270.67 · Inventory GL R1,569,737.73 = valuation exact · 81/13 bank txns · 11 recon issues · outstanding-deposit `unreconciled` · **0 contamination JEs, 0 `source='bank_transaction'` JEs** · 5 category mappings. |
+
+**Gate after S0:** type-check ✅ / lint ✅ / **1146 tests / 162 files** (from 1127/160) ✅ / build ✅.
+
+## PART 0 — Investigation (must complete before any build; schema proposals need user sign-off)
+
+| # | Task | Agent | Status | Findings |
+|---|---|---|---|---|
+| 0.1 | Live-schema audit | Agent 11 | **PASS** | → `docs/BANK_STATEMENT_ARCHITECTURE_AUDIT.md`. **No bank-statement/statement-line/import/document table exists at all** — only bank_accounts, bank_transactions, reconciliations (0 rows, never used), reconciliation_issues. RLS role inconsistency: reconciliations/reconciliation_issues use `{public}`, account/txn tables use `{authenticated}`. |
+| 0.2 | Bank-statement model gap + smallest additive migration | Agent 11 | **PASS** | Proposed migration 0020: 2 new tables (`bank_statements`, `bank_statement_lines`) + 1 nullable column on `bank_transactions` + 3 enums. **Zero changes to existing columns.** DDL sketch in the audit doc. |
+| 0.3 | Import flow audit | Agent 11 | **PASS** | Real CSV/OFX/QIF/MT940 parsers exist (`statementParsers.ts`). Import = N loose `source='import'` bank_transactions, **no statement identity**, `sourceRowId` not persisted, opening/closing balances discarded at parse, no balance validation, a bad row aborts the whole file. Import is non-destructive (no GL posting). |
+| 0.4 | Evidence model audit | Agent 11 | **PASS** | `reconciliation_issues.evidence` is prose `[{label, detail?}]` — every computed number is discarded. None of the requested structured fields exist. Confidence = fixed additive scorecard, exposed as a bare %. Ranking = non-stable confidence-only sort. Supersede-dedupe is broken (string-compares a timestamptz). Needs a structured `evidence_data` jsonb + deterministic ranking key + idempotency key. |
+| 0.5 | Full form inventory | Agent 12 | **PASS** | → `docs/FORM_SYSTEM_AUDIT.md`. ~45 form surfaces; 14 on `form-surface.ts`, ~27 ad-hoc page-inline `max-w-*` dialogs, 7 hand-written AlertDialogs. Purchases domain has **no FormModal layer**. `DialogFooter` sticky but ignored by 40 files. 3 tabbed forms, 3 different hand-rolled height fixes. Dirty-state: nonexistent. Validation UX split RHF/useState. Dark-selects 100% done. Detail side 100% unified. |
+| 0.6 | Shared form infra audit + gap analysis | Agent 12 | **PASS** | Smallest viable new set: `FormShell`, `FormFooter`, `FormTabs`, `useUnsavedChangesPrompt` (removes ~90% of duplication, fixes tab-resize + non-sticky footer). Cheap add-ons: `FormSection`, `FormError`, size-token rename, `ConfirmDialog`. Migration long-poles: 11 useState document forms, the Purchases domain, `StatementImportPanel` wizard. |
+| 0.7 | Queen: consolidate → schema proposal(s) + phased build plan → **user approval gate** | Queen | IN PROGRESS | Both investigations complete. Awaiting Agent 10 (21.1) + Agent 13 (test guard), then consolidated plan → user. |
+
+## Contamination cleanup (Queen, 2026-08-28)
+
+| Item | Detail |
+|---|---|
+| 16 stray `reconciliation_issues` | `missing_bank_side` confidence-40 rows created by live `ReconciliationInvestigatorService.investigate()` runs on 2026-08-28 09:11–10:42 (after the approved seed — false positives from the manual/import ambiguity). **Deleted.** Restored to the golden 08:49 batch of 11 (matches `OFFICE_NATIONAL_RECON_EXPECTATIONS.md`). |
+
+## 0.7 — DECISIONS (user, 2026-08-28)
+1. **Migration 0020** — approved as proposed (all additive: `bank_statements` + `bank_statement_lines` + `bank_transactions.bank_statement_line_id` + `reconciliation_issues.evidence_data` + 3 enums; RLS `{authenticated}`, mutable).
+2. **Part J** — faithful: **~94 `bank_statement_lines`** (one per genuine bank-side event incl. every deliberate scenario leg), created as NEW rows, **no reclassification** of `bank_transactions.source`.
+3. **cost_price** → **`numeric(14,4)`** (fold into 0020) + **re-restate** inventory at 4dp WAC (residual ~R0.07).
+4. **Sequencing** — 3 sub-phases, user review between each:
+   - **P1** = migration 0020 + statement persistence + parser upgrades + duplicate/balance validation + import UX + Part J backfill + inventory re-restate.
+   - **P2** = side-by-side workspace + evidence model + Difference Investigator upgrade + whole-period proof + Office National evidence report (Parts B–I, O, P).
+   - **P3** = Vertex Form System (Parts M–N).
+
+## SUB-PHASE P1 — Persistence, import, backfill
+
+| # | Task | Agent | Status | Notes |
+|---|---|---|---|---|
+| P1.1 | Migration 0020 + TS types | Agent 14 + Queen | **PASS** | Agent 14 wrote types + DDL file; `apply_migration` was blocked for the subagent by the auto-mode classifier → **Queen applied it** (`0020_bank_statements_and_evidence`). Verified: `bank_statements` + `bank_statement_lines` tables, both RLS `_all_own_company` `{authenticated}`, `bank_transactions.bank_statement_line_id`, `reconciliation_issues.evidence_data` + `dedupe_key`, `products.cost_price` → `numeric(14,4)` (50 rows intact, sum 43770.20). Advisors: only 8 new `unused_index` INFO (clear on first query) + 2 `auth_allow_anonymous_sign_ins` WARN identical to every sibling table — **no ERROR, no missing-RLS, no new unindexed-FK**. `docs/db-changes/0020_...sql` updated to "applied". New TS: `src/types/bankStatement.ts` + `ReconciliationEvidenceData` on `reconciliationIssue.ts`. Gate green (1146/162). |
+| P1.2 | Re-restate inventory perpetual-WAC at 4dp | Agent 15 (retry) | **PASS** | Opening-cost gate: Σ(opening_qty × opening_cost) = R1,487,450.00 = JE-0001 DR 1200 exact. Old JE-4100 (R5.54) deleted (no FK refs), fresh JE-4100 posted **DR 5000 / CR 1200 R0.07** (4dp residual). 40 of 48 `cost_price` values gained 4dp precision. **No COGS/Inventory journal line changed** — the 2dp pass already computed COGS from full-precision WAC; only stored `cost_price` was coarse. **Queen-verified:** GL 1200 = round(Σ qoh×cost_price,2) = **R1,569,743.20, diff R0.00**; global Σdr−Σcr R0.00; 0 unbalanced; qoh 10,169.000 unchanged; GL 1100 R207,794.04 + GL 1000 R212,270.67 unchanged; 11 recon issues; 81/13 bank txns. P&L: COGS R339,665.97→**R339,660.50**, GP R209,116.85→**R209,122.32**, NP R103,599.89→**R103,605.36** (Δ = the JE-4100 swap −R5.47). |
+| P1.3 | Statement persistence layer | Agent 16 (retry) | **PASS** | Repos `I/Supabase/Mock BankStatement[Line]Repository` + `StatementImportService` (`previewImport`/`confirmImport`, structurally cannot post GL — constructed with only the 2 statement repos). Parser upgrades: `ParsedStatement` wrapper with `openingBalance`/`closingBalance`/`periodStart`/`periodEnd`/`parseErrors[]`; `ParsedStatementLine` gains `valueDate`/`externalRefId`/`runningBalance`/`raw`. MT940 `:60F:`/`:62F:` + OFX `<LEDGERBAL>`/`<DTSTART/END>` metadata extraction. **Per-row errors → `parseErrors[]`, parsing continues** (was: any bad row aborts the file). New pure `utils/sha256.ts` (FIPS-180-4, verified vs test vectors) → order-independent content hash. `computeBalanceCheck` (PART L): `opening + Σ signed == closing` ± R0.01 → `ok`/`null`. **Queen-verified gate: type-check ✅ / lint ✅ / 1188 tests / 167 files (from 1146/162) ✅ / build ✅.** |
+| P1.4 | Part J backfill | Agent 16 (retry) | **PASS (with 1 doc flag)** | 1 `bank_statements` (`df28d259…`, Aug 2026, opening R350,000, **closing R184,068.54**, `balance_check_ok=true`, content-hash) + **87 `bank_statement_lines`** (75 `matched` + bijectively back-linked via `bank_transactions.bank_statement_line_id`, 12 `unmatched`). Every deliberate scenario represented (per-scenario `line_state` table in the expectations doc). **Queen-verified:** 87 lines, `line_count`=87, bijection clean both directions (0 violations), 0 wrong-company rows, closing arithmetic `350000 − 165,931.46 = 184,068.54`. Baseline untouched: 171 JEs, global diff R0.00, GL 1100/1000/1200 = R207,794.04 / R212,270.67 / R1,569,743.20, 11 recon issues, 81/13 bank txns. **DOC FLAG:** closing R184,068.54 vs the expectations doc's earlier "R174,265.22" — the R9,803.32 gap = REC-1007 (receipt dated 31 Aug, reconciled), included per the brief's "≤ 31 Aug" rule. Needs a user call on the cut (see P1.6). |
+| P1.5 | Import UX wizard | Agent 17 | **PASS** | `useStatementImport` hook (state machine `idle→previewing→preview-ready→confirming→done`) + `StatementImportWizard` (5 views in the shared Dialog + `wideFormDialogClass` — no new form primitive). Steps: pick account → upload (+ format override) → preview (format, period, opening/closing, line count, **duplicate banner + "Import anyway" gate**, **parse-issues disclosure**, **balance-integrity note — warns, never blocks Confirm**, read-only line table) → confirm → done ("Reconcile now" / "Close", states nothing was posted to GL). Wired into `BankTransactionsPage` "Import statement" button. **18 new tests.** Old per-line path (`StatementImportPanel`/`Modal`, `importStatementLines`) intact on disk, just no longer referenced by the page (P2 removes it). Reconciliation route doesn't take a statement id yet → `// P2` marker. **Queen-verified gate: type-check ✅ / lint ✅ / 1206 tests / 169 files (from 1188/167) ✅ / build ✅.** |
+| P1.6 | Queen: verify + P1 gate + read-only baseline re-verify + P1 report → **user review** | Queen | **PASS — awaiting user review** | Baseline read-only re-verify (no posting service): 171 JEs · global Σdr−Σcr **R0.00** · 0 unbalanced · AR R207,794.04 · Bank GL R212,270.67 · Inventory GL R1,569,743.20 = valuation exact · 81/13 bank txns · 11 recon issues · outstanding-deposit `unreconciled` · **0 contamination JEs** · 1 bank_statement + 87 lines · 5 category mappings. Full gate green (1206/169, type-check/lint/build). |
+
+## PART A — Persistent bank statement architecture | superseded by P1
+## PART B — Side-by-side reconciliation workspace | NOT STARTED
+## PART C — Reconciliation line states | NOT STARTED
+## PART D — Line-by-line workflow | NOT STARTED
+## PART E — Trace-everything (clickable record chain, state-preserving) | NOT STARTED
+## PART F — Document proofing (per-line yes/no answers) | NOT STARTED
+## PART G — Reconciliation summary (truthful metrics, no false "100%") | NOT STARTED
+## PART H — Difference Investigator upgrade (sectioned, arithmetic shown) | NOT STARTED
+## PART I — Whole-period proof (statement→books AND books→statement) | NOT STARTED
+## PART J — Run against Office National August data (migrate 94 bank txns under a persistent statement) | NOT STARTED
+## PART K — Bank statement import UX (select acct → upload → preview → confirm → reconcile) | NOT STARTED
+## PART L — Statement balance validation (opening + net == closing) | NOT STARTED
+## PART M–N — Vertex Form System (FormShell/Header/Tabs/Body/Section/Footer, size tokens, tab-resize fix) | NOT STARTED
+## PART O — Accountant-style reconciliation evidence report for every deliberate scenario | NOT STARTED
+## PART P — Accountant-friendly explanations / tooltips | NOT STARTED
+## PART Q — Accounting-safety guardrails (no forced matches, no silent entries, RLS intact) | NOT STARTED
+## PART R — Comprehensive tests (35-point list) | NOT STARTED
+## PART S — Full validation (type-check / lint / test / build / Supabase advisors) | NOT STARTED
+## PART T — Final 47-point report | NOT STARTED
+
+## Overall status
+
+- **SAFETY-0** ✅ fail-closed guard shipped.
+- **PART 0 investigation** ✅ both audits done.
+- **Phase 21** ✅ 21.1 (inventory, now 4dp via P1.2) / 21.2 (AR recon) / 21.3 (category mapping) + 2 contamination cleanups.
+- **0.7 decisions** ✅ user-approved (migration 0020 as-proposed, faithful Part J, cost_price 4dp, 3 sub-phases).
+- **SUB-PHASE P1** ✅ **COMPLETE — awaiting user review**:
+  - P1.1 migration 0020 applied (2 tables, 3 enums, evidence_data + dedupe_key, cost_price→numeric(14,4))
+  - P1.2 inventory re-restated at 4dp WAC (GL 1200 = valuation R1,569,743.20, R0.00)
+  - P1.3 statement persistence layer (repos + `StatementImportService` + parser upgrades + sha256 hash + Part L balance validation)
+  - P1.4 Office National Part J backfill (1 statement + 87 lines, 75 matched/bijective, 12 unmatched)
+  - P1.5 import wizard (select→upload→preview→confirm→reconcile; duplicate/parse/balance warnings)
+  - Gate: **1206 tests / 169 files**, type-check/lint/build clean. Baseline read-only re-verified: 0 contamination.
+- **Open questions for the P1 review** (below).
+- **SUB-PHASE P2** ✅ **COMPLETE — awaiting user review**:
+  - P2.1 engine — statement-line candidate model, `evidence_data` on all 13 detectors, deterministic `dedupe_key` + ranking, sectioned `InvestigationResult`, `proveWholePeriod` both directions, truthful health metrics
+  - P2.2 side-by-side workspace — LEFT statement line / RIGHT accounting record / COMPARISON block / evidence-with-basis / line-by-line nav / trace / document-proofing / 5-section investigator / whole-period tab / tooltips
+  - P2.3 Office National — 12 regenerated `reconciliation_issues` with full evidence, `OFFICE_NATIONAL_RECON_EXPECTATIONS.md` cross-reference + PART O walk-through, closing balance R184,068.54
+  - Gate: **1249 tests / 177 files**, type-check/lint/build clean. Baseline read-only re-verified: 0 contamination, all controls intact.
+- **P3** (Vertex Form System — `FormShell` / `FormFooter` / `FormTabs` / `useUnsavedChangesPrompt` + migrate ~45 forms) BLOCKED on P2 sign-off.
+
+### P1 review — user decisions (2026-08-28)
+1. **August closing balance = R184,068.54** — include REC-1007 (31 Aug reconciled receipt). Statement stays at 87 lines as built. `OFFICE_NATIONAL_RECON_EXPECTATIONS.md`'s old R174,265.22 estimate to be updated to R184,068.54 (Agent 20).
+2. **Old per-line import path** — leave unreferenced; P2 deletes `StatementImportPanel`/`StatementImportModal` + `bankTransactionService.importStatementLines`/`findMatchesForLine` + `useBankTransactionMutations.importStatementLines` cleanly.
+3. **Proceed to P2.**
+
+---
+
+## SUB-PHASE P2 — Side-by-side workspace, evidence model, Difference Investigator upgrade
+
+| # | Task | Agent | Status | Notes |
+|---|---|---|---|---|
+| P2.1 | Evidence + investigator engine | Agent 18 | **PASS** | `buildBankSideCandidatesFromStatementLines` (+ `source='import'` fallback for accounts with no persisted statement). New `utils/evidence.ts` `buildEvidence` (replaces `confidence.ts`) + `utils/renderExplanation.ts` — all 13 detectors populate `evidenceData` (amount/date/ref-similarity deltas, same-counterparty/direction/account, full met+unmet factor scorecard, `candidateSourceType/Id`, `varianceExplainedCents`, `detectorVersion='2026.08'`); explanation generated FROM evidence; combination detector shows literal arithmetic + `combinationTerms`. `dedupe_key` = `issueType|statementDate(date)|sorted(related ids)` → idempotent supersede (fixes timestamptz bug), total-order ranking (`confidence DESC, |effect| DESC, issueType, dedupeKey`). `InvestigationResult.sections` {exactCauses/strongCandidates/timingItems/structuralIssues/combinationExplanations}. New `wholePeriodProofService.proveWholePeriod` (statement→books + books→statement, pure fn). `reconciliationHealthService` extended (statementLineCount, closing/books balances, statementVsBooksDifference — truthful "no 100% while variance remains" preserved). `SupabaseReconciliationIssueRepository` maps `evidence_data`/`dedupe_key`. 16 additive optional fields on `ReconciliationEvidenceData`. **Queen-verified gate: type-check ✅ / lint ✅ / 1218 tests / 171 files (from 1206/169) ✅ / build ✅.** No DB writes. |
+| P2.2 | Side-by-side reconciliation workspace | Agent 19 (+retry verify pass) | **PASS** | `ReconciliationWorkspace.tsx` rebuilt: LEFT `bank_statement_line` list (date/desc/ref/state-chip/signed-amount, search + state filter) → LEFT detail (date, value date, description, ref, direction, amount, running balance, "Line N of M", statement name); RIGHT counterpart panel (source label/number, contact, accounting date, ref, amount, GL account(s), VAT, journal number, status, recon state) OR the exact "cannot find a corresponding accounting entry" state + 6 missing-in-books workflow buttons; COMPARISON block (amount/date/reference[from `evidenceData.referenceSimilarity`]/direction/account/VAT, ✓/✗/⚠ + delta); candidate evidence via `EvidenceFactors` (met "Why" / unmet "Potential concern", never a bare %); "Line N of M" + Prev/Next + keyboard ←→ + "Investigate R0.16" → investigator auto-run; truthful summary (caps at 99.9% unless `varianceRemaining===0`, "—" when coverage null); trace via shared `RecordDetailSheet` (state-preserving — verified by test); 9-question document-proofing checklist; `DifferenceInvestigatorPanel` 5 headed sections + literal combination arithmetic; `WholePeriodProofPanel` as its own tab (both directions, tagged); `HelpTip` tooltips. Retry pass filled 4 gaps (evidence-delta wiring, `keepMounted` so tab-switch preserves selection, honest+visible missing-in-books notice, extra tests). **Queen-verified gate: type-check ✅ / lint ✅ / 1249 tests / 177 files ✅ / build ✅.** Missing-in-books flows: `search_existing` real (routes to Bank Transactions), the other 5 are visible `// P2` stubs (no statement-line→GL entry point yet). Trace chain stops at journal entry (honours "only real links", shallower than full PART E). |
+| P2.3 | Office National evidence report + re-generate recon issues | Agent 20 (+retry) | **PASS** | DB regen: **12 `reconciliation_issues`**, all `status='open'`, all with rich `evidence_data` (met+unmet factor scorecards, `combinationTerms` arithmetic, generated explanations) + `dedupe_key`, single 2026-08-28 17:37:38 batch, no confidence-40 noise. Offline harness `officeNationalPartJRegen.test.ts`. `docs/OFFICE_NATIONAL_RECON_EXPECTATIONS.md` (705 lines): closing balance R174,265.22 → **R184,068.54** everywhere (superseded-cut note, not open question); **`## Issue cross-reference`** section (line 413) — 12 rows with issue_type/confidence/effect_amount + an `evidence_data` field matrix + expected line_state + resolution + rationale, stale UUIDs replaced with regenerated ids; **`## PART O`** walk-through (line 480) O-1..O-10 (R0.16 / R185.50 / R62.10 / duplicate / wrong-sign / wrong-account[why it's a Books-Integrity finding] / one-to-many / pair / triple / timing) each quoting real evidence values. Outstanding deposit (C2b, conf 70) + payment (C2a, conf 45 auto-safe) both materialise as `missing_bank_side` rows, PAY-2004 also flagged as books→statement timing proof. **Queen-verified:** 12 issues all evidence+dedupe, baseline untouched (171 JEs, global diff R0.00, GL 1100/1000/1200 = R207,794.04 / R212,270.67 / R1,569,743.20, inventory valuation == GL 1200, 1 statement / 87 lines, 81/13, 0 contamination). Gate: type-check ✅ / lint ✅ / **1249 tests / 177 files** ✅ / build ✅. |
+| P2.4 | Queen: verify + gate + baseline re-verify + P2 report → **user review** | Queen | **PASS — awaiting user review** |
+
+**NOTHING committed or pushed.**

@@ -1,6 +1,6 @@
 import { InvoiceService } from './invoiceService';
 import { SupabaseInvoiceRepository } from '@/repositories/SupabaseInvoiceRepository';
-import { journalEntryService, accountMappingService } from '@/features/accounting/services';
+import { journalEntryService, accountMappingService, categoryAccountMappingService } from '@/features/accounting/services';
 import { inventoryPoster } from '@/features/inventory/services/inventoryPostingAdapter';
 import { supabase } from '@/config/supabase';
 
@@ -27,4 +27,5 @@ export const invoiceService = new InvoiceService(
   journalEntryService,
   inventoryPoster,
   accountMappingService,
+  categoryAccountMappingService,
 );

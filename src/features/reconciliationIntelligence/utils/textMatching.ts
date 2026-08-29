@@ -42,3 +42,19 @@ export function referencesMatch(a?: string, b?: string): boolean {
   const rb = b.trim().toLowerCase();
   return ra.length > 0 && (ra === rb || ra.includes(rb) || rb.includes(ra));
 }
+
+/**
+ * 0-1 similarity between two reference strings, for
+ * `ReconciliationEvidenceData.referenceSimilarity`: 1 on an exact match, 0.8
+ * when one contains the other, otherwise the token overlap ratio (0 when
+ * either side is missing).
+ */
+export function referenceSimilarity(a?: string, b?: string): number {
+  if (!a || !b) return 0;
+  const ra = a.trim().toLowerCase();
+  const rb = b.trim().toLowerCase();
+  if (!ra || !rb) return 0;
+  if (ra === rb) return 1;
+  if (ra.includes(rb) || rb.includes(ra)) return 0.8;
+  return descriptionOverlap(ra, rb);
+}

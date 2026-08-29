@@ -1,5 +1,6 @@
 import type { InvestigationCandidate, ReconciliationIssueDraft } from '../types';
-import { buildConfidence } from '../utils/confidence';
+import { buildEvidence } from '../utils/evidence';
+import { renderExplanation } from '../utils/renderExplanation';
 import { fromCents } from '../utils/money';
 
 const STALE_AFTER_DAYS = 7;
@@ -33,11 +34,28 @@ export function detectMissingEntries(
   for (const item of unmatchedBank) {
     const ageDays = daysBefore(item.date, statementDate);
     const isStale = ageDays > staleAfterDays;
-    const { value: confidence, evidence } = buildConfidence([
-      { points: 30, label: 'No matching accounting entry found within the tolerance window', met: true },
-      { points: 30, label: `${ageDays} day(s) old as of the statement date`, met: isStale },
-      { points: 15, label: 'Likely a bank-initiated item (fee, interest, or debit order)', met: /fee|charge|interest|debit order|levy/i.test(item.description) },
-    ]);
+    const bankInitiated = /fee|charge|interest|debit order|levy/i.test(item.description);
+    const { value: confidence, evidence, evidenceData } = buildEvidence({
+      detectorType: 'missing_ledger_side',
+      factors: [
+        { key: 'no_ledger_counterpart', points: 30, maxPoints: 30, label: 'No matching accounting entry found within the tolerance window', met: true },
+        { key: 'aged_past_stale', points: 30, maxPoints: 30, label: `${ageDays} day(s) old as of the statement date`, met: isStale, observedValue: `${ageDays} days` },
+        { key: 'bank_initiated_shape', points: 15, maxPoints: 15, label: 'Likely a bank-initiated item (fee, interest, or debit order)', met: bankInitiated, observedValue: bankInitiated },
+      ],
+      fields: {
+        candidateSourceType: item.kind === 'statement_line' ? 'statement_line' : 'bank_transaction',
+        candidateSourceId: item.id,
+        varianceExplainedCents: Math.abs(item.amountCents),
+        sameDirection: true,
+        sameBankAccount: true,
+        bankAmountCents: item.amountCents,
+        counterpartyLabel: item.description,
+        observedDateFrom: item.date,
+        observedDateTo: item.date,
+        ageDays,
+        isStale,
+      },
+    });
 
     issues.push({
       issueType: 'missing_ledger_side',
@@ -49,8 +67,9 @@ export function detectMissingEntries(
       relatedBankTransactionIds: [item.bankTransactionId].filter((x): x is string => Boolean(x)),
       relatedJournalEntryIds: [],
       relatedSourceDocumentIds: [],
-      explanation: `The bank shows "${item.description}" for R${fromCents(Math.abs(item.amountCents)).toFixed(2)} on ${item.date}, but no accounting entry explains it.`,
+      explanation: renderExplanation(evidenceData, 'missing_ledger_side'),
       evidence,
+      evidenceData,
       suggestedResolution: 'Record the missing transaction through the normal Banking flow (e.g. Direct Payment/Receipt), then re-run the investigation.',
       autoResolutionSafe: false,
     });
@@ -59,12 +78,28 @@ export function detectMissingEntries(
   for (const item of unmatchedBooks) {
     const ageDays = daysBefore(item.date, statementDate);
     const isStale = ageDays > staleAfterDays;
-    const { value: confidence, evidence } = buildConfidence([
-      { points: 25, label: 'No matching bank statement line found within the tolerance window', met: true },
-      { points: 25, label: `${ageDays} day(s) old as of the statement date`, met: isStale },
-      { points: 15, label: 'Not from a bank import — recorded directly in the books', met: item.kind === 'bank_transaction' },
-      { points: 20, label: 'Posted straight to the bank GL account with no BankTransaction behind it', met: item.kind === 'journal_entry' },
-    ]);
+    const { value: confidence, evidence, evidenceData } = buildEvidence({
+      detectorType: 'missing_bank_side',
+      factors: [
+        { key: 'no_bank_counterpart', points: 25, maxPoints: 25, label: 'No matching bank statement line found within the tolerance window', met: true },
+        { key: 'aged_past_stale', points: 25, maxPoints: 25, label: `${ageDays} day(s) old as of the statement date`, met: isStale, observedValue: `${ageDays} days` },
+        { key: 'recorded_in_books', points: 15, maxPoints: 15, label: 'Not from a bank import — recorded directly in the books', met: item.kind === 'bank_transaction' },
+        { key: 'orphaned_journal', points: 20, maxPoints: 20, label: 'Posted straight to the bank GL account with no BankTransaction behind it', met: item.kind === 'journal_entry' },
+      ],
+      fields: {
+        candidateSourceType: item.kind === 'journal_entry' ? 'journal_entry' : 'bank_transaction',
+        candidateSourceId: item.id,
+        varianceExplainedCents: Math.abs(item.amountCents),
+        sameDirection: true,
+        sameBankAccount: true,
+        booksAmountCents: item.amountCents,
+        counterpartyLabel: item.description,
+        observedDateFrom: item.date,
+        observedDateTo: item.date,
+        ageDays,
+        isStale,
+      },
+    });
 
     issues.push({
       issueType: 'missing_bank_side',
@@ -76,10 +111,9 @@ export function detectMissingEntries(
       relatedBankTransactionIds: [item.bankTransactionId].filter((x): x is string => Boolean(x)),
       relatedJournalEntryIds: [item.journalEntryId].filter((x): x is string => Boolean(x)),
       relatedSourceDocumentIds: [],
-      explanation: isStale
-        ? `The books show "${item.description}" for R${fromCents(Math.abs(item.amountCents)).toFixed(2)} on ${item.date}, still not reflected on the bank statement ${ageDays} day(s) later — check it was actually processed, and on the right account.`
-        : `The books show "${item.description}" for R${fromCents(Math.abs(item.amountCents)).toFixed(2)} on ${item.date}, not yet on the bank statement — likely still in transit.`,
+      explanation: renderExplanation(evidenceData, 'missing_bank_side'),
       evidence,
+      evidenceData,
       suggestedResolution: isStale
         ? 'Confirm the payment/deposit was actually processed by the bank; if it never was, correct or reverse it through the proper accounting flow.'
         : 'No action needed yet — a normal outstanding item. Revisit if it is still unmatched next period.',

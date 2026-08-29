@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ID, ReconciliationIssue } from '@/types';
+import type { ID, ReconciliationEvidenceData, ReconciliationIssue } from '@/types';
 import type { IReconciliationIssueRepository } from './IReconciliationIssueRepository';
 import { resolveDefaultCompanyId } from '@/repositories/resolveDefaultCompanyId';
 import { isInvalidUuidError } from '@/repositories/supabaseErrors';
@@ -19,6 +19,8 @@ interface ReconciliationIssueRow {
   related_source_document_ids: string[];
   explanation: string;
   evidence: { label: string; detail?: string }[];
+  evidence_data: ReconciliationEvidenceData | null;
+  dedupe_key: string | null;
   suggested_resolution: string;
   auto_resolution_safe: boolean;
   status: string;
@@ -47,6 +49,8 @@ function rowToIssue(row: ReconciliationIssueRow): ReconciliationIssue {
     relatedSourceDocumentIds: row.related_source_document_ids ?? [],
     explanation: row.explanation,
     evidence: row.evidence ?? [],
+    evidenceData: row.evidence_data ?? undefined,
+    dedupeKey: row.dedupe_key ?? undefined,
     suggestedResolution: row.suggested_resolution,
     autoResolutionSafe: row.auto_resolution_safe,
     status: row.status as ReconciliationIssue['status'],
@@ -71,6 +75,8 @@ function issueToRow(entity: Partial<ReconciliationIssue>): Record<string, unknow
   if (entity.relatedSourceDocumentIds !== undefined) row.related_source_document_ids = entity.relatedSourceDocumentIds;
   if (entity.explanation !== undefined) row.explanation = entity.explanation;
   if (entity.evidence !== undefined) row.evidence = entity.evidence;
+  if (entity.evidenceData !== undefined) row.evidence_data = entity.evidenceData;
+  if (entity.dedupeKey !== undefined) row.dedupe_key = entity.dedupeKey;
   if (entity.suggestedResolution !== undefined) row.suggested_resolution = entity.suggestedResolution;
   if (entity.autoResolutionSafe !== undefined) row.auto_resolution_safe = entity.autoResolutionSafe;
   if (entity.status !== undefined) row.status = entity.status;

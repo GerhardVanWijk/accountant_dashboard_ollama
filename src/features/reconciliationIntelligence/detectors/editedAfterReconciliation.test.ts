@@ -65,6 +65,9 @@ describe('detectEditedAfterReconciliation', () => {
     expect(issues[0].issueType).toBe('edited_after_reconciliation');
     expect(issues[0].severity).toBe('critical');
     expect(issues[0].relatedJournalEntryIds).toEqual(['je1', 'je2']);
+    expect(issues[0].evidenceData!.detectorType).toBe('edited_after_reconciliation');
+    expect(issues[0].evidenceData!.factors).toHaveLength(2);
+    expect(issues[0].evidenceData!.counterpartyLabel).toBe('Supplier payment');
   });
 
   it('does not flag when the reversal happened BEFORE the reconciliation was finalized', () => {

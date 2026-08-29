@@ -37,6 +37,16 @@ describe('detectAmountMismatch', () => {
     expect(Math.round(Math.abs(issues[0].effectAmount) * 100)).toBe(16);
     expect(issues[0].confidence).toBeGreaterThanOrEqual(90);
     expect(issues[0].evidence.some((e) => e.label.includes('exactly equals the unexplained'))).toBe(true);
+
+    // structured evidence, not just the prose sentence
+    const data = issues[0].evidenceData!;
+    expect(data.detectorType).toBe('amount_mismatch');
+    expect(data.amountDifferenceCents).toBe(-16);
+    expect(data.explainsVarianceExactly).toBe(true);
+    expect(data.dateDifferenceDays).toBe(0);
+    expect(data.candidateSourceId).toBe('k1');
+    // the "explains whole variance" factor is present even when it were unmet — full scorecard
+    expect(data.factors!.map((f) => f.key)).toContain('explains_whole_variance');
   });
 
   it('classifies a same-length transposed amount as transposition_error, not a generic mismatch', () => {

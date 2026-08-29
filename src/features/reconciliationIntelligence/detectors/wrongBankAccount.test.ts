@@ -22,6 +22,9 @@ describe('detectWrongBankAccount', () => {
     expect(issues).toHaveLength(1);
     expect(issues[0].issueType).toBe('wrong_bank_account');
     expect(issues[0].explanation).toContain('Savings Account');
+    expect(issues[0].evidenceData!.detectorType).toBe('wrong_bank_account');
+    expect(issues[0].evidenceData!.sameBankAccount).toBe(false);
+    expect(issues[0].evidenceData!.otherAccountName).toBe('Savings Account');
   });
 
   it('finds nothing when no other account has a matching item', () => {

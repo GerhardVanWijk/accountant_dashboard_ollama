@@ -4,6 +4,9 @@ import { MockInvoiceRepository } from '@/repositories/mock/MockInvoiceRepository
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import { AccountService } from '@/features/accounting/services/accountService';
 import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
+import { CategoryAccountMappingService } from '@/features/accounting/services/categoryAccountMappingService';
+import { MockCategoryAccountMappingRepository } from '@/features/accounting/repositories/MockCategoryAccountMappingRepository';
+import type { CategoryAccountMappingRecord } from '@/features/accounting/repositories/ICategoryAccountMappingRepository';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
@@ -35,13 +38,17 @@ function makeOpenPeriod(): AccountingPeriod {
  * contract without pulling in real Product/Warehouse/StockMovement
  * repositories here (see inventoryPostingAdapter.test.ts for that).
  */
-function makeInventoryMoverStub(costPerUnit: Record<string, number> = {}) {
+function makeInventoryMoverStub(
+  costPerUnit: Record<string, number> = {},
+  categoryByProduct: Record<string, string> = {},
+) {
   const recordedSales: { productId: string; quantity: number; reference: string; warehouseId?: string }[] = [];
   return {
     calculateCogs: async (productId: string, quantity: number) => (costPerUnit[productId] ?? 0) * quantity,
     recordSaleMovement: async (productId: string, quantity: number, reference: string, warehouseId?: string) => {
       recordedSales.push({ productId, quantity, reference, warehouseId });
     },
+    getProductCategory: async (productId: string) => categoryByProduct[productId],
     recordedSales,
   };
 }
@@ -52,17 +59,24 @@ function makeInventoryMoverStub(costPerUnit: Record<string, number> = {}) {
  * produced, not a mocked assertion — mirrors
  * src/features/banking/services/bankTransactionService.test.ts.
  */
-function setup(initialInvoices?: Invoice[], costPerUnit: Record<string, number> = {}) {
+function setup(
+  initialInvoices?: Invoice[],
+  costPerUnit: Record<string, number> = {},
+  options: { categoryByProduct?: Record<string, string>; categoryMappings?: CategoryAccountMappingRecord[] } = {},
+) {
   const journalRepository = new MockJournalEntryRepository([]);
   const accountRepository = new MockAccountRepository(seedAccounts);
   const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
   const auditLog = new AuditLogService(new MockAuditLogRepository());
   const journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
   const accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
+  const categoryAccounts = new CategoryAccountMappingService(
+    new MockCategoryAccountMappingRepository(options.categoryMappings ?? []),
+  );
 
   const repo = initialInvoices ? new MockInvoiceRepository(initialInvoices) : new MockInvoiceRepository();
-  const inventoryMover = makeInventoryMoverStub(costPerUnit);
-  const service = new InvoiceService(repo, journalEntryService, inventoryMover, accountMapper);
+  const inventoryMover = makeInventoryMoverStub(costPerUnit, options.categoryByProduct ?? {});
+  const service = new InvoiceService(repo, journalEntryService, inventoryMover, accountMapper, categoryAccounts);
 
   return { service, journalEntryService, repo, inventoryMover };
 }
@@ -425,6 +439,121 @@ describe('InvoiceService', () => {
 
       await expect(service.postInvoice(draft.id)).rejects.toThrow(/accounting period/i);
       expect(inventoryMover.recordedSales).toEqual([]);
+    });
+  });
+
+  describe('postInvoice — split revenue/COGS by product category (Phase 21.3)', () => {
+    // Furniture -> 4000/5000, Stationery -> 4200/5300, both inventory -> 1200.
+    const CATEGORY_MAPPINGS = [
+      { categoryName: 'Furniture', revenueAccountId: 'acc_4000', cogsAccountId: 'acc_5000', inventoryAccountId: 'acc_1200' },
+      { categoryName: 'Stationery', revenueAccountId: 'acc_4200', cogsAccountId: 'acc_5300', inventoryAccountId: 'acc_1200' },
+    ];
+
+    it('posts one revenue line and one COGS line per resolved account, and still balances', async () => {
+      const { service, journalEntryService } = setup([], { prod_fur: 40, prod_sta: 20 }, {
+        categoryByProduct: { prod_fur: 'Furniture', prod_sta: 'Stationery' },
+        categoryMappings: CATEGORY_MAPPINGS,
+      });
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-SPLIT-1',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_fur', description: 'Desk', quantity: 10, unitPrice: 100, taxAmount: 150, lineTotal: 1000 },
+          { id: 'li_2', productId: 'prod_sta', description: 'Paper', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 1500,
+        taxTotal: 225,
+        total: 1725,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const posted = await service.postInvoice(draft.id);
+      const entry = await journalEntryService.getEntry(posted.journalEntryId!);
+      const sum = (accountId: string, side: 'debit' | 'credit') =>
+        entry!.lines.filter((l) => l.accountId === accountId).reduce((s, l) => s + l[side], 0);
+
+      expect(sum('acc_4000', 'credit')).toBeCloseTo(1000); // furniture revenue
+      expect(sum('acc_4200', 'credit')).toBeCloseTo(500); // stationery revenue
+      expect(sum('acc_5000', 'debit')).toBeCloseTo(400); // furniture COGS (10 * 40)
+      expect(sum('acc_5300', 'debit')).toBeCloseTo(100); // stationery COGS (5 * 20)
+      expect(sum('acc_1200', 'credit')).toBeCloseTo(500); // one lumped inventory line (both -> 1200)
+      expect(sum('acc_2100', 'credit')).toBeCloseTo(225); // VAT stays one line
+      expect(sum('acc_1100', 'debit')).toBeCloseTo(1725); // AR stays one line
+
+      const totalDebit = entry!.lines.reduce((s, l) => s + l.debit, 0);
+      const totalCredit = entry!.lines.reduce((s, l) => s + l.credit, 0);
+      expect(totalDebit).toBeCloseTo(totalCredit);
+      expect(totalDebit).toBeCloseTo(2225);
+    });
+
+    it('falls back to the generic Sales Revenue / COGS accounts for an unmapped category', async () => {
+      const { service, journalEntryService } = setup([], { prod_x: 30 }, {
+        categoryByProduct: { prod_x: 'Gadgets' }, // not in CATEGORY_MAPPINGS
+        categoryMappings: CATEGORY_MAPPINGS,
+      });
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-SPLIT-FALLBACK',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_x', description: 'Gizmo', quantity: 4, unitPrice: 100, taxAmount: 60, lineTotal: 400 },
+        ],
+        subtotal: 400,
+        taxTotal: 60,
+        total: 460,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const posted = await service.postInvoice(draft.id);
+      const entry = await journalEntryService.getEntry(posted.journalEntryId!);
+
+      expect(entry!.lines.find((l) => l.accountId === 'acc_4000')?.credit).toBeCloseTo(400);
+      expect(entry!.lines.find((l) => l.accountId === 'acc_5000')?.debit).toBeCloseTo(120);
+      expect(entry!.lines.some((l) => l.accountId === 'acc_4200')).toBe(false);
+    });
+
+    it('routes a no-product line to the generic revenue account alongside a mapped product line', async () => {
+      const { service, journalEntryService } = setup([], { prod_fur: 40 }, {
+        categoryByProduct: { prod_fur: 'Furniture' },
+        // Furniture -> 4200 here so the generic (4000) line is distinguishable.
+        categoryMappings: [
+          { categoryName: 'Furniture', revenueAccountId: 'acc_4200', cogsAccountId: 'acc_5300', inventoryAccountId: 'acc_1200' },
+        ],
+      });
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-SPLIT-MIXED-SERVICE',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_fur', description: 'Desk', quantity: 10, unitPrice: 100, taxAmount: 150, lineTotal: 1000 },
+          { id: 'li_2', description: 'Delivery (service, no product)', quantity: 1, unitPrice: 200, taxAmount: 30, lineTotal: 200 },
+        ],
+        subtotal: 1200,
+        taxTotal: 180,
+        total: 1380,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+
+      const posted = await service.postInvoice(draft.id);
+      const entry = await journalEntryService.getEntry(posted.journalEntryId!);
+      const sum = (accountId: string, side: 'debit' | 'credit') =>
+        entry!.lines.filter((l) => l.accountId === accountId).reduce((s, l) => s + l[side], 0);
+
+      expect(sum('acc_4200', 'credit')).toBeCloseTo(1000); // furniture line -> mapped account
+      expect(sum('acc_4000', 'credit')).toBeCloseTo(200); // no-product line -> generic account
+      const totalDebit = entry!.lines.reduce((s, l) => s + l.debit, 0);
+      const totalCredit = entry!.lines.reduce((s, l) => s + l.credit, 0);
+      expect(totalDebit).toBeCloseTo(totalCredit);
     });
   });
 

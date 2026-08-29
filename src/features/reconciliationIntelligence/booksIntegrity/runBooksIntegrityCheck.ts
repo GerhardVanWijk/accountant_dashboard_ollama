@@ -3,7 +3,7 @@ import type { BankTransactionWithAllocations } from '@/features/banking/types';
 import type { JournalEntryService } from '@/features/accounting/services';
 import type { AccountMapper } from '@/features/accounting/services';
 import { reconcileAccountsPayable, reconcileAccountsReceivable } from '@/features/accounting/services/subledgerReconciliation';
-import type { Bill, Invoice } from '@/types';
+import type { Bill, CreditNote, CustomerReceipt, Invoice, Payment } from '@/types';
 import {
   checkBankSubledgerIntegrity,
   checkJournalEntriesBalance,
@@ -17,6 +17,9 @@ export interface BooksIntegrityInput {
   bankTransactions: BankTransactionWithAllocations[];
   invoices: Invoice[];
   bills: Bill[];
+  creditNotes: CreditNote[];
+  customerReceipts: CustomerReceipt[];
+  supplierPayments: Payment[];
   /** Set by the caller once the current investigation run has produced its own results — avoids re-deriving the same detectors twice. */
   editedAfterReconciliationCount: number;
   openingBalanceIssueFound: boolean;
@@ -55,11 +58,11 @@ export async function runBooksIntegrityCheck(
   ];
 
   if (input.invoices.length > 0) {
-    const ar = await reconcileAccountsReceivable(journalEntryService, accounts, input.invoices);
+    const ar = await reconcileAccountsReceivable(journalEntryService, accounts, input.invoices, input.creditNotes, input.customerReceipts);
     results.push(checkSubledgerReconciliation('Accounts Receivable', 'ar_subledger', ar));
   }
   if (input.bills.length > 0) {
-    const ap = await reconcileAccountsPayable(journalEntryService, accounts, input.bills);
+    const ap = await reconcileAccountsPayable(journalEntryService, accounts, input.bills, input.supplierPayments);
     results.push(checkSubledgerReconciliation('Accounts Payable', 'ap_subledger', ap));
   }
 

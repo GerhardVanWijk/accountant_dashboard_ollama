@@ -33,6 +33,9 @@ vi.mock('../services', () => ({
   accountMappingService: {
     getAccountId: vi.fn(),
   },
+  categoryAccountMappingService: {
+    resolveForCategory: vi.fn().mockResolvedValue({}),
+  },
 }));
 
 const mockedComputeTrialBalance = journalEntryService.computeTrialBalance as unknown as ReturnType<typeof vi.fn>;

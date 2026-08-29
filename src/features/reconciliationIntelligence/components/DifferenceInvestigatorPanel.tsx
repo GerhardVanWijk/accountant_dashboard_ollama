@@ -3,11 +3,22 @@ import { Loader2 } from 'lucide-react';
 import type { ID } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Amount } from '@/components/app/figure';
+import type { ReconciliationIssue } from '@/types';
 import { useDifferenceInvestigator } from '../hooks/useDifferenceInvestigator';
+import type { InvestigationSections } from '../services';
 import { selectIssuesForDisplay, filterIssuesByDate } from '../utils/issueSelectors';
 import { ReconciliationHealthCard } from './ReconciliationHealthCard';
 import { IssueCard } from './IssueCard';
 import { DifferenceTimelinePanel } from './DifferenceTimelinePanel';
+
+/** PART H — the sectioned view of an investigation result. */
+const SECTION_ORDER: { key: keyof InvestigationSections; title: string; blurb: string }[] = [
+  { key: 'exactCauses', title: 'Exact causes found', blurb: 'These account for the difference exactly.' },
+  { key: 'strongCandidates', title: 'Strong candidates', blurb: 'High-confidence matches with a small discrepancy.' },
+  { key: 'timingItems', title: 'Timing items', blurb: 'Recorded on one side but not yet the other — usually clears itself.' },
+  { key: 'structuralIssues', title: 'Structural / bookkeeping issues', blurb: 'Duplicates, wrong signs, wrong accounts, VAT and opening-balance problems.' },
+  { key: 'combinationExplanations', title: 'Combination explanations', blurb: 'Several smaller items that together equal the difference.' },
+];
 
 export interface DifferenceInvestigatorPanelProps {
   bankAccountId: ID;
@@ -17,6 +28,13 @@ export interface DifferenceInvestigatorPanelProps {
   variance: number;
   /** Bump this (e.g. from the workspace's "Investigate R…" button) to auto-run the investigation. */
   runSignal?: number;
+  /**
+   * When the page has already lifted `useDifferenceInvestigator` (so the
+   * side-by-side workspace and this panel share ONE investigation result),
+   * pass it here. Omitted → the panel keeps its own instance (backward
+   * compatible with every existing consumer/test).
+   */
+  controller?: ReturnType<typeof useDifferenceInvestigator>;
 }
 
 /**
@@ -26,8 +44,9 @@ export interface DifferenceInvestigatorPanelProps {
  * the timeline alongside it. Every action a card exposes goes through
  * reconciliationIssueResolutionService — see IssueCard's own doc comment.
  */
-export function DifferenceInvestigatorPanel({ bankAccountId, statementDate, statementBalance, clearedTransactionIds, variance, runSignal }: DifferenceInvestigatorPanelProps) {
-  const { result, isInvestigating, error, investigate, reviewIssue, dismissIssue, markAutoSafe, resolveIssue } = useDifferenceInvestigator(bankAccountId);
+export function DifferenceInvestigatorPanel({ bankAccountId, statementDate, statementBalance, clearedTransactionIds, variance, runSignal, controller }: DifferenceInvestigatorPanelProps) {
+  const own = useDifferenceInvestigator(bankAccountId);
+  const { result, isInvestigating, error, investigate, reviewIssue, dismissIssue, markAutoSafe, resolveIssue } = controller ?? own;
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const runInvestigation = () => void investigate(statementDate, statementBalance, clearedTransactionIds);
@@ -88,7 +107,7 @@ export function DifferenceInvestigatorPanel({ bankAccountId, statementDate, stat
             </div>
           )}
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-6">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Most likely causes {selectedDate ? `— ${selectedDate}` : ''}</h3>
               {selectedDate && (
@@ -98,16 +117,32 @@ export function DifferenceInvestigatorPanel({ bankAccountId, statementDate, stat
               )}
             </div>
             {windowIssues.length === 0 && <p className="text-sm text-muted-foreground">No candidate causes found — this may be a genuine bank-timing gap or a data-entry issue not captured by any current pattern.</p>}
-            {windowIssues.map((issue) => (
-              <IssueCard
-                key={issue.id}
-                issue={issue}
-                onReview={() => reviewIssue(issue.id)}
-                onDismiss={(reason) => dismissIssue(issue.id, reason)}
-                onMarkAutoSafe={() => markAutoSafe(issue.id)}
-                onResolve={(reason) => resolveIssue(issue.id, reason)}
-              />
-            ))}
+
+            {SECTION_ORDER.map(({ key, title, blurb }) => {
+              const inSection = filterIssuesByDate(
+                result.sections[key].filter((i) => i.status === 'open' || i.status === 'reviewed'),
+                selectedDate,
+              );
+              if (inSection.length === 0) return null;
+              return (
+                <section key={key} className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <h4 className="text-sm font-semibold">{title}</h4>
+                    <p className="text-xs text-muted-foreground">{blurb}</p>
+                  </div>
+                  {inSection.map((issue: ReconciliationIssue) => (
+                    <IssueCard
+                      key={`${key}-${issue.id}`}
+                      issue={issue}
+                      onReview={() => reviewIssue(issue.id)}
+                      onDismiss={(reason) => dismissIssue(issue.id, reason)}
+                      onMarkAutoSafe={() => markAutoSafe(issue.id)}
+                      onResolve={(reason) => resolveIssue(issue.id, reason)}
+                    />
+                  ))}
+                </section>
+              );
+            })}
           </div>
 
           {otherIssues.length > 0 && (

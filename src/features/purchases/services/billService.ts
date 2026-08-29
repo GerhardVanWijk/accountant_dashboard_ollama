@@ -1,6 +1,7 @@
 import type { AssetCategory, Bill, DepreciationMethod, ID, JournalEntry } from '@/types';
 import type { IBillRepository } from '@/repositories/IBillRepository';
-import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
+import type { AccountMapper, CategoryAccountResolver, NewJournalLineInput } from '@/features/accounting/services';
+import { bucketByAccount, nullCategoryAccountResolver } from '@/features/accounting/services';
 
 /**
  * Minimal surface of TaxRateService this service depends on — resolving a
@@ -21,6 +22,11 @@ export interface TaxRateResolver {
 export interface InventoryReceiver {
   isTrackedInventory(productId: ID): Promise<boolean>;
   recordReceiptMovement(productId: ID, quantity: number, unitCost: number, reference: string, warehouseId?: ID): Promise<void>;
+  /**
+   * This product's category, for per-line Inventory-account resolution
+   * (Phase 21.3). Optional so existing stubs don't need it.
+   */
+  getProductCategory?(productId: ID): Promise<string | undefined>;
 }
 
 /**
@@ -93,6 +99,13 @@ export class BillService {
     private readonly purchaseOrders: PurchaseOrderLookup,
     private readonly fixedAssetCapitalizer: FixedAssetCapitalizer,
     private readonly accounts: AccountMapper,
+    /**
+     * Resolves a tracked-inventory line's product category to its granular
+     * Inventory account (Phase 21.3). Defaults to the null resolver, so a
+     * caller that doesn't wire it keeps posting every capitalized line to
+     * the generic `INVENTORY` account.
+     */
+    private readonly categoryAccounts: CategoryAccountResolver = nullCategoryAccountResolver,
   ) {}
 
   async getBills(): Promise<Bill[]> {
@@ -255,14 +268,40 @@ export class BillService {
       });
     }
     if (inventoryValue > 0) {
-      lines.push({
-        accountId: await this.accounts.getAccountId(grniAlreadyRecognized ? 'GRNI' : 'INVENTORY'),
-        description: grniAlreadyRecognized
-          ? `Bill ${bill.billNumber} - GRNI clearing`
-          : `Bill ${bill.billNumber} - Inventory`,
-        debit: inventoryValue,
-        credit: 0,
-      });
+      if (grniAlreadyRecognized) {
+        // GRNI clearing is not category-specific — the liability was
+        // recorded once at PO-receipt time; clear it as one line.
+        lines.push({
+          accountId: await this.accounts.getAccountId('GRNI'),
+          description: `Bill ${bill.billNumber} - GRNI clearing`,
+          debit: inventoryValue,
+          credit: 0,
+        });
+      } else {
+        // Route each capitalized line through its category's Inventory
+        // account (Phase 21.3 — today every category maps to 1200, but the
+        // choice is now configurable). Falls back to the generic INVENTORY
+        // account for an unmapped category. Buckets reconcile to
+        // inventoryValue so the AP credit can't drift.
+        const genericInventoryId = await this.accounts.getAccountId('INVENTORY');
+        const inventoryContributions = await Promise.all(
+          inventoryLines.map(async (line) => {
+            const category = this.inventoryReceiver.getProductCategory
+              ? await this.inventoryReceiver.getProductCategory(line.productId!)
+              : undefined;
+            const resolved = await this.categoryAccounts.resolveForCategory(category);
+            return { accountId: resolved.inventoryAccountId ?? genericInventoryId, amount: line.lineTotal };
+          }),
+        );
+        for (const bucket of bucketByAccount(inventoryContributions, inventoryValue)) {
+          lines.push({
+            accountId: bucket.accountId,
+            description: `Bill ${bill.billNumber} - Inventory`,
+            debit: bucket.amount,
+            credit: 0,
+          });
+        }
+      }
     }
     if (fixedAssetValue > 0) {
       lines.push({

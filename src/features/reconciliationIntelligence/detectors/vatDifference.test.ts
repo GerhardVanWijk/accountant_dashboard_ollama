@@ -17,6 +17,9 @@ describe('detectVatDifferences', () => {
     expect(issues).toHaveLength(1);
     expect(issues[0].issueType).toBe('vat_difference');
     expect(issues[0].evidence.some((e) => e.label.includes('15%'))).toBe(true);
+    expect(issues[0].evidenceData!.vatRatePercent).toBe(15);
+    expect(issues[0].evidenceData!.detectorType).toBe('vat_difference');
+    expect(issues[0].evidenceData!.amountDifferenceCents).toBe(15000);
   });
 
   it('does not flag a pair whose difference matches no supplied VAT rate', () => {

@@ -23,6 +23,12 @@ describe('detectRounding', () => {
     expect(issues[0].issueType).toBe('rounding_variance');
     expect(Math.round(issues[0].effectAmount * 100)).toBe(16);
     expect(issues[0].relatedBankTransactionIds).toEqual(expect.arrayContaining(['inv1021', 'inv1054', 'fee481']));
+
+    const data = issues[0].evidenceData!;
+    expect(data.detectorType).toBe('rounding_variance');
+    expect(data.explainsVarianceExactly).toBe(true);
+    expect(data.combinationTotalCents).toBe(16);
+    expect(data.combinationTerms).toHaveLength(3);
   });
 
   it('is not triggered when the unexplained amount itself is large', () => {

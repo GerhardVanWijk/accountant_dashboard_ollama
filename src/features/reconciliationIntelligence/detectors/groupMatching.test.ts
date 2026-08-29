@@ -22,6 +22,12 @@ describe('detectGroupMatches', () => {
     expect(issues).toHaveLength(1);
     expect(issues[0].issueType).toBe('grouped_match');
     expect(issues[0].relatedBankTransactionIds).toEqual(expect.arrayContaining(['deposit', 'r1', 'r2', 'r3']));
+
+    const data = issues[0].evidenceData!;
+    expect(data.detectorType).toBe('grouped_match');
+    expect(data.groupSingleCents).toBe(1000000);
+    expect(data.groupPartCount).toBe(3);
+    expect(data.combinationTerms).toHaveLength(3);
   });
 
   it('matches several bank debit-order instalments to one supplier bill payment (many-to-one)', () => {

@@ -388,6 +388,14 @@ export class BankTransactionService {
    * allocation yet (they need a GL split before they can post/clear).
    * Lines whose reference already exists for this account are skipped —
    * cheap de-duplication for a re-imported/overlapping statement file.
+   *
+   * SUPERSEDED for the persistent path by `StatementImportService`
+   * (statementImportService.ts, P1.3): that flow records a first-class
+   * `BankStatement` + `BankStatementLine` rows with a content hash, balance
+   * validation and a per-row parse-error list, and does NOT create loose
+   * `bank_transactions`. This method stays for the legacy
+   * `StatementImportPanel` "pick lines to record as transactions" behaviour
+   * until the import UX (P1.5) moves over.
    */
   async importStatementLines(
     bankAccountId: ID,

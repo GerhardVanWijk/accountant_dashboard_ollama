@@ -2,12 +2,27 @@ import { ReconciliationInvestigatorService } from './reconciliationInvestigatorS
 import { ReconciliationIssueResolutionService } from './reconciliationIssueResolutionService';
 import { SupabaseReconciliationIssueRepository } from '../repositories/SupabaseReconciliationIssueRepository';
 import { bankAccountService, bankTransactionService, bankReconciliationService } from '@/features/banking/services';
+import { SupabaseBankStatementLineRepository } from '@/features/banking/repositories';
 import { journalEntryService } from '@/features/accounting/services';
 import { auditLogService } from '@/services/auditLogService';
 import { supabase } from '@/config/supabase';
 
 export { ReconciliationInvestigatorService } from './reconciliationInvestigatorService';
-export type { InvestigationResult, BankAccountLookup, BankTransactionLookup, BankReconciliationLookup, SummaryComputer } from './reconciliationInvestigatorService';
+export type {
+  InvestigationResult,
+  InvestigationSections,
+  BankAccountLookup,
+  BankTransactionLookup,
+  BankReconciliationLookup,
+  BankStatementLineLookup,
+  SummaryComputer,
+} from './reconciliationInvestigatorService';
+export { proveWholePeriod } from './wholePeriodProofService';
+export type {
+  WholePeriodProof,
+  StatementToBooksItem,
+  BooksToStatementItem,
+} from './wholePeriodProofService';
 export { ReconciliationIssueResolutionService } from './reconciliationIssueResolutionService';
 export { computeReconciliationHealth } from './reconciliationHealthService';
 export type { ReconciliationHealth } from './reconciliationHealthService';
@@ -22,6 +37,8 @@ export type { ReconciliationHealth } from './reconciliationHealthService';
  * is Supabase-backed from the start (migration `0018_reconciliation_investigator`).
  */
 const reconciliationIssueRepository = new SupabaseReconciliationIssueRepository(supabase);
+/** Stateless Supabase-client wrapper — a second instance is not the "disconnected singleton" hazard the note above is about. */
+const bankStatementLineRepository = new SupabaseBankStatementLineRepository(supabase);
 
 export const reconciliationInvestigatorService = new ReconciliationInvestigatorService(
   reconciliationIssueRepository,
@@ -30,6 +47,7 @@ export const reconciliationInvestigatorService = new ReconciliationInvestigatorS
   bankReconciliationService,
   journalEntryService,
   bankReconciliationService,
+  bankStatementLineRepository,
 );
 
 export const reconciliationIssueResolutionService = new ReconciliationIssueResolutionService(reconciliationIssueRepository, auditLogService);

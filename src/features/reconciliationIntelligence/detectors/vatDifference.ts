@@ -1,5 +1,6 @@
 import type { InvestigationCandidate, ReconciliationIssueDraft } from '../types';
-import { buildConfidence } from '../utils/confidence';
+import { buildEvidence } from '../utils/evidence';
+import { renderExplanation } from '../utils/renderExplanation';
 import { fromCents } from '../utils/money';
 import { daysBetween } from '../utils/textMatching';
 
@@ -55,25 +56,49 @@ export function detectVatDifferences(
       if (matchedRate === undefined) continue;
 
       claimed.add(books.id);
-      const { value: confidence, evidence } = buildConfidence([
-        { points: 30, label: `Difference is consistent with a ${matchedRate}% VAT calculation`, met: true },
-        { points: 25, label: daysApart === 0 ? 'Same date' : `${daysApart} day(s) apart`, met: true },
-        { points: 20, label: 'Same direction (both money in, or both money out)', met: true },
-        { points: 15, label: 'Difference is small relative to the transaction', met: Math.abs(diffCents) / bigCents < 0.2 },
-      ]);
+      const dateFrom = bank.date < books.date ? bank.date : books.date;
+      const dateTo = bank.date < books.date ? books.date : bank.date;
+      const smallRelative = Math.abs(diffCents) / bigCents < 0.2;
+
+      const { value: confidence, evidence, evidenceData } = buildEvidence({
+        detectorType: 'vat_difference',
+        factors: [
+          { key: 'gap_matches_vat_rate', points: 30, maxPoints: 30, label: `Difference is consistent with a ${matchedRate}% VAT calculation`, met: true, observedValue: `${matchedRate}%` },
+          { key: 'date_proximity', points: 25, maxPoints: 25, label: daysApart === 0 ? 'Same date' : `${daysApart} day(s) apart`, met: true, observedValue: `${daysApart} days` },
+          { key: 'same_direction', points: 20, maxPoints: 20, label: 'Same direction (both money in, or both money out)', met: true },
+          { key: 'gap_small_relative_to_txn', points: 15, maxPoints: 15, label: 'Difference is small relative to the transaction', met: smallRelative, observedValue: Math.abs(diffCents) / bigCents },
+        ],
+        fields: {
+          amountDifferenceCents: diffCents,
+          dateDifferenceDays: daysApart,
+          sameCounterparty: true,
+          sameDirection: true,
+          sameBankAccount: true,
+          candidateSourceType: books.kind === 'journal_entry' ? 'journal_entry' : 'bank_transaction',
+          candidateSourceId: books.id,
+          varianceExplainedCents: Math.abs(diffCents),
+          bankAmountCents: bank.amountCents,
+          booksAmountCents: books.amountCents,
+          counterpartyLabel: bank.description,
+          observedDateFrom: dateFrom,
+          observedDateTo: dateTo,
+          vatRatePercent: matchedRate,
+        },
+      });
 
       issues.push({
         issueType: 'vat_difference',
         severity: 'medium',
         confidence,
         effectAmount: fromCents(diffCents),
-        affectedDateFrom: bank.date < books.date ? bank.date : books.date,
-        affectedDateTo: bank.date < books.date ? books.date : bank.date,
+        affectedDateFrom: dateFrom,
+        affectedDateTo: dateTo,
         relatedBankTransactionIds: [bank.bankTransactionId].filter((x): x is string => Boolean(x)),
         relatedJournalEntryIds: [bank.journalEntryId, books.journalEntryId].filter((x): x is string => Boolean(x)),
         relatedSourceDocumentIds: [],
-        explanation: `R${fromCents(bigCents).toFixed(2)} vs R${fromCents(smallCents).toFixed(2)} — the R${fromCents(Math.abs(diffCents)).toFixed(2)} gap is consistent with a ${matchedRate}% VAT inclusive/exclusive mismatch, wrong rate, or VAT posted once instead of twice (or vice versa).`,
+        explanation: renderExplanation(evidenceData, 'vat_difference'),
         evidence,
+        evidenceData,
         suggestedResolution: 'Check the source document\'s VAT treatment and correct it through the proper accounting flow — do not change VAT treatment directly on a posted transaction.',
         autoResolutionSafe: false,
       });

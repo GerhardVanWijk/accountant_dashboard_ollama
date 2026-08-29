@@ -28,6 +28,7 @@ function makeLine(overrides: Partial<ParsedStatementLine>): ParsedStatementLine 
     reference: 'EFT-88213',
     amount: 1000,
     direction: 'debit',
+    raw: {},
     ...overrides,
   };
 }
