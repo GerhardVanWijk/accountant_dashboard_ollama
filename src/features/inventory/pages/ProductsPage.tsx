@@ -5,7 +5,6 @@ import type { Product } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { formatCurrency } from '@/lib/app/format';
 import { useProducts } from '../hooks/useProducts';
 import { useStockAlerts } from '../hooks/useStockAlerts';
@@ -14,7 +13,7 @@ import { useStockMovements } from '../hooks/useStockMovements';
 import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { ProductsTable } from '../components/ProductsTable';
 import { ProductDetailSheet } from '../components/ProductDetailSheet';
-import { ProductForm } from '../components/ProductForm';
+import { ProductFormModal } from '../components/ProductFormModal';
 import { calculateInventoryTotals } from '../utils/calculateInventoryTotals';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
@@ -145,14 +144,13 @@ export function ProductsPage() {
         }}
       />
 
-      <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{dialog?.mode === 'edit' ? 'Edit Product' : 'New Product'}</DialogTitle>
-          </DialogHeader>
-          {dialog && <ProductForm product={dialog.mode === 'edit' ? dialog.product : undefined} onSubmit={handleSubmit} onCancel={() => setDialog(null)} />}
-        </DialogContent>
-      </Dialog>
+      {dialog && (
+        <ProductFormModal
+          product={dialog.mode === 'edit' ? dialog.product : undefined}
+          onSubmit={handleSubmit}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </div>
   );
 }

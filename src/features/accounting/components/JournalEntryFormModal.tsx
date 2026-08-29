@@ -1,26 +1,19 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
-import { wideFormDialogClass } from '@/components/app/form-surface';
+import { useState } from 'react';
+
+import { FormShell, FormHeader } from '@/components/app/form';
 import { JournalEntryForm, type JournalEntryFormProps } from './JournalEntryForm';
 
-export interface JournalEntryFormModalProps extends Omit<JournalEntryFormProps, 'onCancel'> {
+export interface JournalEntryFormModalProps extends Omit<JournalEntryFormProps, 'onCancel' | 'onDirtyChange'> {
   onClose: () => void;
 }
 
-/** Modal shell hosting JournalEntryForm, built on the shared v0 Dialog primitive. Wide, to fit the line grid. */
+/** `JournalEntryForm` in the shared Vertex form shell (P3D) — wide, for the line grid. */
 export function JournalEntryFormModal({ onClose, ...formProps }: JournalEntryFormModalProps) {
+  const [dirty, setDirty] = useState(false);
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className={wideFormDialogClass}>
-        <DialogHeader>
-          <DialogTitle>New journal entry</DialogTitle>
-        </DialogHeader>
-        <JournalEntryForm {...formProps} onCancel={onClose} />
-      </DialogContent>
-    </Dialog>
+    <FormShell open onClose={onClose} size="lg" mode="create" isDirty={dirty}>
+      <FormHeader title="New journal entry" />
+      <JournalEntryForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
+    </FormShell>
   );
 }

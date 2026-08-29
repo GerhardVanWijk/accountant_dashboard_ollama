@@ -68,15 +68,11 @@ export function SupplierFormPage({ mode, supplierId, suppliersState, onDone, onC
     return (
       <>
         <PageHeader title={`Edit ${supplier.name}`} description="Update this supplier's account details." />
-        {submitError && (
-          <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {submitError}
-          </div>
-        )}
-        <SectionCard>
+        <SectionCard bodyClassName="p-0">
           <SupplierForm
             initialValues={supplier}
             submitLabel="Save changes"
+            submitError={submitError}
             onCancel={onCancel}
             onSubmit={async (values) => {
               setSubmitError(null);
@@ -96,14 +92,10 @@ export function SupplierFormPage({ mode, supplierId, suppliersState, onDone, onC
   return (
     <>
       <PageHeader title="Add supplier" description="Create a new accounts-payable vendor record." />
-      {submitError && (
-        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {submitError}
-        </div>
-      )}
-      <SectionCard>
+      <SectionCard bodyClassName="p-0">
         <SupplierForm
           submitLabel="Create supplier"
+          submitError={submitError}
           onCancel={onCancel}
           onSubmit={async (values) => {
             setSubmitError(null);

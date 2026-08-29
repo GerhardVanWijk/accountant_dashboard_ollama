@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReportingFramework } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
@@ -18,6 +19,7 @@ export interface ReportingFrameworkOverrideFormProps {
   suggestedFramework: ReportingFramework;
   onSubmit: (framework: ReportingFramework, reason: string) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -27,7 +29,7 @@ export interface ReportingFrameworkOverrideFormProps {
  * state why. Re-skinned onto v0's Field/Textarea (M7); the audited-service
  * call site and required-reason validation are unchanged.
  */
-export function ReportingFrameworkOverrideForm({ currentFramework, suggestedFramework, onSubmit, onCancel }: ReportingFrameworkOverrideFormProps) {
+export function ReportingFrameworkOverrideForm({ currentFramework, suggestedFramework, onSubmit, onCancel, onDirtyChange }: ReportingFrameworkOverrideFormProps) {
   const [framework, setFramework] = useState<ReportingFramework>(suggestedFramework);
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -48,7 +50,8 @@ export function ReportingFrameworkOverrideForm({ currentFramework, suggestedFram
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <p className="text-sm text-muted-foreground">
         Currently: <span className="font-medium text-foreground">{FRAMEWORK_LABELS[currentFramework]}</span>. This change is recorded to the audit trail together with your reason —
         nothing sets the reporting framework automatically.
@@ -74,14 +77,15 @@ export function ReportingFrameworkOverrideForm({ currentFramework, suggestedFram
         )}
         <FieldDescription>Recorded to the audit trail together with this change.</FieldDescription>
       </Field>
-      <div className="flex justify-end gap-2 pt-1">
+      </FormBody>
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" onClick={submit} disabled={submitting}>
           Save
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

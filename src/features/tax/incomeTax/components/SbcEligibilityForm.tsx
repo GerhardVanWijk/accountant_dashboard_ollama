@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
@@ -8,6 +9,7 @@ export interface SbcEligibilityFormProps {
   currentValue: boolean;
   onSubmit: (isEligible: boolean, reason: string) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -19,7 +21,7 @@ export interface SbcEligibilityFormProps {
  * Field/Textarea (M7); the audited-service call site and required-reason
  * validation are unchanged.
  */
-export function SbcEligibilityForm({ currentValue, onSubmit, onCancel }: SbcEligibilityFormProps) {
+export function SbcEligibilityForm({ currentValue, onSubmit, onCancel, onDirtyChange }: SbcEligibilityFormProps) {
   const [isEligible, setIsEligible] = useState(currentValue);
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -40,7 +42,8 @@ export function SbcEligibilityForm({ currentValue, onSubmit, onCancel }: SbcElig
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <p className="text-sm text-muted-foreground">
         SBC (Small Business Corporation) eligibility legislatively depends on shareholder composition, whether this is a personal service company, and restrictions on holding shares in
         other companies — none of which this app models. Confirm eligibility yourself before setting this flag; it is never auto-determined.
@@ -68,14 +71,15 @@ export function SbcEligibilityForm({ currentValue, onSubmit, onCancel }: SbcElig
         )}
         <FieldDescription>Recorded to the audit trail together with this change.</FieldDescription>
       </Field>
-      <div className="flex justify-end gap-2 pt-1">
+      </FormBody>
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" onClick={submit} disabled={submitting}>
           Save
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

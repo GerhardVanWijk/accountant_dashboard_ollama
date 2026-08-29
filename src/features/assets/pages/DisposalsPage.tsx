@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Loader2, Trash2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import { useAssetDisposals } from '../hooks/useAssetDisposals';
 import { useFixedAssets } from '../hooks/useFixedAssets';
 import { useAccounts } from '@/features/accounting/hooks/useAccounts';
@@ -22,6 +22,8 @@ export function DisposalsPage() {
   const { assets, loading: assetsLoading, refetch: refetchAssets } = useFixedAssets();
   const { accounts, loading: accountsLoading } = useAccounts();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const closeDialog = () => { setDialogOpen(false); setDirty(false); };
   const [actionError, setActionError] = useState<string | null>(null);
 
   const disposableCount = assets.filter((a) => a.status === 'active' || a.status === 'fully_depreciated').length;
@@ -78,14 +80,12 @@ export function DisposalsPage() {
         </SectionCard>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Dispose Asset</DialogTitle>
-          </DialogHeader>
-          <DisposeAssetForm assets={assets} accounts={accounts} onSubmit={handleDispose} onCancel={() => setDialogOpen(false)} />
-        </DialogContent>
-      </Dialog>
+      {dialogOpen && (
+        <FormShell open onClose={closeDialog} size="sm" mode="edit" isDirty={dirty}>
+          <FormHeader title="Dispose asset" />
+          <DisposeAssetForm assets={assets} accounts={accounts} onSubmit={handleDispose} onCancel={closeDialog} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
     </div>
   );
 }

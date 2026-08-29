@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { RelatedParty } from '@/types/relatedParty';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -24,6 +26,7 @@ export interface RelatedPartyFormProps {
   relatedParty?: RelatedParty;
   onSubmit: (data: CreateRelatedPartyDTO | UpdateRelatedPartyDTO) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function toDefaultValues(relatedParty?: RelatedParty): RelatedPartyFormValues {
@@ -41,16 +44,18 @@ function toDefaultValues(relatedParty?: RelatedParty): RelatedPartyFormValues {
  * Field/Input/Textarea/Checkbox (M13); validation and submit wiring
  * unchanged.
  */
-export function RelatedPartyForm({ relatedParty, onSubmit, onCancel }: RelatedPartyFormProps) {
+export function RelatedPartyForm({ relatedParty, onSubmit, onCancel, onDirtyChange }: RelatedPartyFormProps) {
   const {
     register,
     handleSubmit,
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<RelatedPartyFormValues>({
     resolver: zodResolver(relatedPartySchema),
     defaultValues: toDefaultValues(relatedParty),
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const submit = handleSubmit(async (data) => {
     await onSubmit({
@@ -62,7 +67,8 @@ export function RelatedPartyForm({ relatedParty, onSubmit, onCancel }: RelatedPa
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+      <FormBody>
       <Field>
         <FieldLabel htmlFor="name">Name</FieldLabel>
         <Input id="name" {...register('name')} />
@@ -95,15 +101,16 @@ export function RelatedPartyForm({ relatedParty, onSubmit, onCancel }: RelatedPa
           </Field>
         )}
       />
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {relatedParty ? 'Save Changes' : 'Add Related Party'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

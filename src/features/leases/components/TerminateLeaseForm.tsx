@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { LeaseContract } from '@/types/lease';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Amount, FigureBlock } from '@/components/app/figure';
@@ -10,6 +11,7 @@ export interface TerminateLeaseFormProps {
   lease: LeaseContract;
   onSubmit: (terminationDate: string) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -19,7 +21,7 @@ export interface TerminateLeaseFormProps {
  * (outstandingLeaseLiability - ROU carrying value), mirroring
  * DisposeAssetForm's live preview. Re-skinned onto v0's Field (M13).
  */
-export function TerminateLeaseForm({ lease, onSubmit, onCancel }: TerminateLeaseFormProps) {
+export function TerminateLeaseForm({ lease, onSubmit, onCancel, onDirtyChange }: TerminateLeaseFormProps) {
   const [terminationDate, setTerminationDate] = useState(new Date().toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,7 +38,8 @@ export function TerminateLeaseForm({ lease, onSubmit, onCancel }: TerminateLease
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <p className="text-sm text-muted-foreground">
         Terminating <span className="font-medium text-foreground">{lease.leaseNumber} - {lease.assetDescription}</span>.
       </p>
@@ -55,14 +58,16 @@ export function TerminateLeaseForm({ lease, onSubmit, onCancel }: TerminateLease
         </div>
       </div>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      </FormBody>
+
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" variant="destructive" disabled={submitting || !terminationDate} onClick={() => void submit()}>
           Terminate Lease
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

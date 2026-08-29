@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import type { TaxRate } from '@/types';
 import { useTaxRateManagement } from '../hooks/useTaxRateManagement';
 import { TaxRateTable } from '../components/TaxRateTable';
@@ -21,8 +21,14 @@ type DialogState = { mode: 'create' } | { mode: 'supersede'; rate: TaxRate } | n
 export function TaxRatesPage() {
   const { taxRates, loading, error, createTaxRate, supersede, deactivate } = useTaxRateManagement();
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [dirty, setDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const closeDialog = () => {
+    setDialog(null);
+    setDirty(false);
+  };
 
   async function handleCreate(data: Parameters<typeof createTaxRate>[0]) {
     setActionError(null);
@@ -94,25 +100,19 @@ export function TaxRatesPage() {
         <TaxRateTable taxRates={taxRates} onSupersede={(rate) => setDialog({ mode: 'supersede', rate })} onDeactivate={(rate) => void handleDeactivate(rate)} />
       )}
 
-      <Dialog open={dialog?.mode === 'create'} onOpenChange={(open) => { if (!open) setDialog(null); }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>New Tax Code</DialogTitle>
-          </DialogHeader>
-          <TaxRateForm onSubmit={handleCreate} onCancel={() => setDialog(null)} isLoading={isSaving} />
-        </DialogContent>
-      </Dialog>
+      {dialog?.mode === 'create' && (
+        <FormShell open onClose={closeDialog} size="md" mode="create" isDirty={dirty} pending={isSaving}>
+          <FormHeader title="New tax code" />
+          <TaxRateForm onSubmit={handleCreate} onCancel={closeDialog} isLoading={isSaving} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
 
-      <Dialog open={dialog?.mode === 'supersede'} onOpenChange={(open) => { if (!open) setDialog(null); }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Supersede {dialog?.mode === 'supersede' ? dialog.rate.code : ''}</DialogTitle>
-          </DialogHeader>
-          {dialog?.mode === 'supersede' && (
-            <SupersedeTaxRateForm currentVersion={dialog.rate} onSubmit={handleSupersede} onCancel={() => setDialog(null)} isLoading={isSaving} />
-          )}
-        </DialogContent>
-      </Dialog>
+      {dialog?.mode === 'supersede' && (
+        <FormShell open onClose={closeDialog} size="md" mode="edit" isDirty={dirty} pending={isSaving}>
+          <FormHeader title={`Supersede ${dialog.rate.code}`} />
+          <SupersedeTaxRateForm currentVersion={dialog.rate} onSubmit={handleSupersede} onCancel={closeDialog} isLoading={isSaving} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
     </div>
   );
 }

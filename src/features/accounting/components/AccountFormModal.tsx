@@ -1,27 +1,20 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
-import { standardDialogClass } from '@/components/app/form-surface';
+import { useState } from 'react';
+
+import { FormShell, FormHeader } from '@/components/app/form';
 import { AccountForm, type AccountFormProps } from './AccountForm';
 
-export interface AccountFormModalProps extends Omit<AccountFormProps, 'onCancel'> {
+export interface AccountFormModalProps extends Omit<AccountFormProps, 'onCancel' | 'onDirtyChange'> {
   title: string;
   onClose: () => void;
 }
 
-/** Modal shell hosting AccountForm for both create and edit flows, built on the shared v0 Dialog primitive. */
+/** `AccountForm` in the shared Vertex form shell (P3D). */
 export function AccountFormModal({ title, onClose, ...formProps }: AccountFormModalProps) {
+  const [dirty, setDirty] = useState(false);
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className={standardDialogClass}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <AccountForm {...formProps} onCancel={onClose} />
-      </DialogContent>
-    </Dialog>
+    <FormShell open onClose={onClose} size="md" mode={formProps.initialValues ? 'edit' : 'create'} isDirty={dirty}>
+      <FormHeader title={title} />
+      <AccountForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
+    </FormShell>
   );
 }

@@ -1,20 +1,11 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Company, Invoice } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/shadcn/alert-dialog';
+import { ConfirmDialog } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { invoiceService } from '@/services';
 
@@ -53,6 +44,7 @@ export function InvoiceDetail({
   onRecordPayment,
   isBusy = false,
 }: InvoiceDetailProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const outstanding = invoice.total - invoice.amountPaid;
   const collectionPercent = invoice.total === 0 ? 0 : (invoice.amountPaid / invoice.total) * 100;
   const overdue = invoiceService.isOverdue(invoice);
@@ -76,29 +68,23 @@ export function InvoiceDetail({
               </Button>
             )}
             {onDelete && invoice.status === 'draft' && (
-              <AlertDialog>
-                <AlertDialogTrigger render={<Button variant="destructive" size="sm" disabled={isBusy} />}>
+              <>
+                <Button variant="destructive" size="sm" disabled={isBusy} onClick={() => setConfirmDelete(true)}>
                   Delete draft
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {invoice.invoiceNumber}?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This permanently removes the draft invoice. This cannot be undone. A posted invoice can never
-                      be deleted this way — issue a credit note instead.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      className="bg-destructive/10 text-destructive hover:bg-destructive/20"
-                      onClick={onDelete}
-                    >
-                      Delete draft
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                </Button>
+                <ConfirmDialog
+                  open={confirmDelete}
+                  onOpenChange={setConfirmDelete}
+                  title={`Delete ${invoice.invoiceNumber}?`}
+                  description="This permanently removes the draft invoice. This cannot be undone. A posted invoice can never be deleted this way — issue a credit note instead."
+                  confirmLabel="Delete draft"
+                  destructive
+                  onConfirm={() => {
+                    setConfirmDelete(false);
+                    onDelete();
+                  }}
+                />
+              </>
             )}
             {onMarkAsSent && invoice.status === 'draft' && (
               <Button size="sm" disabled={isBusy} onClick={onMarkAsSent}>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Account, FixedAsset } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
@@ -12,6 +13,7 @@ export interface DisposeAssetFormProps {
   accounts: Account[];
   onSubmit: (input: { assetId: string; disposalDate: string; proceeds: number; proceedsAccountId: string }) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -20,7 +22,7 @@ export interface DisposeAssetFormProps {
  * computes it for real (proceeds - carrying value), so what the user sees
  * here is exactly what will post. Re-skinned onto v0's Field/Input (M8).
  */
-export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel }: DisposeAssetFormProps) {
+export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel, onDirtyChange }: DisposeAssetFormProps) {
   const disposable = assets.filter((a) => a.status === 'active' || a.status === 'fully_depreciated');
   const [assetId, setAssetId] = useState(disposable[0]?.id ?? '');
   const [disposalDate, setDisposalDate] = useState(new Date().toISOString().slice(0, 10));
@@ -49,7 +51,8 @@ export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel }: Dispo
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <Field>
         <FieldLabel htmlFor="assetId">Asset</FieldLabel>
         <NativeSelect id="assetId" value={assetId} onChange={(e) => setAssetId(e.target.value)}>
@@ -97,14 +100,16 @@ export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel }: Dispo
         </div>
       )}
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      </FormBody>
+
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" variant="destructive" disabled={submitting || !asset || proceedsError} onClick={() => void submit()}>
           Dispose Asset
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

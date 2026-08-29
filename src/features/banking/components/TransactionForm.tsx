@@ -5,6 +5,7 @@ import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { FormFooter } from '@/components/app/form';
 import type { AllocationInput, CreateDirectTransactionInput, CreateTransferInput } from '../services';
 import { AllocationRows } from './AllocationRows';
 
@@ -18,6 +19,7 @@ export interface TransactionFormProps {
   onSubmitDirect: (input: CreateDirectTransactionInput) => Promise<void>;
   onSubmitTransfer: (input: CreateTransferInput) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function today(): string {
@@ -40,6 +42,7 @@ export function TransactionForm({
   onSubmitDirect,
   onSubmitTransfer,
   onCancel,
+  onDirtyChange,
 }: TransactionFormProps) {
   const [mode, setMode] = useState<Mode>('receipt');
   const [bankAccountId, setBankAccountId] = useState(defaultBankAccountId ?? bankAccounts[0]?.id ?? '');
@@ -88,26 +91,26 @@ export function TransactionForm({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Stable tab region — docs/CURRENT_TASKS.md #3: fixed height + internal
-          scroll so switching receipt/payment/transfer (and adding allocation
-          rows) never resizes the dialog; the action row below stays anchored. */}
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      onInput={() => onDirtyChange?.(true)}
+    >
+      {/* Stable tab region — the FormShell fixes the outer height; this fills it
+          and scrolls internally so switching receipt/payment/transfer (and
+          adding allocation rows) never resizes the surface. Receipt and payment
+          share one panel body (identical but for labels/direction), so this
+          keeps its bespoke Tabs rather than the shared FormTabs (which would
+          duplicate the shared panel's field ids). */}
       <Tabs
         value={mode}
         onValueChange={(v) => setMode(v as Mode)}
-        className="flex h-[30rem] flex-col"
+        className="flex min-h-0 flex-1 flex-col"
       >
         <TabsList variant="line" className="w-full justify-start border-b border-border">
           <TabsTrigger value="receipt">Direct receipt</TabsTrigger>
           <TabsTrigger value="payment">Direct payment</TabsTrigger>
           <TabsTrigger value="transfer">Inter-account transfer</TabsTrigger>
         </TabsList>
-
-        {formError && (
-          <p role="alert" className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {formError}
-          </p>
-        )}
 
         {/* Receipt and payment share this exact body (only the labels/direction differ) — rendered
             manually rather than as two near-duplicate TabsContent panels, since TabsContent's
@@ -205,14 +208,14 @@ export function TransactionForm({
         </TabsContent>
       </Tabs>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={formError ?? undefined}>
         <Button variant="outline" type="button" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
           {isSubmitting ? 'Saving…' : mode === 'transfer' ? 'Record transfer' : 'Record transaction'}
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

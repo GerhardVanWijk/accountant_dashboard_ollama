@@ -1,19 +1,10 @@
+import { useState } from 'react';
 import type { Company, CreditNote } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/shadcn/alert-dialog';
+import { ConfirmDialog } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 
 const REASON_LABELS: Record<string, string> = {
@@ -55,6 +46,7 @@ export function CreditNoteDetail({
   onAllocate,
   isBusy = false,
 }: CreditNoteDetailProps) {
+  const [confirmVoid, setConfirmVoid] = useState(false);
   const remaining = creditNote.total - creditNote.amountAllocated;
   const canIssue = creditNote.status === 'draft';
   const canVoid = creditNote.status === 'draft';
@@ -73,28 +65,23 @@ export function CreditNoteDetail({
               </Button>
             )}
             {onVoid && canVoid && (
-              <AlertDialog>
-                <AlertDialogTrigger render={<Button variant="destructive" size="sm" disabled={isBusy} />}>
+              <>
+                <Button variant="destructive" size="sm" disabled={isBusy} onClick={() => setConfirmVoid(true)}>
                   Void
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Void {creditNote.creditNoteNumber}?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This marks the draft credit note as void. This cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      className="bg-destructive/10 text-destructive hover:bg-destructive/20"
-                      onClick={() => onVoid(creditNote.id)}
-                    >
-                      Void credit note
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                </Button>
+                <ConfirmDialog
+                  open={confirmVoid}
+                  onOpenChange={setConfirmVoid}
+                  title={`Void ${creditNote.creditNoteNumber}?`}
+                  description="This marks the draft credit note as void. This cannot be undone."
+                  confirmLabel="Void credit note"
+                  destructive
+                  onConfirm={() => {
+                    setConfirmVoid(false);
+                    onVoid(creditNote.id);
+                  }}
+                />
+              </>
             )}
             {onIssue && canIssue && (
               <Button variant="outline" size="sm" disabled={isBusy} onClick={() => onIssue(creditNote.id)}>

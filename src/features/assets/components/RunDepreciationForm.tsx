@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 
@@ -7,6 +8,7 @@ export interface RunDepreciationFormProps {
   defaultPeriodEnd: string;
   onSubmit: (periodEnd: string) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -15,7 +17,7 @@ export interface RunDepreciationFormProps {
  * journal entry — see DepreciationPage for how the result is surfaced.
  * Re-skinned onto v0's Field/Input (M8); no depreciation math here.
  */
-export function RunDepreciationForm({ defaultPeriodEnd, onSubmit, onCancel }: RunDepreciationFormProps) {
+export function RunDepreciationForm({ defaultPeriodEnd, onSubmit, onCancel, onDirtyChange }: RunDepreciationFormProps) {
   const [periodEnd, setPeriodEnd] = useState(defaultPeriodEnd);
   const [submitting, setSubmitting] = useState(false);
 
@@ -29,7 +31,8 @@ export function RunDepreciationForm({ defaultPeriodEnd, onSubmit, onCancel }: Ru
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <Field>
         <FieldLabel htmlFor="periodEnd">Period End Date</FieldLabel>
         <Input id="periodEnd" type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
@@ -38,14 +41,16 @@ export function RunDepreciationForm({ defaultPeriodEnd, onSubmit, onCancel }: Ru
           twice for the same date is safe — the second run finds nothing left to do.
         </FieldDescription>
       </Field>
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      </FormBody>
+
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" disabled={submitting || !periodEnd} onClick={() => void submit()}>
           Run Depreciation
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 
@@ -9,6 +10,7 @@ export interface PayrollRunFormProps {
   defaultPayDate: string;
   onSubmit: (payPeriodStart: string, payPeriodEnd: string, payDate: string) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -16,7 +18,7 @@ export interface PayrollRunFormProps {
  * chosen period — see PayrollRunsPage for how the resulting draft is
  * reviewed. Re-skinned onto v0's Field/Input (M13); no payroll math here.
  */
-export function PayrollRunForm({ defaultPeriodStart, defaultPeriodEnd, defaultPayDate, onSubmit, onCancel }: PayrollRunFormProps) {
+export function PayrollRunForm({ defaultPeriodStart, defaultPeriodEnd, defaultPayDate, onSubmit, onCancel, onDirtyChange }: PayrollRunFormProps) {
   const [payPeriodStart, setPayPeriodStart] = useState(defaultPeriodStart);
   const [payPeriodEnd, setPayPeriodEnd] = useState(defaultPeriodEnd);
   const [payDate, setPayDate] = useState(defaultPayDate);
@@ -32,7 +34,8 @@ export function PayrollRunForm({ defaultPeriodStart, defaultPeriodEnd, defaultPa
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="payPeriodStart">Pay Period Start</FieldLabel>
@@ -52,14 +55,16 @@ export function PayrollRunForm({ defaultPeriodStart, defaultPeriodEnd, defaultPa
           until you review and post the run.
         </FieldDescription>
       </Field>
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      </FormBody>
+
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" disabled={submitting || !payPeriodStart || !payPeriodEnd || !payDate} onClick={() => void submit()}>
           Create Draft Run
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

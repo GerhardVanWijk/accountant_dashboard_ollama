@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Account, TaxRate } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Amount } from '@/components/app/figure';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { formatDate } from '@/lib/app/format';
 import type { AllocationInput } from '../services';
 import type { BankTransactionWithAllocations } from '../types';
@@ -13,6 +14,7 @@ export interface AllocateTransactionFormProps {
   taxRates: TaxRate[];
   onSubmit: (allocations: AllocationInput[]) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -22,7 +24,7 @@ export interface AllocateTransactionFormProps {
  * direction are fixed; only the allocation lines are editable here — same
  * as before the port.
  */
-export function AllocateTransactionForm({ transaction, glAccounts, taxRates, onSubmit, onCancel }: AllocateTransactionFormProps) {
+export function AllocateTransactionForm({ transaction, glAccounts, taxRates, onSubmit, onCancel, onDirtyChange }: AllocateTransactionFormProps) {
   const [allocations, setAllocations] = useState<AllocationInput[]>(
     transaction.allocations.length > 0
       ? transaction.allocations.map((a) => ({
@@ -49,7 +51,8 @@ export function AllocateTransactionForm({ transaction, glAccounts, taxRates, onS
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-muted/20 p-3 text-sm md:grid-cols-4">
         <div>
           <div className="text-xs text-muted-foreground">Date</div>
@@ -65,22 +68,17 @@ export function AllocateTransactionForm({ transaction, glAccounts, taxRates, onS
         </div>
       </div>
 
-      {formError && (
-        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {formError}
-        </p>
-      )}
-
       <AllocationRows allocations={allocations} onChange={setAllocations} glAccounts={glAccounts} taxRates={taxRates} grossAmount={transaction.amount} />
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={formError ?? undefined}>
         <Button variant="outline" type="button" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
           {isSubmitting ? 'Saving…' : 'Save allocation'}
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

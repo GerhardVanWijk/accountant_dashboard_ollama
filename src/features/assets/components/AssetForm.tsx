@@ -8,6 +8,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS, ASSETS_CURRENCY } from '../constants';
 import type { CreateFixedAssetDTO, UpdateFixedAssetDTO } from '../services';
 
@@ -57,6 +58,7 @@ export interface AssetFormProps {
   asset?: FixedAsset;
   onSubmit: (data: CreateFixedAssetDTO | UpdateFixedAssetDTO) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function toDefaultValues(asset?: FixedAsset): AssetFormValues {
@@ -84,7 +86,7 @@ function toDefaultValues(asset?: FixedAsset): AssetFormValues {
  * visible before the user tries. Re-skinned onto v0's Field/Input/Textarea
  * (M8); validation schema and submit wiring unchanged.
  */
-export function AssetForm({ asset, onSubmit, onCancel }: AssetFormProps) {
+export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFormProps) {
   const locked = asset !== undefined && asset.status !== 'draft';
 
   const {
@@ -92,11 +94,13 @@ export function AssetForm({ asset, onSubmit, onCancel }: AssetFormProps) {
     handleSubmit,
     watch,
     setValue,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<AssetFormValues>({
     resolver: zodResolver(assetSchema),
     defaultValues: toDefaultValues(asset),
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const category = watch('category');
   const depreciationMethod = watch('depreciationMethod');
@@ -134,7 +138,8 @@ export function AssetForm({ asset, onSubmit, onCancel }: AssetFormProps) {
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="assetNumber">Asset Number</FieldLabel>
@@ -226,15 +231,16 @@ export function AssetForm({ asset, onSubmit, onCancel }: AssetFormProps) {
           edited.
         </p>
       )}
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {asset ? 'Save Changes' : 'Add Asset'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

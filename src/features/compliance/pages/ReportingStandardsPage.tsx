@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import { formatDate } from '@/lib/app/format';
 import type { ReportingStandardName } from '@/types';
 import { useReportingStandards } from '../hooks/useReportingStandards';
@@ -30,6 +30,7 @@ export function ReportingStandardsPage() {
   const { financialYears, versions, loading, error, refetch, supersede } = useReportingStandards();
   const [earlyAdoptionElected, setEarlyAdoptionElected] = useState(false);
   const [addModalStandard, setAddModalStandard] = useState<ReportingStandardName | null>(null);
+  const [dirty, setDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -144,15 +145,19 @@ export function ReportingStandardsPage() {
         </>
       )}
 
-      <Dialog open={addModalStandard !== null} onOpenChange={(open) => { if (!open) setAddModalStandard(null); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{addModalStandard ? `Add New ${STANDARD_LABELS[addModalStandard]} Edition` : ''}</DialogTitle>
-          </DialogHeader>
-          {addModalStandard && (
+      {addModalStandard && (
+        <FormShell
+          open
+          onClose={() => { setAddModalStandard(null); setDirty(false); }}
+          size="md"
+          mode="edit"
+          isDirty={dirty}
+        >
+          <FormHeader title={`Add new ${STANDARD_LABELS[addModalStandard]} edition`} />
             <AddReportingStandardVersionForm
               standard={addModalStandard}
-              onCancel={() => setAddModalStandard(null)}
+              onDirtyChange={setDirty}
+              onCancel={() => { setAddModalStandard(null); setDirty(false); }}
               onSubmit={async (input, reason) => {
                 setActionError(null);
                 try {
@@ -164,9 +169,8 @@ export function ReportingStandardsPage() {
                 }
               }}
             />
-          )}
-        </DialogContent>
-      </Dialog>
+        </FormShell>
+      )}
     </div>
   );
 }

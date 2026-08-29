@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 
@@ -7,6 +8,7 @@ export interface RunAmortizationFormProps {
   defaultPeriodEnd: string;
   onSubmit: (periodEnd: string) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -15,7 +17,7 @@ export interface RunAmortizationFormProps {
  * journal entry — mirrors RunDepreciationForm.tsx. Re-skinned onto v0's
  * Field/Input (M13); no lease math here.
  */
-export function RunAmortizationForm({ defaultPeriodEnd, onSubmit, onCancel }: RunAmortizationFormProps) {
+export function RunAmortizationForm({ defaultPeriodEnd, onSubmit, onCancel, onDirtyChange }: RunAmortizationFormProps) {
   const [periodEnd, setPeriodEnd] = useState(defaultPeriodEnd);
   const [submitting, setSubmitting] = useState(false);
 
@@ -29,7 +31,8 @@ export function RunAmortizationForm({ defaultPeriodEnd, onSubmit, onCancel }: Ru
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <Field>
         <FieldLabel htmlFor="periodEnd">Period End Date</FieldLabel>
         <Input id="periodEnd" type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
@@ -39,14 +42,16 @@ export function RunAmortizationForm({ defaultPeriodEnd, onSubmit, onCancel }: Ru
           nothing left to do.
         </FieldDescription>
       </Field>
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      </FormBody>
+
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" disabled={submitting || !periodEnd} onClick={() => void submit()}>
           Run Amortization
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

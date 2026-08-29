@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -8,6 +9,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { UOM_OPTIONS, INVENTORY_CURRENCY } from '../constants';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
@@ -44,6 +46,7 @@ export interface ProductFormProps {
   product?: Product;
   onSubmit: (data: CreateProductDTO | UpdateProductDTO) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function toDefaultValues(product?: Product): ProductFormValues {
@@ -73,18 +76,20 @@ function toDefaultValues(product?: Product): ProductFormValues {
  * Field/Input/Textarea/Checkbox (M8); validation schema and submit wiring
  * unchanged.
  */
-export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
+export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: ProductFormProps) {
   const { taxRates } = useTaxRates();
   const {
     register,
     handleSubmit,
     control,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: toDefaultValues(product),
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const type = watch('type');
   const trackInventoryWatched = watch('trackInventory');
@@ -112,7 +117,8 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="sku">SKU</FieldLabel>
@@ -235,15 +241,16 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
           <FieldDescription>Read-only — record a Stock Adjustment or Transfer on the Warehouses page to change quantities.</FieldDescription>
         </Field>
       )}
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {product ? 'Save Changes' : 'Create Product'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

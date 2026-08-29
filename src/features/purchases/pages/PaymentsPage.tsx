@@ -4,13 +4,12 @@ import { Loader2, Plus } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { formatCurrency } from '@/lib/app/format';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { usePayments, usePaymentMutations, useBills } from '../hooks';
 import { PaymentList } from '../components/PaymentList';
 import { PaymentDetailSheet } from '../components/PaymentDetailSheet';
-import { PaymentForm } from '../components/PaymentForm';
+import { PaymentFormModal } from '../components/PaymentFormModal';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 import type { CreatePaymentDTO } from '../services';
 
@@ -109,20 +108,15 @@ export function PaymentsPage() {
         billNumbers={billNumbers}
       />
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
-          </DialogHeader>
-          <PaymentForm
-            suppliers={suppliers}
-            outstandingBills={outstandingBills}
-            defaultPaymentNumber={nextDocumentNumber(payments.map((p) => p.paymentNumber), 'PAY')}
-            onSubmit={handleCreate}
-            onCancel={() => setShowCreate(false)}
-          />
-        </DialogContent>
-      </Dialog>
+      {showCreate && (
+        <PaymentFormModal
+          suppliers={suppliers}
+          outstandingBills={outstandingBills}
+          defaultPaymentNumber={nextDocumentNumber(payments.map((p) => p.paymentNumber), 'PAY')}
+          onSubmit={handleCreate}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
     </div>
   );
 }

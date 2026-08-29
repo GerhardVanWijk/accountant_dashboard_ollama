@@ -4,7 +4,7 @@ import { Loader2, Plus } from 'lucide-react';
 import type { LeaseContract } from '@/types/lease';
 import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import { useLeases } from '../hooks/useLeases';
 import { useLeaseAmortization } from '../hooks/useLeaseAmortization';
 import { LeaseForm } from '../components/LeaseForm';
@@ -26,6 +26,11 @@ export function LeaseRegisterPage() {
   const { leases, loading, error, refetch, createLease, updateLease, deleteLease, postCommencement, terminateLease } = useLeases();
   const { history: amortizationHistory, loading: amortizationLoading } = useLeaseAmortization();
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [dirty, setDirty] = useState(false);
+  const closeDialog = () => {
+    setDialog(null);
+    setDirty(false);
+  };
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -153,23 +158,19 @@ export function LeaseRegisterPage() {
         }}
       />
 
-      <Dialog open={dialog?.mode === 'create' || dialog?.mode === 'edit'} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{dialog?.mode === 'edit' ? 'Edit Lease' : 'New Lease'}</DialogTitle>
-          </DialogHeader>
-          {(dialog?.mode === 'create' || dialog?.mode === 'edit') && <LeaseForm lease={dialog.mode === 'edit' ? dialog.lease : undefined} onSubmit={handleFormSubmit} onCancel={() => setDialog(null)} />}
-        </DialogContent>
-      </Dialog>
+      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
+        <FormShell open onClose={closeDialog} size="md" mode={dialog.mode} isDirty={dirty}>
+          <FormHeader title={dialog.mode === 'edit' ? 'Edit lease' : 'New lease'} />
+          <LeaseForm lease={dialog.mode === 'edit' ? dialog.lease : undefined} onSubmit={handleFormSubmit} onCancel={closeDialog} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
 
-      <Dialog open={dialog?.mode === 'terminate'} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Terminate Lease</DialogTitle>
-          </DialogHeader>
-          {dialog?.mode === 'terminate' && <TerminateLeaseForm lease={dialog.lease} onSubmit={handleTerminate} onCancel={() => setDialog(null)} />}
-        </DialogContent>
-      </Dialog>
+      {dialog?.mode === 'terminate' && (
+        <FormShell open onClose={closeDialog} size="sm" mode="edit" isDirty={dirty}>
+          <FormHeader title="Terminate lease" />
+          <TerminateLeaseForm lease={dialog.lease} onSubmit={handleTerminate} onCancel={closeDialog} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
     </div>
   );
 }

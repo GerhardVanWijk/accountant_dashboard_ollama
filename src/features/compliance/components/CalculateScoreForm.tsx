@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FinancialYear } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
@@ -11,6 +12,7 @@ export interface CalculateScoreFormProps {
   financialYears: FinancialYear[];
   onSubmit: (input: CalculateScoreFormInput) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -22,7 +24,7 @@ export interface CalculateScoreFormProps {
  * asked for here. Re-skinned onto v0's Field/Input/Checkbox (M7);
  * validation logic unchanged.
  */
-export function CalculateScoreForm({ financialYears, onSubmit, onCancel }: CalculateScoreFormProps) {
+export function CalculateScoreForm({ financialYears, onSubmit, onCancel, onDirtyChange }: CalculateScoreFormProps) {
   const [financialYearId, setFinancialYearId] = useState(financialYears[0]?.id ?? '');
   const [shareholdersOrMembersCount, setShareholdersOrMembersCount] = useState('1');
   const [holdsFiduciaryAssetsOverThreshold, setHoldsFiduciaryAssetsOverThreshold] = useState(false);
@@ -49,7 +51,8 @@ export function CalculateScoreForm({ financialYears, onSubmit, onCancel }: Calcu
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <Field>
         <FieldLabel htmlFor="pisFinancialYear">Financial Year</FieldLabel>
         <NativeSelect id="pisFinancialYear" value={financialYearId} onChange={(e) => setFinancialYearId(e.target.value)}>
@@ -74,19 +77,16 @@ export function CalculateScoreForm({ financialYears, onSubmit, onCancel }: Calcu
         <Checkbox checked={holdsFiduciaryAssetsOverThreshold} onCheckedChange={(value) => setHoldsFiduciaryAssetsOverThreshold(value === true)} />
         Holds assets exceeding R5 million in a fiduciary capacity
       </label>
-      {validationError && (
-        <p role="alert" className="text-sm text-destructive">
-          {validationError}
-        </p>
-      )}
-      <div className="flex justify-end gap-2 pt-1">
+      </FormBody>
+
+      <FormFooter error={validationError ?? undefined}>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" onClick={submit} disabled={submitting || financialYears.length === 0}>
           Calculate
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

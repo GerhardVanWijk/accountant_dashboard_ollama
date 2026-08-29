@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
+import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateSalesOrderDTO } from '../services';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
@@ -18,6 +19,7 @@ export interface SalesOrderFormProps {
   defaultOrderNumber: string;
   onSubmit: (data: CreateSalesOrderDTO) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function today(): string {
@@ -34,7 +36,7 @@ function today(): string {
  * quote; there is no picker for it here since a sales order is never
  * manually linked to a quote after the fact.
  */
-export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSubmit, onCancel }: SalesOrderFormProps) {
+export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSubmit, onCancel, onDirtyChange }: SalesOrderFormProps) {
   const { taxRates } = useTaxRates();
   const { products } = useProducts();
   const { warehouses } = useWarehouses();
@@ -84,12 +86,8 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      {formError && (
-        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {formError}
-        </p>
-      )}
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field>
@@ -158,15 +156,16 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
         <FieldLabel htmlFor="order-notes">Notes (optional)</FieldLabel>
         <Textarea id="order-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={isSubmitting} />
       </Field>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={formError ?? undefined}>
         <Button variant="outline" type="button" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Saving…' : salesOrder ? 'Save sales order' : 'Create sales order'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import type { ExchangeRate } from '@/types/foreignExchange';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import { ExchangeRateTable } from '../components/ExchangeRateTable';
@@ -21,8 +21,13 @@ type DialogState = { mode: 'create' } | { mode: 'edit'; rate: ExchangeRate } | n
 export function ExchangeRatesPage() {
   const { rates, loading, error, createRate, updateRate, deleteRate } = useExchangeRates();
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [dirty, setDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const closeDialog = () => {
+    setDialog(null);
+    setDirty(false);
+  };
 
   async function handleCreate(data: Parameters<typeof createRate>[0]) {
     setActionError(null);
@@ -96,15 +101,26 @@ export function ExchangeRatesPage() {
         </SectionCard>
       )}
 
-      <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{dialog?.mode === 'edit' ? `Edit ${dialog.rate.fromCurrency}/${dialog.rate.toCurrency} Rate` : 'New Exchange Rate'}</DialogTitle>
-          </DialogHeader>
-          {dialog?.mode === 'create' && <ExchangeRateForm onSubmit={handleCreate} onCancel={() => setDialog(null)} isLoading={isSaving} />}
-          {dialog?.mode === 'edit' && <ExchangeRateForm initialValue={dialog.rate} onSubmit={handleEdit} onCancel={() => setDialog(null)} isLoading={isSaving} />}
-        </DialogContent>
-      </Dialog>
+      {dialog !== null && (
+        <FormShell
+          open
+          onClose={closeDialog}
+          size="md"
+          mode={dialog.mode === 'edit' ? 'edit' : 'create'}
+          isDirty={dirty}
+          pending={isSaving}
+        >
+          <FormHeader
+            title={dialog.mode === 'edit' ? `Edit ${dialog.rate.fromCurrency}/${dialog.rate.toCurrency} rate` : 'New exchange rate'}
+          />
+          {dialog.mode === 'create' && (
+            <ExchangeRateForm onSubmit={handleCreate} onCancel={closeDialog} isLoading={isSaving} onDirtyChange={setDirty} />
+          )}
+          {dialog.mode === 'edit' && (
+            <ExchangeRateForm initialValue={dialog.rate} onSubmit={handleEdit} onCancel={closeDialog} isLoading={isSaving} onDirtyChange={setDirty} />
+          )}
+        </FormShell>
+      )}
     </div>
   );
 }

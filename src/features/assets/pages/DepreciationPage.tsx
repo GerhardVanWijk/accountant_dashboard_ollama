@@ -2,7 +2,7 @@
 import { Loader2, Play } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import { useDepreciation } from '../hooks/useDepreciation';
 import { useFixedAssets } from '../hooks/useFixedAssets';
 import { RunDepreciationForm } from '../components/RunDepreciationForm';
@@ -26,6 +26,8 @@ export function DepreciationPage() {
   const { history, loading, error, refetch, runDepreciation } = useDepreciation();
   const { assets, loading: assetsLoading } = useFixedAssets();
   const [runDialogOpen, setRunDialogOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const closeDialog = () => { setRunDialogOpen(false); setDirty(false); };
   const [actionError, setActionError] = useState<string | null>(null);
   const [lastRunMessage, setLastRunMessage] = useState<string | null>(null);
 
@@ -99,14 +101,12 @@ export function DepreciationPage() {
         </SectionCard>
       )}
 
-      <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Run Depreciation</DialogTitle>
-          </DialogHeader>
-          <RunDepreciationForm defaultPeriodEnd={endOfCurrentMonth()} onSubmit={handleRun} onCancel={() => setRunDialogOpen(false)} />
-        </DialogContent>
-      </Dialog>
+      {runDialogOpen && (
+        <FormShell open onClose={closeDialog} size="sm" mode="edit" isDirty={dirty}>
+          <FormHeader title="Run depreciation" />
+          <RunDepreciationForm defaultPeriodEnd={endOfCurrentMonth()} onSubmit={handleRun} onCancel={closeDialog} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
     </div>
   );
 }

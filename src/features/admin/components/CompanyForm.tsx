@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Company } from '@/types';
@@ -5,12 +6,15 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { FormBody, FormFooter, FormSection } from '@/components/app/form';
 import { companyFormSchema, companyToFormValues, type CompanyFormValues } from '../utils/companyFormSchema';
 
 export interface CompanyFormProps {
   company: Company;
   onSubmit: (values: CompanyFormValues) => Promise<void> | void;
   onCancel: () => void;
+  submitError?: string | null;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 const legalEntityLabels: Record<CompanyFormValues['legalEntityType'], string> = {
@@ -32,26 +36,27 @@ const legalEntityLabels: Record<CompanyFormValues['legalEntityType'], string> = 
  * (companyFormSchema.ts). Deliberately does not expose reportingFramework
  * or isSbcEligible; see that schema's doc comment for why.
  */
-export function CompanyForm({ company, onSubmit, onCancel }: CompanyFormProps) {
+export function CompanyForm({ company, onSubmit, onCancel, submitError, onDirtyChange }: CompanyFormProps) {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<CompanyFormValues>({
     resolver: zodResolver(companyFormSchema),
     defaultValues: companyToFormValues(company),
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   return (
     <form
       onSubmit={handleSubmit(async (values) => {
         await onSubmit(values);
       })}
-      className="flex min-h-0 flex-1 flex-col gap-4 md:h-full"
+      className="flex min-h-0 flex-1 flex-col"
     >
-      <div className="app-scroll flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
-      <fieldset className="flex flex-col gap-4">
-        <legend className="text-sm font-semibold">Company details</legend>
+      <FormBody>
+      <FormSection title="Company details">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="company-name">Company name</FieldLabel>
@@ -91,10 +96,9 @@ export function CompanyForm({ company, onSubmit, onCancel }: CompanyFormProps) {
             </FieldLabel>
           </Field>
         </div>
-      </fieldset>
+      </FormSection>
 
-      <fieldset className="flex flex-col gap-4">
-        <legend className="text-sm font-semibold">Financial year &amp; accounting</legend>
+      <FormSection title="Financial year & accounting">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="company-fye-month">Financial year-end month</FieldLabel>
@@ -124,10 +128,9 @@ export function CompanyForm({ company, onSubmit, onCancel }: CompanyFormProps) {
             <FieldError errors={[errors.presentationCurrency]} />
           </Field>
         </div>
-      </fieldset>
+      </FormSection>
 
-      <fieldset className="flex flex-col gap-4">
-        <legend className="text-sm font-semibold">VAT &amp; tax</legend>
+      <FormSection title="VAT & tax">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field orientation="horizontal">
             <input type="checkbox" id="company-vat-registered" className="size-4 rounded border-input" {...register('isVatRegistered')} />
@@ -168,18 +171,17 @@ export function CompanyForm({ company, onSubmit, onCancel }: CompanyFormProps) {
             <Input id="company-income-tax-number" {...register('incomeTaxNumber')} />
           </Field>
         </div>
-      </fieldset>
+      </FormSection>
+      </FormBody>
 
-      </div>
-
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={submitError ?? undefined}>
         <Button variant="outline" type="button" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Saving…' : 'Save changes'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

@@ -13,16 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/shadcn/alert-dialog';
+import { ConfirmDialog } from '@/components/app/form';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useBankAccounts } from '../hooks/useBankAccounts';
 import { useBankTransactions } from '../hooks/useBankTransactions';
@@ -255,27 +246,16 @@ export function BankTransactionsPage() {
       )}
 
       {dialog?.mode === 'confirmDelete' && (
-        <AlertDialog open onOpenChange={(open) => { if (!open) setDialog(null); }}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete {dialog.transaction.description}?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This permanently removes the transaction. This cannot be undone. A transaction already cleared by a
-                finalized reconciliation can never be deleted this way.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive/10 text-destructive hover:bg-destructive/20"
-                onClick={() => void handleDelete(dialog.transaction)}
-              >
-                Delete transaction
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => { if (!open) setDialog(null); }}
+          title={`Delete ${dialog.transaction.description}?`}
+          description="This permanently removes the transaction. This cannot be undone. A transaction already cleared by a finalized reconciliation can never be deleted this way."
+          confirmLabel="Delete transaction"
+          destructive
+          error={deleteError}
+          onConfirm={() => void handleDelete(dialog.transaction)}
+        />
       )}
     </>
   );

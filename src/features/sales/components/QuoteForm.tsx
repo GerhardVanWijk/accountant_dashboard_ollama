@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
+import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateQuoteDTO } from '../services';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
@@ -18,6 +19,7 @@ export interface QuoteFormProps {
   defaultQuoteNumber: string;
   onSubmit: (data: CreateQuoteDTO) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function today(): string {
@@ -36,7 +38,7 @@ function plusDays(days: number): string {
  * Quotes never post to the GL — this only builds and validates the
  * CreateQuoteDTO payload for quoteService.createQuote()/updateQuote().
  */
-export function QuoteForm({ customers, quote, defaultQuoteNumber, onSubmit, onCancel }: QuoteFormProps) {
+export function QuoteForm({ customers, quote, defaultQuoteNumber, onSubmit, onCancel, onDirtyChange }: QuoteFormProps) {
   const { taxRates } = useTaxRates();
   const { products } = useProducts();
   const { warehouses } = useWarehouses();
@@ -87,13 +89,8 @@ export function QuoteForm({ customers, quote, defaultQuoteNumber, onSubmit, onCa
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      {formError && (
-        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {formError}
-        </p>
-      )}
-
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="quote-number">Quote number</FieldLabel>
@@ -171,15 +168,16 @@ export function QuoteForm({ customers, quote, defaultQuoteNumber, onSubmit, onCa
         <FieldLabel htmlFor="quote-notes">Notes (optional)</FieldLabel>
         <Textarea id="quote-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={isSubmitting} />
       </Field>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={formError ?? undefined}>
         <Button variant="outline" type="button" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Saving…' : quote ? 'Save quote' : 'Create quote'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

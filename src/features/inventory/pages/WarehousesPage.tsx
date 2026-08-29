@@ -3,15 +3,14 @@ import { Loader2, Plus } from 'lucide-react';
 import type { Warehouse } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { useWarehouses } from '../hooks/useWarehouses';
 import { useProducts } from '../hooks/useProducts';
 import { useStockMovements } from '../hooks/useStockMovements';
-import { WarehouseForm } from '../components/WarehouseForm';
+import { WarehouseFormModal } from '../components/WarehouseFormModal';
 import { WarehousesTable } from '../components/WarehousesTable';
 import { StockByWarehouseTable } from '../components/StockByWarehouseTable';
-import { StockTransferForm } from '../components/StockTransferForm';
-import { StockAdjustmentForm } from '../components/StockAdjustmentForm';
+import { StockTransferFormModal } from '../components/StockTransferFormModal';
+import { StockAdjustmentFormModal } from '../components/StockAdjustmentFormModal';
 import type { CreateWarehouseDTO, UpdateWarehouseDTO } from '../services/warehouseService';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
@@ -133,58 +132,41 @@ export function WarehousesPage() {
         </>
       )}
 
-      <Dialog open={dialog?.mode === 'create-warehouse' || dialog?.mode === 'edit-warehouse'} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{dialog?.mode === 'edit-warehouse' ? 'Edit Warehouse' : 'New Warehouse'}</DialogTitle>
-          </DialogHeader>
-          {(dialog?.mode === 'create-warehouse' || dialog?.mode === 'edit-warehouse') && (
-            <WarehouseForm warehouse={dialog.mode === 'edit-warehouse' ? dialog.warehouse : undefined} onSubmit={handleWarehouseSubmit} onCancel={() => setDialog(null)} />
-          )}
-        </DialogContent>
-      </Dialog>
+      {(dialog?.mode === 'create-warehouse' || dialog?.mode === 'edit-warehouse') && (
+        <WarehouseFormModal
+          warehouse={dialog.mode === 'edit-warehouse' ? dialog.warehouse : undefined}
+          onSubmit={handleWarehouseSubmit}
+          onClose={() => setDialog(null)}
+        />
+      )}
 
-      <Dialog open={dialog?.mode === 'transfer'} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Stock Transfer</DialogTitle>
-          </DialogHeader>
-          {dialog?.mode === 'transfer' && (
-            <StockTransferForm
-              products={products}
-              warehouses={warehouses}
-              onSubmit={async (input) => {
-                await transferStock(input);
-                setDialog(null);
-              }}
-              onCancel={() => setDialog(null)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {dialog?.mode === 'transfer' && (
+        <StockTransferFormModal
+          products={products}
+          warehouses={warehouses}
+          onSubmit={async (input) => {
+            await transferStock(input);
+            setDialog(null);
+          }}
+          onClose={() => setDialog(null)}
+        />
+      )}
 
-      <Dialog open={dialog?.mode === 'adjust'} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Stock Adjustment</DialogTitle>
-          </DialogHeader>
-          {dialog?.mode === 'adjust' && (
-            <StockAdjustmentForm
-              products={products}
-              warehouses={warehouses}
-              onSubmitAdjustment={async (input) => {
-                await adjustStock(input);
-                setDialog(null);
-              }}
-              onSubmitOpening={async (input) => {
-                await recordOpeningStock(input);
-                setDialog(null);
-              }}
-              onCancel={() => setDialog(null)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {dialog?.mode === 'adjust' && (
+        <StockAdjustmentFormModal
+          products={products}
+          warehouses={warehouses}
+          onSubmitAdjustment={async (input) => {
+            await adjustStock(input);
+            setDialog(null);
+          }}
+          onSubmitOpening={async (input) => {
+            await recordOpeningStock(input);
+            setDialog(null);
+          }}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </div>
   );
 }

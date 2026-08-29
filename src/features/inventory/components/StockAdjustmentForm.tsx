@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -7,6 +8,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { FormBody, FormFooter } from '@/components/app/form';
 import type { AdjustStockInput, OpeningStockInput } from '../services/stockService';
 
 const REASON_PRESETS = ['Write-off', 'Damage', 'Shrinkage', 'Stock take variance', 'Other'] as const;
@@ -30,6 +32,7 @@ export interface StockAdjustmentFormProps {
   onSubmitAdjustment: (input: AdjustStockInput) => Promise<void>;
   onSubmitOpening: (input: OpeningStockInput) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -47,12 +50,13 @@ export function StockAdjustmentForm({
   onSubmitAdjustment,
   onSubmitOpening,
   onCancel,
+  onDirtyChange,
 }: StockAdjustmentFormProps) {
   const {
     register,
     handleSubmit,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<AdjustmentFormValues>({
     resolver: zodResolver(adjustmentSchema),
     defaultValues: {
@@ -66,6 +70,8 @@ export function StockAdjustmentForm({
       reference: '',
     },
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const movementKind = watch('movementKind');
   const trackedProducts = products.filter((p) => p.trackInventory);
@@ -93,7 +99,8 @@ export function StockAdjustmentForm({
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+      <FormBody>
       <Field>
         <FieldLabel htmlFor="adj-kind">Movement Type</FieldLabel>
         <NativeSelect id="adj-kind" {...register('movementKind')}>
@@ -174,15 +181,16 @@ export function StockAdjustmentForm({
             : 'Optional context for this opening balance.'}
         </FieldDescription>
       </Field>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {movementKind === 'opening' ? 'Record Opening Stock' : 'Record Adjustment'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

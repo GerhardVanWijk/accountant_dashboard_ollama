@@ -1,27 +1,20 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
-import { wideFormDialogClass } from '@/components/app/form-surface';
+import { useState } from 'react';
+
+import { FormShell, FormHeader } from '@/components/app/form';
 import { QuoteForm, type QuoteFormProps } from './QuoteForm';
 
-export interface QuoteFormModalProps extends Omit<QuoteFormProps, 'onCancel'> {
+export interface QuoteFormModalProps extends Omit<QuoteFormProps, 'onCancel' | 'onDirtyChange'> {
   title: string;
   onClose: () => void;
 }
 
-/** Modal shell hosting QuoteForm for both create and edit flows, built on the shared v0 Dialog primitive — mirrors InvoiceFormModal.tsx. */
+/** `QuoteForm` in the shared Vertex form shell (P3G) — mirrors InvoiceFormModal. */
 export function QuoteFormModal({ title, onClose, ...formProps }: QuoteFormModalProps) {
+  const [dirty, setDirty] = useState(false);
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className={wideFormDialogClass}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <QuoteForm {...formProps} onCancel={onClose} />
-      </DialogContent>
-    </Dialog>
+    <FormShell open onClose={onClose} size="lg" mode={formProps.quote ? 'edit' : 'create'} isDirty={dirty}>
+      <FormHeader title={title} />
+      <QuoteForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
+    </FormShell>
   );
 }

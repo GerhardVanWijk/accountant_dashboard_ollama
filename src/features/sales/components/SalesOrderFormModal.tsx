@@ -1,27 +1,20 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
-import { wideFormDialogClass } from '@/components/app/form-surface';
+import { useState } from 'react';
+
+import { FormShell, FormHeader } from '@/components/app/form';
 import { SalesOrderForm, type SalesOrderFormProps } from './SalesOrderForm';
 
-export interface SalesOrderFormModalProps extends Omit<SalesOrderFormProps, 'onCancel'> {
+export interface SalesOrderFormModalProps extends Omit<SalesOrderFormProps, 'onCancel' | 'onDirtyChange'> {
   title: string;
   onClose: () => void;
 }
 
-/** Modal shell hosting SalesOrderForm for both create and edit flows, built on the shared v0 Dialog primitive — mirrors InvoiceFormModal.tsx/QuoteFormModal.tsx. */
+/** `SalesOrderForm` in the shared Vertex form shell (P3G). */
 export function SalesOrderFormModal({ title, onClose, ...formProps }: SalesOrderFormModalProps) {
+  const [dirty, setDirty] = useState(false);
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className={wideFormDialogClass}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <SalesOrderForm {...formProps} onCancel={onClose} />
-      </DialogContent>
-    </Dialog>
+    <FormShell open onClose={onClose} size="lg" mode={formProps.salesOrder ? 'edit' : 'create'} isDirty={dirty}>
+      <FormHeader title={title} />
+      <SalesOrderForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
+    </FormShell>
   );
 }

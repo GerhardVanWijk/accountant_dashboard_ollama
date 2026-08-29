@@ -2,7 +2,7 @@
 import { Loader2, Play } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import { useLeaseAmortization } from '../hooks/useLeaseAmortization';
 import { useLeases } from '../hooks/useLeases';
 import { RunAmortizationForm } from '../components/RunAmortizationForm';
@@ -25,6 +25,8 @@ export function LeaseAmortizationPage() {
   const { history, loading, error, refetch, runAmortization } = useLeaseAmortization();
   const { leases, loading: leasesLoading } = useLeases();
   const [runDialogOpen, setRunDialogOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const closeDialog = () => { setRunDialogOpen(false); setDirty(false); };
   const [actionError, setActionError] = useState<string | null>(null);
   const [lastRunMessage, setLastRunMessage] = useState<string | null>(null);
 
@@ -98,14 +100,12 @@ export function LeaseAmortizationPage() {
         </SectionCard>
       )}
 
-      <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Run Amortization</DialogTitle>
-          </DialogHeader>
-          <RunAmortizationForm defaultPeriodEnd={endOfCurrentMonth()} onSubmit={handleRun} onCancel={() => setRunDialogOpen(false)} />
-        </DialogContent>
-      </Dialog>
+      {runDialogOpen && (
+        <FormShell open onClose={closeDialog} size="sm" mode="edit" isDirty={dirty}>
+          <FormHeader title="Run amortization" />
+          <RunAmortizationForm defaultPeriodEnd={endOfCurrentMonth()} onSubmit={handleRun} onCancel={closeDialog} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
     </div>
   );
 }

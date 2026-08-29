@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { FigureBlock } from '@/components/app/figure';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
 import type { CreatePurchaseOrderDTO } from '../services';
 import { LineItemsEditor } from './LineItemsEditor';
@@ -18,6 +19,7 @@ export interface PurchaseOrderFormProps {
   defaultPoNumber: string;
   onSubmit: (data: CreatePurchaseOrderDTO) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function today(): string {
@@ -30,7 +32,7 @@ function today(): string {
  * purchaseOrderService.createPurchaseOrder(). Re-skinned onto v0's
  * Field/Input (M8); `LineItemsEditor` untouched.
  */
-export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCancel }: PurchaseOrderFormProps) {
+export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCancel, onDirtyChange }: PurchaseOrderFormProps) {
   const { taxRates } = useTaxRates();
   const { products } = useProducts();
   const { warehouses } = useWarehouses();
@@ -80,13 +82,8 @@ export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCanc
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {formError && (
-        <p role="alert" className="text-sm text-destructive">
-          {formError}
-        </p>
-      )}
-
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="po-number">PO Number</FieldLabel>
@@ -124,15 +121,16 @@ export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCanc
         <FieldLabel htmlFor="po-notes">Notes (optional)</FieldLabel>
         <Textarea id="po-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={formError ?? undefined}>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
           {isSubmitting ? 'Saving…' : 'Create Purchase Order'}
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

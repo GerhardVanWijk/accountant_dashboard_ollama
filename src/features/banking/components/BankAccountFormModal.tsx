@@ -1,27 +1,20 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
-import { standardDialogClass } from '@/components/app/form-surface';
+import { useState } from 'react';
+
+import { FormShell, FormHeader } from '@/components/app/form';
 import { BankAccountForm, type BankAccountFormProps } from './BankAccountForm';
 
-export interface BankAccountFormModalProps extends Omit<BankAccountFormProps, 'onCancel'> {
+export interface BankAccountFormModalProps extends Omit<BankAccountFormProps, 'onCancel' | 'onDirtyChange'> {
   title: string;
   onClose: () => void;
 }
 
-/** Modal shell hosting BankAccountForm for both create and edit flows, built on the shared v0 Dialog primitive. */
+/** `BankAccountForm` in the shared Vertex form shell (P3D). */
 export function BankAccountFormModal({ title, onClose, ...formProps }: BankAccountFormModalProps) {
+  const [dirty, setDirty] = useState(false);
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className={standardDialogClass}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <BankAccountForm {...formProps} onCancel={onClose} />
-      </DialogContent>
-    </Dialog>
+    <FormShell open onClose={onClose} size="md" mode={formProps.initialValues ? 'edit' : 'create'} isDirty={dirty}>
+      <FormHeader title={title} />
+      <BankAccountForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
+    </FormShell>
   );
 }

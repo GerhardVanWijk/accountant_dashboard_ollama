@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
+import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateInvoiceDTO } from '@/services/invoiceService';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
@@ -18,6 +19,7 @@ interface InvoiceFormProps {
   onSubmit: (data: Partial<Invoice>) => void;
   onCancel?: () => void;
   isLoading?: boolean;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function today(): string {
@@ -39,7 +41,7 @@ function plusDays(days: number): string {
  * on InvoiceDetail (Mark as Sent, Record Payment) that go through the real
  * service methods.
  */
-export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading = false }: InvoiceFormProps) => {
+export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading = false, onDirtyChange }: InvoiceFormProps) => {
   const { taxRates } = useTaxRates();
   const { products } = useProducts();
   const { warehouses } = useWarehouses();
@@ -86,13 +88,8 @@ export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading 
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      {formError && (
-        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {formError}
-        </p>
-      )}
-
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="invoice-number">Invoice number</FieldLabel>
@@ -170,8 +167,9 @@ export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading 
         <FieldLabel htmlFor="invoice-notes">Notes (optional)</FieldLabel>
         <Textarea id="invoice-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={isLoading} />
       </Field>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={formError ?? undefined}>
         {onCancel && (
           <Button variant="outline" type="button" onClick={onCancel} disabled={isLoading}>
             Cancel
@@ -180,7 +178,7 @@ export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading 
         <Button type="submit" disabled={isLoading}>
           {isLoading ? 'Saving…' : invoice ? 'Save invoice' : 'Create invoice'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 };

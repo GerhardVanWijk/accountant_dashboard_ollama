@@ -14,17 +14,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/shadcn/empty';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/shadcn/alert-dialog';
+import { ConfirmDialog } from '@/components/app/form';
 import type { UseSuppliersResult } from '../hooks/useSuppliers';
 import { StatusBadge } from '../components/StatusBadge';
 import { calculateAging, billsToOpenBills } from '../utils/calculateAging';
@@ -76,6 +66,7 @@ function AddressBlock({ address, fallback = 'Not provided' }: { address?: Addres
 export function SupplierDetailPage({ supplierId, suppliersState, onBack, onEdit }: SupplierDetailPageProps) {
   const { suppliers, loading, error, refetch, setOnHold, setStatus, deleteSupplier } = suppliersState;
   const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const navigate = useNavigate();
 
   const { bills } = useBills();
@@ -308,29 +299,21 @@ export function SupplierDetailPage({ supplierId, suppliersState, onBack, onEdit 
           Permanently deleting a supplier is only allowed when it has no linked bills, payments, or ledger
           transactions. Otherwise, inactivate the supplier or place it on hold instead.
         </p>
-        <AlertDialog>
-          <AlertDialogTrigger render={<Button variant="destructive" size="sm" className="mt-3" />}>
-            Delete supplier
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete {supplier.name}?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This permanently removes the supplier record. This cannot be undone. If this supplier has any
-                linked bills, payments, or ledger transactions, the deletion will be blocked automatically.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive/10 text-destructive hover:bg-destructive/20"
-                onClick={() => void handleDelete()}
-              >
-                Delete supplier
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button variant="destructive" size="sm" className="mt-3" onClick={() => setConfirmDelete(true)}>
+          Delete supplier
+        </Button>
+        <ConfirmDialog
+          open={confirmDelete}
+          onOpenChange={setConfirmDelete}
+          title={`Delete ${supplier.name}?`}
+          description="This permanently removes the supplier record. This cannot be undone. If this supplier has any linked bills, payments, or ledger transactions, the deletion will be blocked automatically."
+          confirmLabel="Delete supplier"
+          destructive
+          onConfirm={() => {
+            setConfirmDelete(false);
+            void handleDelete();
+          }}
+        />
       </SectionCard>
     </>
   );

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReportingStandardName } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
@@ -20,6 +21,7 @@ export interface AddReportingStandardVersionFormProps {
     reason: string,
   ) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -30,7 +32,7 @@ export interface AddReportingStandardVersionFormProps {
  * elsewhere in this codebase. Re-skinned onto v0's Field/Input/Textarea/
  * Checkbox (M7); validation logic unchanged.
  */
-export function AddReportingStandardVersionForm({ standard, onSubmit, onCancel }: AddReportingStandardVersionFormProps) {
+export function AddReportingStandardVersionForm({ standard, onSubmit, onCancel, onDirtyChange }: AddReportingStandardVersionFormProps) {
   const [versionLabel, setVersionLabel] = useState('');
   const [effectiveFrom, setEffectiveFrom] = useState('');
   const [earlyAdoptionPermitted, setEarlyAdoptionPermitted] = useState(false);
@@ -61,7 +63,8 @@ export function AddReportingStandardVersionForm({ standard, onSubmit, onCancel }
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <p className="text-sm text-muted-foreground">
         This does not remove or edit any prior edition of {standard === 'full_ifrs' ? 'Full IFRS' : 'IFRS for SMEs'} — it only records a new one and marks the previous one superseded,
         so any past reporting period still resolves against whichever edition was actually in effect at the time.
@@ -92,14 +95,15 @@ export function AddReportingStandardVersionForm({ standard, onSubmit, onCancel }
         )}
         <FieldDescription>Recorded to the audit trail together with this change.</FieldDescription>
       </Field>
-      <div className="flex justify-end gap-2 pt-1">
+      </FormBody>
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" onClick={submit} disabled={submitting}>
           Save
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

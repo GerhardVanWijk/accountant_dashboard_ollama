@@ -1,10 +1,6 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
-import { wideFormDialogClass } from '@/components/app/form-surface';
+import { useState } from 'react';
+
+import { FormShell, FormHeader } from '@/components/app/form';
 import { InvoiceForm } from './InvoiceForm';
 import type { Invoice } from '@/types';
 
@@ -17,16 +13,13 @@ export interface InvoiceFormModalProps {
   isLoading?: boolean;
 }
 
-/** Modal shell hosting InvoiceForm for both create and edit flows, built on the shared v0 Dialog primitive. */
+/** `InvoiceForm` in the shared Vertex form shell (P3D). */
 export function InvoiceFormModal({ title, onClose, ...formProps }: InvoiceFormModalProps) {
+  const [dirty, setDirty] = useState(false);
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className={wideFormDialogClass}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <InvoiceForm {...formProps} onCancel={onClose} />
-      </DialogContent>
-    </Dialog>
+    <FormShell open onClose={onClose} size="lg" mode={formProps.invoice ? 'edit' : 'create'} isDirty={dirty}>
+      <FormHeader title={title} />
+      <InvoiceForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
+    </FormShell>
   );
 }

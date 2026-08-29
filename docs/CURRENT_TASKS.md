@@ -470,4 +470,471 @@ Must be technically impossible again, not just a written rule.
 - **Cloudflare deploy**: this repo deploys via **Cloudflare Pages connected to the GitHub repo** — the push to `main` triggers the build (`npm run build`) + deploy automatically. There is deliberately no `wrangler.toml` (commit `ba8d10f` removed it — "it was silently breaking the live deployment"). Deploy env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`) are set in the Pages project, not the repo. Nothing further to run locally.
 - Migrations 0019 + 0020 are already live on Supabase, so the DB is in sync with the deployed code.
 
-**P3 (Vertex Form System) not started.**
+---
+
+# P3 — VERTEX FORM SYSTEM + PAGE LAYOUT FOUNDATION
+
+**Opened:** 2026-08-29 · **Owner:** Queen Bee
+**Rule:** Do NOT commit or push until each sub-phase is reviewed. Stop at each review boundary.
+Two connected goals, deliberately NOT the same CSS problem:
+1. A consistent Vertex Form System (FormShell / Header / Body / Footer / Tabs + size tokens).
+2. Fix the shared page-width/layout defect that makes desktop totals / filters / reports appear
+   vertically/narrowly stacked.
+
+**Architecture rule:** forms/detail surfaces MAY have deliberate `max-width`; normal
+accounting/list/report pages use the full available content width.
+
+Statuses: `NOT STARTED` · `IN PROGRESS` · `PASS` · `FIXED` · `BLOCKED` · `N/A`
+
+Review boundaries: **R1 = P3A** · R2 = P3B+P3C · R3 = P3D · R4 = P3E+P3F+P3G · Final = P3H/P3I/P3J.
+
+## SUB-PHASE STATUS
+
+| Sub-phase | Scope | Status |
+|---|---|---|
+| **P3A** | Shared page-width foundation + 10-page ancestry audit | **FIXED — awaiting R1 review** |
+| P3B | Vertex Form System primitives (FormShell/Header/Body/Footer/Tabs) | NOT STARTED (blocked on R1) |
+| P3C | Form behaviour standard (create/edit/detail, unsaved-changes, validation, loading) | NOT STARTED |
+| P3D | High-priority form migration (Banking, Customer, Supplier, Company, Invoice, CN, Receipt, Journal) | NOT STARTED |
+| P3E | Purchases + inventory forms | NOT STARTED |
+| P3F | Admin / settings forms | NOT STARTED |
+| P3G | Long-tail form audit (~45-form inventory → MIGRATED/COMPLIANT/N/A/BLOCKED) | NOT STARTED |
+| P3H | Global summary / page-layout re-audit (forms constrained, pages full-width) | NOT STARTED |
+| P3I | Tests for the shared architecture (17-point list) | NOT STARTED |
+| P3J | Visual QA (1440 / 1280 / mobile) | NOT STARTED |
+
+---
+
+## P3A — SHARED PAGE WIDTH FOUNDATION — **FIXED, awaiting R1**
+
+### P3A.0 — Root cause (exact)
+
+**The Tailwind config has no `sm` breakpoint, so every `sm:*` utility in the app compiles to
+nothing.**
+
+`tailwind.config.js` sets `theme.screens` (NOT `theme.extend.screens`) to a custom object:
+
+```
+xs 320 · md 768 · lg 1024 · xl 1280 · 2xl 1536      ← no sm
+```
+
+Specifying `theme.screens` **replaces** Tailwind's default breakpoint set entirely. This scale
+has existed since the Phase 0 scaffold (`6e8e6e9`) — the pre-v0 design system was deliberately
+built on `xs/md/lg/xl/2xl` (DESIGN_SYSTEM.md still says "Below 768px (`md` breakpoint)…").
+
+Then the **v0 design-system port** (`fb7f778` onward) brought in ~109 components authored
+against Tailwind v4, whose default scale **includes `sm` (640px / 40rem)**. Those components use
+`sm:` heavily — and Tailwind v3's JIT silently emits **no CSS** for an unknown variant prefix
+(no error, no build failure). Same silent v4→v3 breakage family as the three already documented:
+`card.tsx` `@spacing()`, `sidebar.tsx` `w-(--var)`, `tokens.css` status-* alpha modifiers.
+
+**Empirically confirmed** against the compiled bundle (`dist/assets/*.css`):
+- *Before:* media queries present = `320, 768, 1024, 1280, 1536`. **No `640`.** `grep -c 'sm\:'`
+  on responsive utilities = 0.
+- *After the fix:* `@media (width>=640px)` block now present, containing
+  `.sm\:grid-cols-3`, `.sm\:flex`, `.sm\:grid`, `.sm\:w-auto`, `.sm\:min-w-64`, … — all 188.
+
+### P3A.1 — Rendered-DOM ancestry audit (no browser tooling available → static + compiled-CSS)
+
+Full chain from `<body>` to the Trial Balance summary grid, every level checked for
+`max-w-*` / `w-fit` / `w-auto` / fixed width / `inline-*` / `self-start` / `container` / `prose`
+/ inline max-width / narrow flex child / reused modal width classes:
+
+```
+body                                  — globals.css: only bg/text/font. NO max-width.
+└ #root                               — no class, no CSS rule. NO constraint.
+  └ .app-shell                        — token scope only (tokens.css). display:block, 100%. NO width.
+    └ [data-slot=sidebar-wrapper]     — flex min-h-svh w-full   (SidebarProvider)
+      ├ Sidebar peer wrapper          — hidden md:block; in-flow width = sidebar-gap = 16rem
+      │  └ sidebar-gap                 — w-[var(--sidebar-width)] (16rem) / icon-collapsed 3rem
+      │  └ sidebar-container           — position:fixed (OUT OF FLOW — cannot constrain siblings)
+      └ SidebarInset <main>           — relative flex w-full flex-1 flex-col + min-w-0 (AppLayout)
+        │                                variant="sidebar" (default) → NO m-2 inset margin
+        ├ AppTopbar <header>          — sticky, h-14. Not an ancestor of page content.
+        └ <main> (AppLayout)          — flex min-w-0 flex-1 flex-col gap-6 p-4 sm:p-6
+          └ Outlet → TrialBalancePage — React fragment, no wrapper element
+            ├ PageHeader <header>     — flex flex-col … (full width). `max-w-2xl` is on the
+            │                            <p> description ONLY — correct, does not affect layout.
+            └ SectionCard <section>   — flex flex-col rounded-xl border  (align stretch → 100%)
+              └ body <div>            — flex-1 p-5   (100%)
+                └ <div>               — flex flex-col gap-5   (100%)
+                  └ <div>             — grid gap-6 sm:grid-cols-3   ← THE MEASURED ELEMENT
+```
+
+**Finding: there is NO width-constraining ancestor anywhere in the shared chain.** The chain
+resolves to full content width at every level. `SidebarInset` correctly fills
+`viewport − 16rem sidebar`; `<main>` fills that minus padding.
+
+**The defect is on the measured element itself:** `sm:grid-cols-3` never compiled, so the grid
+stays at its implicit **single column at all widths**, stacking Total Debits / Total Credits /
+Difference vertically. The DevTools "~466px" reading was the 1-column grid inside a
+DevTools-narrowed viewport (≈770px − 256px sidebar − padding); the *visual* "stacked" complaint
+is fully explained by the dead `sm:` breakpoint, independent of viewport.
+
+The prior "browser-driven correction pass" (§9/§13, 2026-08-27) concluded these pages were
+"already correct in `main`" **by reading the Tailwind classes** — which is exactly the mistake
+this brief warned against; the classes were present but inert.
+
+### P3A.2 — Pages affected (the 10 audited) — all same root cause, no per-page constraint
+
+| # | Page | Content wrapper | Summary strip | Verdict |
+|---|---|---|---|---|
+| 1 | Trial Balance | fragment → SectionCard | `grid gap-6 sm:grid-cols-3` | dead `sm:` → 1-col |
+| 2 | General Ledger | `flex flex-col gap-6` → SectionCard | `grid gap-6 sm:grid-cols-3` | dead `sm:` → 1-col |
+| 3 | Chart of Accounts | fragment → SectionCard | filter row `flex flex-col … sm:flex-row sm:items-center` | dead `sm:` → stays vertical |
+| 4 | Bank Accounts | — → SectionCard | `grid gap-6 sm:grid-cols-2` + filter `sm:flex-row` | dead `sm:` → 1-col / vertical |
+| 5 | Bank Transactions | — → SectionCard | `grid gap-6 sm:grid-cols-3` | dead `sm:` → 1-col |
+| 6 | Bank Reconciliation | `flex flex-col gap-6` → SectionCard + Tabs | two-pane workspace uses `lg:` (works); page shell full-width | OK structurally; `sm:` bits inert |
+| 7 | VAT | `flex flex-col gap-6` → SectionCard | `grid gap-6 sm:grid-cols-3` | dead `sm:` → 1-col |
+| 8 | Income Statement | `flex flex-col gap-6` → SectionCard | header filter row `flex flex-wrap items-end gap-2` (no `sm:`) | report body full-width; OK |
+| 9 | Balance Sheet | (same family as #8) | — | to re-verify visually |
+| 10 | Cash Flow | (same family as #8) | — | to re-verify visually |
+
+No target page carries a `max-w-*` / form-width class on its content wrapper. `max-w-*` in the
+`src/features/**/*Page.tsx` grep is exclusively on: `DialogContent` (modals — correct),
+search `InputGroup` (`sm:max-w-72` — a capped search box, correct), and marketing pages
+(`MarketingPageShell`, a separate un-audited shell — not in scope).
+
+### P3A.3 — The fix (shared, one line)
+
+`tailwind.config.js` → add `sm: '640px'` to `theme.screens` (Tailwind's own default, = what
+accounting-v0-frontend was built against). This activates all 188 `sm:*` utilities across
+~109 files to lay out as their (v0) authors intended. No component code changed.
+
+- **Shared files changed: 1** — `tailwind.config.js` (+ explanatory comment).
+- **Components changed: 0.**
+- **Width constraint removed:** none existed; the dead breakpoint was *restored*.
+- No report/list page receives form `max-width` (none touched).
+- **Blast radius: ~109 files / 188 `sm:` utilities** now render responsively (summary grids
+  2-/3-up from 640px, filter toolbars horizontal from 640px, `main` padding 16→24px from 640px,
+  plus form/detail-sheet internal `sm:` layouts). **This IS a significant shared-layout change
+  → STOP at R1 for visual review before P3B.**
+
+### P3A.4 — Gate
+
+- type-check ✅ · lint (`--max-warnings 0`) ✅ · **tests 1249/1249, 177 files ✅** (unchanged) · `vite build` ✅
+- `git status`: only `tailwind.config.js` modified. Not committed, not pushed.
+
+### P3A.5 — Outstanding
+
+- **Visual verification (P3A.9 / P3J).** No Chrome DevTools / Playwright MCP in this environment
+  → no rendered-width screenshots at 1440 / 1280 / mobile. The fix is proven at the
+  compiled-CSS level; **the user should visually confirm the 10 pages on a fresh `npm run dev`**,
+  watching for: any page that now over-wraps, any form/detail sheet whose restored `sm:` layout
+  regresses, `main` padding step at 640px, and the reconciliation two-pane workspace (unaffected —
+  uses `lg:`).
+- Balance Sheet / Cash Flow pages: class audit pending in P3H re-audit.
+
+**REVIEW 1 — user approved 2026-08-29: "proceed to P3B + P3C".** P3A `sm`-breakpoint fix
+kept as-is. Visual QA still outstanding (folded into P3H/P3J).
+
+---
+
+## P3B — VERTEX FORM SYSTEM PRIMITIVES — **PASS, awaiting R2**
+## P3C — FORM BEHAVIOUR STANDARD — **PASS, awaiting R2**
+
+**Primitives built, ZERO forms migrated** (migration is P3D+, gated on this review). New dir
+`src/components/app/form/`, barrel `@/components/app/form`.
+
+### What was built
+
+| Primitive | File | Responsibility |
+|---|---|---|
+| **`FormShell`** | `FormShell.tsx` | The one thing it owns is **sizing** (`size` token → width + height). Also: brand-green ring, viewport-safe constraints, flex-column skeleton (stable header → scrolling body → stable footer), the unsaved-changes close guard, `<form>` wrapping + submit. Composes the base-ui dialog primitive directly (not `DialogContent`) so header/footer sit *outside* the scroll region. `surface="dialog"` (default) or `"sheet"`. |
+| **`FormHeader`** | `FormHeader.tsx` | Fixed header: title / `recordRef` / `badge` / `actions` / × button. Supplies the surface's a11y name+description (base-ui `Title`/`Description` via context); × routes through the shell's guarded close. Degrades to `<h2>` outside a shell. |
+| **`FormBody`** + `FormSection` / `FormLoading` / `FormEmptyState` | `FormBody.tsx` | The single scroll region: `flex-1 min-h-0 overflow-y-auto` + consistent padding + `gap-6` section rhythm. `FormSection` = real `<fieldset>/<legend>`. `FormLoading`/`FormEmptyState` fill the body without collapsing the shell (P3C loading / not-found spec). |
+| **`FormFooter`** | `FormFooter.tsx` | Fixed footer outside the scroll region (fixes the 40 forms that hand-rolled `<div class="flex justify-end border-t pt-4">` *inside* the body). `flex-col-reverse` on mobile (primary on top, thumb-reachable) → right-aligned row from `sm`. `destructiveAction` slot pinned left (`sm:mr-auto`), keeps semantic red. `error` slot = server-error alert above the buttons. |
+| **`FormTabs`** + `FormTab` | `FormTabs.tsx` | Use *instead of* `FormBody`. `flex min-h-0 flex-1 flex-col` inside the fixed-height shell → tab list pinned, each panel its own scroll area, `keepMounted` → **switching tabs never changes outer width/height and never moves the footer** (the tab-resize bug, consolidated from 3 hand-rolled copies). Active tab = brand-green `line` treatment (shared `Tabs`). Per-tab `hasError` dot. |
+| **`FormError`** / **`RequiredMark`** | `FormError.tsx` | Form-level (non-field) error banner, dark-mode-safe `destructive` token. `RequiredMark` = `*` + `sr-only` "(required)" (not colour-only). Field-level errors keep the shadcn `FieldError`. |
+| **`ConfirmDialog`** | `ConfirmDialog.tsx` | One shared confirm prompt — the discard-changes prompt AND (P3D) the ~7 hand-rolled delete/void `AlertDialog`s. `destructive` → red confirm; Cancel-left / action-right always; `pending` disables both. Built on `AlertDialogContent` (deliberately *not* brand-ringed — a confirm is not a form). |
+| **`useUnsavedChangesPrompt(isDirty)`** | `useUnsavedChangesPrompt.ts` | `beforeunload` guard (out-of-app nav / tab close / reload). In-app dialog/sheet/Escape/overlay close is handled by `FormShell` itself. In-app *route* nav blocking = a later `useUnsavedChangesBlocker` (needs a data-router context an isolated modal render lacks) — deferred to P3D wiring. |
+
+### Size tokens (P3B "FORM SIZE TOKENS") — consolidated into `form-surface.ts`, not duplicated
+
+| Token | Width (dialog) | Height | For |
+|---|---|---|---|
+| `sm` | `sm:max-w-lg` (32rem) | natural, viewport-capped | bank account, basic ledger account, small settings record, 1-field override |
+| `md` (default) | `sm:max-w-2xl` (42rem) | **fixed** `md:h-[min(calc(100dvh-2rem),44rem)]` | Customer, Supplier, Product, Employee, Company |
+| `lg` | `sm:max-w-4xl` (56rem) | **fixed** `…,52rem` | Invoice, Credit Note, Receipt, Bill, Supplier Payment, Journal Entry |
+| `xl` | `sm:max-w-6xl` (72rem) | **fixed** `…,56rem` | Bank Statement Import, reconciliation config, advanced settings |
+
+- Base (mobile) is always `max-h-[calc(100dvh-2rem)]` — no absolute heights that fail on laptops.
+- `height="natural"` opts a form out of the fixed frame.
+- Sheet widths: `formSheetWidthClass` (`sm:max-w-md`…`sm:max-w-2xl`); sheets are full-height.
+- **Legacy `formDialogClass` / `wideFormDialogClass` / `standardDialogClass` / `compactDialogClass`
+  kept byte-stable** — the ~15 un-migrated `*FormModal`s still import them; deleted after P3D+.
+- Popup base look extracted to `formDialogPopupBaseClass` / `formSheetPopupBaseClass` /
+  `formOverlayClass` so `FormShell` stays visually identical to `DialogContent`.
+
+### Green visual spec (P3B "GREEN FORM VISUAL SPEC")
+
+Inherited unchanged — `ring-1 ring-brand-outline` (30% green hairline, no neon glow), brand
+focus ring on inputs (`--ring` = `--brand`), brand active tab. Errors stay `--destructive`,
+warnings stay `--warning`. `FormShell` adds no new green; it reuses the tokens.
+
+### Behaviour standard (P3C)
+
+- **Modes:** `create` / `edit` → `<form>` + unsaved-changes guard; `detail` → **never** a
+  `<form>`, `onSubmit` ignored, `isDirty` ignored, close never prompts. Enforces "do not open a
+  posted immutable journal in an editable form" at the shell level — the consumer picks the mode.
+- **Unsaved changes:** dirty create/edit + (close × | Escape | overlay | tab close/reload) →
+  `ConfirmDialog` ("Discard unsaved changes?" / "Discard changes" / "Keep editing"). `onClose`
+  fires only on confirm. Clean form / detail view → closes silently.
+- **Validation surface:** `RequiredMark`, shadcn `FieldError` (inline), `FormFooter error=`
+  (server), `FormShell pending` → footer disables actions. Focus-first-error and the RHF-vs-
+  useState reconciliation are per-form work in P3D+.
+- **Loading / empty:** `FormLoading` / `FormEmptyState` keep the shell at its `size` dimensions.
+
+### P3I tests written (18 new, `src/components/app/form/*.test.tsx` + `src/styles/tailwind-breakpoints.test.ts`)
+
+Covers P3I list items **1** (size token applied) · **2** (width stable across tab change) ·
+**3** (height stable across tab change) · **4** (body scrolls internally) · **5** (footer stays
+mounted) · **6** (loading preserves shell) · **7** (mobile viewport cap) · **8** (dirty create
+warns) · **9** (dirty edit warns) · **10** (clean form closes) · **11** (detail never warns) ·
+**12** (active tab brand/`line`) · **13** (native select untouched inside body) · **17** (detail
+renders no `<form>`, never submits) · plus discard-confirm/keep-editing paths, `<form>` wrap for
+edit, `FormFooter` error+destructive, `FormError`/`RequiredMark`/`FormSection`/`ConfirmDialog`,
+`useUnsavedChangesPrompt` add/remove/preventDefault, and a **P3A regression lock** on the `sm`
+breakpoint. Items **14–16** (page summary width / report pages / nested controls) are P3H.
+
+### Gate
+
+- type-check ✅ · lint (`--max-warnings 0`) ✅ · **tests 1283/1283, 181 files ✅** (+34, +4 files) · `vite build` ✅
+- `git status`: `tailwind.config.js`, `src/components/app/form-surface.ts`, `docs/CURRENT_TASKS.md`
+  modified; `src/components/app/form/` + `src/styles/tailwind-breakpoints.test.ts` new. **No form
+  migrated. Not committed, not pushed.**
+
+### Outstanding for R2 review
+
+- No form uses the new primitives yet — proof is the 18 unit tests, not an in-app render.
+- `DialogContent`/`SheetContent`/`RecordDetailSheet` untouched — `FormShell` is additive.
+- Visual QA of a primitive-built form deferred to the first P3D migration (pilot: CustomerForm).
+
+**REVIEW 2 — user approved 2026-08-29: "proceed to P3D".**
+
+---
+
+## P3D — HIGH-PRIORITY FORM MIGRATION — **PASS, awaiting R3**
+
+Migrated the brief's priority list onto `FormShell` / `FormHeader` / `FormBody` / `FormTabs`
+/ `FormFooter`. **Uniform recipe** (so the diff is mechanical and reviewable):
+
+- `*FormModal.tsx` → `<FormShell open onClose size mode isDirty><FormHeader title/>{form}</FormShell>`.
+  Modal holds a `const [dirty, setDirty] = useState(false)` and passes `onDirtyChange={setDirty}`.
+- `*Form.tsx`: root becomes `flex min-h-0 flex-1 flex-col`; fields wrapped in `<FormBody>` (or
+  `<FormTabs>` for tabbed); the hand-rolled `<div class="flex justify-end border-t pt-4">` +
+  the inline `{formError && <p>}` → `<FormFooter error={formError}>`.
+- Dirty signal: RHF forms report `formState.isDirty` via `useEffect(() => onDirtyChange?.(isDirty), …)`;
+  useState forms report on first `onInput` (real edit; `fireEvent.change` in tests doesn't trip it,
+  so existing tests are unaffected).
+- No validation logic, schema, submit handler, or service call was touched.
+
+### Migrated (brief order)
+
+| # | Form | Modal → shell | Size | Notes |
+|---|---|---|---|---|
+| 1a | **Bank Account** | `BankAccountFormModal` | `md` | RHF; `FormBody` + `FormFooter`. |
+| 1b | **Bank Transaction** | `TransactionFormModal` | `lg` | useState, tabbed. Keeps its bespoke `<Tabs>` (receipt & payment share one panel body — `FormTabs` would duplicate that panel's field ids); gains `FormShell` height + `FormFooter`. |
+| 1c | **Allocate Transaction** | `AllocateTransactionFormModal` | `lg` | useState; `FormBody` + `FormFooter`. |
+| 1d | **Statement Import** | `StatementImportWizard` | `xl` | Minimal shell swap only (`FormShell`+`FormHeader hideClose`+`FormBody`); the 3 wizard steps keep their own per-step footers — **sticky-footer-per-step deferred to P3E** (documented long-pole). |
+| 2 | **Customer** | `CustomerFormModal` | `md` | **Flagship.** 4 tabs → shared `FormTabs` (stable size, brand active tab, per-tab error dot, `keepMounted`). This is the tab-resize case the audit flagged. |
+| 3 | **Supplier** | `SupplierFormPage` (page, not modal) | — | `SuppliersRoot` deliberately keeps create/edit as a full-page workflow (documented). So: `FormTabs` inside a bounded `h-[28rem]` frame + `FormFooter`; `SectionCard bodyClassName="p-0"`. Not wrapped in `FormShell` (not a modal surface). |
+| 4 | **Company** | `CompanyPage` dialog → `FormShell` | `md` | 3 `<fieldset>` → `FormSection`; page's inline `saveError` banner → `FormFooter error`. |
+| 5 | **Invoice** | `InvoiceFormModal` | `lg` | useState + `SalesLineItemsEditor` (untouched). |
+| 6 | **Credit Note** | `CreditNoteFormModal` | `lg` | ditto. |
+| 7 | **Customer Receipt** | `CustomerReceiptFormModal` | `lg` | ditto. |
+| 8 | **Journal Entry** | `JournalEntryFormModal` | `lg` | useState + real-time `validateLines` (untouched). |
+| + | **Account** (Chart of Accounts) | `AccountFormModal` | `md` | Banking-adjacent, same one-file recipe — done alongside 1a. |
+
+### Not done in P3D (deferred, documented)
+
+- `StatementImportWizard` per-step sticky footers → **P3E**.
+- `TransactionForm` still shows its submit error inline near the tab list rather than in
+  `FormFooter error=` (its `FormFooter` has no `error` prop wired) — cosmetic, **P3E**.
+- Legacy `formDialogClass` / `wideFormDialogClass` / `standardDialogClass` / `compactDialogClass`
+  still used by the ~15 un-migrated `*FormModal`s (Quote, SalesOrder, Purchases domain, admin,
+  inventory, …) — those are **P3E / P3F / P3G**. Deleted once all consumers move over (P3G).
+
+### Tests
+
+- New `CustomerFormModal.test.tsx` (4): stable surface size across all 4 tabs · Save button
+  mounted on every tab · edit-then-close prompts + discard closes · clean close is silent.
+- All pre-existing form/page/service tests pass **unchanged** — `StatementImportWizard.test.tsx`
+  needed one query disambiguated (`hideClose` removed the now-redundant header × that collided
+  with the DoneStep's "Close").
+
+### Gate
+
+- type-check ✅ · lint (`--max-warnings 0`) ✅ · **tests 1287/1287, 182 files ✅** (+4) · `vite build` ✅
+- **25 files modified** (config + `form-surface.ts` + 11 form/modal pairs + CompanyPage +
+  SupplierFormPage) + `src/components/app/form/` + 2 new test files. **Not committed, not pushed.**
+
+### Outstanding for R3
+
+- Visual QA: no browser tooling — the migrated modals are proven by unit tests, not an in-app
+  render. User should check the 11 forms on `npm run dev` (esp. Customer's 4 tabs, the `lg`
+  line-item forms' width, the Supplier page frame, and that the discard prompt feels right).
+- `DialogContent` / `RecordDetailSheet` still untouched.
+
+**REVIEW 3 — user approved 2026-08-29: "proceed to P3E".**
+
+---
+
+## P3E — PURCHASES & INVENTORY FORMS — **PASS, awaiting R4 (checkpoint)**
+
+Same uniform recipe as P3D. **Purchases + Inventory + Assets now have the `*FormModal`
+layer they lacked** (the audit's "most inconsistent module").
+
+### Migrated
+
+| Domain | Form | New modal | Size | Page updated |
+|---|---|---|---|---|
+| Purchases | `BillForm` | `BillFormModal` | `lg` | `BillsPage` |
+| Purchases | `PaymentForm` | `PaymentFormModal` (`title?`) | `lg` | `BillsPage` (Record payment) + `PaymentsPage` |
+| Purchases | `PurchaseOrderForm` | `PurchaseOrderFormModal` | `lg` | `PurchaseOrdersPage` |
+| Inventory | `ProductForm` (RHF) | `ProductFormModal` | `md` | `ProductsPage` — Product Category is a free-text field on this form, no separate entity (per audit) |
+| Inventory | `WarehouseForm` (RHF) | `WarehouseFormModal` | `md` | `WarehousesPage` |
+| Inventory | `StockTransferForm` (RHF) | `StockTransferFormModal` | `md` | `WarehousesPage` |
+| Inventory | `StockAdjustmentForm` (RHF) | `StockAdjustmentFormModal` | `md` | `WarehousesPage` — the brief's "Inventory Adjustment" |
+| Assets | `AssetForm` (RHF) | `AssetFormModal` | `md` | `AssetRegisterPage` — the brief's "Fixed Asset" |
+| Assets | `PostAcquisitionForm` | `PostAcquisitionFormModal` | `sm` | `AssetRegisterPage` (same page — done for consistency) |
+
+- Each page swapped its inline `<Dialog open={…}><DialogContent max-w-*>…` for
+  `{show && <XFormModal onClose={…} …/>}` (mount/unmount → dirty state resets cleanly each open).
+- **Expense** → N/A: no Expense entity in the domain (audit); the real path is
+  `AllocateTransactionForm` / `TransactionForm`, both migrated in P3D.
+
+### P3D deferrals now cleared
+
+- `TransactionForm` submit error → moved from the inline block inside the tab list to
+  `FormFooter error=`.
+- `StatementImportWizard` per-step sticky footers → **still deferred** (its 3 steps each carry a
+  distinct footer; needs the wizard restructured, not a mechanical swap) — **P3F/P3G**.
+
+### Tests
+
+- New `PurchasesFormModals.test.tsx` (3): Bill modal opens in the shared shell (`lg` width,
+  header, footer outside the scroll region) · clean PO modal closes silently · edited PO modal
+  prompts.
+- All pre-existing purchases / inventory / assets tests (`PaymentForm.test`,
+  `LineItemsEditor.test`, `SalesLineItemsEditor.test`, service + page tests) pass **unchanged**.
+
+### Gate
+
+- type-check ✅ · lint (`--max-warnings 0`) ✅ · **tests 1290/1290, 183 files ✅** (+3) · `vite build` ✅
+- **~30 files touched** (14 forms + 12 new `*FormModal` + 6 pages) + 1 new test file. **Not committed.**
+
+### Remaining before Review 4 is complete (P3F + P3G)
+
+- **P3F** — admin/settings forms: `UsersPage` (×3), `ReopenPeriodDialog`, `TaxRatesPage` (×2),
+  `ExchangeRatesPage`, `ReportingStandardsPage`, `PublicInterestScorePage` (×2), `IncomeTaxPage`
+  (SBC), `DividendsTaxPage`, `RelatedParty*` (×2), `PayrollRunsPage` (×3), `EmployeesPage`,
+  `LeaseRegisterPage` (×2), `LeaseAmortizationPage`, `DepreciationPage`, `DisposalsPage`.
+  Full-page Settings/Accounting-settings hubs stay as pages.
+- **P3G** — long-tail: Quote / SalesOrder `*FormModal`s → `FormShell`; the 7 hand-rolled
+  delete/void `AlertDialog`s → `ConfirmDialog`; `StatementImportWizard` per-step footers;
+  then DELETE the legacy `*DialogClass` consts from `form-surface.ts` once no consumer remains;
+  final ~45-form classification table (MIGRATED / ALREADY COMPLIANT / N/A / BLOCKED).
+
+**REVIEW 3/checkpoint — user 2026-08-29: "continue with all the phases … full permission … upload to github and deploy … commit … deploy to cloudflare".** P3F→P3J run to completion + commit + push + deploy.
+
+---
+
+## P3F — ADMIN / SETTINGS / TAX / PAYROLL / LEASE FORMS — **PASS**
+## P3G — LONG-TAIL — **PASS**
+
+Same uniform recipe. **Every page-inline `<Dialog>` / `<AlertDialog>` form surface in `src/features/`
+is now on `FormShell` or `ConfirmDialog`** — `grep -rn "DialogContent\|AlertDialogContent"
+src/features --include=*.tsx` (excl. tests) returns **nothing**. `RecordDetailSheet` is the only
+remaining direct dialog-primitive consumer (correct — it's the detail-sheet layer).
+
+### P3F — migrated (form + page)
+
+| Form | Modal / page | Size |
+|---|---|---|
+| `ReopenPeriodDialog` (self-hosted) | → `FormShell` | `sm` |
+| `TaxRateForm` / `SupersedeTaxRateForm` | `TaxRatesPage` (page-level `FormShell`) | `md` |
+| `ExchangeRateForm` | `ExchangeRatesPage` | `md` |
+| `RelatedPartyForm` / `RelatedPartyTransactionForm` | `RelatedParty*Page` | `md` |
+| `LeaseForm` / `TerminateLeaseForm` | `LeaseRegisterPage` | `md` / `sm` |
+| `RunAmortizationForm` | `LeaseAmortizationPage` | `sm` |
+| `EmployeeForm` | `EmployeesPage` | `md` |
+| `PayrollRunForm` / `PostPayrollRunForm` | `PayrollRunsPage` | `md` |
+| Payroll-run **view** (`PayslipLinesTable`) | `PayrollRunsPage` | `xl`, `mode="detail"` |
+| `DividendDeclarationForm` | `DividendsTaxPage` | `md` |
+| `RunDepreciationForm` / `DisposeAssetForm` | `DepreciationPage` / `DisposalsPage` | `sm` |
+| `CalculateScoreForm` / `ReportingFrameworkOverrideForm` | `PublicInterestScorePage` | `md` |
+| `AddReportingStandardVersionForm` | `ReportingStandardsPage` | `md` |
+| `SbcEligibilityForm` | `IncomeTaxPage` | `md` |
+| `UsersPage` — add-user / assign-role / create-role (3 inline dialogs, trigger-button pattern) | → `FormShell` `sm` | `sm` |
+
+- Full-page Settings / Accounting-settings hubs stay pages — not form surfaces (P3F rule).
+- Multi-dialog pages use one page-level `dirty` state + a `closeDialog()` that resets it, so
+  each freshly-opened dialog starts clean.
+
+### P3G
+
+- **Sales:** `QuoteFormModal` / `SalesOrderFormModal` (`lg`) · `AllocationFormModal` (`sm`) → `FormShell`.
+- **7 hand-rolled delete/void `AlertDialog`s → `ConfirmDialog`:** delete draft
+  invoice/quote/sales-order · void credit note · delete supplier · delete bank transaction
+  (`error` slot added to `ConfirmDialog` for this one) · delete role.
+- **Dead code deleted:** `StatementImportModal.tsx` + `StatementImportPanel.tsx` (0 references —
+  superseded by `StatementImportWizard` per the P1 review). The unused
+  `bankTransactionService.importStatementLines` / `findMatchesForLine` methods + their tests are
+  left (service-layer cleanup, not a form concern).
+- **Legacy `*DialogClass` consts DELETED** from `form-surface.ts` (`formDialogClass`,
+  `wideFormDialogClass`, `standardDialogClass`, `compactDialogClass`, `tabbedFormPanelsClass`) —
+  0 consumers remained. `recordSheetClass` / `wideRecordSheetClass` kept (RecordDetailSheet).
+- **`StatementImportWizard` per-step footers** — still deferred (its 3 steps carry distinct
+  footers; a proper wizard restructure, not a mechanical swap). It has the `FormShell` + `FormBody`
+  shell; only the per-step footer stickiness is outstanding.
+
+### Final form classification (~45 surfaces)
+
+| Bucket | Count | Notes |
+|---|---|---|
+| **MIGRATED to `FormShell`** | ~40 | every `*FormModal` + every page-inline form dialog + 3 tabbed forms (`FormTabs`) + Supplier (page `FormTabs`) + Company/Reopen/Payroll-view |
+| **MIGRATED to `ConfirmDialog`** | 7 | the delete/void `AlertDialog`s |
+| **ALREADY COMPLIANT (unchanged)** | 17 | all `RecordDetailSheet` detail surfaces — one shared component, none tabbed |
+| **N/A** | — | Expense (no entity), Bank Reconciliation (workspace page, not a form), Settings hubs (full pages) |
+| **BLOCKED / partial** | 1 | `StatementImportWizard` — shell done, per-step sticky footers deferred |
+
+No ad-hoc `max-w-*` remains on any accounting `Dialog`/`Sheet` form surface.
+
+---
+
+## P3H — GLOBAL PAGE-LAYOUT RE-AUDIT — **PASS**
+
+- `grep` for `formSizeWidthClass` / `sm:max-w-2xl|4xl|6xl` in every `*Page.tsx` → **only** on
+  filter `InputGroup` / `SelectTrigger` (search boxes — correct). **No form width class leaked
+  into page content.**
+- The P3A `sm` breakpoint fix is intact and regression-locked
+  (`src/styles/tailwind-breakpoints.test.ts`). All 10 summary/report pages keep their responsive
+  grids; no page wraps content in a form-sized shell.
+- `AppLayout` `<main>` / `SidebarInset` untouched since P3A.
+
+## P3I — TESTS — **PASS**
+
+`src/components/app/form/*.test.tsx` (FormShell ×21, primitives ×13, unsaved-prompt ×2) +
+`CustomerFormModal.test.tsx` ×4 + `PurchasesFormModals.test.tsx` ×3 + `tailwind-breakpoints.test.ts` ×2.
+Covers P3I list items 1–13, 17; 14–16 covered by P3H grep + the breakpoint lock.
+**All 1290 tests pass** (183 files), incl. every pre-existing form/page/service test **unchanged**.
+
+## P3J — VISUAL QA — **OUTSTANDING (no browser tooling in this environment)**
+
+No Chrome DevTools / Playwright MCP available → no rendered screenshots at 1440 / 1280 / mobile.
+Every change is behind strict type-check + lint (`--max-warnings 0`) + 1290 tests + a production
+`vite build`, and uses the same `FormShell` primitive proven by 40+ unit tests. **The user should
+do a visual pass on the deploy** — priority surfaces: Customer 4-tab form (size stable), the `lg`
+line-item forms (Invoice/Bill/Journal) width, the reconciliation workspace (unaffected), the 10
+report pages' summary grids (P3A `sm` fix), and the discard-changes prompt.
+
+---
+
+## P3 — FINAL GATE (2026-08-29)
+
+- **type-check** ✅ · **lint** (`--max-warnings 0`) ✅ · **tests 1290 / 183 files** ✅ · **`vite build`** ✅
+- **~102 files changed:** `tailwind.config.js` (P3A) · `src/components/app/form/` (new, 11 files) ·
+  `form-surface.ts` · ~48 form components · ~28 pages · ~22 new `*FormModal` files · 4 new test
+  files · 2 deleted dead files · `docs/CURRENT_TASKS.md`.
+- Committed + pushed to `origin/main`; Cloudflare Pages auto-deploys from the push.

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Account } from '@/types';
@@ -6,6 +7,7 @@ import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { ACCOUNT_TYPES } from '../types/account.types';
 import {
   accountFormSchema,
@@ -27,6 +29,7 @@ export interface AccountFormProps {
   submitting?: boolean;
   submitError?: string | null;
   submitLabel?: string;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -46,17 +49,20 @@ export function AccountForm({
   submitting,
   submitError,
   submitLabel = 'Save account',
+  onDirtyChange,
 }: AccountFormProps) {
   const {
     register,
     handleSubmit,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<AccountFormSchema>({
     resolver: zodResolver(accountFormSchema),
     defaultValues: toDefaultValues(initialValues),
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const selectedType = watch('type');
   const parentOptions = accounts.filter((a) => a.type === selectedType && a.id !== initialValues?.id);
@@ -66,8 +72,9 @@ export function AccountForm({
       onSubmit={handleSubmit((values) => {
         void onSubmit(values);
       })}
-      className="flex flex-col gap-6"
+      className="flex min-h-0 flex-1 flex-col"
     >
+      <FormBody>
       {hasPostings && (
         <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           This account has posted ledger history — it can be renamed or deactivated, but it cannot be deleted from
@@ -141,17 +148,16 @@ export function AccountForm({
         <FieldLabel htmlFor="account-description">Description (optional)</FieldLabel>
         <Textarea id="account-description" rows={2} {...register('description')} />
       </Field>
+      </FormBody>
 
-      {submitError && <p className="text-sm text-destructive">{submitError}</p>}
-
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={submitError ?? undefined}>
         <Button variant="outline" type="button" onClick={onCancel} disabled={submitting}>
           Cancel
         </Button>
         <Button type="submit" disabled={submitting}>
           {submitting ? 'Saving…' : submitLabel}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

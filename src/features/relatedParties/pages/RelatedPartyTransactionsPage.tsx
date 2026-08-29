@@ -3,7 +3,7 @@ import { Loader2, Plus } from 'lucide-react';
 import type { RelatedPartyTransaction } from '@/types/relatedParty';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import { useRelatedParties } from '../hooks/useRelatedParties';
 import { useRelatedPartyTransactions } from '../hooks/useRelatedPartyTransactions';
 import { RelatedPartyTransactionForm } from '../components/RelatedPartyTransactionForm';
@@ -26,6 +26,8 @@ export function RelatedPartyTransactionsPage() {
   const { relatedParties, loading: relatedPartiesLoading } = useRelatedParties();
   const { transactions, loading, error, refetch, createTransaction, updateTransaction, deleteTransaction } = useRelatedPartyTransactions();
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [dirty, setDirty] = useState(false);
+  const closeDialog = () => { setDialog(null); setDirty(false); };
   const [actionError, setActionError] = useState<string | null>(null);
 
   const relatedPartiesById = useMemo(() => new Map(relatedParties.map((p) => [p.id, p])), [relatedParties]);
@@ -107,16 +109,12 @@ export function RelatedPartyTransactionsPage() {
         </>
       )}
 
-      <Dialog open={dialog?.mode === 'create' || dialog?.mode === 'edit'} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{dialog?.mode === 'edit' ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
-          </DialogHeader>
-          {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
-            <RelatedPartyTransactionForm transaction={dialog.mode === 'edit' ? dialog.transaction : undefined} relatedParties={relatedParties} onSubmit={handleFormSubmit} onCancel={() => setDialog(null)} />
-          )}
-        </DialogContent>
-      </Dialog>
+      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
+        <FormShell open onClose={closeDialog} size="md" mode={dialog.mode} isDirty={dirty}>
+          <FormHeader title={dialog.mode === 'edit' ? 'Edit transaction' : 'New transaction'} />
+          <RelatedPartyTransactionForm transaction={dialog.mode === 'edit' ? dialog.transaction : undefined} relatedParties={relatedParties} onSubmit={handleFormSubmit} onCancel={closeDialog} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
     </div>
   );
 }

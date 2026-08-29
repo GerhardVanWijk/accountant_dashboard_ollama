@@ -3,8 +3,7 @@ import { Building2, CalendarDays, Loader2, Pencil, Receipt } from 'lucide-react'
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
-import { formDialogClass } from '@/components/app/form-surface';
+import { FormShell, FormHeader } from '@/components/app/form';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { useCompany } from '../hooks/useCompany';
 import { companyService } from '../services';
@@ -38,6 +37,7 @@ export function CompanyPage() {
   const { company, loading, error, refetch } = useCompany();
   const [editing, setEditing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
 
   if (loading) {
     return (
@@ -129,21 +129,26 @@ export function CompanyPage() {
         </ul>
       </article>
 
-      <Dialog
-        open={editing}
-        onOpenChange={(open) => {
-          setEditing(open);
-          if (!open) setSaveError(null);
-        }}
-      >
-        <DialogContent className={formDialogClass}>
-          <DialogHeader>
-            <DialogTitle>Edit company</DialogTitle>
-          </DialogHeader>
-          {saveError && <p className="text-sm text-destructive">{saveError}</p>}
+      {editing && (
+        <FormShell
+          open
+          onClose={() => {
+            setEditing(false);
+            setSaveError(null);
+          }}
+          size="md"
+          mode="edit"
+          isDirty={dirty}
+        >
+          <FormHeader title="Edit company" />
           <CompanyForm
             company={company}
-            onCancel={() => setEditing(false)}
+            submitError={saveError}
+            onDirtyChange={setDirty}
+            onCancel={() => {
+              setEditing(false);
+              setSaveError(null);
+            }}
             onSubmit={async (values) => {
               setSaveError(null);
               try {
@@ -155,8 +160,8 @@ export function CompanyPage() {
               }
             }}
           />
-        </DialogContent>
-      </Dialog>
+        </FormShell>
+      )}
     </>
   );
 }

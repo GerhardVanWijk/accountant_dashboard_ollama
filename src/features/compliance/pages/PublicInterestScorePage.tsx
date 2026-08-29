@@ -4,7 +4,7 @@ import type { ReportingFramework } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { formatCurrency } from '@/lib/app/format';
 import { usePublicInterestScore } from '../hooks/usePublicInterestScore';
@@ -39,6 +39,7 @@ export function PublicInterestScorePage() {
   const { company, financialYears, history, latest, loading, error, refetch, calculateScore, applyReportingFramework } = usePublicInterestScore();
   const [calculateOpen, setCalculateOpen] = useState(false);
   const [frameworkFormOpen, setFrameworkFormOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
@@ -190,30 +191,30 @@ export function PublicInterestScorePage() {
         </>
       )}
 
-      <Dialog open={calculateOpen} onOpenChange={setCalculateOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Calculate New Score</DialogTitle>
-          </DialogHeader>
-          <CalculateScoreForm financialYears={financialYears} onSubmit={handleCalculate} onCancel={() => setCalculateOpen(false)} />
-        </DialogContent>
-      </Dialog>
+      {calculateOpen && (
+        <FormShell open onClose={() => { setCalculateOpen(false); setDirty(false); }} size="md" mode="create" isDirty={dirty}>
+          <FormHeader title="Calculate new score" />
+          <CalculateScoreForm
+            financialYears={financialYears}
+            onSubmit={handleCalculate}
+            onCancel={() => { setCalculateOpen(false); setDirty(false); }}
+            onDirtyChange={setDirty}
+          />
+        </FormShell>
+      )}
 
-      <Dialog open={frameworkFormOpen && Boolean(company && latest)} onOpenChange={setFrameworkFormOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Change Reporting Framework</DialogTitle>
-          </DialogHeader>
-          {company && latest && (
-            <ReportingFrameworkOverrideForm
-              currentFramework={company.reportingFramework}
-              suggestedFramework={latest.suggestedReportingFramework}
-              onSubmit={handleApplyFramework}
-              onCancel={() => setFrameworkFormOpen(false)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {frameworkFormOpen && company && latest && (
+        <FormShell open onClose={() => { setFrameworkFormOpen(false); setDirty(false); }} size="md" mode="edit" isDirty={dirty}>
+          <FormHeader title="Change reporting framework" />
+          <ReportingFrameworkOverrideForm
+            currentFramework={company.reportingFramework}
+            suggestedFramework={latest.suggestedReportingFramework}
+            onSubmit={handleApplyFramework}
+            onCancel={() => { setFrameworkFormOpen(false); setDirty(false); }}
+            onDirtyChange={setDirty}
+          />
+        </FormShell>
+      )}
     </div>
   );
 }

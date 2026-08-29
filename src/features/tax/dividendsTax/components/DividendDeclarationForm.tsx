@@ -1,7 +1,9 @@
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -37,6 +39,7 @@ export type DividendDeclarationFormValues = z.infer<typeof declarationSchema>;
 export interface DividendDeclarationFormProps {
   onSubmit: (data: CreateDividendDeclarationInput) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -47,12 +50,12 @@ export interface DividendDeclarationFormProps {
  * check. Re-skinned onto v0's Field/Input/Textarea (M7); validation
  * schema and submit wiring unchanged.
  */
-export function DividendDeclarationForm({ onSubmit, onCancel }: DividendDeclarationFormProps) {
+export function DividendDeclarationForm({ onSubmit, onCancel, onDirtyChange }: DividendDeclarationFormProps) {
   const {
     register,
     handleSubmit,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<DividendDeclarationFormValues>({
     resolver: zodResolver(declarationSchema),
     defaultValues: {
@@ -63,6 +66,8 @@ export function DividendDeclarationForm({ onSubmit, onCancel }: DividendDeclarat
       notes: '',
     },
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const exemptPortion = watch('exemptPortion');
   const showExemptionReason = Boolean(exemptPortion && Number(exemptPortion) > 0);
@@ -78,7 +83,8 @@ export function DividendDeclarationForm({ onSubmit, onCancel }: DividendDeclarat
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="declarationDate">Declaration Date</FieldLabel>
@@ -115,14 +121,16 @@ export function DividendDeclarationForm({ onSubmit, onCancel }: DividendDeclarat
         <Textarea id="notes" rows={2} {...register('notes')} />
       </Field>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      </FormBody>
+
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           Create Draft
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

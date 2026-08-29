@@ -3,7 +3,7 @@ import { Loader2, Plus } from 'lucide-react';
 import type { RelatedParty } from '@/types/relatedParty';
 import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import { useRelatedParties } from '../hooks/useRelatedParties';
 import { useRelatedPartyTransactions } from '../hooks/useRelatedPartyTransactions';
 import { RelatedPartyForm } from '../components/RelatedPartyForm';
@@ -26,6 +26,8 @@ export function RelatedPartyRegisterPage() {
   const { relatedParties, loading, error, refetch, createRelatedParty, updateRelatedParty, deleteRelatedParty } = useRelatedParties();
   const { transactions, loading: transactionsLoading } = useRelatedPartyTransactions();
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [dirty, setDirty] = useState(false);
+  const closeDialog = () => { setDialog(null); setDirty(false); };
   const [actionError, setActionError] = useState<string | null>(null);
 
   const transactionCountByPartyId = useMemo(() => {
@@ -105,16 +107,12 @@ export function RelatedPartyRegisterPage() {
         />
       )}
 
-      <Dialog open={dialog?.mode === 'create' || dialog?.mode === 'edit'} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{dialog?.mode === 'edit' ? 'Edit Related Party' : 'New Related Party'}</DialogTitle>
-          </DialogHeader>
-          {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
-            <RelatedPartyForm relatedParty={dialog.mode === 'edit' ? dialog.relatedParty : undefined} onSubmit={handleFormSubmit} onCancel={() => setDialog(null)} />
-          )}
-        </DialogContent>
-      </Dialog>
+      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
+        <FormShell open onClose={closeDialog} size="md" mode={dialog.mode} isDirty={dirty}>
+          <FormHeader title={dialog.mode === 'edit' ? 'Edit related party' : 'New related party'} />
+          <RelatedPartyForm relatedParty={dialog.mode === 'edit' ? dialog.relatedParty : undefined} onSubmit={handleFormSubmit} onCancel={closeDialog} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
     </div>
   );
 }

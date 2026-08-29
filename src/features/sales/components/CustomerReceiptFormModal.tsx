@@ -1,27 +1,20 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
-import { wideFormDialogClass } from '@/components/app/form-surface';
+import { useState } from 'react';
+
+import { FormShell, FormHeader } from '@/components/app/form';
 import { CustomerReceiptForm, type CustomerReceiptFormProps } from './CustomerReceiptForm';
 
-export interface CustomerReceiptFormModalProps extends Omit<CustomerReceiptFormProps, 'onCancel'> {
+export interface CustomerReceiptFormModalProps extends Omit<CustomerReceiptFormProps, 'onCancel' | 'onDirtyChange'> {
   title?: string;
   onClose: () => void;
 }
 
-/** Modal shell hosting CustomerReceiptForm, built on the shared v0 Dialog primitive. */
+/** `CustomerReceiptForm` in the shared Vertex form shell (P3D). */
 export function CustomerReceiptFormModal({ title = 'Record customer receipt', onClose, ...formProps }: CustomerReceiptFormModalProps) {
+  const [dirty, setDirty] = useState(false);
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className={wideFormDialogClass}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <CustomerReceiptForm {...formProps} onCancel={onClose} />
-      </DialogContent>
-    </Dialog>
+    <FormShell open onClose={onClose} size="lg" mode="create" isDirty={dirty}>
+      <FormHeader title={title} />
+      <CustomerReceiptForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
+    </FormShell>
   );
 }

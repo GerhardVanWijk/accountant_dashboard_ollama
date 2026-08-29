@@ -4,13 +4,12 @@ import { Loader2, Plus } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { formatCurrency } from '@/lib/app/format';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { usePurchaseOrders, usePurchaseOrderMutations, useBillMutations, useBills } from '../hooks';
 import { PurchaseOrderList } from '../components/PurchaseOrderList';
 import { PurchaseOrderDetailSheet } from '../components/PurchaseOrderDetailSheet';
-import { PurchaseOrderForm } from '../components/PurchaseOrderForm';
+import { PurchaseOrderFormModal } from '../components/PurchaseOrderFormModal';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 import type { CreatePurchaseOrderDTO } from '../services';
 
@@ -147,14 +146,14 @@ export function PurchaseOrdersPage() {
         isBusy={isBusy}
       />
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>New Purchase Order</DialogTitle>
-          </DialogHeader>
-          <PurchaseOrderForm suppliers={suppliers} defaultPoNumber={nextDocumentNumber(purchaseOrders.map((po) => po.poNumber), 'PO')} onSubmit={handleCreate} onCancel={() => setShowCreate(false)} />
-        </DialogContent>
-      </Dialog>
+      {showCreate && (
+        <PurchaseOrderFormModal
+          suppliers={suppliers}
+          defaultPoNumber={nextDocumentNumber(purchaseOrders.map((po) => po.poNumber), 'PO')}
+          onSubmit={handleCreate}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -7,6 +8,7 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateWarehouseDTO, UpdateWarehouseDTO } from '../services/warehouseService';
 
 const warehouseSchema = z.object({
@@ -26,6 +28,7 @@ export interface WarehouseFormProps {
   warehouse?: Warehouse;
   onSubmit: (data: CreateWarehouseDTO | UpdateWarehouseDTO) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function toDefaultValues(warehouse?: Warehouse): WarehouseFormValues {
@@ -42,16 +45,18 @@ function toDefaultValues(warehouse?: Warehouse): WarehouseFormValues {
 }
 
 /** Create/edit form for warehouses (react-hook-form + zod), used by WarehousesPage. Re-skinned onto v0's Field/Input/Checkbox (M8). */
-export function WarehouseForm({ warehouse, onSubmit, onCancel }: WarehouseFormProps) {
+export function WarehouseForm({ warehouse, onSubmit, onCancel, onDirtyChange }: WarehouseFormProps) {
   const {
     register,
     handleSubmit,
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<WarehouseFormValues>({
     resolver: zodResolver(warehouseSchema),
     defaultValues: toDefaultValues(warehouse),
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const submit = handleSubmit(async (data) => {
     const hasAddress = data.line1 || data.city || data.postalCode || data.country;
@@ -72,7 +77,8 @@ export function WarehouseForm({ warehouse, onSubmit, onCancel }: WarehouseFormPr
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="wh-name">Name</FieldLabel>
@@ -125,15 +131,16 @@ export function WarehouseForm({ warehouse, onSubmit, onCancel }: WarehouseFormPr
           </NativeSelect>
         </Field>
       </div>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {warehouse ? 'Save Changes' : 'Create Warehouse'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

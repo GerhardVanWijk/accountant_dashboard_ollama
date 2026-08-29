@@ -4,7 +4,6 @@ import { Loader2, Plus } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { formatCurrency } from '@/lib/app/format';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { useBills } from '../hooks/useBills';
@@ -12,8 +11,8 @@ import { useBillMutations } from '../hooks/useBillMutations';
 import { usePayments, usePaymentMutations, usePurchaseOrders } from '../hooks';
 import { BillList } from '../components/BillList';
 import { BillDetailSheet } from '../components/BillDetailSheet';
-import { BillForm } from '../components/BillForm';
-import { PaymentForm } from '../components/PaymentForm';
+import { BillFormModal } from '../components/BillFormModal';
+import { PaymentFormModal } from '../components/PaymentFormModal';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 
 /**
@@ -158,32 +157,26 @@ export function BillsPage() {
         onRecordPayment={() => setShowRecordPayment(true)}
       />
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>New Bill</DialogTitle>
-          </DialogHeader>
-          <BillForm suppliers={suppliers} defaultBillNumber={nextDocumentNumber(bills.map((b) => b.billNumber), 'BILL')} onSubmit={handleCreate} onCancel={() => setShowCreate(false)} />
-        </DialogContent>
-      </Dialog>
+      {showCreate && (
+        <BillFormModal
+          suppliers={suppliers}
+          defaultBillNumber={nextDocumentNumber(bills.map((b) => b.billNumber), 'BILL')}
+          onSubmit={handleCreate}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
 
-      <Dialog open={showRecordPayment && Boolean(detailBill)} onOpenChange={setShowRecordPayment}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{detailBill ? `Record Payment — ${detailBill.billNumber}` : 'Record Payment'}</DialogTitle>
-          </DialogHeader>
-          {detailBill && (
-            <PaymentForm
-              suppliers={suppliers}
-              outstandingBills={outstandingBills}
-              defaultPaymentNumber={nextDocumentNumber(payments.map((p) => p.paymentNumber), 'PAY')}
-              presetBillId={detailBill.id}
-              onSubmit={handleRecordPayment}
-              onCancel={() => setShowRecordPayment(false)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {showRecordPayment && detailBill && (
+        <PaymentFormModal
+          title={`Record payment — ${detailBill.billNumber}`}
+          suppliers={suppliers}
+          outstandingBills={outstandingBills}
+          defaultPaymentNumber={nextDocumentNumber(payments.map((p) => p.paymentNumber), 'PAY')}
+          presetBillId={detailBill.id}
+          onSubmit={handleRecordPayment}
+          onClose={() => setShowRecordPayment(false)}
+        />
+      )}
     </>
   );
 }

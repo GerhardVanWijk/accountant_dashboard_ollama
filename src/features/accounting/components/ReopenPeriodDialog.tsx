@@ -1,14 +1,8 @@
 import { useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/shadcn/dialog';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { FormShell, FormHeader, FormBody, FormFooter } from '@/components/app/form';
 
 export interface ReopenPeriodDialogProps {
   periodName: string;
@@ -20,7 +14,8 @@ export interface ReopenPeriodDialogProps {
  * Reopening a closed/locked period ALWAYS requires a reason —
  * AccountingPeriodService.reopenPeriod() throws without one
  * (docs/SA_ACCOUNTING_MASTER_SPEC.md §35). Enforced there, not just here;
- * this dialog only makes it impossible to submit blank.
+ * this dialog only makes it impossible to submit blank. P3F: on the shared
+ * `FormShell` (`sm`).
  */
 export function ReopenPeriodDialog({ periodName, onConfirm, onClose }: ReopenPeriodDialogProps) {
   const [reason, setReason] = useState('');
@@ -46,15 +41,12 @@ export function ReopenPeriodDialog({ periodName, onConfirm, onClose }: ReopenPer
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Reopen {periodName}</DialogTitle>
-          <DialogDescription>
-            Reopening allows posting into this period again. The reason is recorded in the audit trail.
-          </DialogDescription>
-        </DialogHeader>
-
+    <FormShell open onClose={onClose} size="sm" mode="edit" isDirty={Boolean(reason)} pending={submitting}>
+      <FormHeader
+        title={`Reopen ${periodName}`}
+        description="Reopening allows posting into this period again. The reason is recorded in the audit trail."
+      />
+      <FormBody>
         <Field>
           <FieldLabel htmlFor="reopen-reason">Reason</FieldLabel>
           <Textarea
@@ -67,18 +59,15 @@ export function ReopenPeriodDialog({ periodName, onConfirm, onClose }: ReopenPer
           />
           {invalid && <FieldError>A reason is required to reopen a period.</FieldError>}
         </Field>
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <div className="flex justify-end gap-2 border-t border-border pt-4">
-          <Button variant="outline" type="button" onClick={onClose} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={handleConfirm} disabled={submitting}>
-            {submitting ? 'Reopening…' : 'Reopen period'}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </FormBody>
+      <FormFooter error={error ?? undefined}>
+        <Button variant="outline" type="button" onClick={onClose} disabled={submitting}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={handleConfirm} disabled={submitting}>
+          {submitting ? 'Reopening…' : 'Reopen period'}
+        </Button>
+      </FormFooter>
+    </FormShell>
   );
 }

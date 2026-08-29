@@ -1,26 +1,19 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
-import { wideFormDialogClass } from '@/components/app/form-surface';
+import { useState } from 'react';
+
+import { FormShell, FormHeader } from '@/components/app/form';
 import { CreditNoteForm, type CreditNoteFormProps } from './CreditNoteForm';
 
-export interface CreditNoteFormModalProps extends Omit<CreditNoteFormProps, 'onCancel'> {
+export interface CreditNoteFormModalProps extends Omit<CreditNoteFormProps, 'onCancel' | 'onDirtyChange'> {
   onClose: () => void;
 }
 
-/** Modal shell hosting CreditNoteForm, built on the shared v0 Dialog primitive. */
+/** `CreditNoteForm` in the shared Vertex form shell (P3D). */
 export function CreditNoteFormModal({ onClose, ...formProps }: CreditNoteFormModalProps) {
+  const [dirty, setDirty] = useState(false);
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className={wideFormDialogClass}>
-        <DialogHeader>
-          <DialogTitle>New credit note</DialogTitle>
-        </DialogHeader>
-        <CreditNoteForm {...formProps} onCancel={onClose} />
-      </DialogContent>
-    </Dialog>
+    <FormShell open onClose={onClose} size="lg" mode="create" isDirty={dirty}>
+      <FormHeader title="New credit note" />
+      <CreditNoteForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
+    </FormShell>
   );
 }

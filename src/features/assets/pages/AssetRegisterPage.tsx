@@ -5,14 +5,13 @@ import type { FixedAsset } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { formatCurrency, formatPercent } from '@/lib/app/format';
 import { useFixedAssets } from '../hooks/useFixedAssets';
 import { useDepreciation } from '../hooks/useDepreciation';
 import { useAssetDisposals } from '../hooks/useAssetDisposals';
 import { useAccounts } from '@/features/accounting/hooks/useAccounts';
-import { AssetForm } from '../components/AssetForm';
-import { PostAcquisitionForm } from '../components/PostAcquisitionForm';
+import { AssetFormModal } from '../components/AssetFormModal';
+import { PostAcquisitionFormModal } from '../components/PostAcquisitionFormModal';
 import { AssetsTable } from '../components/AssetsTable';
 import { AssetDetailSheet } from '../components/AssetDetailSheet';
 import type { CreateFixedAssetDTO, UpdateFixedAssetDTO } from '../services';
@@ -166,27 +165,22 @@ export function AssetRegisterPage() {
         }}
       />
 
-      <Dialog open={dialog?.mode === 'create' || dialog?.mode === 'edit'} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{dialog?.mode === 'edit' ? 'Edit Asset' : 'New Asset'}</DialogTitle>
-          </DialogHeader>
-          {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
-            <AssetForm asset={dialog.mode === 'edit' ? dialog.asset : undefined} onSubmit={handleFormSubmit} onCancel={() => setDialog(null)} />
-          )}
-        </DialogContent>
-      </Dialog>
+      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
+        <AssetFormModal
+          asset={dialog.mode === 'edit' ? dialog.asset : undefined}
+          onSubmit={handleFormSubmit}
+          onClose={() => setDialog(null)}
+        />
+      )}
 
-      <Dialog open={dialog?.mode === 'post-acquisition'} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Post Acquisition</DialogTitle>
-          </DialogHeader>
-          {dialog?.mode === 'post-acquisition' && (
-            <PostAcquisitionForm asset={dialog.asset} accounts={accounts} onSubmit={handlePostAcquisition} onCancel={() => setDialog(null)} />
-          )}
-        </DialogContent>
-      </Dialog>
+      {dialog?.mode === 'post-acquisition' && (
+        <PostAcquisitionFormModal
+          asset={dialog.asset}
+          accounts={accounts}
+          onSubmit={handlePostAcquisition}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </div>
   );
 }

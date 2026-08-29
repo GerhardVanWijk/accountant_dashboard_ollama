@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { FormBody, FormFooter } from '@/components/app/form';
 import type { ExchangeRate } from '@/types/foreignExchange';
 import type { CreateExchangeRateDTO } from '../services';
 
@@ -12,6 +13,7 @@ export interface ExchangeRateFormProps {
   onSubmit: (data: CreateExchangeRateDTO) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function today(): string {
@@ -32,7 +34,7 @@ function toDateInputValue(iso: string | undefined): string {
  * this is still a plain useState form (no react-hook-form), matching the
  * form's original shape.
  */
-export function ExchangeRateForm({ initialValue, onSubmit, onCancel, isLoading = false }: ExchangeRateFormProps) {
+export function ExchangeRateForm({ initialValue, onSubmit, onCancel, isLoading = false, onDirtyChange }: ExchangeRateFormProps) {
   const [fromCurrency, setFromCurrency] = useState(initialValue?.fromCurrency ?? '');
   const [toCurrency, setToCurrency] = useState(initialValue?.toCurrency ?? 'ZAR');
   const [rate, setRate] = useState(initialValue?.rate ?? 0);
@@ -65,13 +67,8 @@ export function ExchangeRateForm({ initialValue, onSubmit, onCancel, isLoading =
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
-
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="fromCurrency">From Currency</FieldLabel>
@@ -103,15 +100,16 @@ export function ExchangeRateForm({ initialValue, onSubmit, onCancel, isLoading =
           filing.
         </FieldDescription>
       </Field>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={error ?? undefined}>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isLoading}>
           {isLoading ? 'Saving…' : initialValue ? 'Save Changes' : 'Create Rate'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

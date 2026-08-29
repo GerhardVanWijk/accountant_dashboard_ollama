@@ -3,7 +3,7 @@ import { Loader2, Plus } from 'lucide-react';
 import type { PayrollRun } from '@/types';
 import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader, FormBody, FormFooter } from '@/components/app/form';
 import { useAccounts } from '@/features/accounting/hooks/useAccounts';
 import { usePayrollRuns } from '../hooks/usePayrollRuns';
 import { PayrollRunForm } from '../components/PayrollRunForm';
@@ -39,6 +39,11 @@ export function PayrollRunsPage() {
   const { runs, loading, error, refetch, createPayrollRun, updatePayslipOverride, deletePayrollRun, postPayrollRun } = usePayrollRuns();
   const { accounts, loading: accountsLoading } = useAccounts();
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [dirty, setDirty] = useState(false);
+  const closeDialog = () => {
+    setDialog(null);
+    setDirty(false);
+  };
   const [actionError, setActionError] = useState<string | null>(null);
   const canCreate = useCanAccess('payroll', 'create');
   const canDelete = useCanAccess('payroll', 'delete');
@@ -125,53 +130,41 @@ export function PayrollRunsPage() {
         <PayrollRunsTable runs={runs} onView={(run) => setDialog({ mode: 'view', run })} onDelete={canDelete ? (run) => void handleDelete(run) : undefined} />
       )}
 
-      <Dialog open={dialog?.mode === 'create'} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>New Payroll Run</DialogTitle>
-          </DialogHeader>
-          {dialog?.mode === 'create' && (
-            <PayrollRunForm defaultPeriodStart={firstOfMonthISO()} defaultPeriodEnd={endOfMonthISO()} defaultPayDate={todayISO()} onSubmit={handleCreate} onCancel={() => setDialog(null)} />
-          )}
-        </DialogContent>
-      </Dialog>
+      {dialog?.mode === 'create' && (
+        <FormShell open onClose={closeDialog} size="md" mode="create" isDirty={dirty}>
+          <FormHeader title="New payroll run" />
+          <PayrollRunForm defaultPeriodStart={firstOfMonthISO()} defaultPeriodEnd={endOfMonthISO()} defaultPayDate={todayISO()} onSubmit={handleCreate} onCancel={closeDialog} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
 
-      <Dialog open={dialog?.mode === 'view'} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>{dialog?.mode === 'view' ? `Payroll Run ${dialog.run.runNumber}` : ''}</DialogTitle>
-          </DialogHeader>
-          {dialog?.mode === 'view' && (
-            <div className="flex flex-col gap-4">
-              <PayslipLinesTable
-                run={dialog.run}
-                onOverrideChange={dialog.run.status === 'draft' ? (employeeId, overtime, bonus) => handleOverrideChange(dialog.run.id, employeeId, overtime, bonus) : undefined}
-              />
-              <div className="flex justify-end gap-2 border-t border-border pt-4">
-                <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  Close
-                </Button>
-                {dialog.run.status === 'draft' && (
-                  <Button type="button" onClick={() => setDialog({ mode: 'post', run: dialog.run })}>
-                    Post Run
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {dialog?.mode === 'view' && (
+        <FormShell open onClose={() => setDialog(null)} size="xl" mode="detail">
+          <FormHeader title={`Payroll run ${dialog.run.runNumber}`} />
+          <FormBody>
+            <PayslipLinesTable
+              run={dialog.run}
+              onOverrideChange={dialog.run.status === 'draft' ? (employeeId, overtime, bonus) => handleOverrideChange(dialog.run.id, employeeId, overtime, bonus) : undefined}
+            />
+          </FormBody>
+          <FormFooter>
+            <Button type="button" variant="outline" onClick={() => setDialog(null)}>
+              Close
+            </Button>
+            {dialog.run.status === 'draft' && (
+              <Button type="button" onClick={() => setDialog({ mode: 'post', run: dialog.run })}>
+                Post Run
+              </Button>
+            )}
+          </FormFooter>
+        </FormShell>
+      )}
 
-      <Dialog open={dialog?.mode === 'post'} onOpenChange={(open) => !open && dialog?.mode === 'post' && setDialog({ mode: 'view', run: dialog.run })}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{dialog?.mode === 'post' ? `Post Payroll Run ${dialog.run.runNumber}` : ''}</DialogTitle>
-          </DialogHeader>
-          {dialog?.mode === 'post' && (
-            <PostPayrollRunForm accounts={accounts} onSubmit={(contraAccountId) => handlePost(dialog.run.id, contraAccountId)} onCancel={() => setDialog({ mode: 'view', run: dialog.run })} />
-          )}
-        </DialogContent>
-      </Dialog>
+      {dialog?.mode === 'post' && (
+        <FormShell open onClose={() => setDialog({ mode: 'view', run: dialog.run })} size="md" mode="create" isDirty={dirty}>
+          <FormHeader title={`Post payroll run ${dialog.run.runNumber}`} />
+          <PostPayrollRunForm accounts={accounts} onSubmit={(contraAccountId) => handlePost(dialog.run.id, contraAccountId)} onCancel={() => setDialog({ mode: 'view', run: dialog.run })} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
     </div>
   );
 }

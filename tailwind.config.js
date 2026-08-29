@@ -12,8 +12,22 @@ export default {
   darkMode: ['class', '[data-theme="dark"]'],
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
+    /*
+     * Breakpoint scale. `sm: 640px` is Tailwind's own default (and Tailwind
+     * v4's default, i.e. what accounting-v0-frontend was built against). The
+     * Phase 0 scaffold defined a custom `screens` object WITHOUT `sm`, which
+     * REPLACES (not extends) the default set — so every `sm:*` utility the v0
+     * design-system port brought in (188 of them across ~109 files: summary
+     * grids `sm:grid-cols-3`, filter toolbars `sm:flex-row`, form layouts,
+     * `main`'s `sm:p-6`, …) silently compiled to nothing, leaving those
+     * surfaces permanently in their 1-column / stacked mobile layout at every
+     * width below `md` (768px). Restoring `sm` makes the ported components
+     * lay out as designed. Same silent v4→v3 breakage class as card.tsx's
+     * `@spacing()` and sidebar.tsx's `w-(--var)` — see those files. (P3A.)
+     */
     screens: {
       xs: '320px',
+      sm: '640px',
       md: '768px',
       lg: '1024px',
       xl: '1280px',

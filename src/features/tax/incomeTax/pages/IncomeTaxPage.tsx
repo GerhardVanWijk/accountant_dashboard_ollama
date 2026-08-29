@@ -4,7 +4,7 @@ import { FileQuestion, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { RecordLink } from '@/components/app/record-link';
@@ -35,6 +35,7 @@ export function IncomeTaxPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [sbcModalOpen, setSbcModalOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const sortedFinancialYears = useMemo(() => [...financialYears].sort((a, b) => b.endDate.localeCompare(a.endDate)), [financialYears]);
@@ -228,23 +229,23 @@ export function IncomeTaxPage() {
         </>
       )}
 
-      <Dialog open={sbcModalOpen} onOpenChange={setSbcModalOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>SBC Eligibility</DialogTitle>
-          </DialogHeader>
+      {sbcModalOpen && (
+        <FormShell open onClose={() => { setSbcModalOpen(false); setDirty(false); }} size="md" mode="edit" isDirty={dirty}>
+          <FormHeader title="SBC eligibility" />
           <SbcEligibilityForm
             currentValue={company?.isSbcEligible ?? false}
-            onCancel={() => setSbcModalOpen(false)}
+            onDirtyChange={setDirty}
+            onCancel={() => { setSbcModalOpen(false); setDirty(false); }}
             onSubmit={async (isEligible, reason) => {
               await runAction(async () => {
                 await setSbcEligibility(isEligible, SYSTEM_USER_ID, reason);
               }, 'SBC eligibility updated.');
               setSbcModalOpen(false);
+              setDirty(false);
             }}
           />
-        </DialogContent>
-      </Dialog>
+        </FormShell>
+      )}
     </div>
   );
 }

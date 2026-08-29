@@ -4,12 +4,14 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { formatCurrency } from '@/lib/app/format';
+import { FormBody, FormFooter } from '@/components/app/form';
 
 export interface PostAcquisitionFormProps {
   asset: FixedAsset;
   accounts: Account[];
   onSubmit: (contraAccountId: string) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -19,7 +21,7 @@ export interface PostAcquisitionFormProps {
  * DR Fixed Asset / CR that account for the full cost. Re-skinned onto
  * v0's Field (M8); posting logic unchanged.
  */
-export function PostAcquisitionForm({ asset, accounts, onSubmit, onCancel }: PostAcquisitionFormProps) {
+export function PostAcquisitionForm({ asset, accounts, onSubmit, onCancel, onDirtyChange }: PostAcquisitionFormProps) {
   const contraCandidates = accounts.filter(
     (a) => a.isActive && a.id !== asset.glAssetAccountId && a.id !== asset.glAccumulatedDepreciationAccountId,
   );
@@ -37,7 +39,8 @@ export function PostAcquisitionForm({ asset, accounts, onSubmit, onCancel }: Pos
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <p className="text-sm text-muted-foreground">
         Capitalizing <span className="font-medium text-foreground">{asset.assetNumber} - {asset.name}</span> for{' '}
         <span className="font-medium tabular-nums">{formatCurrency(asset.cost)}</span>.
@@ -56,14 +59,15 @@ export function PostAcquisitionForm({ asset, accounts, onSubmit, onCancel }: Pos
           immediately.
         </FieldDescription>
       </Field>
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      </FormBody>
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" disabled={submitting || !contraAccountId} onClick={() => void submit()}>
           Post Acquisition
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

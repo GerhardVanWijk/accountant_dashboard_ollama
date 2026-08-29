@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Account } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
 
@@ -8,6 +9,7 @@ export interface PostPayrollRunFormProps {
   accounts: Account[];
   onSubmit: (contraAccountId: string) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /** Cash and Bank's Chart of Accounts code — matched by `code`, not a fixed id, since account ids are real Supabase-generated uuids, not the old Mock-era `'acc_1000'` literal. */
@@ -19,7 +21,7 @@ const DEFAULT_CONTRA_ACCOUNT_CODE = '1000';
  * PostAcquisitionForm. Re-skinned onto v0's Field (M13); posting logic
  * unchanged.
  */
-export function PostPayrollRunForm({ accounts, onSubmit, onCancel }: PostPayrollRunFormProps) {
+export function PostPayrollRunForm({ accounts, onSubmit, onCancel, onDirtyChange }: PostPayrollRunFormProps) {
   const [contraAccountId, setContraAccountId] = useState(accounts.find((a) => a.code === DEFAULT_CONTRA_ACCOUNT_CODE)?.id ?? (accounts[0]?.id ?? ''));
   const [submitting, setSubmitting] = useState(false);
 
@@ -33,7 +35,8 @@ export function PostPayrollRunForm({ accounts, onSubmit, onCancel }: PostPayroll
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <Field>
         <FieldLabel htmlFor="contraAccountId">Net Pay Account</FieldLabel>
         <NativeSelect id="contraAccountId" value={contraAccountId} onChange={(e) => setContraAccountId(e.target.value)}>
@@ -52,14 +55,16 @@ export function PostPayrollRunForm({ accounts, onSubmit, onCancel }: PostPayroll
         This posts one combined, balanced journal entry for every employee in this run and cannot be undone — review
         the payslip lines before posting.
       </p>
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      </FormBody>
+
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" disabled={submitting || !contraAccountId} onClick={() => void submit()}>
           Post Payroll Run
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
 
 export interface OpenInvoiceOption {
@@ -19,6 +20,7 @@ export interface AllocationFormProps {
   maxAmount: number;
   onSubmit: (invoiceId: string, amount: number) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -29,7 +31,7 @@ export interface AllocationFormProps {
  * expose an identical `allocateToInvoice(id, invoiceId, amount)` shape, so
  * one form covers both call sites.
  */
-export function AllocationForm({ openInvoices, maxAmount, onSubmit, onCancel }: AllocationFormProps) {
+export function AllocationForm({ openInvoices, maxAmount, onSubmit, onCancel, onDirtyChange }: AllocationFormProps) {
   const [invoiceId, setInvoiceId] = useState(openInvoices[0]?.invoice.id ?? '');
   const [amount, setAmount] = useState<number>(Math.min(maxAmount, openInvoices[0]?.outstanding ?? maxAmount));
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,25 +60,22 @@ export function AllocationForm({ openInvoices, maxAmount, onSubmit, onCancel }: 
 
   if (openInvoices.length === 0) {
     return (
-      <div className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">This customer has no open invoices to allocate against.</p>
-        <div className="flex justify-end">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <FormBody>
+          <p className="text-sm text-muted-foreground">This customer has no open invoices to allocate against.</p>
+        </FormBody>
+        <FormFooter>
           <Button variant="outline" type="button" onClick={onCancel}>
             Close
           </Button>
-        </div>
+        </FormFooter>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {formError && (
-        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {formError}
-        </p>
-      )}
-
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <div className="text-sm text-muted-foreground">
         Remaining to allocate: <Amount value={maxAmount} className="font-semibold text-foreground" />
       </div>
@@ -111,15 +110,16 @@ export function AllocationForm({ openInvoices, maxAmount, onSubmit, onCancel }: 
           onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
         />
       </Field>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={formError ?? undefined}>
         <Button variant="outline" type="button" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
           {isSubmitting ? 'Allocating…' : 'Allocate'}
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

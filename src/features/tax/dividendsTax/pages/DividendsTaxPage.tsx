@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react';
 import type { DividendDeclaration } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import { useDividendDeclarations } from '../hooks/useDividendDeclarations';
 import { DividendDeclarationForm } from '../components/DividendDeclarationForm';
 import { DividendDeclarationsTable } from '../components/DividendDeclarationsTable';
@@ -19,6 +19,8 @@ import type { CreateDividendDeclarationInput } from '../services';
 export function DividendsTaxPage() {
   const { declarations, loading, error, refetch, createDeclaration, declare, pay, remitToSars, deleteDraft } = useDividendDeclarations();
   const [showCreate, setShowCreate] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const closeDialog = () => { setShowCreate(false); setDirty(false); };
   const [actionError, setActionError] = useState<string | null>(null);
 
   const handleCreate = async (data: CreateDividendDeclarationInput) => {
@@ -111,14 +113,12 @@ export function DividendsTaxPage() {
         <DividendDeclarationsTable declarations={declarations} onDeclare={handleDeclare} onPay={handlePay} onRemit={handleRemit} onDelete={handleDelete} />
       )}
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>New Dividend Declaration</DialogTitle>
-          </DialogHeader>
-          <DividendDeclarationForm onSubmit={handleCreate} onCancel={() => setShowCreate(false)} />
-        </DialogContent>
-      </Dialog>
+      {showCreate && (
+        <FormShell open onClose={closeDialog} size="md" mode="create" isDirty={dirty}>
+          <FormHeader title="New dividend declaration" />
+          <DividendDeclarationForm onSubmit={handleCreate} onCancel={closeDialog} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
     </div>
   );
 }

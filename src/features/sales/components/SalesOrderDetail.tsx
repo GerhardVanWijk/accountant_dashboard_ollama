@@ -1,18 +1,9 @@
+import { useState } from 'react';
 import type { SalesOrder } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/shadcn/alert-dialog';
+import { ConfirmDialog } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 
 interface SalesOrderDetailProps {
@@ -50,6 +41,7 @@ export function SalesOrderDetail({
   onConvertToInvoice,
   isBusy = false,
 }: SalesOrderDetailProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const canConfirm = salesOrder.status === 'pending';
   const canCancel = salesOrder.status !== 'fulfilled' && salesOrder.status !== 'cancelled';
   const canConvert = salesOrder.status !== 'cancelled' && salesOrder.status !== 'fulfilled';
@@ -72,29 +64,23 @@ export function SalesOrderDetail({
               </Button>
             )}
             {onDelete && salesOrder.status === 'pending' && (
-              <AlertDialog>
-                <AlertDialogTrigger render={<Button variant="destructive" size="sm" disabled={isBusy} />}>
+              <>
+                <Button variant="destructive" size="sm" disabled={isBusy} onClick={() => setConfirmDelete(true)}>
                   Delete draft
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {salesOrder.orderNumber}?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This permanently removes the pending sales order. This cannot be undone. Once confirmed or
-                      fulfilled, it is a real business commitment and must be cancelled instead of deleted.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      className="bg-destructive/10 text-destructive hover:bg-destructive/20"
-                      onClick={onDelete}
-                    >
-                      Delete draft
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                </Button>
+                <ConfirmDialog
+                  open={confirmDelete}
+                  onOpenChange={setConfirmDelete}
+                  title={`Delete ${salesOrder.orderNumber}?`}
+                  description="This permanently removes the pending sales order. This cannot be undone. Once confirmed or fulfilled, it is a real business commitment and must be cancelled instead of deleted."
+                  confirmLabel="Delete draft"
+                  destructive
+                  onConfirm={() => {
+                    setConfirmDelete(false);
+                    onDelete();
+                  }}
+                />
+              </>
             )}
             {onCancelOrder && canCancel && (
               <Button variant="destructive" size="sm" disabled={isBusy} onClick={() => onCancelOrder(salesOrder.id)}>

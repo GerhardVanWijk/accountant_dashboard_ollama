@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateTaxRateDTO } from '../services';
 import { treatmentLabels, VAT_TREATMENTS } from '../utils/treatmentLabels';
 
@@ -11,6 +12,7 @@ export interface TaxRateFormProps {
   onSubmit: (data: CreateTaxRateDTO) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function today(): string {
@@ -24,7 +26,7 @@ function today(): string {
  * validation logic is byte-for-byte unchanged (same required-field checks,
  * same TaxRateService.createTaxRate() call site via the page).
  */
-export function TaxRateForm({ onSubmit, onCancel, isLoading = false }: TaxRateFormProps) {
+export function TaxRateForm({ onSubmit, onCancel, isLoading = false, onDirtyChange }: TaxRateFormProps) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [treatment, setTreatment] = useState<VatTreatment>('standard_rated');
@@ -56,13 +58,8 @@ export function TaxRateForm({ onSubmit, onCancel, isLoading = false }: TaxRateFo
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
-
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="rate-code">Code</FieldLabel>
@@ -112,15 +109,16 @@ export function TaxRateForm({ onSubmit, onCancel, isLoading = false }: TaxRateFo
           so here rather than presenting it as confirmed.
         </FieldDescription>
       </Field>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={error ?? undefined}>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isLoading}>
           {isLoading ? 'Saving…' : 'Create Tax Code'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

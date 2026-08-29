@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Supplier } from '@/types';
@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { FormFooter, FormSection, FormTabs, type FormTab } from '@/components/app/form';
 import { SUPPLIER_CATEGORIES } from '../types/supplier.types';
 import { supplierFormSchema, type SupplierFormSchema } from '../utils/supplierFormSchema';
 
@@ -71,6 +71,8 @@ export interface SupplierFormProps {
   onSubmit: (values: SupplierFormSchema) => Promise<void> | void;
   onCancel: () => void;
   submitLabel?: string;
+  submitError?: string | null;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function tabHasError(fields: (keyof SupplierFormSchema)[], errors: FieldErrors<SupplierFormSchema>): boolean {
@@ -78,125 +80,111 @@ function tabHasError(fields: (keyof SupplierFormSchema)[], errors: FieldErrors<S
 }
 
 /**
- * Multi-tab supplier onboarding/edit form (General Info / Primary
- * Contacts / Addresses / Financial & Tax), backed by react-hook-form +
- * zod — the exact same supplierFormSchema.ts every other SupplierForm
- * implementation used, unchanged. Only the JSX is re-skinned onto v0's
- * Field/Input/Select/Tabs primitives.
+ * Multi-tab supplier onboarding/edit form (General Info / Primary Contacts /
+ * Addresses / Financial & Tax), backed by react-hook-form + zod — the exact
+ * same supplierFormSchema.ts, validation and mutation wiring as before,
+ * unchanged. P3D: the tab region is the shared `FormTabs` (stable size,
+ * brand active tab, per-tab error dot, keepMounted) inside a bounded
+ * `h-[28rem]` frame — Supplier create/edit stays a full-page workflow
+ * (SuppliersRoot), not a modal, so the frame is bounded here rather than by
+ * a `FormShell`.
  */
-export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 'Save Supplier' }: SupplierFormProps) {
+export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 'Save Supplier', submitError, onDirtyChange }: SupplierFormProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('general');
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<SupplierFormSchema>({
     resolver: zodResolver(supplierFormSchema),
     defaultValues: toDefaultValues(initialValues),
   });
 
-  return (
-    <form
-      onSubmit={handleSubmit(async (values) => {
-        await onSubmit(values);
-      })}
-      className="flex flex-col gap-4"
-    >
-      {/*
-        Stable tab region (docs/CURRENT_TASKS.md #3). This form renders on a
-        page (SupplierFormPage), not in a fixed-height dialog, so a min-height
-        floor + internal scroll keeps the shortest tab (Contacts) from
-        collapsing the page and jumping the layout on tab switches.
-      */}
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as TabKey)}
-        className="flex h-[28rem] flex-col"
-      >
-        <TabsList variant="line" className="w-full justify-start border-b border-border">
-          {TABS.map((tab) => (
-            <TabsTrigger key={tab.key} value={tab.key} className="gap-1.5">
-              {tab.label}
-              {tabHasError(tab.fields, errors) && (
-                <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" />
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
-        <TabsContent value="general" className="app-scroll min-h-0 flex-1 overflow-y-auto pt-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="supplier-number">Supplier number</FieldLabel>
-              <Input id="supplier-number" {...register('supplierNumber')} />
-              <FieldError errors={[errors.supplierNumber]} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="supplier-name">Supplier name</FieldLabel>
-              <Input id="supplier-name" {...register('name')} />
-              <FieldError errors={[errors.name]} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="supplier-category">Category</FieldLabel>
-              <NativeSelect
-                id="supplier-category"
-                {...register('category', { setValueAs: (v) => (v === '' ? undefined : v) })}
-              >
-                <option value="">Unassigned</option>
-                {SUPPLIER_CATEGORIES.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </NativeSelect>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="supplier-currency">Currency</FieldLabel>
-              <Input id="supplier-currency" {...register('currency')} />
-              <FieldError errors={[errors.currency]} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="supplier-status">Status</FieldLabel>
-              <NativeSelect id="supplier-status" {...register('status')}>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </NativeSelect>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="supplier-balance">Opening balance</FieldLabel>
-              <Input id="supplier-balance" type="number" step="0.01" {...register('balance', { valueAsNumber: true })} />
-              <FieldError errors={[errors.balance]} />
-            </Field>
-            <Field orientation="horizontal">
-              <input type="checkbox" id="supplier-on-hold" className="size-4 rounded border-input" {...register('onHold')} />
-              <FieldLabel htmlFor="supplier-on-hold" className="font-normal">
-                Place this supplier on hold
-              </FieldLabel>
-            </Field>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="contacts" className="app-scroll min-h-0 flex-1 overflow-y-auto pt-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="supplier-contact-person">Contact person</FieldLabel>
-              <Input id="supplier-contact-person" {...register('contactPerson')} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="supplier-email">Email</FieldLabel>
-              <Input id="supplier-email" type="email" {...register('email')} />
-              <FieldError errors={[errors.email]} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="supplier-phone">Phone</FieldLabel>
-              <Input id="supplier-phone" {...register('phone')} />
-            </Field>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="addresses" className="app-scroll flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pt-4">
-          <fieldset className="flex flex-col gap-4">
-            <legend className="text-sm font-semibold">Physical address</legend>
+  const tabs: FormTab[] = [
+    {
+      value: 'general',
+      label: TABS[0].label,
+      hasError: tabHasError(TABS[0].fields, errors),
+      content: (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="supplier-number">Supplier number</FieldLabel>
+            <Input id="supplier-number" {...register('supplierNumber')} />
+            <FieldError errors={[errors.supplierNumber]} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="supplier-name">Supplier name</FieldLabel>
+            <Input id="supplier-name" {...register('name')} />
+            <FieldError errors={[errors.name]} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="supplier-category">Category</FieldLabel>
+            <NativeSelect id="supplier-category" {...register('category', { setValueAs: (v) => (v === '' ? undefined : v) })}>
+              <option value="">Unassigned</option>
+              {SUPPLIER_CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="supplier-currency">Currency</FieldLabel>
+            <Input id="supplier-currency" {...register('currency')} />
+            <FieldError errors={[errors.currency]} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="supplier-status">Status</FieldLabel>
+            <NativeSelect id="supplier-status" {...register('status')}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="supplier-balance">Opening balance</FieldLabel>
+            <Input id="supplier-balance" type="number" step="0.01" {...register('balance', { valueAsNumber: true })} />
+            <FieldError errors={[errors.balance]} />
+          </Field>
+          <Field orientation="horizontal">
+            <input type="checkbox" id="supplier-on-hold" className="size-4 rounded border-input" {...register('onHold')} />
+            <FieldLabel htmlFor="supplier-on-hold" className="font-normal">
+              Place this supplier on hold
+            </FieldLabel>
+          </Field>
+        </div>
+      ),
+    },
+    {
+      value: 'contacts',
+      label: TABS[1].label,
+      hasError: tabHasError(TABS[1].fields, errors),
+      content: (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="supplier-contact-person">Contact person</FieldLabel>
+            <Input id="supplier-contact-person" {...register('contactPerson')} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="supplier-email">Email</FieldLabel>
+            <Input id="supplier-email" type="email" {...register('email')} />
+            <FieldError errors={[errors.email]} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="supplier-phone">Phone</FieldLabel>
+            <Input id="supplier-phone" {...register('phone')} />
+          </Field>
+        </div>
+      ),
+    },
+    {
+      value: 'addresses',
+      label: TABS[2].label,
+      hasError: tabHasError(TABS[2].fields, errors),
+      content: (
+        <>
+          <FormSection title="Physical address">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="supplier-address-line1">Address line 1</FieldLabel>
@@ -223,10 +211,9 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
                 <Input id="supplier-address-country" {...register('address.country')} />
               </Field>
             </div>
-          </fieldset>
+          </FormSection>
 
-          <fieldset className="flex flex-col gap-4">
-            <legend className="text-sm font-semibold">Remittance address (if different)</legend>
+          <FormSection title="Remittance address (if different)">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="supplier-remit-line1">Address line 1</FieldLabel>
@@ -253,10 +240,16 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
                 <Input id="supplier-remit-country" {...register('remittanceAddress.country')} />
               </Field>
             </div>
-          </fieldset>
-        </TabsContent>
-
-        <TabsContent value="financial" className="app-scroll flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pt-4">
+          </FormSection>
+        </>
+      ),
+    },
+    {
+      value: 'financial',
+      label: TABS[3].label,
+      hasError: tabHasError(TABS[3].fields, errors),
+      content: (
+        <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="supplier-tax-number">Tax/VAT registration number</FieldLabel>
@@ -274,10 +267,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
             </Field>
             <Field>
               <FieldLabel htmlFor="supplier-payment-terms">Payment terms</FieldLabel>
-              <NativeSelect
-                id="supplier-payment-terms"
-                {...register('paymentTerms', { setValueAs: (v) => (v === '' ? undefined : v) })}
-              >
+              <NativeSelect id="supplier-payment-terms" {...register('paymentTerms', { setValueAs: (v) => (v === '' ? undefined : v) })}>
                 <option value="">Unassigned</option>
                 <option value="Net14">Net 14</option>
                 <option value="Net30">Net 30</option>
@@ -286,10 +276,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
             </Field>
             <Field>
               <FieldLabel htmlFor="supplier-payment-method">Payment method</FieldLabel>
-              <NativeSelect
-                id="supplier-payment-method"
-                {...register('paymentMethod', { setValueAs: (v) => (v === '' ? undefined : v) })}
-              >
+              <NativeSelect id="supplier-payment-method" {...register('paymentMethod', { setValueAs: (v) => (v === '' ? undefined : v) })}>
                 <option value="">Unassigned</option>
                 <option value="EFT">EFT</option>
                 <option value="Direct Debit">Direct Debit</option>
@@ -308,8 +295,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
             </Field>
           </div>
 
-          <fieldset className="flex flex-col gap-4">
-            <legend className="text-sm font-semibold">Banking details</legend>
+          <FormSection title="Banking details">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Field>
                 <FieldLabel htmlFor="supplier-bank-name">Bank name</FieldLabel>
@@ -324,23 +310,36 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
                 <Input id="supplier-bank-account" {...register('bankDetails.accountNumber')} />
               </Field>
             </div>
-          </fieldset>
+          </FormSection>
 
           <Field>
             <FieldLabel htmlFor="supplier-notes">Notes</FieldLabel>
             <Textarea id="supplier-notes" rows={3} {...register('notes')} />
           </Field>
-        </TabsContent>
-      </Tabs>
+        </>
+      ),
+    },
+  ];
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+  return (
+    <form
+      onSubmit={handleSubmit(async (values) => {
+        await onSubmit(values);
+      })}
+      className="flex flex-col"
+    >
+      <div className="flex h-[28rem] flex-col">
+        <FormTabs tabs={tabs} value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)} />
+      </div>
+
+      <FormFooter error={submitError ?? undefined}>
         <Button variant="outline" type="button" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Saving…' : submitLabel}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

@@ -6,6 +6,7 @@ import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { cn } from '@/lib/utils';
 import type { JournalValidationResult, NewJournalEntryInput, NewJournalLineInput } from '../services';
 
@@ -35,6 +36,7 @@ export interface JournalEntryFormProps {
   validateLines: (lines: NewJournalLineInput[]) => Promise<JournalValidationResult>;
   onSubmit: (input: NewJournalEntryInput) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -51,7 +53,7 @@ export interface JournalEntryFormProps {
  * draft/awaiting-review workflow the real engine doesn't have, see the M3
  * report.
  */
-export function JournalEntryForm({ accounts, validateLines, onSubmit, onCancel }: JournalEntryFormProps) {
+export function JournalEntryForm({ accounts, validateLines, onSubmit, onCancel, onDirtyChange }: JournalEntryFormProps) {
   const activeAccounts = accounts.filter((a) => a.isActive);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [memo, setMemo] = useState('');
@@ -116,13 +118,8 @@ export function JournalEntryForm({ accounts, validateLines, onSubmit, onCancel }
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {submitError && (
-        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {submitError}
-        </p>
-      )}
-
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Field>
           <FieldLabel htmlFor="je-date">Date</FieldLabel>
@@ -250,15 +247,16 @@ export function JournalEntryForm({ accounts, validateLines, onSubmit, onCancel }
           </ul>
         )}
       </div>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={submitError ?? undefined}>
         <Button variant="outline" type="button" onClick={onCancel} disabled={submitting}>
           Cancel
         </Button>
         <Button type="button" onClick={handleSubmit} disabled={!canSubmit}>
           {submitting ? 'Posting…' : 'Post journal entry'}
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

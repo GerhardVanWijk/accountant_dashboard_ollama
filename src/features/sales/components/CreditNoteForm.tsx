@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { Amount } from '@/components/app/figure';
+import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateCreditNoteDTO } from '../services';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
@@ -26,6 +27,7 @@ export interface CreditNoteFormProps {
   defaultCreditNoteNumber: string;
   onSubmit: (data: CreateCreditNoteDTO) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function today(): string {
@@ -38,7 +40,7 @@ function today(): string {
  * stays in 'draft' until the Detail view's "Issue credit note" action
  * posts it via creditNoteService.issueCreditNote().
  */
-export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, onSubmit, onCancel }: CreditNoteFormProps) {
+export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, onSubmit, onCancel, onDirtyChange }: CreditNoteFormProps) {
   const { taxRates } = useTaxRates();
   const { products } = useProducts();
   const { warehouses } = useWarehouses();
@@ -94,13 +96,8 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {formError && (
-        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {formError}
-        </p>
-      )}
-
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="cn-number">Credit note number</FieldLabel>
@@ -171,15 +168,16 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
         <FieldLabel htmlFor="cn-notes">Notes (optional)</FieldLabel>
         <Textarea id="cn-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={formError ?? undefined}>
         <Button variant="outline" type="button" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
           {isSubmitting ? 'Saving…' : 'Create credit note'}
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

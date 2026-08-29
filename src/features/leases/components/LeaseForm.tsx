@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { LeaseContract } from '@/types/lease';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Amount } from '@/components/app/figure';
@@ -31,6 +33,7 @@ export interface LeaseFormProps {
   lease?: LeaseContract;
   onSubmit: (data: CreateLeaseDTO | UpdateLeaseDTO) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function toDefaultValues(lease?: LeaseContract): LeaseFormValues {
@@ -55,16 +58,18 @@ function toDefaultValues(lease?: LeaseContract): LeaseFormValues {
  * the way AssetForm locks fields post-capitalization. Re-skinned onto v0's
  * Field/Input (M13); validation and preview calculation unchanged.
  */
-export function LeaseForm({ lease, onSubmit, onCancel }: LeaseFormProps) {
+export function LeaseForm({ lease, onSubmit, onCancel, onDirtyChange }: LeaseFormProps) {
   const {
     register,
     handleSubmit,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<LeaseFormValues>({
     resolver: zodResolver(leaseSchema),
     defaultValues: toDefaultValues(lease),
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const leaseTermMonths = watch('leaseTermMonths');
   const monthlyPayment = watch('monthlyPayment');
@@ -88,7 +93,8 @@ export function LeaseForm({ lease, onSubmit, onCancel }: LeaseFormProps) {
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+      <FormBody>
       <Field>
         <FieldLabel htmlFor="lessorName">Lessor Name</FieldLabel>
         <Input id="lessorName" {...register('lessorName')} />
@@ -140,14 +146,16 @@ export function LeaseForm({ lease, onSubmit, onCancel }: LeaseFormProps) {
         </p>
       </div>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      </FormBody>
+
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {lease ? 'Save Changes' : 'Add Lease'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

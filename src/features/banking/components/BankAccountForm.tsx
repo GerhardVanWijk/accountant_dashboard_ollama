@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Account, BankAccount } from '@/types';
@@ -5,6 +6,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { BANK_ACCOUNT_TYPE_LABELS, SA_BANKS } from '../constants';
 import { bankAccountFormSchema, toDefaultValues, type BankAccountFormSchema } from '../utils/bankAccountFormSchema';
 
@@ -17,6 +19,8 @@ export interface BankAccountFormProps {
   submitting?: boolean;
   submitError?: string | null;
   submitLabel?: string;
+  /** Reports edit state up to the hosting `FormShell` for the unsaved-changes guard. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -34,16 +38,19 @@ export function BankAccountForm({
   submitting,
   submitError,
   submitLabel = 'Save bank account',
+  onDirtyChange,
 }: BankAccountFormProps) {
   const {
     register,
     handleSubmit,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<BankAccountFormSchema>({
     resolver: zodResolver(bankAccountFormSchema),
     defaultValues: toDefaultValues(initialValues),
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const bankName = watch('bankName');
   const accountType = watch('accountType');
@@ -56,8 +63,9 @@ export function BankAccountForm({
           bankName: values.bankName === 'Other' ? values.bankNameOther?.trim() || 'Other' : values.bankName,
         });
       })}
-      className="flex flex-col gap-6"
+      className="flex min-h-0 flex-1 flex-col"
     >
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="bank-account-name">Account name</FieldLabel>
@@ -142,17 +150,16 @@ export function BankAccountForm({
           <FieldError errors={[errors.glAccountId]} />
         </Field>
       </div>
+      </FormBody>
 
-      {submitError && <p className="text-sm text-destructive">{submitError}</p>}
-
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
-        <Button variant="outline" type="button" onClick={onCancel}>
+      <FormFooter error={submitError ?? undefined}>
+        <Button variant="outline" type="button" onClick={onCancel} disabled={isSubmitting || submitting}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting || submitting}>
           {isSubmitting || submitting ? 'Saving…' : submitLabel}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

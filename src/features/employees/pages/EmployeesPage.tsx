@@ -4,7 +4,7 @@ import { Loader2, Plus } from 'lucide-react';
 import type { Employee } from '@/types';
 import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { FormShell, FormHeader } from '@/components/app/form';
 import { useEmployees } from '../hooks/useEmployees';
 import { EmployeeForm } from '../components/EmployeeForm';
 import { EmployeesTable } from '../components/EmployeesTable';
@@ -24,6 +24,8 @@ type DialogState = { mode: 'create' } | { mode: 'edit'; employee: Employee } | n
 export function EmployeesPage() {
   const { employees, loading, error, refetch, createEmployee, updateEmployee, deleteEmployee } = useEmployees();
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [dirty, setDirty] = useState(false);
+  const closeDialog = () => { setDialog(null); setDirty(false); };
   const [actionError, setActionError] = useState<string | null>(null);
   const canCreate = useCanAccess('payroll', 'create');
   const canUpdate = useCanAccess('payroll', 'update');
@@ -125,14 +127,12 @@ export function EmployeesPage() {
         }}
       />
 
-      <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{dialog?.mode === 'edit' ? 'Edit Employee' : 'New Employee'}</DialogTitle>
-          </DialogHeader>
-          {dialog && <EmployeeForm employee={dialog.mode === 'edit' ? dialog.employee : undefined} onSubmit={handleFormSubmit} onCancel={() => setDialog(null)} />}
-        </DialogContent>
-      </Dialog>
+      {dialog && (
+        <FormShell open onClose={closeDialog} size="md" mode={dialog.mode} isDirty={dirty}>
+          <FormHeader title={dialog.mode === 'edit' ? 'Edit employee' : 'New employee'} />
+          <EmployeeForm employee={dialog.mode === 'edit' ? dialog.employee : undefined} onSubmit={handleFormSubmit} onCancel={closeDialog} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
     </div>
   );
 }

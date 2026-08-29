@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
 import { FigureBlock } from '@/components/app/figure';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import type { CreatePaymentDTO } from '../services';
 
@@ -18,6 +19,7 @@ export interface PaymentFormProps {
   defaultPaymentNumber: string;
   onSubmit: (data: CreatePaymentDTO) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
   /**
    * "Record Payment" from BillDetail opens THIS form rather than a
    * bespoke one-off — it's the real, GL-posting payment flow, just
@@ -41,7 +43,7 @@ function today(): string {
  * against existing Bills, it doesn't price new line items. Re-skinned
  * onto v0's Field/Input (M8); allocation logic unchanged.
  */
-export function PaymentForm({ suppliers, outstandingBills, defaultPaymentNumber, onSubmit, onCancel, presetBillId }: PaymentFormProps) {
+export function PaymentForm({ suppliers, outstandingBills, defaultPaymentNumber, onSubmit, onCancel, onDirtyChange, presetBillId }: PaymentFormProps) {
   const presetBill = presetBillId ? outstandingBills.find((b) => b.id === presetBillId) : undefined;
   const presetOutstanding = presetBill ? Math.max(0, presetBill.total - presetBill.amountPaid) : 0;
 
@@ -118,13 +120,8 @@ export function PaymentForm({ suppliers, outstandingBills, defaultPaymentNumber,
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {formError && (
-        <p role="alert" className="text-sm text-destructive">
-          {formError}
-        </p>
-      )}
-
+    <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="payment-number">Payment Number</FieldLabel>
@@ -206,15 +203,16 @@ export function PaymentForm({ suppliers, outstandingBills, defaultPaymentNumber,
         <FieldLabel htmlFor="payment-notes">Notes (optional)</FieldLabel>
         <Textarea id="payment-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter error={formError ?? undefined}>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
           {isSubmitting ? 'Recording…' : 'Record Payment'}
         </Button>
-      </div>
+      </FormFooter>
     </div>
   );
 }

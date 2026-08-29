@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { RelatedParty, RelatedPartyTransaction } from '@/types/relatedParty';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -29,6 +31,7 @@ export interface RelatedPartyTransactionFormProps {
   relatedParties: RelatedParty[];
   onSubmit: (data: CreateRelatedPartyTransactionDTO | UpdateRelatedPartyTransactionDTO) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function toDefaultValues(transaction?: RelatedPartyTransaction, relatedParties: RelatedParty[] = []): RelatedPartyTransactionFormValues {
@@ -48,15 +51,17 @@ function toDefaultValues(transaction?: RelatedPartyTransaction, relatedParties: 
  * free text (no fixed enum). Re-skinned onto v0's Field/Input/Textarea
  * (M13); validation and submit wiring unchanged.
  */
-export function RelatedPartyTransactionForm({ transaction, relatedParties, onSubmit, onCancel }: RelatedPartyTransactionFormProps) {
+export function RelatedPartyTransactionForm({ transaction, relatedParties, onSubmit, onCancel, onDirtyChange }: RelatedPartyTransactionFormProps) {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<RelatedPartyTransactionFormValues>({
     resolver: zodResolver(transactionSchema),
     defaultValues: toDefaultValues(transaction, relatedParties),
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const submit = handleSubmit(async (data) => {
     await onSubmit({
@@ -70,7 +75,8 @@ export function RelatedPartyTransactionForm({ transaction, relatedParties, onSub
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+      <FormBody>
       <Field>
         <FieldLabel htmlFor="relatedPartyId">Related Party</FieldLabel>
         <NativeSelect id="relatedPartyId" {...register('relatedPartyId')}>
@@ -113,14 +119,16 @@ export function RelatedPartyTransactionForm({ transaction, relatedParties, onSub
         <Input id="sourceReference" placeholder="e.g. an Invoice or Bill number, for cross-checking only" {...register('sourceReference')} />
       </Field>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      </FormBody>
+
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting || relatedParties.length === 0}>
           {transaction ? 'Save Changes' : 'Add Transaction'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

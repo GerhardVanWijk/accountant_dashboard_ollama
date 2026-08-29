@@ -7,8 +7,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/shadcn/avatar';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/shadcn/alert-dialog';
+import { FormShell, FormHeader, FormBody, FormFooter } from '@/components/app/form';
+import { ConfirmDialog } from '@/components/app/form';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
@@ -74,27 +74,23 @@ function AddExistingUserDialog({ companyId, actorId, canCreate, onAdded }: { com
 
   if (!canCreate) return null;
 
+  const close = () => {
+    setOpen(false);
+    setEmail('');
+    setFound(undefined);
+    setError(null);
+  };
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) {
-          setEmail('');
-          setFound(undefined);
-          setError(null);
-        }
-      }}
-    >
+    <>
       <Button size="sm" onClick={() => setOpen(true)}>
         <UserPlus data-icon="inline-start" />
         Add user
       </Button>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add an existing user</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-4">
+      {open && (
+      <FormShell open onClose={close} size="sm" mode="create" isDirty={Boolean(email)}>
+        <FormHeader title="Add an existing user" />
+        <FormBody>
           <p className="text-sm text-muted-foreground">
             This app has no email-invite delivery — a colleague must sign up themselves first (at /signup), then you add them here by their exact email.
           </p>
@@ -132,9 +128,15 @@ function AddExistingUserDialog({ companyId, actorId, canCreate, onAdded }: { com
               {error}
             </p>
           )}
-        </div>
-      </DialogContent>
-    </Dialog>
+        </FormBody>
+        <FormFooter>
+          <Button type="button" variant="outline" onClick={close}>
+            Close
+          </Button>
+        </FormFooter>
+      </FormShell>
+      )}
+    </>
   );
 }
 
@@ -163,38 +165,38 @@ function AssignRoleDialog({ companyId, actorId, userId, roles, alreadyAssignedRo
   if (assignable.length === 0) return null;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <>
       <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
         <Plus data-icon="inline-start" />
         Assign role
       </Button>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Assign a role</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <Field>
-            <FieldLabel htmlFor="assign-role-select">Role</FieldLabel>
-            <NativeSelect id="assign-role-select" value={roleId} onChange={(e) => setRoleId(e.target.value)}>
-              <option value="">Select a role…</option>
-              {assignable.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </Field>
-          <div className="flex justify-end gap-2">
+      {open && (
+        <FormShell open onClose={() => setOpen(false)} size="sm" mode="create" isDirty={Boolean(roleId)}>
+          <FormHeader title="Assign a role" />
+          <FormBody>
+            <Field>
+              <FieldLabel htmlFor="assign-role-select">Role</FieldLabel>
+              <NativeSelect id="assign-role-select" value={roleId} onChange={(e) => setRoleId(e.target.value)}>
+                <option value="">Select a role…</option>
+                {assignable.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Field>
+          </FormBody>
+          <FormFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <Button type="button" disabled={busy || !roleId} onClick={() => void assign()}>
               Assign
             </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+          </FormFooter>
+        </FormShell>
+      )}
+    </>
   );
 }
 
@@ -389,31 +391,31 @@ function RolesPanel({ companyId, actorId, roles, assignments, canCreate, canUpda
       description="These drive which buttons/pages a user sees (usePermission()) — they do not change what the underlying database allows, which is still controlled by each user's access level above."
       actions={
         canCreate ? (
-          <Dialog open={newRoleDialogOpen} onOpenChange={setNewRoleDialogOpen}>
+          <>
             <Button size="sm" variant="outline" onClick={() => setNewRoleDialogOpen(true)}>
               <Plus data-icon="inline-start" />
               Create custom role
             </Button>
-            <DialogContent className="max-w-sm">
-              <DialogHeader>
-                <DialogTitle>Create a custom role</DialogTitle>
-              </DialogHeader>
-              <div className="flex flex-col gap-4">
-                <Field>
-                  <FieldLabel htmlFor="new-role-name">Role name</FieldLabel>
-                  <Input id="new-role-name" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} placeholder="e.g. Bookkeeper" />
-                </Field>
-                <div className="flex justify-end gap-2">
+            {newRoleDialogOpen && (
+              <FormShell open onClose={() => setNewRoleDialogOpen(false)} size="sm" mode="create" isDirty={Boolean(newRoleName)}>
+                <FormHeader title="Create a custom role" />
+                <FormBody>
+                  <Field>
+                    <FieldLabel htmlFor="new-role-name">Role name</FieldLabel>
+                    <Input id="new-role-name" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} placeholder="e.g. Bookkeeper" />
+                  </Field>
+                </FormBody>
+                <FormFooter>
                   <Button type="button" variant="outline" onClick={() => setNewRoleDialogOpen(false)}>
                     Cancel
                   </Button>
                   <Button type="button" disabled={!newRoleName.trim()} onClick={() => void createRole()}>
                     Create
                   </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+                </FormFooter>
+              </FormShell>
+            )}
+          </>
         ) : undefined
       }
     >
@@ -464,18 +466,15 @@ function RolesPanel({ companyId, actorId, roles, assignments, canCreate, canUpda
         ))}
       </ul>
 
-      <AlertDialog open={roleToDelete !== null} onOpenChange={(open) => !open && setRoleToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete "{roleToDelete?.name}"?</AlertDialogTitle>
-            <AlertDialogDescription>Users holding this role will lose the permissions it granted. This cannot be undone.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void deleteRole()}>Delete role</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={roleToDelete !== null}
+        onOpenChange={(open) => !open && setRoleToDelete(null)}
+        title={`Delete "${roleToDelete?.name ?? ''}"?`}
+        description="Users holding this role will lose the permissions it granted. This cannot be undone."
+        confirmLabel="Delete role"
+        destructive
+        onConfirm={() => void deleteRole()}
+      />
     </SectionCard>
   );
 }

@@ -3,13 +3,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, FileUp, Loader2 } from 'lucid
 import type { BankAccount, BankStatement } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
-import { wideFormDialogClass } from '@/components/app/form-surface';
+import { FormShell, FormHeader, FormBody } from '@/components/app/form';
 import { Amount } from '@/components/app/figure';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { useStatementImport } from '../hooks/useStatementImport';
@@ -82,12 +76,11 @@ export function StatementImportWizard({
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) handleClose(); }}>
-      <DialogContent className={wideFormDialogClass}>
-        <DialogHeader>
-          <DialogTitle>Import bank statement</DialogTitle>
-        </DialogHeader>
-
+    <FormShell open onClose={handleClose} size="xl" mode="create">
+      {/* hideClose: each step owns its own explicit Cancel / Close / Back — a
+          stray header × in a multi-step wizard is ambiguous. */}
+      <FormHeader title="Import bank statement" hideClose />
+      <FormBody>
         {status === 'done' && statement ? (
           <DoneStep
             lineCount={lineCount ?? statement.lineCount}
@@ -126,8 +119,8 @@ export function StatementImportWizard({
             onCancel={handleClose}
           />
         )}
-      </DialogContent>
-    </Dialog>
+      </FormBody>
+    </FormShell>
   );
 }
 

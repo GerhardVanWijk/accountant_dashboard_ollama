@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { Employee, EmployeeAllowance, EmployeeDeduction } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
+import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
@@ -40,6 +41,7 @@ export interface EmployeeFormProps {
   employee?: Employee;
   onSubmit: (data: CreateEmployeeDTO | UpdateEmployeeDTO) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function toDefaultValues(employee?: Employee): EmployeeFormValues {
@@ -75,7 +77,7 @@ function newId(prefix: string): string {
  * PayslipLinesTable). Re-skinned onto v0's Field/Input/Checkbox (M13);
  * validation schema, DTO shape and payroll calculation inputs unchanged.
  */
-export function EmployeeForm({ employee, onSubmit, onCancel }: EmployeeFormProps) {
+export function EmployeeForm({ employee, onSubmit, onCancel, onDirtyChange }: EmployeeFormProps) {
   const [allowances, setAllowances] = useState<EmployeeAllowance[]>(employee?.standardAllowances ?? []);
   const [deductions, setDeductions] = useState<EmployeeDeduction[]>(employee?.standardDeductions ?? []);
 
@@ -83,11 +85,13 @@ export function EmployeeForm({ employee, onSubmit, onCancel }: EmployeeFormProps
     register,
     handleSubmit,
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeSchema),
     defaultValues: toDefaultValues(employee),
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const submit = handleSubmit(async (data) => {
     await onSubmit({
@@ -114,7 +118,8 @@ export function EmployeeForm({ employee, onSubmit, onCancel }: EmployeeFormProps
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+      <FormBody>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="employeeNumber">Employee Number</FieldLabel>
@@ -298,14 +303,16 @@ export function EmployeeForm({ employee, onSubmit, onCancel }: EmployeeFormProps
         </div>
       </fieldset>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      </FormBody>
+
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {employee ? 'Save Changes' : 'Add Employee'}
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }

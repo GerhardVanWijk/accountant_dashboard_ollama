@@ -1,27 +1,20 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
-import { formDialogClass } from '@/components/app/form-surface';
+import { useState } from 'react';
+
+import { FormShell, FormHeader } from '@/components/app/form';
 import { CustomerForm, type CustomerFormProps } from './CustomerForm';
 
-export interface CustomerFormModalProps extends Omit<CustomerFormProps, 'onCancel'> {
+export interface CustomerFormModalProps extends Omit<CustomerFormProps, 'onCancel' | 'onDirtyChange'> {
   title: string;
   onClose: () => void;
 }
 
-/** Modal shell hosting CustomerForm for both create and edit flows, built on the shared v0 Dialog primitive. */
+/** `CustomerForm` in the shared Vertex form shell (P3D) — stable size across all four tabs. */
 export function CustomerFormModal({ title, onClose, ...formProps }: CustomerFormModalProps) {
+  const [dirty, setDirty] = useState(false);
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className={formDialogClass}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <CustomerForm {...formProps} onCancel={onClose} />
-      </DialogContent>
-    </Dialog>
+    <FormShell open onClose={onClose} size="md" mode={formProps.mode} isDirty={dirty}>
+      <FormHeader title={title} />
+      <CustomerForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
+    </FormShell>
   );
 }

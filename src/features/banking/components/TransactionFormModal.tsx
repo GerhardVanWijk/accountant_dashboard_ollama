@@ -1,26 +1,19 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
-import { wideFormDialogClass } from '@/components/app/form-surface';
+import { useState } from 'react';
+
+import { FormShell, FormHeader } from '@/components/app/form';
 import { TransactionForm, type TransactionFormProps } from './TransactionForm';
 
-export interface TransactionFormModalProps extends Omit<TransactionFormProps, 'onCancel'> {
+export interface TransactionFormModalProps extends Omit<TransactionFormProps, 'onCancel' | 'onDirtyChange'> {
   onClose: () => void;
 }
 
-/** Modal shell hosting TransactionForm, built on the shared v0 Dialog primitive. */
+/** `TransactionForm` in the shared Vertex form shell (P3D). */
 export function TransactionFormModal({ onClose, ...formProps }: TransactionFormModalProps) {
+  const [dirty, setDirty] = useState(false);
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className={wideFormDialogClass}>
-        <DialogHeader>
-          <DialogTitle>New bank transaction</DialogTitle>
-        </DialogHeader>
-        <TransactionForm {...formProps} onCancel={onClose} />
-      </DialogContent>
-    </Dialog>
+    <FormShell open onClose={onClose} size="lg" mode="create" isDirty={dirty}>
+      <FormHeader title="New bank transaction" />
+      <TransactionForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
+    </FormShell>
   );
 }

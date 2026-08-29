@@ -1,18 +1,9 @@
+import { useState } from 'react';
 import type { Quote } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/shadcn/alert-dialog';
+import { ConfirmDialog } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 
 interface QuoteDetailProps {
@@ -50,6 +41,7 @@ export function QuoteDetail({
   onConvertToSalesOrder,
   isBusy = false,
 }: QuoteDetailProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const canSend = quote.status === 'draft';
   const canRespond = quote.status === 'sent';
   const canConvert = quote.status === 'accepted';
@@ -72,29 +64,23 @@ export function QuoteDetail({
               </Button>
             )}
             {onDelete && quote.status === 'draft' && (
-              <AlertDialog>
-                <AlertDialogTrigger render={<Button variant="destructive" size="sm" disabled={isBusy} />}>
+              <>
+                <Button variant="destructive" size="sm" disabled={isBusy} onClick={() => setConfirmDelete(true)}>
                   Delete draft
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {quote.quoteNumber}?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This permanently removes the draft quote. This cannot be undone. Once sent, a quote is a
-                      customer-facing document and must be declined or left to expire instead of deleted.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      className="bg-destructive/10 text-destructive hover:bg-destructive/20"
-                      onClick={onDelete}
-                    >
-                      Delete draft
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                </Button>
+                <ConfirmDialog
+                  open={confirmDelete}
+                  onOpenChange={setConfirmDelete}
+                  title={`Delete ${quote.quoteNumber}?`}
+                  description="This permanently removes the draft quote. This cannot be undone. Once sent, a quote is a customer-facing document and must be declined or left to expire instead of deleted."
+                  confirmLabel="Delete draft"
+                  destructive
+                  onConfirm={() => {
+                    setConfirmDelete(false);
+                    onDelete();
+                  }}
+                />
+              </>
             )}
             {onMarkAsSent && canSend && (
               <Button size="sm" disabled={isBusy} onClick={() => onMarkAsSent(quote.id)}>

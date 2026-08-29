@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -7,6 +8,7 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { FormBody, FormFooter } from '@/components/app/form';
 import type { TransferStockInput } from '../services/stockService';
 
 const transferSchema = z
@@ -30,6 +32,7 @@ export interface StockTransferFormProps {
   warehouses: Warehouse[];
   onSubmit: (input: TransferStockInput) => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -39,11 +42,11 @@ export interface StockTransferFormProps {
  * a quantity directly (docs/DO_NOT_BREAK.md § Inventory & Stock).
  * Re-skinned onto v0's Field/Input/Textarea (M8).
  */
-export function StockTransferForm({ products, warehouses, onSubmit, onCancel }: StockTransferFormProps) {
+export function StockTransferForm({ products, warehouses, onSubmit, onCancel, onDirtyChange }: StockTransferFormProps) {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<TransferFormValues>({
     resolver: zodResolver(transferSchema),
     defaultValues: {
@@ -55,6 +58,8 @@ export function StockTransferForm({ products, warehouses, onSubmit, onCancel }: 
       notes: '',
     },
   });
+
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const trackedProducts = products.filter((p) => p.trackInventory);
 
@@ -70,7 +75,8 @@ export function StockTransferForm({ products, warehouses, onSubmit, onCancel }: 
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+      <FormBody>
       <Field>
         <FieldLabel htmlFor="tr-product">Product</FieldLabel>
         <NativeSelect id="tr-product" {...register('productId')}>
@@ -127,15 +133,16 @@ export function StockTransferForm({ products, warehouses, onSubmit, onCancel }: 
         <FieldLabel htmlFor="tr-notes">Notes</FieldLabel>
         <Textarea id="tr-notes" rows={2} {...register('notes')} />
       </Field>
+      </FormBody>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <FormFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           Transfer Stock
         </Button>
-      </div>
+      </FormFooter>
     </form>
   );
 }
