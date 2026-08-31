@@ -248,7 +248,7 @@ export class FixedAssetService {
     });
   }
 
-  /** Mirrors JournalEntryService.nextEntryNumber()'s shape — sequential, based on register size. */
+  /** A sequential document number based on register size (a per-document-type counter, not the journal-number allocator). */
   private async nextAssetNumber(): Promise<string> {
     const assets = await this.repository.getAll();
     return `FA-${String(assets.length + 1).padStart(4, '0')}`;

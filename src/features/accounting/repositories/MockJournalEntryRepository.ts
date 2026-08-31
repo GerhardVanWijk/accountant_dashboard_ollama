@@ -1,5 +1,6 @@
 import type { JournalEntry } from '@/types';
 import { seedJournalEntries } from '@/mock-data/journalEntries';
+import { deriveNextJournalEntryNumber } from '../utils/journalNumbering';
 import type { IJournalEntryRepository } from './IJournalEntryRepository';
 
 function nowISO(): string {
@@ -61,12 +62,26 @@ export class MockJournalEntryRepository implements IJournalEntryRepository {
     return entry ? { ...entry, lines: entry.lines.map((l) => ({ ...l })) } : undefined;
   }
 
+  /**
+   * `entity.entryNumber` may be blank — `JournalEntryService` no longer
+   * computes the number; the repository / DB boundary owns it. The in-memory
+   * rule mirrors migration 0033's `allocate_journal_number`: next = highest
+   * existing `JE-<n>` suffix + 1 (see utils/journalNumbering.ts). A caller
+   * that DOES supply a number (seed data, an explicit test fixture) keeps it.
+   */
   async create(entity: JournalEntry): Promise<JournalEntry> {
     assertBalanced(entity);
     const now = nowISO();
+    const entryNumber =
+      entity.entryNumber || deriveNextJournalEntryNumber(this.entries.map((e) => e.entryNumber));
     const record: JournalEntry = {
       ...entity,
       id: entity.id || generateId(),
+      entryNumber,
+      lines: entity.lines.map((line, index) => ({
+        ...line,
+        id: line.id || `${entryNumber}_${index}`,
+      })),
       createdAt: now,
       updatedAt: now,
     };

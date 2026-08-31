@@ -21,6 +21,7 @@
 | `/banking/accounts` | `banking` | Bank Accounts | Banking |
 | `/banking/transactions` | `banking` | Bank Transactions | Banking |
 | `/banking/reconciliation` | `banking` | Bank Reconciliation | Banking |
+| `/inventory` | `inventory` | Inventory (module overview) | Inventory / Organisation |
 | `/inventory/products` | `inventory` | Products & Services | Inventory |
 | `/inventory/warehouses`| `inventory` | Multi-Warehouse Stock | Inventory |
 | `/assets/register` | `assets` | Asset Register | Fixed Assets |

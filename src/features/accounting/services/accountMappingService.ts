@@ -31,6 +31,10 @@ export type AccountMappingKey =
   | 'VAT_INPUT' // VAT Input (Receivable)
   | 'COGS' // Cost of Goods Sold
   | 'INVENTORY'
+  | 'INVENTORY_ADJUSTMENT' // 5050 — write-offs / shrinkage / damage / stock gains (physical stock differences)
+  | 'PURCHASE_PRICE_VARIANCE' // 5060 — supplier credit/refund value vs WAC carrying cost (purchasing gain/loss)
+  | 'INVENTORY_IN_TRANSIT' // 1210 — inter-warehouse transfers in transit
+  | 'OPENING_BALANCE_EQUITY' // 3950 — opening-stock suspense
   | 'EXPENSE' // Operating Expenses
   | 'CASH_AND_BANK'
   | 'GRNI' // Goods Received Not Invoiced
@@ -83,6 +87,10 @@ const ACCOUNT_CODE_BY_KEY: Record<AccountMappingKey, string> = {
   VAT_INPUT: '2110',
   COGS: '5000',
   INVENTORY: '1200',
+  INVENTORY_ADJUSTMENT: '5050',
+  PURCHASE_PRICE_VARIANCE: '5060',
+  INVENTORY_IN_TRANSIT: '1210',
+  OPENING_BALANCE_EQUITY: '3950',
   EXPENSE: '5100',
   CASH_AND_BANK: '1000',
   GRNI: '2050',

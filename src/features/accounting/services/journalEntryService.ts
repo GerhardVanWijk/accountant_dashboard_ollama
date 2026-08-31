@@ -189,21 +189,24 @@ export class JournalEntryService {
       );
     }
 
-    const entryNumber = await this.nextEntryNumber();
     const now = new Date().toISOString();
     const userId = input.postedByUserId ?? SYSTEM_USER_ID;
 
+    // The entry number is assigned at the repository / DB boundary
+    // (`allocate_journal_number`, migration 0033 — one atomic, gap-safe,
+    // company-scoped allocator), never computed here. See
+    // src/features/accounting/utils/journalNumbering.ts.
     const entry = await this.journalRepository.create({
       id: '',
-      entryNumber,
+      entryNumber: '',
       date: input.date,
       memo: input.memo,
       source: input.source,
       status: 'posted',
       postedAt: now,
       currency: input.currency ?? this.defaultCurrency,
-      lines: input.lines.map((line, index) => ({
-        id: line.id || `${entryNumber}_${index}`,
+      lines: input.lines.map((line) => ({
+        id: line.id ?? '',
         accountId: line.accountId,
         description: line.description,
         debit: line.debit ?? 0,
@@ -256,11 +259,9 @@ export class JournalEntryService {
       );
     }
 
-    const entryNumber = await this.nextEntryNumber();
-
     const reversal = await this.journalRepository.create({
       id: '',
-      entryNumber,
+      entryNumber: '',
       date: now,
       memo: memo ?? `Reversal of ${original.entryNumber}`,
       source: 'reversal',
@@ -268,8 +269,8 @@ export class JournalEntryService {
       postedAt: now,
       currency: original.currency ?? this.defaultCurrency,
       reversalOfEntryId: original.id,
-      lines: original.lines.map((line, index) => ({
-        id: `${entryNumber}_${index}`,
+      lines: original.lines.map((line) => ({
+        id: '',
         accountId: line.accountId,
         description: line.description,
         debit: line.credit,
@@ -378,10 +379,5 @@ export class JournalEntryService {
   private async postedEntriesSortedByDate(): Promise<JournalEntry[]> {
     const entries = await this.journalRepository.getAll();
     return entries.filter((e) => e.status === 'posted').sort((a, b) => a.date.localeCompare(b.date));
-  }
-
-  private async nextEntryNumber(): Promise<string> {
-    const entries = await this.journalRepository.getAll();
-    return `JE-${String(entries.length + 1).padStart(4, '0')}`;
   }
 }

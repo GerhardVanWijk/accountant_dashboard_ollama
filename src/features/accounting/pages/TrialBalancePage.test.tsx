@@ -36,6 +36,11 @@ vi.mock('../services', () => ({
   categoryAccountMappingService: {
     resolveForCategory: vi.fn().mockResolvedValue({}),
   },
+  // Pulled in transitively via `@/services` → inventory posting engine instance
+  // (useSubledgerReconciliation imports invoiceService from the root barrel).
+  accountingPeriodService: {
+    getPeriodForDate: vi.fn(),
+  },
 }));
 
 const mockedComputeTrialBalance = journalEntryService.computeTrialBalance as unknown as ReturnType<typeof vi.fn>;

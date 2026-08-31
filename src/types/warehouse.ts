@@ -12,4 +12,6 @@ export interface Warehouse extends BaseEntity {
   /** The warehouse new stock/orders default to when none is explicitly chosen. Exactly one warehouse should carry this flag. */
   isDefault: boolean;
   status: ActiveStatus;
+  /** Free-text operational notes (dock hours, contact, handling instructions). Inventory Accounting Module (Phase 2). */
+  notes?: string;
 }

@@ -43,8 +43,11 @@ import { VendorAgingPage } from '@/features/purchases/pages/VendorAgingPage';
 import { BankAccountsPage } from '@/features/banking/pages/BankAccountsPage';
 import { BankTransactionsPage } from '@/features/banking/pages/BankTransactionsPage';
 import { BankReconciliationPage } from '@/features/banking/pages/BankReconciliationPage';
+import { InventoryOverviewPage } from '@/features/inventory/pages/InventoryOverviewPage';
 import { ProductsPage } from '@/features/inventory/pages/ProductsPage';
 import { WarehousesPage } from '@/features/inventory/pages/WarehousesPage';
+import { CategoriesPage } from '@/features/inventory/pages/CategoriesPage';
+import { StockMovementsPage } from '@/features/inventory/pages/StockMovementsPage';
 import { AssetRegisterPage } from '@/features/assets/pages/AssetRegisterPage';
 import { DepreciationPage } from '@/features/assets/pages/DepreciationPage';
 import { DisposalsPage } from '@/features/assets/pages/DisposalsPage';
@@ -166,8 +169,11 @@ export const routes: RouteObject[] = [
           { path: 'banking/accounts', element: <BankAccountsPage /> },
           { path: 'banking/transactions', element: <BankTransactionsPage /> },
           { path: 'banking/reconciliation', element: <BankReconciliationPage /> },
+          { path: 'inventory', element: <PermissionRoute feature="inventory" action="read"><InventoryOverviewPage /></PermissionRoute> },
           { path: 'inventory/products', element: <PermissionRoute feature="inventory" action="read"><ProductsPage /></PermissionRoute> },
+          { path: 'inventory/categories', element: <PermissionRoute feature="inventory" action="read"><CategoriesPage /></PermissionRoute> },
           { path: 'inventory/warehouses', element: <PermissionRoute feature="inventory" action="read"><WarehousesPage /></PermissionRoute> },
+          { path: 'inventory/movements', element: <PermissionRoute feature="inventory" action="read"><StockMovementsPage /></PermissionRoute> },
           { path: 'assets/register', element: <AssetRegisterPage /> },
           { path: 'assets/depreciation', element: <DepreciationPage /> },
           { path: 'assets/disposals', element: <DisposalsPage /> },

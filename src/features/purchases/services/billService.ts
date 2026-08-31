@@ -1,7 +1,19 @@
-import type { AssetCategory, Bill, DepreciationMethod, ID, JournalEntry } from '@/types';
+import type { AssetCategory, Bill, DepreciationMethod, ID, Product } from '@/types';
 import type { IBillRepository } from '@/repositories/IBillRepository';
-import type { AccountMapper, CategoryAccountResolver, NewJournalLineInput } from '@/features/accounting/services';
-import { bucketByAccount, nullCategoryAccountResolver } from '@/features/accounting/services';
+import type { AccountMapper } from '@/features/accounting/services';
+import { roundToCents, SYSTEM_USER_ID } from '@/features/accounting/services';
+import type { InventoryAccountResolver } from '@/features/inventory/services/inventoryAccountResolver';
+import type {
+  ExtraJournalLine,
+  InventoryTransactionLine,
+} from '@/features/inventory/services/inventoryPostingEngine';
+import {
+  type DocumentProductLookup,
+  type DocumentWarehouseResolver,
+  type InventoryTransactionPoster,
+  requireWarehouseId,
+  toMovementDate,
+} from '@/features/inventory/services/documentInventoryPosting';
 
 /**
  * Minimal surface of TaxRateService this service depends on — resolving a
@@ -10,23 +22,6 @@ import { bucketByAccount, nullCategoryAccountResolver } from '@/features/account
  */
 export interface TaxRateResolver {
   getTaxRate(id: ID): Promise<{ treatment: string } | undefined>;
-}
-
-/**
- * Minimal surface of InventoryPoster this service depends on
- * (src/features/inventory/services/inventoryPostingAdapter.ts) — a bill
- * for tracked inventory must capitalize to the Inventory asset rather than
- * being expensed, and stock must increase once the bill posts, per
- * SA_ACCOUNTING_MASTER_SPEC.md §22-§24.
- */
-export interface InventoryReceiver {
-  isTrackedInventory(productId: ID): Promise<boolean>;
-  recordReceiptMovement(productId: ID, quantity: number, unitCost: number, reference: string, warehouseId?: ID): Promise<void>;
-  /**
-   * This product's category, for per-line Inventory-account resolution
-   * (Phase 21.3). Optional so existing stubs don't need it.
-   */
-  getProductCategory?(productId: ID): Promise<string | undefined>;
 }
 
 /**
@@ -69,43 +64,28 @@ export interface FixedAssetCapitalizer {
 export type CreateBillDTO = Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>;
 
 /**
- * Minimal surface of JournalEntryService that BillService depends on — an
- * interface, not the concrete class, so this service stays unit-testable
- * with a stub and never needs to reach into src/features/accounting
- * internals beyond its published service API
- * (@/features/accounting/services). Mirrors bankTransactionService.ts's
- * JournalPoster exactly, per this dispatch's brief.
- */
-export interface JournalPoster {
-  postJournalEntry(input: {
-    date: string;
-    memo?: string;
-    source: string;
-    lines: NewJournalLineInput[];
-    postedByUserId?: ID;
-  }): Promise<JournalEntry>;
-}
-
-/**
  * Business-logic layer for supplier bills.
  * Handles bill creation, updates, status changes, and GL posting.
  */
 export class BillService {
   constructor(
     private readonly repository: IBillRepository,
-    private readonly journalEntryService: JournalPoster,
+    /**
+     * The ONE atomic inventory posting engine. `postBill()` hands it the
+     * expense / VAT-input / fixed-asset / AP lines as `extraJournal` plus
+     * one `receipt` line per tracked-inventory line — the engine blends
+     * WAC, moves stock, and posts a SINGLE balanced journal entry in one
+     * RPC. No separate `journalEntryService` post, no separate stock call.
+     */
+    private readonly engine: InventoryTransactionPoster,
     private readonly taxRateResolver: TaxRateResolver,
-    private readonly inventoryReceiver: InventoryReceiver,
     private readonly purchaseOrders: PurchaseOrderLookup,
     private readonly fixedAssetCapitalizer: FixedAssetCapitalizer,
     private readonly accounts: AccountMapper,
-    /**
-     * Resolves a tracked-inventory line's product category to its granular
-     * Inventory account (Phase 21.3). Defaults to the null resolver, so a
-     * caller that doesn't wire it keeps posting every capitalized line to
-     * the generic `INVENTORY` account.
-     */
-    private readonly categoryAccounts: CategoryAccountResolver = nullCategoryAccountResolver,
+    /** Product → category → generic-key resolution for the Inventory / GRNI / AP accounts. */
+    private readonly inventoryAccounts: InventoryAccountResolver,
+    private readonly products: DocumentProductLookup,
+    private readonly warehouses: DocumentWarehouseResolver,
   ) {}
 
   async getBills(): Promise<Bill[]> {
@@ -126,7 +106,26 @@ export class BillService {
     });
   }
 
+  /**
+   * Edits a bill. A POSTED bill is immutable (SA_ACCOUNTING_MASTER_SPEC.md
+   * §14/§36/§72/§79, and Phase 3C item 5): once it has hit the ledger and
+   * moved stock, its supplier, lines, quantities, prices, tax, accounting
+   * date and status must not change through here. Corrections go through the
+   * supplier-return / journal-reversal workflow, exactly as a posted invoice
+   * is corrected with a credit note. `recordPayment()` / `markAsOverdue()` /
+   * `postBill()` mutate their own specific fields directly and are unaffected.
+   */
   async updateBill(id: string, patch: Partial<Bill>): Promise<Bill> {
+    const bill = await this.repository.getById(id);
+    if (!bill) {
+      throw new Error(`Bill "${id}" not found`);
+    }
+    if (bill.status !== 'draft') {
+      throw new Error(
+        `Cannot edit bill "${id}": a posted bill is immutable (current status: ${bill.status}). ` +
+          `Raise a supplier return or reverse the journal entry to correct it.`,
+      );
+    }
     return this.repository.update(id, patch);
   }
 
@@ -188,22 +187,25 @@ export class BillService {
   private async splitLineItems(bill: Bill): Promise<{
     expenseValue: number;
     inventoryValue: number;
-    inventoryLines: Bill['lineItems'];
+    inventoryLines: { line: Bill['lineItems'][number]; product: Product }[];
     fixedAssetValue: number;
     fixedAssetLines: Bill['lineItems'];
   }> {
     let inventoryValue = 0;
     let expenseValue = 0;
     let fixedAssetValue = 0;
-    const inventoryLines: Bill['lineItems'] = [];
+    const inventoryLines: { line: Bill['lineItems'][number]; product: Product }[] = [];
     const fixedAssetLines: Bill['lineItems'] = [];
     for (const line of bill.lineItems) {
       if (line.fixedAssetDetails) {
         fixedAssetValue += line.lineTotal;
         fixedAssetLines.push(line);
-      } else if (line.productId && (await this.inventoryReceiver.isTrackedInventory(line.productId))) {
+        continue;
+      }
+      const product = line.productId ? await this.products.getProduct(line.productId) : undefined;
+      if (product?.trackInventory) {
         inventoryValue += line.lineTotal;
-        inventoryLines.push(line);
+        inventoryLines.push({ line, product });
       } else {
         expenseValue += line.lineTotal;
       }
@@ -212,36 +214,30 @@ export class BillService {
   }
 
   /**
-   * Posts a bill to accounts payable: debit Operating Expenses for
-   * non-inventory lines (plus any non-deductible VAT — see
-   * splitDeductibleVat()), debit VAT Input for the DEDUCTIBLE tax only,
-   * credit Accounts Payable for the bill total. GL posting happens FIRST,
-   * and stock is only increased AFTER it succeeds — if postJournalEntry()
-   * throws (unbalanced lines or a closed accounting period), this method
-   * throws too and neither the bill nor stock ever changes (same ordering
-   * bankTransactionService.ts uses). Only a 'draft' bill may be posted, so
-   * the same bill can never be posted to the ledger twice.
+   * Posts a bill to accounts payable through the ONE atomic inventory
+   * posting engine. `postBill()` builds only the non-inventory journal
+   * lines and passes them as `extraJournal`:
+   *
+   *   DR Operating Expenses   expenseValue + non-deductible VAT   (only if > 0)
+   *   DR VAT Input            deductible VAT only                 (only if > 0)
+   *   DR Fixed Assets         Σ fixedAssetDetails line totals     (only if > 0)
+   *   DR GRNI                 inventoryValue  — pre-received PO ONLY (clears the accrual)
+   *   CR Accounts Payable     bill.total   (less inventoryValue when the engine posts the goods against AP)
    *
    * Tracked-inventory lines (§22) split on whether this bill's PO already
-   * had its goods receipt posted (`purchaseOrderService.recordReceipt()`,
-   * 3-way PO/GRN/Invoice matching):
-   *   - PO not GRNI-received (no `purchaseOrderId`, or its receipt was
-   *     never recorded): debit Inventory (as before), then record the
-   *     stock receipt now via `recordReceiptMovement()`.
-   *   - PO already GRNI-received: debit GRNI instead (clearing the
-   *     liability recorded at receipt time), and do NOT call
-   *     `recordReceiptMovement()` again — stock and its GL value were
-   *     already recognized then; recording it again here would
-   *     double-count both the quantity and the weighted-average cost
-   *     recalculation.
+   * had its goods receipt posted (`purchaseOrderService.recordReceipt()`):
+   *   - PO not GRNI-received: an engine `receipt` line per tracked line —
+   *     DR <category Inventory> / CR AP, WAC blended, stock moved, all in
+   *     the atomic RPC.
+   *   - PO already GRNI-received: NO engine line (the PO receipt already
+   *     moved the stock + blended WAC). The bill only reclassifies the
+   *     GRNI accrual to real AP — DR GRNI in `extraJournal`, no stock
+   *     re-record, no WAC recompute (the double-count guard, preserved).
    *
-   * A line flagged `fixedAssetDetails` (§116 Phase 7) debits Fixed Assets
-   * instead of Expense/Inventory. AFTER the entry posts,
-   * `fixedAssetCapitalizer.capitalizeFromBillLine()` writes the register
-   * row directly as 'active' with `journalEntryId` pointing at THIS same
-   * entry — the Bill's posting is the only capitalization event, there is
-   * no separate acquisition entry (see FixedAssetService.
-   * capitalizeFromBillLine()'s doc comment).
+   * Only a 'draft' bill posts. GL + stock are one transaction — a failure
+   * (unbalanced, closed period, no warehouse for a tracked line) throws
+   * and nothing changes. `fixedAssetCapitalizer.capitalizeFromBillLine()`
+   * runs AFTER, with `journalEntryId` pointing at THIS entry.
    */
   async postBill(id: string): Promise<Bill> {
     const bill = await this.repository.getById(id);
@@ -252,128 +248,89 @@ export class BillService {
       throw new Error(`Bill "${id}" has already been posted (status: ${bill.status}).`);
     }
 
+    const docLabel = `Bill ${bill.billNumber}`;
     const { deductibleVat, nonDeductibleVat } = await this.splitDeductibleVat(bill);
     const { expenseValue, inventoryValue, inventoryLines, fixedAssetValue, fixedAssetLines } = await this.splitLineItems(bill);
     const linkedPO = bill.purchaseOrderId ? await this.purchaseOrders.getPurchaseOrder(bill.purchaseOrderId) : undefined;
     const grniAlreadyRecognized = Boolean(linkedPO?.journalEntryId);
 
-    const lines: NewJournalLineInput[] = [];
-    const expenseDebit = expenseValue + nonDeductibleVat;
-    if (expenseDebit > 0) {
-      lines.push({
-        accountId: await this.accounts.getAccountId('EXPENSE'),
-        description: `Bill ${bill.billNumber}`,
-        debit: expenseDebit,
-        credit: 0,
-      });
-    }
-    if (inventoryValue > 0) {
-      if (grniAlreadyRecognized) {
-        // GRNI clearing is not category-specific — the liability was
-        // recorded once at PO-receipt time; clear it as one line.
-        lines.push({
-          accountId: await this.accounts.getAccountId('GRNI'),
-          description: `Bill ${bill.billNumber} - GRNI clearing`,
-          debit: inventoryValue,
-          credit: 0,
-        });
-      } else {
-        // Route each capitalized line through its category's Inventory
-        // account (Phase 21.3 — today every category maps to 1200, but the
-        // choice is now configurable). Falls back to the generic INVENTORY
-        // account for an unmapped category. Buckets reconcile to
-        // inventoryValue so the AP credit can't drift.
-        const genericInventoryId = await this.accounts.getAccountId('INVENTORY');
-        const inventoryContributions = await Promise.all(
-          inventoryLines.map(async (line) => {
-            const category = this.inventoryReceiver.getProductCategory
-              ? await this.inventoryReceiver.getProductCategory(line.productId!)
-              : undefined;
-            const resolved = await this.categoryAccounts.resolveForCategory(category);
-            return { accountId: resolved.inventoryAccountId ?? genericInventoryId, amount: line.lineTotal };
-          }),
-        );
-        for (const bucket of bucketByAccount(inventoryContributions, inventoryValue)) {
-          lines.push({
-            accountId: bucket.accountId,
-            description: `Bill ${bill.billNumber} - Inventory`,
-            debit: bucket.amount,
-            credit: 0,
-          });
-        }
-      }
-    }
-    if (fixedAssetValue > 0) {
-      lines.push({
-        accountId: await this.accounts.getAccountId('FIXED_ASSET'),
-        description: `Bill ${bill.billNumber} - Fixed Assets`,
-        debit: fixedAssetValue,
-        credit: 0,
-      });
-    }
-    if (lines.length === 0 && deductibleVat === 0 && bill.total === 0) {
-      // A genuinely zero-value bill (no line items, no tax) has nothing
-      // real to post — a fake zero-amount line would itself violate
-      // validateLines(), and there is no meaningful journal entry here.
+    const expenseDebit = roundToCents(expenseValue + nonDeductibleVat);
+    const hasValue =
+      expenseDebit > 0 || deductibleVat > 0 || fixedAssetValue > 0 || inventoryValue > 0 || bill.total > 0;
+    if (!hasValue) {
       throw new Error(`Cannot post bill "${id}": it has no value to record (subtotal, tax, and total are all zero).`);
     }
 
+    const extraJournal: ExtraJournalLine[] = [];
+    if (expenseDebit > 0) {
+      extraJournal.push({ accountId: await this.accounts.getAccountId('EXPENSE'), debit: expenseDebit, credit: 0, description: docLabel });
+    }
     if (deductibleVat > 0) {
-      lines.push({
-        accountId: await this.accounts.getAccountId('VAT_INPUT'),
-        description: `Bill ${bill.billNumber} - VAT Input`,
-        debit: deductibleVat,
-        credit: 0,
+      extraJournal.push({ accountId: await this.accounts.getAccountId('VAT_INPUT'), debit: deductibleVat, credit: 0, description: `${docLabel} - VAT Input` });
+    }
+    if (fixedAssetValue > 0) {
+      extraJournal.push({ accountId: await this.accounts.getAccountId('FIXED_ASSET'), debit: fixedAssetValue, credit: 0, description: `${docLabel} - Fixed Assets` });
+    }
+
+    const lines: InventoryTransactionLine[] = [];
+    let apCredit = bill.total;
+    if (inventoryValue > 0) {
+      if (grniAlreadyRecognized) {
+        extraJournal.push({
+          accountId: await this.inventoryAccounts.resolveKey('GRNI'),
+          debit: inventoryValue,
+          credit: 0,
+          description: `${docLabel} - GRNI clearing`,
+        });
+      } else {
+        for (const { line, product } of inventoryLines) {
+          lines.push({
+            productId: product.id,
+            warehouseId: await requireWarehouseId(this.warehouses, line.warehouseId, docLabel),
+            quantityDelta: line.quantity,
+            costingMode: 'receipt',
+            unitCostIn: line.unitPrice,
+            inventoryAccountId: await this.inventoryAccounts.resolveForProduct(product, 'inventory'),
+            contraAccountId: await this.inventoryAccounts.resolveKey('AP'),
+            sourceDocumentLineId: line.id,
+            nonStock: false,
+          });
+        }
+        apCredit = roundToCents(bill.total - inventoryValue);
+      }
+    }
+    if (apCredit > 0) {
+      extraJournal.push({ accountId: await this.accounts.getAccountId('AP'), debit: 0, credit: apCredit, description: docLabel });
+    }
+
+    const result = await this.engine.applyInventoryTransaction({
+      postingKey: `bill:${bill.id}:post`,
+      sourceType: 'bill',
+      sourceId: bill.id,
+      movementDate: toMovementDate(bill.issueDate),
+      createdBy: SYSTEM_USER_ID,
+      lines,
+      extraJournal,
+      journal: { source: 'bill', memo: docLabel },
+    });
+
+    for (const line of fixedAssetLines) {
+      await this.fixedAssetCapitalizer.capitalizeFromBillLine({
+        sourceBillId: bill.id,
+        journalEntryId: result.journalEntryId!,
+        name: line.description,
+        category: line.fixedAssetDetails!.category,
+        acquisitionDate: bill.issueDate,
+        cost: line.lineTotal,
+        residualValue: line.fixedAssetDetails!.residualValue,
+        usefulLifeYears: line.fixedAssetDetails!.usefulLifeYears,
+        depreciationMethod: line.fixedAssetDetails!.depreciationMethod,
+        reducingBalanceRatePercent: line.fixedAssetDetails!.reducingBalanceRatePercent,
+        taxWearTearRatePercent: line.fixedAssetDetails!.taxWearTearRatePercent,
       });
     }
 
-    lines.push({
-      accountId: await this.accounts.getAccountId('AP'),
-      description: `Bill ${bill.billNumber}`,
-      debit: 0,
-      credit: bill.total,
-    });
-
-    const entry = await this.journalEntryService.postJournalEntry({
-      date: bill.issueDate,
-      memo: `Bill ${bill.billNumber}`,
-      source: 'bill',
-      lines,
-    });
-
-    if (!grniAlreadyRecognized) {
-      await Promise.all(
-        inventoryLines.map((line) =>
-          this.inventoryReceiver.recordReceiptMovement(
-            line.productId!,
-            line.quantity,
-            line.unitPrice,
-            `Bill ${bill.billNumber}`,
-            line.warehouseId,
-          ),
-        ),
-      );
-    }
-
-    await Promise.all(
-      fixedAssetLines.map((line) =>
-        this.fixedAssetCapitalizer.capitalizeFromBillLine({
-          sourceBillId: bill.id,
-          journalEntryId: entry.id,
-          name: line.description,
-          category: line.fixedAssetDetails!.category,
-          acquisitionDate: bill.issueDate,
-          cost: line.lineTotal,
-          residualValue: line.fixedAssetDetails!.residualValue,
-          usefulLifeYears: line.fixedAssetDetails!.usefulLifeYears,
-          depreciationMethod: line.fixedAssetDetails!.depreciationMethod,
-          reducingBalanceRatePercent: line.fixedAssetDetails!.reducingBalanceRatePercent,
-          taxWearTearRatePercent: line.fixedAssetDetails!.taxWearTearRatePercent,
-        }),
-      ),
-    );
-
-    return this.repository.update(id, { status: 'awaiting_payment', journalEntryId: entry.id });
+    return this.repository.update(id, { status: 'awaiting_payment', journalEntryId: result.journalEntryId });
   }
 
   /**
@@ -408,9 +365,24 @@ export class BillService {
   }
 
   /**
-   * Voids a bill (soft delete - marks as void instead of removing).
+   * Voids a DRAFT bill (soft cancel — marks 'void' instead of removing the
+   * row). A posted bill cannot be voided (Phase 3C item 5): voiding a posted
+   * bill would leave its journal entry and stock movements live while the
+   * document reads "void" — a subledger ↔ GL inconsistency. There is no
+   * product requirement for voiding a posted bill; correct one via a supplier
+   * return (which atomically reverses stock + GL) or a journal reversal.
    */
   async voidBill(id: string): Promise<Bill> {
+    const bill = await this.repository.getById(id);
+    if (!bill) {
+      throw new Error(`Bill "${id}" not found`);
+    }
+    if (bill.status !== 'draft') {
+      throw new Error(
+        `Cannot void bill "${id}": only a draft bill can be voided (current status: ${bill.status}). ` +
+          `Raise a supplier return or reverse the journal entry to unwind a posted bill.`,
+      );
+    }
     return this.repository.update(id, { status: 'void' });
   }
 

@@ -44,8 +44,26 @@ async function setup() {
   const accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
 
   const invoiceRepository = new MockInvoiceRepository([]);
-  const noOpInventoryMover = { calculateCogs: async () => 0, recordSaleMovement: async () => {} };
-  const invoiceService = new InvoiceService(invoiceRepository, journalEntryService, noOpInventoryMover, accountMapper);
+  const inertEngine = {
+    applyInventoryTransaction: async () => ({
+      idempotent: false,
+      transactionLogId: 't',
+      journalEntryId: undefined,
+      movementIds: [],
+      warnings: [],
+    }),
+  };
+  const inertResolver = { resolveForProduct: async () => 'acc_x', resolveKey: async () => 'acc_x' };
+  const inertProducts = { getProduct: async () => undefined };
+  const inertWarehouses = { getWarehouse: async () => undefined, getDefaultWarehouse: async () => undefined };
+  const invoiceService = new InvoiceService(
+    invoiceRepository,
+    inertEngine,
+    inertResolver,
+    accountMapper,
+    inertProducts,
+    inertWarehouses,
+  );
   const invoice = await invoiceService.createInvoice({
     invoiceNumber: 'INV-2026-RCT-TEST',
     customerId: 'cust_test',

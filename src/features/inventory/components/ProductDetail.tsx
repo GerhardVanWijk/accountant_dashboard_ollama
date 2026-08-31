@@ -20,6 +20,11 @@ const MOVEMENT_TYPE_LABELS: Record<StockMovement['type'], string> = {
   transfer_out: 'Transfer out',
   adjustment: 'Adjustment',
   opening: 'Opening stock',
+  purchase_return: 'Purchase return',
+  write_off: 'Write-off',
+  stock_gain: 'Stock gain',
+  stock_take: 'Stock take',
+  correction: 'Correction',
 };
 
 /** New — ProductsTable never had a detail view before this pass, only inline Edit/Delete row actions. */

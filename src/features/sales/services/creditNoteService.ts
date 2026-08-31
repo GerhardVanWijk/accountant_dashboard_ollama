@@ -1,51 +1,31 @@
-import type { CreditNote, ID } from '@/types';
+import type { CreditNote, ID, Invoice, Product } from '@/types';
 import type { ICreditNoteRepository } from '@/repositories/ICreditNoteRepository';
-import type { AccountMapper, CategoryAccountResolver, NewJournalLineInput } from '@/features/accounting/services';
-import { bucketByAccount, nullCategoryAccountResolver, roundToCents } from '@/features/accounting/services';
+import type { AccountMapper } from '@/features/accounting/services';
+import { bucketByAccount, SYSTEM_USER_ID } from '@/features/accounting/services';
+import type { InventoryAccountResolver } from '@/features/inventory/services/inventoryAccountResolver';
+import type {
+  ExtraJournalLine,
+  InventoryTransactionLine,
+} from '@/features/inventory/services/inventoryPostingEngine';
+import {
+  type DocumentProductLookup,
+  type DocumentWarehouseResolver,
+  type InventoryTransactionPoster,
+  requireWarehouseId,
+  resolveWarehouseId,
+  toMovementDate,
+} from '@/features/inventory/services/documentInventoryPosting';
 
 export type CreateCreditNoteDTO = Omit<CreditNote, 'id' | 'createdAt' | 'updatedAt'>;
 
 /**
- * Minimal surface of JournalEntryService this service depends on. Mirrors
- * src/features/banking/services/bankTransactionService.ts's JournalPoster.
- */
-export interface JournalPoster {
-  postJournalEntry(input: {
-    date: string;
-    memo?: string;
-    source: string;
-    lines: NewJournalLineInput[];
-    postedByUserId?: ID;
-  }): Promise<{ id: ID }>;
-}
-
-/**
  * Minimal surface of InvoiceService this service depends on — allocating a
- * credit note against an invoice reduces what's owed the same way a
- * receipt does, from the invoice's point of view, so it reuses
- * InvoiceService.recordPayment() rather than reimplementing the
- * paid/partially_paid status logic.
+ * credit note against an invoice reuses InvoiceService.recordPayment(), and
+ * the "returned qty ≤ invoiced qty" guard reads the linked invoice's lines.
  */
 export interface InvoicePaymentRecorder {
   recordPayment(invoiceId: string, amount: number): Promise<unknown>;
-}
-
-/**
- * Minimal surface of InventoryPoster this service depends on
- * (src/features/inventory/services/inventoryPostingAdapter.ts) — reversing
- * Cost of Sales and restoring stock for a customer return, mirroring
- * InvoiceService's InventoryMover. See docs/KNOWN_ISSUES.md's now-resolved
- * "Credit notes don't reverse Cost of Sales or restore stock quantity"
- * entry.
- */
-export interface InventoryReturnMover {
-  calculateCogs(productId: ID, quantity: number, warehouseId?: ID): Promise<number>;
-  recordReturnMovement(productId: ID, quantity: number, reference: string, warehouseId?: ID, unitCost?: number): Promise<void>;
-  /**
-   * This product's category, for per-line revenue/COGS account resolution
-   * (Phase 21.3). Optional so existing stubs don't need it.
-   */
-  getProductCategory?(productId: ID): Promise<string | undefined>;
+  getInvoice(id: string): Promise<Invoice | undefined>;
 }
 
 const BALANCE_EPSILON = 0.01;
@@ -60,17 +40,21 @@ const BALANCE_EPSILON = 0.01;
 export class CreditNoteService {
   constructor(
     private readonly repository: ICreditNoteRepository,
-    private readonly journalEntryService: JournalPoster,
-    private readonly invoiceService: InvoicePaymentRecorder,
-    private readonly inventoryMover: InventoryReturnMover,
-    private readonly accounts: AccountMapper,
     /**
-     * Resolves a line's product category to granular revenue / COGS /
-     * inventory accounts (Phase 21.3). Defaults to the null resolver, so a
-     * caller that doesn't wire it keeps the pre-21.3 single-line-per-leg
-     * reversal behaviour.
+     * The ONE atomic inventory posting engine. `issueCreditNote()` hands it
+     * the revenue-reversal / VAT / AR lines as `extraJournal`; for a
+     * `reason === 'return'` note it also passes one `return_in` line per
+     * product line — the engine computes the COGS reversal from current WAC
+     * (DR Inventory / CR COGS), restores stock, and posts ONE balanced
+     * entry in a single RPC.
      */
-    private readonly categoryAccounts: CategoryAccountResolver = nullCategoryAccountResolver,
+    private readonly engine: InventoryTransactionPoster,
+    private readonly invoiceService: InvoicePaymentRecorder,
+    private readonly accounts: AccountMapper,
+    /** Product → category → generic-key resolution for revenue / inventory / COGS accounts. */
+    private readonly inventoryAccounts: InventoryAccountResolver,
+    private readonly products: DocumentProductLookup,
+    private readonly warehouses: DocumentWarehouseResolver,
   ) {}
 
   async getCreditNotes(): Promise<CreditNote[]> {
@@ -140,121 +124,121 @@ export class CreditNoteService {
       );
     }
 
+    const docLabel = `Credit Note ${creditNote.creditNoteNumber}`;
+    const isReturn = creditNote.reason === 'return';
     const genericRevenueId = await this.accounts.getAccountId('SALES_REVENUE');
 
-    // Per-line category -> granular account resolution (Phase 21.3), mirroring
-    // InvoiceService.postInvoice(): a return of furniture + stationery reverses
-    // revenue against 4010 and 4030 separately, buckets reconciled to
-    // creditNote.subtotal so the reversal still balances to the cent.
-    const lineCategoryAccounts = await Promise.all(
-      creditNote.lineItems.map(async (line) => {
-        const category =
-          line.productId && this.inventoryMover.getProductCategory
-            ? await this.inventoryMover.getProductCategory(line.productId)
-            : undefined;
-        return this.categoryAccounts.resolveForCategory(category);
-      }),
-    );
+    // Resolve every product line's Product once.
+    const productById = new Map<ID, Product>();
+    for (const line of creditNote.lineItems) {
+      if (line.productId && !productById.has(line.productId)) {
+        const product = await this.products.getProduct(line.productId);
+        if (!product) {
+          throw new Error(`${docLabel}: product "${line.productId}" not found — cannot issue.`);
+        }
+        productById.set(line.productId, product);
+      }
+    }
 
-    const revenueContributions = creditNote.lineItems.map((line, index) => ({
-      accountId: lineCategoryAccounts[index].revenueAccountId ?? genericRevenueId,
-      amount: line.lineTotal,
-    }));
+    // New guard: a return line's quantity may not exceed what was invoiced
+    // for that product on the linked invoice.
+    if (isReturn && creditNote.invoiceId) {
+      const invoice = await this.invoiceService.getInvoice(creditNote.invoiceId);
+      if (invoice) {
+        const invoicedByProduct = new Map<ID, number>();
+        for (const line of invoice.lineItems) {
+          if (line.productId) {
+            invoicedByProduct.set(line.productId, (invoicedByProduct.get(line.productId) ?? 0) + line.quantity);
+          }
+        }
+        const returnedByProduct = new Map<ID, number>();
+        for (const line of creditNote.lineItems) {
+          if (line.productId) {
+            returnedByProduct.set(line.productId, (returnedByProduct.get(line.productId) ?? 0) + line.quantity);
+          }
+        }
+        for (const [productId, returnedQty] of returnedByProduct) {
+          const invoicedQty = invoicedByProduct.get(productId) ?? 0;
+          if (returnedQty > invoicedQty + 1e-9) {
+            throw new Error(
+              `${docLabel}: return quantity ${returnedQty} for product "${productId}" exceeds the ${invoicedQty} invoiced on invoice "${creditNote.invoiceId}".`,
+            );
+          }
+        }
+      }
+    }
+
+    // --- extraJournal: the value reversal (always) ---
+    const revenueContributions: { accountId: ID; amount: number }[] = [];
+    for (const line of creditNote.lineItems) {
+      const product = line.productId ? productById.get(line.productId) : undefined;
+      const accountId = product
+        ? await this.inventoryAccounts.resolveForProduct(product, 'revenue')
+        : genericRevenueId;
+      revenueContributions.push({ accountId, amount: line.lineTotal });
+    }
     const revenueBuckets =
       revenueContributions.length > 0
         ? bucketByAccount(revenueContributions, creditNote.subtotal)
         : [{ accountId: genericRevenueId, amount: creditNote.subtotal }];
 
-    const lines: NewJournalLineInput[] = revenueBuckets.map((bucket) => ({
+    const extraJournal: ExtraJournalLine[] = revenueBuckets.map((bucket) => ({
       accountId: bucket.accountId,
-      description: `Credit Note ${creditNote.creditNoteNumber}`,
       debit: bucket.amount,
       credit: 0,
+      description: docLabel,
     }));
     if (creditNote.taxTotal > 0) {
-      lines.push({
+      extraJournal.push({
         accountId: await this.accounts.getAccountId('VAT_OUTPUT'),
-        description: 'VAT Output reversal',
         debit: creditNote.taxTotal,
         credit: 0,
+        description: 'VAT Output reversal',
       });
     }
-    lines.push({
+    extraJournal.push({
       accountId: await this.accounts.getAccountId('AR'),
-      description: `Credit Note ${creditNote.creditNoteNumber}`,
       debit: 0,
       credit: creditNote.total,
+      description: docLabel,
     });
 
-    const returnLines = creditNote.reason === 'return' ? creditNote.lineItems.filter((line) => line.productId) : [];
-    const returnLineAccounts =
-      creditNote.reason === 'return'
-        ? creditNote.lineItems
-            .map((line, index) => ({ line, resolved: lineCategoryAccounts[index] }))
-            .filter((entry) => entry.line.productId)
-        : [];
-    const cogsByLine = await Promise.all(
-      returnLines.map((line) => this.inventoryMover.calculateCogs(line.productId!, line.quantity, line.warehouseId)),
-    );
-    const roundedCogs = cogsByLine.map(roundToCents);
-    const totalCogs = roundToCents(roundedCogs.reduce((sum, c) => sum + c, 0));
-    if (totalCogs > 0) {
-      const genericInventoryId = await this.accounts.getAccountId('INVENTORY');
-      const genericCogsId = await this.accounts.getAccountId('COGS');
-      const inventoryBuckets = bucketByAccount(
-        returnLineAccounts.map((entry, i) => ({
-          accountId: entry.resolved.inventoryAccountId ?? genericInventoryId,
-          amount: roundedCogs[i],
-        })),
-      );
-      const cogsBuckets = bucketByAccount(
-        returnLineAccounts.map((entry, i) => ({
-          accountId: entry.resolved.cogsAccountId ?? genericCogsId,
-          amount: roundedCogs[i],
-        })),
-      );
-      for (const bucket of inventoryBuckets) {
+    // --- inventory lines: only for a genuine goods return ---
+    const lines: InventoryTransactionLine[] = [];
+    if (isReturn) {
+      for (const line of creditNote.lineItems) {
+        if (!line.productId) continue;
+        const product = productById.get(line.productId)!;
+        const tracked = Boolean(product.trackInventory);
+        const warehouseId = tracked
+          ? await requireWarehouseId(this.warehouses, line.warehouseId, docLabel)
+          : ((await resolveWarehouseId(this.warehouses, line.warehouseId)) ?? line.warehouseId ?? '');
         lines.push({
-          accountId: bucket.accountId,
-          description: `Credit Note ${creditNote.creditNoteNumber} - Inventory`,
-          debit: bucket.amount,
-          credit: 0,
-        });
-      }
-      for (const bucket of cogsBuckets) {
-        lines.push({
-          accountId: bucket.accountId,
-          description: `Credit Note ${creditNote.creditNoteNumber} - Cost of Sales reversal`,
-          debit: 0,
-          credit: bucket.amount,
+          productId: product.id,
+          warehouseId,
+          quantityDelta: line.quantity,
+          costingMode: 'return_in',
+          movementType: 'sales_return',
+          inventoryAccountId: await this.inventoryAccounts.resolveForProduct(product, 'inventory'),
+          contraAccountId: await this.inventoryAccounts.resolveForProduct(product, 'cogs'),
+          sourceDocumentLineId: line.id,
+          nonStock: !tracked,
         });
       }
     }
 
-    const entry = await this.journalEntryService.postJournalEntry({
-      date: creditNote.issueDate,
-      memo: `Credit Note ${creditNote.creditNoteNumber}`,
-      source: 'credit_note',
-      postedByUserId,
+    const result = await this.engine.applyInventoryTransaction({
+      postingKey: `credit_note:${creditNote.id}:issue`,
+      sourceType: 'credit_note',
+      sourceId: creditNote.id,
+      movementDate: toMovementDate(creditNote.issueDate),
+      createdBy: postedByUserId ?? SYSTEM_USER_ID,
       lines,
+      extraJournal,
+      journal: { source: 'credit_note', memo: docLabel },
     });
 
-    await Promise.all(
-      returnLines.map((line, index) =>
-        this.inventoryMover.recordReturnMovement(
-          line.productId!,
-          line.quantity,
-          `Credit Note ${creditNote.creditNoteNumber}`,
-          line.warehouseId,
-          // Ties a FIFO return lot's cost to the exact amount just
-          // reversed to the GL above, so the lot ledger and the GL can
-          // never disagree — see InventoryPostingAdapter's class doc.
-          line.quantity > 0 ? cogsByLine[index] / line.quantity : undefined,
-        ),
-      ),
-    );
-
-    return this.repository.update(id, { status: 'issued', journalEntryId: entry.id });
+    return this.repository.update(id, { status: 'issued', journalEntryId: result.journalEntryId });
   }
 
   /**

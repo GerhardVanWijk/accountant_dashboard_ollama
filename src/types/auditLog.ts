@@ -25,7 +25,16 @@ export type AuditAction =
   | 'public_interest_score_calculated'
   | 'reconciliation_issue_reviewed'
   | 'reconciliation_issue_dismissed'
-  | 'reconciliation_issue_resolved';
+  | 'reconciliation_issue_resolved'
+  // Inventory Accounting Module (docs/INVENTORY_ACCOUNTING.md § Audit).
+  | 'stock_adjusted'
+  | 'stock_written_off'
+  | 'stock_take_posted'
+  | 'opening_stock_set'
+  | 'cost_price_changed'
+  | 'inventory_account_mapping_changed'
+  | 'stock_import_committed'
+  | 'supplier_return_posted';
 
 /**
  * One append-only audit log row. `userId` is supplied by the caller — this

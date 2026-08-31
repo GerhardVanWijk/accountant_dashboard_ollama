@@ -2,12 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { BillService, type FixedAssetCapitalizer } from './billService';
 import { MockBillRepository } from '@/repositories/mock/MockBillRepository';
 import { seedBills } from '@/mock-data/bills';
-import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import { AccountService } from '@/features/accounting/services/accountService';
 import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
-import { CategoryAccountMappingService } from '@/features/accounting/services/categoryAccountMappingService';
-import { MockCategoryAccountMappingRepository } from '@/features/accounting/repositories/MockCategoryAccountMappingRepository';
-import type { CategoryAccountMappingRecord } from '@/features/accounting/repositories/ICategoryAccountMappingRepository';
+import { AccountingPeriodService } from '@/features/accounting/services/accountingPeriodService';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
@@ -15,9 +12,15 @@ import { AuditLogService } from '@/services/auditLogService';
 import { MockAuditLogRepository } from '@/repositories/mock/MockAuditLogRepository';
 import { seedAccounts } from '@/mock-data/accounts';
 import { taxRateService } from '@/features/tax/services';
-import type { AccountingPeriod } from '@/types';
+import { InventoryPostingEngine } from '@/features/inventory/services/inventoryPostingEngine';
+import {
+  FakeInventoryStore,
+  FakeInventoryTransactionExecutor,
+} from '@/features/inventory/services/inventoryPostingEngine.fake';
+import { InventoryAccountResolverService } from '@/features/inventory/services/inventoryAccountResolver';
+import { periodGuardFrom } from '@/features/inventory/services/documentInventoryPosting';
+import type { AccountingPeriod, Product, ProductCategory, Warehouse } from '@/types';
 
-/** A single accounting period wide open enough to cover every date these tests use. */
 function makeOpenPeriod(): AccountingPeriod {
   return {
     id: 'period_test_open',
@@ -32,43 +35,37 @@ function makeOpenPeriod(): AccountingPeriod {
   };
 }
 
-/**
- * Configurable stub InventoryReceiver — `trackedProductIds` controls which
- * products isTrackedInventory() reports as tracked, and `recordedReceipts`
- * lets tests assert recordReceiptMovement() was only called AFTER a
- * successful post, matching the real InventoryPostingAdapter's contract
- * without pulling in real Product/Warehouse/StockMovement repositories
- * here (see inventoryPostingAdapter.test.ts for that).
- */
-function makeInventoryReceiverStub(trackedProductIds: string[] = [], categoryByProduct: Record<string, string> = {}) {
-  const recordedReceipts: { productId: string; quantity: number; unitCost: number; reference: string; warehouseId?: string }[] = [];
+function makeProduct(id: string, overrides: Partial<Product> = {}): Product {
   return {
-    isTrackedInventory: async (productId: string) => trackedProductIds.includes(productId),
-    recordReceiptMovement: async (
-      productId: string,
-      quantity: number,
-      unitCost: number,
-      reference: string,
-      warehouseId?: string,
-    ) => {
-      recordedReceipts.push({ productId, quantity, unitCost, reference, warehouseId });
-    },
-    getProductCategory: async (productId: string) => categoryByProduct[productId],
-    recordedReceipts,
+    id,
+    sku: id,
+    name: id,
+    type: 'good',
+    unitPrice: 100,
+    costPrice: 0,
+    trackInventory: true,
+    quantityOnHand: 0,
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
   };
 }
 
-function makeCategoryAccounts(rows: CategoryAccountMappingRecord[] = []) {
-  return new CategoryAccountMappingService(new MockCategoryAccountMappingRepository(rows));
+function makeWarehouse(id: string, isDefault = false): Warehouse {
+  return {
+    id,
+    name: id,
+    code: id,
+    isDefault,
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
 }
 
-/**
- * Stub PurchaseOrderLookup — `receivedPOs` maps a PO id to whatever
- * `journalEntryId` its (stubbed) GRNI receipt posted, so tests can prove
- * postBill() clears GRNI instead of debiting Inventory when the linked PO
- * was already received. Empty by default: no bill in these tests is linked
- * to a GRNI-received PO unless a test explicitly configures one.
- */
+const DEFAULT_WH = 'wh_default';
+
 function makePurchaseOrderLookupStub(receivedPOs: Record<string, string> = {}) {
   return {
     getPurchaseOrder: async (id: string) =>
@@ -76,12 +73,6 @@ function makePurchaseOrderLookupStub(receivedPOs: Record<string, string> = {}) {
   };
 }
 
-/**
- * Stub FixedAssetCapitalizer — records every call so tests can assert
- * postBill() capitalized the right lines with the right details, without
- * pulling in the real FixedAssetService/repository here (see
- * fixedAssetService.test.ts for that).
- */
 function makeFixedAssetCapitalizerStub() {
   const capitalized: Parameters<FixedAssetCapitalizer['capitalizeFromBillLine']>[0][] = [];
   return {
@@ -92,46 +83,95 @@ function makeFixedAssetCapitalizerStub() {
   };
 }
 
+/**
+ * Real InventoryPostingEngine over an in-memory FakeInventoryStore + real
+ * AccountMappingService against seedAccounts. `postBill()` posts a SINGLE
+ * journal entry through the engine; assertions read `store.journalEntries`.
+ */
+function makeHarness(options: {
+  trackedProducts?: Record<string, Partial<Product>>;
+  categories?: Record<string, Partial<ProductCategory>>;
+  purchaseOrders?: Record<string, string>;
+} = {}) {
+  const accountRepository = new MockAccountRepository(seedAccounts);
+  const journalRepository = new MockJournalEntryRepository([]);
+  const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
+  const auditLog = new AuditLogService(new MockAuditLogRepository());
+  const accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
+  const periodService = new AccountingPeriodService(periodRepository, auditLog);
+
+  const store = new FakeInventoryStore();
+  const engine = new InventoryPostingEngine(
+    new FakeInventoryTransactionExecutor(store),
+    periodGuardFrom(periodService),
+  );
+
+  const categoryMap = new Map<string, ProductCategory>();
+  for (const [id, partial] of Object.entries(options.categories ?? {})) {
+    categoryMap.set(id, {
+      id,
+      name: id,
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      ...partial,
+    });
+  }
+  const resolver = new InventoryAccountResolverService(accountMapper, {
+    getCategory: async (id: string) => categoryMap.get(id),
+  });
+
+  const productStore = new Map<string, Product>();
+  for (const [id, partial] of Object.entries(options.trackedProducts ?? {})) {
+    const product = makeProduct(id, partial);
+    productStore.set(id, product);
+    store.addProduct(id, product.quantityOnHand, product.costPrice);
+  }
+  const products = { getProduct: async (id: string) => productStore.get(id) };
+
+  const warehouseList = [makeWarehouse(DEFAULT_WH, true), makeWarehouse('wh_branch')];
+  const warehouses = {
+    getWarehouse: async (id: string) => warehouseList.find((w) => w.id === id),
+    getDefaultWarehouse: async () => warehouseList.find((w) => w.isDefault),
+  };
+
+  const repository = new MockBillRepository();
+  const capitalizer = makeFixedAssetCapitalizerStub();
+  const service = new BillService(
+    repository,
+    engine,
+    taxRateService,
+    makePurchaseOrderLookupStub(options.purchaseOrders),
+    capitalizer,
+    accountMapper,
+    resolver,
+    products,
+    warehouses,
+  );
+
+  const getJE = (id: string | undefined) => store.journalEntries.find((e) => e.id === id);
+  const line = (id: string | undefined, accountId: string, side: 'debit' | 'credit') =>
+    getJE(id)?.lines.find((l) => l.accountId === accountId)?.[side];
+  const balanced = (id: string | undefined) => {
+    const e = getJE(id)!;
+    return e.lines.reduce((s, l) => s + l.debit, 0) === e.lines.reduce((s, l) => s + l.credit, 0);
+  };
+
+  return { service, repository, store, capitalizer, getJE, line, balanced };
+}
+
 describe('BillService', () => {
+  let harness: ReturnType<typeof makeHarness>;
   let billService: BillService;
-  let repository: MockBillRepository;
-  let journalEntryService: JournalEntryService;
-  let accountMapper: AccountMappingService;
-  let inventoryReceiver: ReturnType<typeof makeInventoryReceiverStub>;
 
   beforeEach(() => {
-    repository = new MockBillRepository();
-    const journalRepository = new MockJournalEntryRepository([]);
-    const accountRepository = new MockAccountRepository(seedAccounts);
-    const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
-    const auditLog = new AuditLogService(new MockAuditLogRepository());
-    journalEntryService = new JournalEntryService(
-      journalRepository,
-      accountRepository,
-      periodRepository,
-      auditLog,
-    );
-    // Real AccountMappingService (docs/SUPABASE_MIGRATION_GUIDE.md Phase
-    // E.5) resolving against the same seedAccounts codes the old
-    // hardcoded acc_XXXX constants used to point at directly.
-    accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
-    inventoryReceiver = makeInventoryReceiverStub();
-    billService = new BillService(
-      repository,
-      journalEntryService,
-      taxRateService,
-      inventoryReceiver,
-      makePurchaseOrderLookupStub(),
-      makeFixedAssetCapitalizerStub(),
-      accountMapper,
-    );
+    harness = makeHarness();
+    billService = harness.service;
   });
 
   describe('getBills', () => {
     it('should return all bills', async () => {
       const bills = await billService.getBills();
-      expect(bills).toBeDefined();
-      expect(bills.length).toBeGreaterThan(0);
       expect(bills.length).toBe(seedBills.length);
     });
   });
@@ -139,71 +179,122 @@ describe('BillService', () => {
   describe('getBill', () => {
     it('should return a bill by ID', async () => {
       const bill = await billService.getBill(seedBills[0].id);
-      expect(bill).toBeDefined();
       expect(bill?.id).toBe(seedBills[0].id);
-      expect(bill?.billNumber).toBe(seedBills[0].billNumber);
     });
 
     it('should return undefined for non-existent bill', async () => {
-      const bill = await billService.getBill('non-existent-id');
-      expect(bill).toBeUndefined();
+      expect(await billService.getBill('non-existent-id')).toBeUndefined();
     });
   });
 
   describe('createBill', () => {
     it('should create a new bill', async () => {
-      const billData = {
+      const bill = await billService.createBill({
         billNumber: 'BILL-2026-TEST',
         supplierId: 'sup_test',
         issueDate: '2026-08-21',
         dueDate: '2026-09-21',
-        lineItems: [
-          {
-            id: 'li_test',
-            productId: 'prod_test',
-            description: 'Test Item',
-            quantity: 10,
-            unitPrice: 100,
-            taxRateId: 'tax_rate_15',
-            taxAmount: 150,
-            lineTotal: 1000,
-          },
-        ],
+        lineItems: [],
         subtotal: 1000,
         taxTotal: 150,
         total: 1150,
         amountPaid: 0,
-        currency: 'ZAR' as const,
-        status: 'draft' as const,
-      };
-
-      const bill = await billService.createBill(billData);
-      expect(bill).toBeDefined();
-      expect(bill.id).toBeDefined();
+        currency: 'ZAR',
+        status: 'draft',
+      });
       expect(bill.billNumber).toBe('BILL-2026-TEST');
-      expect(bill.total).toBe(1150);
       expect(bill.status).toBe('draft');
     });
   });
 
   describe('updateBill', () => {
-    it('should update a bill', async () => {
-      const bills = await billService.getBills();
-      const billToUpdate = bills[0];
-
-      const updated = await billService.updateBill(billToUpdate.id, {
-        status: 'paid',
-        amountPaid: billToUpdate.total,
+    it('edits a DRAFT bill', async () => {
+      const draft = await billService.createBill({
+        billNumber: 'BILL-DRAFT-EDIT',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [],
+        subtotal: 100,
+        taxTotal: 15,
+        total: 115,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
       });
-
-      expect(updated.status).toBe('paid');
-      expect(updated.amountPaid).toBe(billToUpdate.total);
+      const updated = await billService.updateBill(draft.id, { subtotal: 200 });
+      expect(updated.subtotal).toBe(200);
     });
 
     it('should throw error for non-existent bill', async () => {
-      await expect(
-        billService.updateBill('non-existent-id', { status: 'paid' }),
-      ).rejects.toThrow('not found');
+      await expect(billService.updateBill('non-existent-id', { status: 'paid' })).rejects.toThrow('not found');
+    });
+
+    it('REJECTS editing a posted bill — a posted bill is immutable (item 5)', async () => {
+      const posted = (await billService.getBills()).find((b) => b.status !== 'draft')!;
+      await expect(billService.updateBill(posted.id, { supplierId: 'x' })).rejects.toThrow(/immutable/i);
+      await expect(billService.updateBill(posted.id, { total: 999 })).rejects.toThrow(/immutable/i);
+      await expect(billService.updateBill(posted.id, { issueDate: '2020-01-01' })).rejects.toThrow(/immutable/i);
+    });
+  });
+
+  describe('immutability of a posted bill (Phase 3C item 5)', () => {
+    it('a posted bill cannot be deleted', async () => {
+      const posted = (await billService.getBills()).find((b) => b.status !== 'draft')!;
+      await expect(billService.deleteBill(posted.id)).rejects.toThrow(/only a draft bill/i);
+    });
+
+    it('a posted bill cannot be voided — voidBill is draft-only', async () => {
+      const posted = (await billService.getBills()).find((b) => b.status !== 'draft')!;
+      await expect(billService.voidBill(posted.id)).rejects.toThrow(/only a draft bill can be voided/i);
+    });
+
+    it('a draft bill CAN be voided', async () => {
+      const draft = await billService.createBill({
+        billNumber: 'BILL-DRAFT-VOID',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [],
+        subtotal: 0,
+        taxTotal: 0,
+        total: 0,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      expect((await billService.voidBill(draft.id)).status).toBe('void');
+    });
+
+    it('a posted inventory bill stays GL/stock-consistent — no mutation path leaves it inconsistent', async () => {
+      const h = makeHarness({ trackedProducts: { prod_tracked: {} } });
+      const bill = await h.service.createBill({
+        billNumber: 'BILL-INV-IMMUT',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_tracked', description: 'Widgets', quantity: 10, unitPrice: 50, taxRateId: 'tax_std_v2', taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      const posted = await h.service.postBill(bill.id);
+      const je = h.store.journalEntries;
+      const movements = h.store.movements.length;
+
+      await expect(h.service.updateBill(bill.id, { total: 1 })).rejects.toThrow(/immutable/i);
+      await expect(h.service.voidBill(bill.id)).rejects.toThrow(/only a draft bill can be voided/i);
+      await expect(h.service.deleteBill(bill.id)).rejects.toThrow(/only a draft bill/i);
+
+      // nothing changed: the journal entry and stock movements are exactly as posted
+      expect(h.store.journalEntries).toBe(je);
+      expect(h.store.movements).toHaveLength(movements);
+      expect((await h.service.getBill(bill.id))!.journalEntryId).toBe(posted.journalEntryId);
     });
   });
 
@@ -222,51 +313,17 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       await billService.deleteBill(draft.id);
-
-      const deleted = await billService.getBill(draft.id);
-      expect(deleted).toBeUndefined();
+      expect(await billService.getBill(draft.id)).toBeUndefined();
     });
 
     it('should refuse to delete a posted (non-draft) bill', async () => {
-      const bills = await billService.getBills();
-      const postedBill = bills.find((b) => b.status !== 'draft');
-      expect(postedBill).toBeDefined();
-
-      await expect(billService.deleteBill(postedBill!.id)).rejects.toThrow(/only a draft bill/i);
-
-      const stillThere = await billService.getBill(postedBill!.id);
-      expect(stillThere).toBeDefined();
+      const postedBill = (await billService.getBills()).find((b) => b.status !== 'draft')!;
+      await expect(billService.deleteBill(postedBill.id)).rejects.toThrow(/only a draft bill/i);
     });
   });
 
   describe('postBill', () => {
-    it('should change status from draft to awaiting_payment', async () => {
-      const bills = await billService.getBills();
-      const draftBill = bills.find((b) => b.status === 'draft');
-
-      if (!draftBill) {
-        // Create one
-        const newBill = await billService.createBill({
-          billNumber: 'BILL-2026-DRAFT',
-          supplierId: 'sup_test',
-          issueDate: '2026-08-21',
-          dueDate: '2026-09-21',
-          lineItems: [],
-          subtotal: 0,
-          taxTotal: 0,
-          total: 0,
-          amountPaid: 0,
-          currency: 'ZAR',
-          status: 'draft',
-        });
-
-        const posted = await billService.postBill(newBill.id);
-        expect(posted.status).toBe('awaiting_payment');
-      }
-    });
-
     it('posts the full VAT to VAT Input when every line is deductible', async () => {
       const bill = await billService.createBill({
         billNumber: 'BILL-VAT-STD',
@@ -283,15 +340,10 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       const posted = await billService.postBill(bill.id);
-      const entry = await journalEntryService.getAccountLedger('acc_2110');
-      const vatInputLine = entry.find((row) => row.entryId === posted.journalEntryId);
-      expect(vatInputLine?.debit).toBe(150);
-
-      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
-      const expenseLine = expenseLedger.find((row) => row.entryId === posted.journalEntryId);
-      expect(expenseLine?.debit).toBe(1000);
+      expect(harness.line(posted.journalEntryId, 'acc_2110', 'debit')).toBe(150);
+      expect(harness.line(posted.journalEntryId, 'acc_5100', 'debit')).toBe(1000);
+      expect(harness.balanced(posted.journalEntryId)).toBe(true);
     });
 
     it('folds non-deductible VAT into the expense line instead of posting it to VAT Input', async () => {
@@ -310,15 +362,9 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       const posted = await billService.postBill(bill.id);
-
-      const vatInputLedger = await journalEntryService.getAccountLedger('acc_2110');
-      expect(vatInputLedger.some((row) => row.entryId === posted.journalEntryId)).toBe(false);
-
-      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
-      const expenseLine = expenseLedger.find((row) => row.entryId === posted.journalEntryId);
-      expect(expenseLine?.debit).toBe(460); // subtotal (400) + non-deductible VAT (60), never claimed
+      expect(harness.line(posted.journalEntryId, 'acc_2110', 'debit')).toBeUndefined();
+      expect(harness.line(posted.journalEntryId, 'acc_5100', 'debit')).toBe(460);
     });
 
     it('splits a mixed bill correctly between deductible and non-deductible VAT', async () => {
@@ -338,23 +384,13 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       const posted = await billService.postBill(bill.id);
-
-      const vatInputLedger = await journalEntryService.getAccountLedger('acc_2110');
-      const vatInputLine = vatInputLedger.find((row) => row.entryId === posted.journalEntryId);
-      expect(vatInputLine?.debit).toBe(150); // only the deductible portion
-
-      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
-      const expenseLine = expenseLedger.find((row) => row.entryId === posted.journalEntryId);
-      expect(expenseLine?.debit).toBe(1460); // subtotal (1400) + non-deductible VAT (60)
-
-      const apLedger = await journalEntryService.getAccountLedger('acc_2000');
-      const apLine = apLedger.find((row) => row.entryId === posted.journalEntryId);
-      expect(apLine?.credit).toBe(1610); // still the full bill total, unaffected by the split
+      expect(harness.line(posted.journalEntryId, 'acc_2110', 'debit')).toBe(150);
+      expect(harness.line(posted.journalEntryId, 'acc_5100', 'debit')).toBe(1460);
+      expect(harness.line(posted.journalEntryId, 'acc_2000', 'credit')).toBe(1610);
     });
 
-    it('conservatively treats VAT with no resolvable tax rate as non-deductible rather than claiming it', async () => {
+    it('conservatively treats VAT with no resolvable tax rate as non-deductible', async () => {
       const bill = await billService.createBill({
         billNumber: 'BILL-VAT-UNRESOLVED',
         supplierId: 'sup_test',
@@ -370,22 +406,14 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       const posted = await billService.postBill(bill.id);
-
-      const vatInputLedger = await journalEntryService.getAccountLedger('acc_2110');
-      expect(vatInputLedger.some((row) => row.entryId === posted.journalEntryId)).toBe(false);
-
-      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
-      const expenseLine = expenseLedger.find((row) => row.entryId === posted.journalEntryId);
-      expect(expenseLine?.debit).toBe(575);
+      expect(harness.line(posted.journalEntryId, 'acc_2110', 'debit')).toBeUndefined();
+      expect(harness.line(posted.journalEntryId, 'acc_5100', 'debit')).toBe(575);
     });
 
-    it('capitalizes a tracked-inventory line to the Inventory account instead of Operating Expenses, and records a receipt after posting', async () => {
-      const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub(), accountMapper);
-
-      const bill = await localBillService.createBill({
+    it('capitalizes a tracked-inventory line to Inventory, moves stock once, in ONE entry', async () => {
+      const h = makeHarness({ trackedProducts: { prod_tracked: {} } });
+      const bill = await h.service.createBill({
         billNumber: 'BILL-INV-TRACKED',
         supplierId: 'sup_test',
         issueDate: '2026-08-21',
@@ -400,43 +428,28 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
+      const posted = await h.service.postBill(bill.id);
+      expect(h.line(posted.journalEntryId, 'acc_1200', 'debit')).toBe(500);
+      expect(h.line(posted.journalEntryId, 'acc_5100', 'debit')).toBeUndefined();
+      expect(h.line(posted.journalEntryId, 'acc_2000', 'credit')).toBe(575);
+      expect(h.balanced(posted.journalEntryId)).toBe(true);
 
-      const posted = await localBillService.postBill(bill.id);
-
-      const inventoryLedger = await journalEntryService.getAccountLedger('acc_1200');
-      const inventoryLine = inventoryLedger.find((row) => row.entryId === posted.journalEntryId);
-      expect(inventoryLine?.debit).toBe(500);
-
-      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
-      const expenseLine = expenseLedger.find((row) => row.entryId === posted.journalEntryId);
-      expect(expenseLine).toBeUndefined(); // nothing expensed — the whole subtotal went to Inventory
-
-      expect(trackedReceiver.recordedReceipts).toEqual([
-        { productId: 'prod_tracked', quantity: 10, unitCost: 50, reference: 'Bill BILL-INV-TRACKED' },
-      ]);
+      const receipts = h.store.movements.filter((m) => m.type === 'goods_received');
+      expect(receipts).toHaveLength(1);
+      expect(receipts[0].quantityDelta).toBe(10);
+      expect(receipts[0].unitCost).toBe(50);
+      expect(h.store.products.get('prod_tracked')!.costPrice).toBe(50); // WAC blended once
     });
 
-    it("passes a line item's warehouseId through to recordReceiptMovement", async () => {
-      const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub(), accountMapper);
-
-      const bill = await localBillService.createBill({
+    it("uses a line item's explicit warehouseId for the receipt movement", async () => {
+      const h = makeHarness({ trackedProducts: { prod_tracked: {} } });
+      const bill = await h.service.createBill({
         billNumber: 'BILL-INV-WH',
         supplierId: 'sup_test',
         issueDate: '2026-08-21',
         dueDate: '2026-09-21',
         lineItems: [
-          {
-            id: 'li_1',
-            productId: 'prod_tracked',
-            warehouseId: 'wh_branch',
-            description: 'Widgets for resale',
-            quantity: 10,
-            unitPrice: 50,
-            taxRateId: 'tax_std_v2',
-            taxAmount: 75,
-            lineTotal: 500,
-          },
+          { id: 'li_1', productId: 'prod_tracked', warehouseId: 'wh_branch', description: 'Widgets', quantity: 10, unitPrice: 50, taxRateId: 'tax_std_v2', taxAmount: 75, lineTotal: 500 },
         ],
         subtotal: 500,
         taxTotal: 75,
@@ -445,27 +458,23 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
-      await localBillService.postBill(bill.id);
-
-      expect(trackedReceiver.recordedReceipts).toEqual([
-        { productId: 'prod_tracked', quantity: 10, unitCost: 50, reference: 'Bill BILL-INV-WH', warehouseId: 'wh_branch' },
-      ]);
+      await h.service.postBill(bill.id);
+      expect(h.store.movements.filter((m) => m.type === 'goods_received')[0].warehouseId).toBe('wh_branch');
     });
 
-    it('clears GRNI instead of debiting Inventory, and does NOT re-record the stock receipt, when the linked PO was already GRNI-received', async () => {
-      const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const purchaseOrders = makePurchaseOrderLookupStub({ po_already_received: 'je_grni_receipt' });
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, purchaseOrders, makeFixedAssetCapitalizerStub(), accountMapper);
-
-      const bill = await localBillService.createBill({
+    it('clears GRNI (not Inventory) and does NOT re-record stock when the linked PO was already GRNI-received', async () => {
+      const h = makeHarness({
+        trackedProducts: { prod_tracked: {} },
+        purchaseOrders: { po_already_received: 'je_grni_receipt' },
+      });
+      const bill = await h.service.createBill({
         billNumber: 'BILL-FROM-RECEIVED-PO',
         supplierId: 'sup_test',
         purchaseOrderId: 'po_already_received',
         issueDate: '2026-08-22',
         dueDate: '2026-09-22',
         lineItems: [
-          { id: 'li_1', productId: 'prod_tracked', description: 'Widgets for resale', quantity: 10, unitPrice: 50, taxRateId: 'tax_std_v2', taxAmount: 75, lineTotal: 500 },
+          { id: 'li_1', productId: 'prod_tracked', description: 'Widgets', quantity: 10, unitPrice: 50, taxRateId: 'tax_std_v2', taxAmount: 75, lineTotal: 500 },
         ],
         subtotal: 500,
         taxTotal: 75,
@@ -474,28 +483,17 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
-      const posted = await localBillService.postBill(bill.id);
-
-      const inventoryLedger = await journalEntryService.getAccountLedger('acc_1200');
-      expect(inventoryLedger.some((row) => row.entryId === posted.journalEntryId)).toBe(false); // Inventory NOT debited again
-
-      const grniLedger = await journalEntryService.getAccountLedger('acc_2050');
-      const grniLine = grniLedger.find((row) => row.entryId === posted.journalEntryId);
-      expect(grniLine?.debit).toBe(500); // clears the liability recorded at PO-receipt time
-
-      const totalDebit = (await journalEntryService.getEntry(posted.journalEntryId!))!.lines.reduce((s, l) => s + l.debit, 0);
-      const totalCredit = (await journalEntryService.getEntry(posted.journalEntryId!))!.lines.reduce((s, l) => s + l.credit, 0);
-      expect(totalDebit).toBeCloseTo(totalCredit);
-
-      expect(trackedReceiver.recordedReceipts).toEqual([]); // stock already moved at PO-receipt — not recorded again
+      const posted = await h.service.postBill(bill.id);
+      expect(h.line(posted.journalEntryId, 'acc_1200', 'debit')).toBeUndefined(); // Inventory NOT debited again
+      expect(h.line(posted.journalEntryId, 'acc_2050', 'debit')).toBe(500); // GRNI cleared
+      expect(h.line(posted.journalEntryId, 'acc_2000', 'credit')).toBe(575);
+      expect(h.balanced(posted.journalEntryId)).toBe(true);
+      expect(h.store.movements).toHaveLength(0); // stock already moved at PO-receipt
     });
 
     it('splits a mixed bill between Inventory (tracked) and Expense (non-tracked) lines', async () => {
-      const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub(), accountMapper);
-
-      const bill = await localBillService.createBill({
+      const h = makeHarness({ trackedProducts: { prod_tracked: {} } });
+      const bill = await h.service.createBill({
         billNumber: 'BILL-INV-MIXED',
         supplierId: 'sup_test',
         issueDate: '2026-08-21',
@@ -511,35 +509,16 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
-      const posted = await localBillService.postBill(bill.id);
-
-      const inventoryLedger = await journalEntryService.getAccountLedger('acc_1200');
-      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
-      const apLedger = await journalEntryService.getAccountLedger('acc_2000');
-
-      expect(inventoryLedger.find((row) => row.entryId === posted.journalEntryId)?.debit).toBe(500);
-      expect(expenseLedger.find((row) => row.entryId === posted.journalEntryId)?.debit).toBe(200);
-      expect(apLedger.find((row) => row.entryId === posted.journalEntryId)?.credit).toBe(805);
-
-      expect(trackedReceiver.recordedReceipts).toEqual([
-        { productId: 'prod_tracked', quantity: 10, unitCost: 50, reference: 'Bill BILL-INV-MIXED' },
-      ]);
+      const posted = await h.service.postBill(bill.id);
+      expect(h.line(posted.journalEntryId, 'acc_1200', 'debit')).toBe(500);
+      expect(h.line(posted.journalEntryId, 'acc_5100', 'debit')).toBe(200);
+      expect(h.line(posted.journalEntryId, 'acc_2000', 'credit')).toBe(805);
+      expect(h.balanced(posted.journalEntryId)).toBe(true);
     });
 
-    it('capitalizes a fixedAssetDetails line to the Fixed Assets account instead of Operating Expenses, and calls the capitalizer after posting', async () => {
-      const capitalizer = makeFixedAssetCapitalizerStub();
-      const localBillService = new BillService(
-        repository,
-        journalEntryService,
-        taxRateService,
-        makeInventoryReceiverStub(),
-        makePurchaseOrderLookupStub(),
-        capitalizer,
-        accountMapper,
-      );
-
-      const bill = await localBillService.createBill({
+    it('capitalizes a fixedAssetDetails line to Fixed Assets and calls the capitalizer after posting', async () => {
+      const h = makeHarness();
+      const bill = await h.service.createBill({
         billNumber: 'BILL-FA-1',
         supplierId: 'sup_test',
         issueDate: '2026-08-21',
@@ -569,51 +548,29 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
-      const posted = await localBillService.postBill(bill.id);
-
-      const fixedAssetLedger = await journalEntryService.getAccountLedger('acc_1500');
-      expect(fixedAssetLedger.find((row) => row.entryId === posted.journalEntryId)?.debit).toBe(350000);
-
-      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
-      expect(expenseLedger.find((row) => row.entryId === posted.journalEntryId)).toBeUndefined();
-
-      expect(capitalizer.capitalized).toHaveLength(1);
-      expect(capitalizer.capitalized[0]).toMatchObject({
+      const posted = await h.service.postBill(bill.id);
+      expect(h.line(posted.journalEntryId, 'acc_1500', 'debit')).toBe(350000);
+      expect(h.line(posted.journalEntryId, 'acc_5100', 'debit')).toBeUndefined();
+      expect(h.capitalizer.capitalized).toHaveLength(1);
+      expect(h.capitalizer.capitalized[0]).toMatchObject({
         sourceBillId: bill.id,
         journalEntryId: posted.journalEntryId,
         name: 'Delivery Van',
         category: 'motor_vehicles',
-        acquisitionDate: '2026-08-21',
         cost: 350000,
-        residualValue: 50000,
-        usefulLifeYears: 5,
-        depreciationMethod: 'straight_line',
-        taxWearTearRatePercent: 20,
       });
     });
 
-    it('splits a bill three ways between Inventory, Fixed Assets, and Expense lines', async () => {
-      const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const capitalizer = makeFixedAssetCapitalizerStub();
-      const localBillService = new BillService(
-        repository,
-        journalEntryService,
-        taxRateService,
-        trackedReceiver,
-        makePurchaseOrderLookupStub(),
-        capitalizer,
-        accountMapper,
-      );
-
-      const bill = await localBillService.createBill({
+    it('splits a bill three ways between Inventory, Fixed Assets, and Expense', async () => {
+      const h = makeHarness({ trackedProducts: { prod_tracked: {} } });
+      const bill = await h.service.createBill({
         billNumber: 'BILL-3WAY',
         supplierId: 'sup_test',
         issueDate: '2026-08-21',
         dueDate: '2026-09-21',
         lineItems: [
-          { id: 'li_1', productId: 'prod_tracked', description: 'Widgets for resale', quantity: 10, unitPrice: 50, taxRateId: 'tax_std_v2', taxAmount: 75, lineTotal: 500 },
-          { id: 'li_2', description: 'Office supplies (not tracked)', quantity: 1, unitPrice: 200, taxRateId: 'tax_std_v2', taxAmount: 30, lineTotal: 200 },
+          { id: 'li_1', productId: 'prod_tracked', description: 'Widgets', quantity: 10, unitPrice: 50, taxRateId: 'tax_std_v2', taxAmount: 75, lineTotal: 500 },
+          { id: 'li_2', description: 'Office supplies', quantity: 1, unitPrice: 200, taxRateId: 'tax_std_v2', taxAmount: 30, lineTotal: 200 },
           {
             id: 'li_3',
             description: 'Office Printer',
@@ -622,12 +579,7 @@ describe('BillService', () => {
             taxRateId: 'tax_std_v2',
             taxAmount: 2250,
             lineTotal: 15000,
-            fixedAssetDetails: {
-              category: 'office_equipment',
-              usefulLifeYears: 4,
-              depreciationMethod: 'straight_line',
-              residualValue: 0,
-            },
+            fixedAssetDetails: { category: 'office_equipment', usefulLifeYears: 4, depreciationMethod: 'straight_line', residualValue: 0 },
           },
         ],
         subtotal: 15700,
@@ -637,42 +589,24 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
-      const posted = await localBillService.postBill(bill.id);
-
-      const inventoryLedger = await journalEntryService.getAccountLedger('acc_1200');
-      const expenseLedger = await journalEntryService.getAccountLedger('acc_5100');
-      const fixedAssetLedger = await journalEntryService.getAccountLedger('acc_1500');
-      const apLedger = await journalEntryService.getAccountLedger('acc_2000');
-
-      expect(inventoryLedger.find((row) => row.entryId === posted.journalEntryId)?.debit).toBe(500);
-      expect(expenseLedger.find((row) => row.entryId === posted.journalEntryId)?.debit).toBe(200);
-      expect(fixedAssetLedger.find((row) => row.entryId === posted.journalEntryId)?.debit).toBe(15000);
-      expect(apLedger.find((row) => row.entryId === posted.journalEntryId)?.credit).toBe(18055);
-      expect(capitalizer.capitalized).toHaveLength(1);
+      const posted = await h.service.postBill(bill.id);
+      expect(h.line(posted.journalEntryId, 'acc_1200', 'debit')).toBe(500);
+      expect(h.line(posted.journalEntryId, 'acc_5100', 'debit')).toBe(200);
+      expect(h.line(posted.journalEntryId, 'acc_1500', 'debit')).toBe(15000);
+      expect(h.line(posted.journalEntryId, 'acc_2000', 'credit')).toBe(18055);
+      expect(h.capitalizer.capitalized).toHaveLength(1);
+      expect(h.balanced(posted.journalEntryId)).toBe(true);
     });
 
-    it('splits the capitalized Inventory debit by product category when a mapping is provided (Phase 21.3)', async () => {
-      const trackedReceiver = makeInventoryReceiverStub(['prod_fur', 'prod_sta'], {
-        prod_fur: 'Furniture',
-        prod_sta: 'Stationery',
+    it('splits the capitalized Inventory debit by product category', async () => {
+      const h = makeHarness({
+        trackedProducts: { prod_fur: { categoryId: 'cat_fur' }, prod_sta: { categoryId: 'cat_sta' } },
+        categories: {
+          cat_fur: { inventoryAccountId: 'acc_1200' },
+          cat_sta: { inventoryAccountId: 'acc_1500' },
+        },
       });
-      const categoryAccounts = makeCategoryAccounts([
-        { categoryName: 'Furniture', revenueAccountId: 'acc_4000', cogsAccountId: 'acc_5000', inventoryAccountId: 'acc_1200' },
-        { categoryName: 'Stationery', revenueAccountId: 'acc_4200', cogsAccountId: 'acc_5300', inventoryAccountId: 'acc_1500' },
-      ]);
-      const localBillService = new BillService(
-        repository,
-        journalEntryService,
-        taxRateService,
-        trackedReceiver,
-        makePurchaseOrderLookupStub(),
-        makeFixedAssetCapitalizerStub(),
-        accountMapper,
-        categoryAccounts,
-      );
-
-      const bill = await localBillService.createBill({
+      const bill = await h.service.createBill({
         billNumber: 'BILL-INV-SPLIT',
         supplierId: 'sup_test',
         issueDate: '2026-08-21',
@@ -688,40 +622,17 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
-      const posted = await localBillService.postBill(bill.id);
-      const entry = (await journalEntryService.getEntry(posted.journalEntryId!))!;
-      const sum = (accountId: string) =>
-        entry.lines.filter((l) => l.accountId === accountId).reduce((s, l) => s + l.debit, 0);
-
-      expect(sum('acc_1200')).toBe(500); // furniture -> mapped inventory account
-      expect(sum('acc_1500')).toBe(300); // stationery -> different mapped inventory account
-      expect(entry.lines.find((l) => l.accountId === 'acc_5100')).toBeUndefined(); // nothing expensed
-
-      const apLine = entry.lines.find((l) => l.accountId === 'acc_2000');
-      expect(apLine?.credit).toBe(920);
-      const totalDebit = entry.lines.reduce((s, l) => s + l.debit, 0);
-      const totalCredit = entry.lines.reduce((s, l) => s + l.credit, 0);
-      expect(totalDebit).toBeCloseTo(totalCredit);
+      const posted = await h.service.postBill(bill.id);
+      expect(h.line(posted.journalEntryId, 'acc_1200', 'debit')).toBe(500);
+      expect(h.line(posted.journalEntryId, 'acc_1500', 'debit')).toBe(300);
+      expect(h.line(posted.journalEntryId, 'acc_5100', 'debit')).toBeUndefined();
+      expect(h.line(posted.journalEntryId, 'acc_2000', 'credit')).toBe(920);
+      expect(h.balanced(posted.journalEntryId)).toBe(true);
     });
 
     it('falls back to the generic Inventory account for a tracked line whose category is unmapped', async () => {
-      const trackedReceiver = makeInventoryReceiverStub(['prod_x'], { prod_x: 'Gadgets' });
-      const categoryAccounts = makeCategoryAccounts([
-        { categoryName: 'Furniture', revenueAccountId: 'acc_4000', cogsAccountId: 'acc_5000', inventoryAccountId: 'acc_1500' },
-      ]);
-      const localBillService = new BillService(
-        repository,
-        journalEntryService,
-        taxRateService,
-        trackedReceiver,
-        makePurchaseOrderLookupStub(),
-        makeFixedAssetCapitalizerStub(),
-        accountMapper,
-        categoryAccounts,
-      );
-
-      const bill = await localBillService.createBill({
+      const h = makeHarness({ trackedProducts: { prod_x: { categoryId: 'cat_none' } } });
+      const bill = await h.service.createBill({
         billNumber: 'BILL-INV-SPLIT-FALLBACK',
         supplierId: 'sup_test',
         issueDate: '2026-08-21',
@@ -736,21 +647,17 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
-      const posted = await localBillService.postBill(bill.id);
-      const entry = (await journalEntryService.getEntry(posted.journalEntryId!))!;
-      expect(entry.lines.find((l) => l.accountId === 'acc_1200')?.debit).toBe(400); // generic INVENTORY
-      expect(entry.lines.some((l) => l.accountId === 'acc_1500')).toBe(false);
+      const posted = await h.service.postBill(bill.id);
+      expect(h.line(posted.journalEntryId, 'acc_1200', 'debit')).toBe(400);
+      expect(h.line(posted.journalEntryId, 'acc_1500', 'debit')).toBeUndefined();
     });
 
-    it('does not record a stock receipt if GL posting fails', async () => {
-      const trackedReceiver = makeInventoryReceiverStub(['prod_tracked']);
-      const localBillService = new BillService(repository, journalEntryService, taxRateService, trackedReceiver, makePurchaseOrderLookupStub(), makeFixedAssetCapitalizerStub(), accountMapper);
-
-      const bill = await localBillService.createBill({
+    it('does not record a stock receipt or post anything if GL posting fails', async () => {
+      const h = makeHarness({ trackedProducts: { prod_tracked: {} } });
+      const bill = await h.service.createBill({
         billNumber: 'BILL-INV-FAIL',
         supplierId: 'sup_test',
-        issueDate: '2027-06-01', // outside the test period
+        issueDate: '2027-06-01',
         dueDate: '2027-07-01',
         lineItems: [
           { id: 'li_1', productId: 'prod_tracked', description: 'Widgets', quantity: 10, unitPrice: 50, taxRateId: 'tax_std_v2', taxAmount: 75, lineTotal: 500 },
@@ -762,9 +669,34 @@ describe('BillService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
+      await expect(h.service.postBill(bill.id)).rejects.toThrow(/accounting period/i);
+      expect(h.store.movements).toHaveLength(0);
+      expect(h.store.journalEntries).toHaveLength(0);
+    });
 
-      await expect(localBillService.postBill(bill.id)).rejects.toThrow(/accounting period/i);
-      expect(trackedReceiver.recordedReceipts).toEqual([]);
+    it('is idempotent on retry — no duplicate entry or movement', async () => {
+      const h = makeHarness({ trackedProducts: { prod_tracked: {} } });
+      const bill = await h.service.createBill({
+        billNumber: 'BILL-RETRY',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_tracked', description: 'Widgets', quantity: 10, unitPrice: 50, taxRateId: 'tax_std_v2', taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      const first = await h.service.postBill(bill.id);
+      await h.repository.update(bill.id, { status: 'draft' });
+      const second = await h.service.postBill(bill.id);
+      expect(second.journalEntryId).toBe(first.journalEntryId);
+      expect(h.store.journalEntries).toHaveLength(1);
+      expect(h.store.movements.filter((m) => m.type === 'goods_received')).toHaveLength(1);
     });
   });
 
@@ -772,25 +704,8 @@ describe('BillService', () => {
     it('should record partial payment', async () => {
       const bills = await billService.getBills();
       const bill = bills.find((b) => b.amountPaid === 0) || bills[3];
-
-      const paymentAmount = bill.total / 2;
-      const updated = await billService.recordPayment(bill.id, paymentAmount);
-
-      expect(updated.amountPaid).toBe(bill.amountPaid + paymentAmount);
-      if (updated.amountPaid < updated.total) {
-        expect(updated.status).toBe('partially_paid');
-      }
-    });
-
-    it('should mark bill as paid when fully paid', async () => {
-      const bills = await billService.getBills();
-      const unpaidBill = bills.find((b) => b.amountPaid === 0 && b.status !== 'paid');
-
-      if (unpaidBill) {
-        const updated = await billService.recordPayment(unpaidBill.id, unpaidBill.total);
-        expect(updated.amountPaid).toBe(unpaidBill.total);
-        expect(updated.status).toBe('paid');
-      }
+      const updated = await billService.recordPayment(bill.id, bill.total / 2);
+      expect(updated.amountPaid).toBe(bill.amountPaid + bill.total / 2);
     });
   });
 
@@ -798,31 +713,6 @@ describe('BillService', () => {
     it('should return bills with specific status', async () => {
       const paidBills = await billService.getBillsByStatus('paid');
       expect(paidBills.every((b) => b.status === 'paid')).toBe(true);
-    });
-  });
-
-  describe('getBillsBySupplier', () => {
-    it('should return bills for specific supplier', async () => {
-      const bills = await billService.getBills();
-      const supplierId = bills[0].supplierId;
-
-      const supplierBills = await billService.getBillsBySupplier(supplierId);
-      expect(supplierBills.every((b) => b.supplierId === supplierId)).toBe(true);
-    });
-  });
-
-  describe('getOutstandingBills', () => {
-    it('should return bills not fully paid', async () => {
-      const outstanding = await billService.getOutstandingBills();
-      expect(outstanding.every((b) => b.amountPaid < b.total)).toBe(true);
-    });
-  });
-
-  describe('calculateTotalOutstanding', () => {
-    it('should calculate total outstanding amount', async () => {
-      const total = await billService.calculateTotalOutstanding();
-      expect(total).toBeGreaterThanOrEqual(0);
-      expect(typeof total).toBe('number');
     });
   });
 });

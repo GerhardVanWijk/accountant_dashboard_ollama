@@ -1,4 +1,20 @@
-import type { CurrencyCode, TaxRate } from '@/types';
+import type { CurrencyCode, StockMovement, TaxRate } from '@/types';
+
+/** Human-readable label for every stock movement type. */
+export const MOVEMENT_TYPE_LABELS: Record<StockMovement['type'], string> = {
+  goods_received: 'Goods received',
+  sale: 'Sale',
+  sales_return: 'Sales return',
+  transfer_in: 'Transfer in',
+  transfer_out: 'Transfer out',
+  adjustment: 'Adjustment',
+  opening: 'Opening stock',
+  purchase_return: 'Purchase return',
+  write_off: 'Write-off',
+  stock_gain: 'Stock gain',
+  stock_take: 'Stock take',
+  correction: 'Correction',
+};
 
 /**
  * Reporting currency for inventory valuation/price display. There is no

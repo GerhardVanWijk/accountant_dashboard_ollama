@@ -938,3 +938,407 @@ report pages' summary grids (P3A `sm` fix), and the discard-changes prompt.
   `form-surface.ts` · ~48 form components · ~28 pages · ~22 new `*FormModal` files · 4 new test
   files · 2 deleted dead files · `docs/CURRENT_TASKS.md`.
 - Committed + pushed to `origin/main`; Cloudflare Pages auto-deploys from the push.
+
+---
+
+# INVENTORY ACCOUNTING MODULE — MAJOR FEATURE
+
+**Opened:** 2026-08-30 · **Owner:** Queen Bee
+**Rule:** Do NOT commit or push, and do NOT run `apply_migration` or any Supabase write, until the
+relevant Review checkpoint explicitly allows it. STOP at every Review boundary.
+**Objective:** make Inventory a first-class accounting subsystem (domain model + stock-movement ledger
++ perpetual-inventory GL integration + costing + stock take + import framework + export/printing +
+inventory reports + reconciliation), and remove Inventory from the Fixed Assets navigation grouping.
+
+**Governing docs:** `docs/INVENTORY_ARCHITECTURE.md` (Phase 0 audit + target architecture — created
+this pass), `docs/SA_ACCOUNTING_MASTER_SPEC.md`. Later: `docs/INVENTORY_ACCOUNTING.md`,
+`docs/IMPORT_EXPORT_ARCHITECTURE.md`.
+
+Review boundaries: R1 = Phase 0 audit + architecture · R2 = schema/migrations/domain services ·
+R3 = core Inventory UI/navigation · R4 = purchasing/sales/accounting integration · R5 = stock take +
+imports · R6 = reports/printing/export · R7 = Office National backfill + reconciliation · R8 = full
+regression/QA.
+
+## PHASE 0 — COMPLETE INVENTORY AUDIT — **DONE, awaiting Review 1**
+
+Ran 6 parallel read-only audit agents (schema/migrations · services/costing · GL integration ·
+navigation/UI/Fixed-Assets · import/export/print/reports · demo-data/permissions/tests), cross-checked
+by the Queen against the live Supabase project. **No DB writes.** Full 15-point audit + proposed
+target architecture + proposed migrations + risks in **`docs/INVENTORY_ARCHITECTURE.md`**.
+
+Headline findings:
+1. Inventory is already its own code module (`src/features/inventory/`) — **not** entangled with Fixed
+   Assets (zero cross-imports). The "Assets & Inventory" nav group is the only coupling; move (c) is
+   cosmetic, zero risk.
+2. **Adjustments, write-offs, stock-takes and opening stock post NOTHING to the GL** and have no
+   approval control → a write-off silently breaks the GL 1200 ↔ valuation tie.
+3. **No inventory-variance / write-off GL account exists** in the chart at all.
+4. **`stock_movements` carries no cost and no source-document link** — only a free-text `reference`;
+   WAC is not reconstructable from history.
+5. **No stock-take / adjustment-document / transfer-document / opening-stock entity** — only bare
+   enum values.
+6. **No import framework, no Excel, no export, no printing/document-generation** anywhere in the app.
+7. **FIFO is non-functional deployed** — no `stock_lots` Supabase table; live wiring is an in-memory
+   mock.
+8. GL 1200 = valuation (R1,569,743.20, diff R0.00) holds **only** because Phase 21.1 hand-restated
+   WAC in SQL — no regression test, drift mechanism unchanged.
+9. `docs/INVENTORY_DOMAIN.md` account codes (1400 / 5500) are **wrong** — the real inventory asset is
+   `1200`; `5500` is Income Tax Expense.
+
+**Review 1 checkpoint report** — see `docs/INVENTORY_ARCHITECTURE.md` § "REVIEW 1 CHECKPOINT SUMMARY":
+files added (the architecture doc), files modified (this file), migrations (none), schema changes
+(none), tests added (none), test totals (unchanged ~1290/183), accounting invariants verified
+(read-only live — all tie to R0.00), known issues, proposed next action.
+
+**7 architecture forks await a decision** (see `docs/INVENTORY_ARCHITECTURE.md` § "ARCHITECTURE FORKS
+FOR REVIEW 1"): (A) costing-model scope, (B) relational categories, (C) supplier link shape,
+(D) per-warehouse balance table, (E) print/PDF strategy, (F) inventory RLS/security, (G) adopt
+`supabase/migrations/`. Queen recommendations recorded for each.
+
+- [x] **Review 1 — APPROVED (user, 2026-08-30): "go ahead with all recommendations, proceed to Phase 1 and 2".** All 7 forks approved as recommended.
+
+## PHASE 1 — NAVIGATION / INFORMATION ARCHITECTURE — **DONE** (part of the Review 2 batch)
+
+- `navigation.ts`: Inventory quick-access under Suppliers in Organisation; new "Inventory" operational
+  group after "Purchases & Expenses"; "Assets & Inventory" split into "Fixed Assets" + "Leases".
+- `permissionRouteMap.ts`: `/inventory` gated `inventory:read`. `router.tsx`: `/inventory` →
+  new lean `InventoryOverviewPage`. `docs/ROUTES.md` updated.
+- Gate: type-check ✅ · lint ✅ · 1290 tests ✅ · build ✅.
+
+## PHASE 2 — INVENTORY DOMAIN MODEL + MIGRATIONS — **REVIEW 2C HYBRID → STOP before any `apply_migration`**
+
+- `supabase/migrations/` folder adopted (fork G); 0000–0020 backfilled from the live DB. Physical
+  filenames `20260830120021__0021_...` … `20260830120030__0030_...` (timestamp-prefixed so they sort
+  after the timestamped history); logical numbering/order unchanged.
+- **10 logical migrations authored, NOT applied** (0021–0030) — see `docs/INVENTORY_ARCHITECTURE.md`
+  § "PHASE 2 — DOMAIN MODEL + MIGRATIONS (Review 2C Hybrid)" for the full contract + the Review 2C
+  decision table.
+- **Review 2C Hybrid (user decision):**
+  - **KEEP** normalized header + line tables (5 pairs, no embedded JSON — permanent).
+  - **KEEP** composite `(company_id, id)` candidate keys + composite FKs — but only the 9 that an
+    actual composite FK consumes; each audited (`products`, `warehouses`, `journal_entries`,
+    `accounts`, `suppliers`, `bills`, `purchase_orders`, `tax_rates`, `stock_movements`).
+  - **REVERT** the inventory-only role-aware RLS + `user_has_permission()` — the 10 new tables use the
+    coarse company-tenant policy every other module uses, written into each table's own migration.
+  - **REMOVE** computed-formula CHECK constraints; **KEEP** structural CHECKs.
+  - `inventory:*` permissions remain (UI/service authz only); 0030 seeds them + role grants, nothing
+    else.
+- **Lifecycle contract:** line CRUD/deletion are draft-only (service-enforced, consistent with
+  invoices/bills). Posted/confirmed headers + lines are immutable; corrections/reversals create new
+  evidence. Stock-take expected qty + WAC are frozen line data.
+- **Source evidence:** Phase 3 movements set `stock_movements.source_document_line_id` to the
+  normalized line UUID.
+- **Enum safety:** 0021 is enum-only; nothing in 0021 consumes the new values; no undocumented manual
+  `ALTER TYPE` fallback.
+- TS types: Product/StockMovement/Warehouse extended; 7 new entity types (+ line/header/status types)
+  + barrel. `docs/INVENTORY_ACCOUNTING.md` = GL-flow + costing contract for Phase 3. New GL accounts
+  in `src/mock-data/accounts.ts` (5050 / 1210 / 3950).
+- Domain services: `ProductCategoryService` + `StockBalanceService` (full), 5 document-entity service
+  skeletons (lifecycle only; GL posting = Phase 3), repository triples (header + line), Mock-repo
+  tests, migration-contract test.
+- **Review 2C gate:** type-check ✅ / lint ✅ / **1384 tests (192 files)** ✅ / build ✅.
+- **Review 2C — APPROVED (user, 2026-08-30).** 20-point manifest accepted; independent migration
+  QA PASS.
+
+### MIGRATIONS APPLIED — 2026-08-30 (Review 3A gate)
+
+All 10 applied sequentially with per-migration verification. Files renamed to the recorded versions
+`20260830155625__0021_…` … `20260830160120__0030_…` (strictly increasing, after 0020).
+
+| # | applied version | result |
+|---|---|---|
+| 0021 | 20260830155625 | enum 7 → 12 values; 0 business rows changed |
+| 0022 | 20260830155713 | `stock_movements` +8 cols; `movement_date` backfilled (0 null/0 mismatch); candidate key + reversal composite FK; append-only intact (`a,r` policy, UPDATE/DELETE still revoked) |
+| 0023 | 20260830155738 | accounts 62 → 65 (5050/1210/3950); 0 dup codes; 0 JE created |
+| 0024 | 20260830155811 | 6 `product_categories` (match ON mappings; Delivery&Service account-less); 50/50 products linked; `category` text kept; qoh\|cost hash unchanged |
+| 0025 | 20260830155844 | `products` +10 cols; `valuation_method` NOT NULL (2 backfilled, both non-stock); `cost_price` numeric(14,4); qoh\|cost hash unchanged |
+| 0026 | 20260830155907 | `stock_balances` 48 rows; **48/48 = ledger, 0 mismatch, max diff 0.000** |
+| 0027 | 20260830155950 | adjustments+transfers (4 tables, 0 rows); `products`/`warehouses`/`journal_entries` candidate keys; `warehouses.notes`; coarse RLS in-migration |
+| 0028 | 20260830160020 | stock takes (2 tables, 0 rows); coarse RLS in-migration |
+| 0029 | 20260830160052 | opening stock + supplier returns (4 tables, 0 rows); 5 candidate keys; coarse RLS in-migration |
+| 0030 | 20260830160120 | permissions 29 → 35 (+6); role_permissions 59 → 71 (accountant/stock_controller ×6); **no function, no policy, no `user_roles` dependency** |
+
+**Post-migration invariants — ZERO accounting change:** md5(journal_entries) `75670ccf…`,
+md5(journal_lines) `3dbf24e1…`, md5(products qoh|cost) `772619b8…`, md5(stock_movements) `c6d843f0…` —
+**all byte-identical to the pre-migration snapshot.** Global Σdr = Σcr R4,838,209.61 (R0.00); TB
+R3,076,605.94/side; GL 1200/1000/1100/2000 unchanged; round(Σ qoh×cost,2) = GL 1200 R1,569,743.20
+(R0.00); Σqoh 10,169.000; 0 negative stock.
+
+**Reconciliation:** ledger = stock_balances 48/48 (max diff 0.000); products.quantity_on_hand =
+Σ stock_balances 50/50 (max diff 0.000).
+
+**Advisors:** security 0 ERROR / 77 WARN (all standing project pattern — every new table has the
+same `auth_allow_anonymous_sign_ins` WARN as every existing table; 0 `rls_enabled_no_policy`; no new
+`security_definer`). Performance 0 ERROR / 126 INFO / 3 WARN (0 inventory) — 73 `unused_index`
+(expected, empty tables), 0 `duplicate_index`, 32 `unindexed_foreign_keys` INFO on the composite FKs
+(consistent with 21 pre-existing; empty tables; a covering-composite-index migration is a cheap
+Phase-3 follow-up).
+
+**App gate:** type-check ✅ / lint ✅ / **1384 tests (192 files)** ✅ / build ✅ (no regression).
+Supabase repos verified column-compatible with the applied schema; **NOT wired into `instances.ts`**
+(that + GL posting DI = the first Phase 3 task).
+
+- **NOT committed. NO pushes.**
+- [ ] **STOP — Review 3A migration gate.** 25-point report delivered. Do NOT start Phase 3
+      accounting posting until this gate is approved.
+## PHASE 3 — INVENTORY ACCOUNTING ENGINE — **COMPLETE → STOP at Review 3B (awaiting review)**
+
+**Item 1 — performance index migration:** analysed all `unindexed_foreign_keys` INFOs individually
+(32 pre-apply + 22 more from the 0027–0031 tables = 54 now). **No migration warranted** — every real
+access pattern is already covered: child→parent by the parent's `(company_id, id)` unique; parent→child
+(get-lines / cascade) by the existing `(<header>_id, line_number)` unique (leading column = the header
+FK, and it also serves the `ORDER BY line_number`); header→master by the single-column FK indexes on
+`product_id` / `warehouse_id` / `journal_entry_id` / `*_account_id`. The outstanding INFOs are all
+composite `(company_id, <fk>)` notices with no corresponding hot query, and the advisor separately
+reports **74 `unused_index` INFOs** on the new inventory indexes — the schema is already over-indexed
+for the current workload. `prove an equivalent does not exist` fails for all candidates. Documented,
+no migration. (Deferred cleanup: consider dropping the unused single-column line-table indexes in a
+later maintenance pass.)
+
+**Migration 0031 (`20260830162737__0031_inventory_posting_engine.sql`) — APPLIED.** Additive: 1 table
+`inventory_transaction_log` (0 rows) + 2 **SECURITY INVOKER** functions `post_inventory_transaction` /
+`reverse_inventory_transaction`. `prosecdef=false` both; advisors 0 ERROR, +1 standing anon-warn only,
+**no new `security_definer` finding**. products/journal hashes unchanged by the DDL.
+
+**Engine core built (COMPLETE):**
+- `inventoryValuation.ts` — the ONE WAC + valuation contract. Integer-scaled BigInt arithmetic (no
+  float drift). **ROUND-AFTER-SUM** valuation; WAC blend with all edge cases (empty product, newQty≤0).
+- `inventoryPostingEngine.ts` + `.real.ts` (RPC executor) + `.fake.ts` (line-for-line mirror for tests).
+  ONE atomic boundary (the RPC), idempotent (`inventory_transaction_log.posting_key` unique), WAC race
+  fixed (`SELECT … FOR UPDATE` on every product, `ORDER BY id`).
+- `inventoryAccountResolver.ts` — product override → `product_categories` → generic `AccountMappingKey`.
+  3 new keys added: `INVENTORY_ADJUSTMENT`(5050) / `INVENTORY_IN_TRANSIT`(1210) / `OPENING_BALANCE_EQUITY`(3950).
+- `reconcileInventory.ts` — the reconciliation ENGINE (Phase 14 = UI only). A/B/C/D/E/F checks; exact
+  product/warehouse/document/movement/journal + expected/actual/difference evidence; ROUND-AFTER-SUM.
+- `inventoryPostingEngine.test.ts` (25) + `reconcileInventory.test.ts` (8) — WAC contract with
+  numerical examples, all 10 transaction types, idempotency, atomicity, negative-stock, reversal.
+
+**Migration 0032 (`20260830165401__0032_inventory_posting_engine_frozen_cost.sql`) — APPLIED.**
+`create or replace` on `post_inventory_transaction` only (no table/enum change). Adds
+`unit_cost_override` handling for `issue` / `return_in` lines so a stock take posts its variance at
+the count sheet's FROZEN unit cost, not today's WAC. `prosecdef=false` unchanged; hashes unchanged.
+
+**Workflow-service integration (COMPLETE):** greenfield document services (adjustment/write-off,
+stock take, opening stock, supplier return, transfer) + sales/purchases (invoice COGS, bill receipt,
+PO receipt, credit-note return) rewired to call the engine; the old `inventoryPostingAdapter`
+`Promise.all` fan-out **deleted**; `CategoryAccountMappingService` read path replaced by
+`InventoryAccountResolver`; no-default-warehouse → loud failure before any GL write; credit-note
+return-qty guard against the linked invoice; stock take passes `unitCostOverride = line.unitCost`.
+
+**Composition root (COMPLETE):** `repositories/instances.ts` now exports 7 Supabase repo singletons
+(productCategory, stockBalance, stockAdjustment, stockTransfer, stockTake, openingStockBatch,
+supplierReturn); `productCategoryService` + `stockBalanceService` + the 5 greenfield workflow
+singletons repointed Mock → Supabase. `productCategoryService` gains an audit hook
+(`inventory_account_mapping_changed`, fired only when a category account field changes) and the real
+`productService`-backed delete guard. `periodGuardedInventoryPostingEngine` (invoice/bill/PO/credit
+note) resolves its `OpenPeriodGuard` lazily so a leaf import never forces `accountingPeriodService`
+into a test's mock.
+
+**Reconciliation — run READ-ONLY against live Office National data:** A 0 mismatches · B 0 mismatches
+· C subledger R1,569,743.20 = GL 1200 R1,569,743.20 (diff **R0.00**) · D GL 1210 R0.00 · negative
+stock 0. Invariants unchanged: 171 JE / 705 lines / 284 movements / 48 balances / 50 products /
+Σdr=Σcr R4,838,209.61 / Σqoh 10,169.000. `inventory_transaction_log` 0 rows,
+`stock_movements.unit_cost` still all NULL → **no engine invocation touched live data**.
+
+**Test matrix (item 23):** new `inventoryAccountingMatrix.test.ts` (17) — WAC simple/multiple/
+same-product-multi-line/concurrent/zero-qty/4dp/deterministic-rounding, atomicity (failed posting
+leaves NO partial state; retry-after-rollback), idempotency (post + reversal), reconciliation
+(clean R0.00 + deliberate mismatches identified exactly). Fake executor made atomic
+(`store.snapshot()` / rollback on throw) so its atomicity claims are real.
+
+**Advisors (before → after Phase 3):** security 0 ERROR → 0 ERROR (no new `security_definer`
+finding; both RPCs SECURITY INVOKER). performance 0 ERROR → 0 ERROR (128 INFO, 3 pre-existing WARN;
+all inventory notices are INFO-level composite-FK / unused-index).
+
+**Independent QA (read-only bee) — OVERALL: NEEDS WORK → addressed.** Confirmed sound: atomicity
+(RPC single-txn / Fake snapshot-rollback), idempotency (unique `(company_id, posting_key)`), security
+(INVOKER, locked `search_path`, `get_my_company_id()` internal, `authenticated`-only), no hardcoded
+account codes, resolver precedence, no double-post. Findings **fixed this pass (code-only, no
+migration):**
+- Fake now blends WAC via the authoritative `newWeightedAverageCost` + `lineValue` (was inline JS
+  float) — a faithful mirror of the RPC's exact-`numeric` rule.
+- `FakeMovement` gained `reference` (`<sourceType>:<sourceId>` / `reversal:<id>`) mirroring the RPC —
+  in-transit reconciliation (check D) is now exercisable against Fake-produced data.
+- Fake idempotent-reversal returns `movementIds: []`, matching the deployed RPC exactly.
+- `stockAdjustmentService` now passes `unitCostOverride = line.unitCost` — fixes a stock GAIN on a
+  zero-qty/zero-WAC product posting a zero-value journal, and keeps the approved `totalCostEffect` =
+  GL.
+- Open-period guard: stock adjustment / transfer / take / supplier-return singletons switched to
+  `periodGuardedInventoryPostingEngine` (opening stock stays unguarded — legitimately back-dated).
+- `reconcileInventory` rounding band: `subledger_vs_gl` / `total_inventory_vs_gl` within
+  `0.005 × movementCount` → `warning` (reported, not hidden), not an `isReconciled`-failing `error`.
+
+**Flagged / deferred (Review 3B decision):**
+- **Migration 0033** — RPC round-after-sum in the JE line aggregation (`round(Σ line)` not
+  `Σ round(line)` per account) + enrich the idempotent-reversal return. Specified, not written,
+  pending your call on applying another `create or replace` before review. The reconcile band makes
+  it non-urgent.
+- Supplier return books AP/GRNI at WAC, not the refund price — no purchase-price-variance line
+  (AP-control-vs-statement drift when refund ≠ WAC).
+- Void/delete of a posted invoice/bill does not call `reverseInventoryTransaction` (pre-existing;
+  corrections go via credit notes which do reverse).
+- JE `entry_number = count()+1` with no serialization — concurrent postings for different products
+  can collide on the unique constraint and spuriously fail (fails closed; posting key makes retry
+  safe). Pre-existing pattern.
+- `reconcileInventory` check F exempts `adjustment`/`correction` movements from evidence; check D
+  mishandles a reversed in-transit transfer.
+- Live-RPC end-to-end test (needs a throwaway Supabase project).
+- `stockTakeService.freeze()` does not yet snapshot expectedQty/WAC from live balances (trusts
+  caller-supplied line values; post-time behaviour is correct).
+
+Gate: type-check ✅ / lint ✅ / **1432 tests (194 files)** ✅ / build ✅.
+
+- [x] **Review 3B — APPROVED.** Proceed to Phase 3C.
+
+## PHASE 3C — HARDENING — **MIGRATIONS 0033–0036 APPLIED (Review 3C-A gate), awaiting Review 3C-B**
+
+Applied 2026-08-30 one-at-a-time with per-migration verification. Recorded versions
+`20260830221042__0033` … `20260830221256__0036` (local files renamed to match). No commit, no push,
+no Office National business transaction, no Phase 4.
+
+**Post-apply integrity:** all business tables byte-identical (md5 unchanged for journal_entries,
+journal_lines, stock_movements, products qoh|cost); only additions = 1 `journal_number_counters`
+seed row + 1 `accounts` row (5060). Global Σdr=Σcr R4,838,209.61 (R0.00); TB R3,076,605.94/side;
+GL 1200 R1,569,743.20 = subledger valuation exact; GL 1210 R0.00; JE counter `next_value = 4101`
+(= max valid JE suffix 4100 + 1). Advisors: security 0 ERROR, performance 0 ERROR, 0 new findings.
+Read-only reconcile: A/B 0 mismatches, C/D/E R0.00, F warnings only, `isReconciled = true`. Gate
+(type-check/lint/1484 tests/build) green before and after.
+**LIVE INVENTORY POSTING E2E: NOT PERFORMED — no disposable environment** (`inventory_transaction_log`
+still 0 rows). Office National contamination: NONE.
+
+**Migrations (dependency order 0033 → 0034 → 0035 → 0036):**
+- `20260830170000__0033_journal_number_allocator.sql` — `journal_number_counters` (per-company
+  row, RLS `_all_own_company`) + `allocate_journal_number(uuid)` (atomic `UPDATE … RETURNING`,
+  row-lock; seeded once from the highest existing `JE-<n>` suffix, malformed numbers ignored, no
+  renumbering) + `create or replace create_journal_entry_with_lines` (allocates when
+  `p_entry_number` is NULL/''). SECURITY INVOKER, `search_path` locked, EXECUTE authenticated-only.
+- `20260830170001__0034_purchase_price_variance_account.sql` — seeds `5060 Purchase Price Variance`
+  (expense, debit) per company, idempotent (`where not exists … code = '5060'`). No row mutation.
+- `20260830170002__0035_inventory_rpc_round_after_sum.sql` — `create or replace` on BOTH inventory
+  RPCs: (a) raw `|qty|×unit_cost` (NUMERIC, unrounded) flows into `v_je_lines`, per-account CTE does
+  the single `round(sum(), 2)` = round-after-sum; `stock_movements.total_cost` keeps its per-movement
+  2dp value; (b) `allocate_journal_number(v_company)` replaces the inline `count(*)+1` in both RPCs;
+  (c) `reverse_inventory_transaction`'s idempotent branch returns `movement_ids` + `warnings`
+  (contract-compatible with the success result). Security properties preserved.
+- `20260830170003__0036_stock_take_atomic_freeze.sql` — `freeze_stock_take(uuid)`: locks every
+  scoped product `FOR UPDATE` (id order), replaces the take's lines in ONE `INSERT … SELECT`
+  (`expected_qty` from `stock_balances` for the take's warehouse, `unit_cost` from
+  `products.cost_price`), stamps `frozen_at` / `status='counting'`. Caller supplies SCOPE only
+  (`all|category|items`). Draft-only, rejects a double freeze. SECURITY INVOKER, `search_path`
+  locked, EXECUTE authenticated-only.
+
+**Code changes (all behind the gate):**
+- `PURCHASE_PRICE_VARIANCE` → `5060` in `accountMappingService.ts`; `acc_5060` in `mock-data/accounts.ts`.
+- **JE numbering:** `journalEntryService.nextEntryNumber()` deleted; service passes a blank number;
+  the repository / DB boundary assigns it. New `utils/journalNumbering.ts` (one rule);
+  `MockJournalEntryRepository` derives it in memory; `SupabaseJournalEntryRepository` passes `null`.
+- **Supplier return (PPV model):** inventory leaves at WAC, AP/GRNI + input VAT unwind at the
+  supplier's actual credit value, the gap posts to `PURCHASE_PRICE_VARIANCE`. Worked examples in
+  `docs/INVENTORY_ACCOUNTING.md`.
+- **Bill immutability:** `billService.updateBill` + `voidBill` are now draft-only (matching posted
+  invoices). Invoice immutability unchanged + regression-tested.
+- **Stock-take freeze:** `stockTakeService.freeze()` calls the atomic `StockTakeFreezeExecutor`
+  (production: `freeze_stock_take` RPC; test: fake mirror); no caller-supplied line values trusted.
+- **Reconciliation:** `reconcileInventory` — rounding band is now `0.005 × distinct
+  inventory-affecting postings` (per posting, not per movement) with `toleranceBound` exposed;
+  evidence rules BY movement type (no blanket adjustment/correction exemption); in-transit
+  understands `correction` chains + flags `duplicate_transfer_receipt` / `orphan_in_transit`.
+- Fake posting engine mirrors the round-after-sum aggregation + the enriched idempotent-reversal
+  result (migration 0035).
+
+**Gate:** type-check ✅ / lint ✅ / **1484 tests (195 files)** ✅ (+52 / +1 vs Review 3B) / build ✅
+(before and after apply). Independent migration QA: PASS.
+
+- [x] **Review 3C-A — APPROVED.** Migrations 0033–0036 applied under the controlled procedure.
+- [x] **Review 3C-B — APPROVED. Phase 3 closed** — accounting engine ready for frontend integration.
+
+## PHASE 4 — CORE INVENTORY FRONTEND — **COMPLETE, awaiting Review 4**
+
+UI/UX + service integration over the Phase-3 engine. No engine redesign. Real hook/service data
+throughout (correct empty states, no fabricated business numbers). No commit, no push. Phase 5 NOT started.
+
+**Navigation:** Organisation → "Inventory" (`/inventory`); "Inventory" operational group after
+"Purchases & Expenses" → Overview / Products / Categories / Warehouses / Stock Movements (both
+"Inventory" links → `/inventory`). Fixed Assets group unchanged (assets-only). `segmentLabels` +
+`permissionRouteMap` + `router.tsx` updated. (`navigation.test.ts` asserts the structure.)
+
+**Screens:**
+- `/inventory` — **rewritten** `InventoryOverviewPage`: primary actions (New item, Import, Stock
+  actions ▾ [adjustment/transfer/take/supplier-return/opening], Reports); live FigureBlock strip
+  (Inventory value, Items in stock, Low stock, Out of stock, Activity 30d); `InventoryReconciliationCard`
+  (subledger / GL 1200 / in-transit / GL 1210 / difference / status + every finding shown verbatim);
+  `InventoryTable` register (SKU / Product / Category / Preferred supplier / On hand / Available /
+  Committed / Reorder / Avg cost / Inventory value / Selling price / Margin / Status — search + category
+  + supplier + stock-level (+ warehouse when >1) filters + sort + paginate + empty); row → tabbed
+  `InventoryItemDetailSheet` (Overview / Stock / Purchasing / Sales / Transactions / Accounting /
+  Documents / Audit — Accounting tab shows the resolved semantic mapping incl. 5060 Purchase Price
+  Variance, and product-override / category-default / standard source).
+- `/inventory/categories` — **new** `CategoriesPage`: relational `product_categories` list (product
+  count, account-mapping status) + Vertex `FormShell` create/edit (name/description/active + 4 GL
+  account selects + default tax rate) + guarded delete (blocks a category still assigned to a product).
+- `/inventory/movements` — **new** `StockMovementsPage`: append-only ledger, read-only. Date/item/
+  warehouse/type/qty/unit cost/value/source + reversal relationship. Type / direction / source
+  (+ warehouse) filters, search.
+- `/inventory/products`, `/inventory/warehouses` — unchanged (kept).
+
+**Quick actions:** New item, Stock adjustment, Stock transfer open real forms (adjustment/transfer
+via the pre-existing `stockService` path also used by `/inventory/warehouses`). Import, Stock take,
+Supplier return, Opening stock open a `ConfirmDialog` "arrives in the workflow phase" notice —
+**Phase 4 never wires a shortcut that bypasses the approved lifecycle/posting services.**
+
+**Real-data integration:** new hooks `useProductCategories`, `useStockBalances`,
+`useInventoryReconciliation` (the last runs `reconcileInventory()` with the real
+`accountMappingService` + `journalEntryService`, read-only). `buildInventoryRows` is a pure display
+rollup. Office National was not mutated.
+
+**Gate:** type-check ✅ / lint ✅ (`--max-warnings 0`) / **1526 tests (203 files)** ✅ (+42 / +8 vs
+Phase 3) / `vite build` ✅.
+**Browser QA:** no Chrome DevTools / Playwright MCP available in this environment → NOT performed.
+Every change is behind strict type-check + lint + the full suite + a production build; layout uses
+the established responsive Tailwind + Vertex components.
+
+- [ ] **STOP — Review 4.** Report delivered. Do NOT start the import/reporting build. Do NOT commit/push.
+
+## PHASE 5 — STOCK TAKE SYSTEM / WORKFLOWS — NOT STARTED
+## PHASE 6 — IMPORT FRAMEWORK — NOT STARTED
+## PHASE 7 — EXPORT / PRINTING — NOT STARTED
+## PHASE 8 — INVENTORY REPORTS — NOT STARTED
+## PHASE 9 — RELATIONSHIPS — NOT STARTED
+## PHASE 10 — FIXED ASSET CLEANUP — NOT STARTED
+## PHASE 11 — PERMISSIONS / AUDIT — NOT STARTED
+## PHASE 12 — OFFICE NATIONAL DATA — NOT STARTED (SQL/migration only)
+## PHASE 13 — ACCOUNTING INVARIANT TESTS — NOT STARTED
+## PHASE 14 — RECONCILIATION / INVESTIGATOR UI — NOT STARTED
+
+Phase 14 consumes the Phase 3 `reconcileInventory()` result in the Difference Investigator and
+evidence UI; it does not defer the reconciliation engine itself.
+
+---
+
+## FUTURE TASK — APPLICATION-WIDE ROLE-AWARE DATABASE AUTHORIZATION (not scheduled; not part of the Inventory initiative)
+
+**Origin:** Review 2C (2026-08-30). Codex's Review-2B pass built an inventory-only role-aware RLS
+layer (`user_has_permission()` SECURITY DEFINER + per-operation, permission-gated policies on the 10
+new inventory document tables). The user **reverted** it: with `user_roles` currently at 0 rows it
+would have locked ordinary authenticated users out of the new tables, and it would have created two
+incompatible security models (fine-grained DB authz on Inventory, coarse `profiles.role` everywhere
+else). The design is preserved here for the real, intentional version.
+
+**Scope — the whole accounting application together:** inventory · invoices · sales/quotes/orders/
+credit-notes/receipts · purchases/POs/bills/payments · banking/transactions/reconciliation ·
+accounting/journals/GL/trial-balance · VAT & tax · customers · suppliers · reports · payroll ·
+fixed assets · leases · administration.
+
+**Must include:**
+- `user_roles` population / migration strategy for every existing profile (the ~45 pre-existing
+  tables are still `profiles.role`-only).
+- Admin / superuser behaviour (bypass rules), staff role definitions, permission → table/operation
+  mapping for every module.
+- Backward compatibility + a rollout strategy (feature-flag / phased enablement) that **cannot** lock
+  an existing user out mid-migration — explicit lockout-prevention checks.
+- The reusable predicate (a reviewed `user_has_permission()` or equivalent), applied uniformly.
+- Full test coverage (RLS integration tests with real authenticated sessions per role).
+- One migration series, application-wide — never per-module.
+
+Until this ships, all module-level `*:*` permissions (including `inventory:*`) gate the **UI /
+service layer only** (`useCanAccess`), and DB RLS stays coarse company-tenant.

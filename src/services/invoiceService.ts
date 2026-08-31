@@ -1,44 +1,22 @@
-import type { ID, Invoice } from '@/types';
+import type { ID, Invoice, Product } from '@/types';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
-import type { AccountMapper, CategoryAccountResolver, NewJournalLineInput } from '@/features/accounting/services';
-import { bucketByAccount, nullCategoryAccountResolver, roundToCents } from '@/features/accounting/services';
+import type { AccountMapper } from '@/features/accounting/services';
+import { bucketByAccount, SYSTEM_USER_ID } from '@/features/accounting/services';
+import type { InventoryAccountResolver } from '@/features/inventory/services/inventoryAccountResolver';
+import type {
+  ExtraJournalLine,
+  InventoryTransactionLine,
+} from '@/features/inventory/services/inventoryPostingEngine';
+import {
+  type DocumentProductLookup,
+  type DocumentWarehouseResolver,
+  type InventoryTransactionPoster,
+  requireWarehouseId,
+  resolveWarehouseId,
+  toMovementDate,
+} from '@/features/inventory/services/documentInventoryPosting';
 
 export type CreateInvoiceDTO = Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>;
-
-/**
- * Minimal surface of JournalEntryService that InvoiceService depends on —
- * an interface, not the concrete class, so this service stays
- * unit-testable with a stub and never needs to reach into
- * src/features/accounting internals beyond its published service API
- * (@/features/accounting/services). Mirrors
- * src/features/banking/services/bankTransactionService.ts's JournalPoster.
- */
-export interface JournalPoster {
-  postJournalEntry(input: {
-    date: string;
-    memo?: string;
-    source: string;
-    lines: NewJournalLineInput[];
-    postedByUserId?: ID;
-  }): Promise<{ id: ID }>;
-}
-
-/**
- * Minimal surface of InventoryPoster this service depends on
- * (src/features/inventory/services/inventoryPostingAdapter.ts) — resolving
- * Cost of Sales and reducing stock for a sale, per
- * SA_ACCOUNTING_MASTER_SPEC.md §24.
- */
-export interface InventoryMover {
-  calculateCogs(productId: ID, quantity: number, warehouseId?: ID): Promise<number>;
-  recordSaleMovement(productId: ID, quantity: number, reference: string, warehouseId?: ID): Promise<void>;
-  /**
-   * This product's category, for per-line revenue/COGS account resolution
-   * (Phase 21.3). Optional so existing stubs don't need it — a stub that
-   * omits it behaves exactly as before (every line → generic account).
-   */
-  getProductCategory?(productId: ID): Promise<string | undefined>;
-}
 
 /**
  * Every field that either fed the journal entry `postInvoice()` created
@@ -89,17 +67,18 @@ function fieldChanged<K extends keyof Invoice>(current: Invoice, patch: Partial<
 export class InvoiceService {
   constructor(
     private readonly repository: IInvoiceRepository,
-    private readonly journalEntryService: JournalPoster,
-    private readonly inventoryMover: InventoryMover,
-    private readonly accounts: AccountMapper,
     /**
-     * Resolves a line's product category to granular revenue / COGS /
-     * inventory accounts (Phase 21.3). Defaults to the null resolver, so a
-     * caller that doesn't wire it keeps the pre-21.3 single-line-per-leg
-     * behaviour (every line → generic `SALES_REVENUE` / `COGS` /
-     * `INVENTORY`).
+     * The ONE atomic inventory posting engine. `postInvoice()` hands it the
+     * revenue/AR/VAT lines as `extraJournal` plus one inventory `line` per
+     * product line — the engine computes COGS from WAC, merges, and posts a
+     * SINGLE balanced journal entry + the stock movements + WAC in one RPC.
      */
-    private readonly categoryAccounts: CategoryAccountResolver = nullCategoryAccountResolver,
+    private readonly engine: InventoryTransactionPoster,
+    /** Product → category → generic-key resolution for the revenue / inventory / COGS accounts. */
+    private readonly inventoryAccounts: InventoryAccountResolver,
+    private readonly accounts: AccountMapper,
+    private readonly products: DocumentProductLookup,
+    private readonly warehouses: DocumentWarehouseResolver,
   ) {}
 
   async getInvoices(): Promise<Invoice[]> {
@@ -173,26 +152,26 @@ export class InvoiceService {
 
   /**
    * Posts an invoice to the ledger and transitions it from 'draft' to
-   * 'sent'. Posts BEFORE updating the domain record and BEFORE reducing
-   * stock — see docs/LEDGER_ARCHITECTURE.md and
-   * bankTransactionService.ts's postAllocationsToLedger — so a failed
-   * post (unbalanced entry, closed accounting period) never leaves an
-   * orphaned "posted" invoice row or stock reduced with no matching
-   * journal entry.
+   * 'sent'. Posts BEFORE updating the domain record — a failed post
+   * (unbalanced entry, closed accounting period, no warehouse for a
+   * tracked line) never leaves an orphaned "posted" invoice row.
    *
-   * debit  Accounts Receivable for invoice.total
-   * credit Sales Revenue      for invoice.subtotal — split into one line
-   *        per resolved revenue account when line items map to different
-   *        product categories (Phase 21.3); the buckets are reconciled to
-   *        invoice.subtotal so the entry still balances to the cent.
-   * credit VAT Output         for invoice.taxTotal (only if > 0)
-   * debit  Cost of Goods Sold  credit Inventory, for
-   *        the total Cost of Sales across every tracked-inventory line
-   *        item (only if > 0) — SA_ACCOUNTING_MASTER_SPEC.md §24: revenue
-   *        must never post without the corresponding inventory/cost
-   *        treatment where inventory is involved. Both legs are likewise
-   *        split by the line's resolved category account. Stock itself is
-   *        only reduced AFTER this entry posts successfully.
+   * Everything is now ONE atomic call to the inventory posting engine —
+   * no separate `journalEntryService` post, no separate per-line stock
+   * call, no `Promise.all` fan-out. The single journal entry the engine
+   * builds is:
+   *
+   *   DR Accounts Receivable                    invoice.total
+   *   CR Sales Revenue (per resolved account)   bucketed to invoice.subtotal
+   *   CR VAT Output                             invoice.taxTotal   (only if > 0)
+   *   DR Cost of Goods Sold (per product)       Σ WAC × qty        (engine-computed)
+   *   CR Inventory (per product)                Σ WAC × qty        (engine-computed)
+   *
+   * The AR / revenue / VAT lines are passed as `extraJournal`; the engine
+   * computes the COGS / inventory legs from each product's current
+   * weighted-average cost inside the atomic RPC and merges them in.
+   * Service (non-tracked-product) lines pass a `nonStock` line — the
+   * engine records neither a movement nor a COGS leg for it.
    */
   async postInvoice(id: string, postedByUserId?: ID): Promise<Invoice> {
     const invoice = await this.repository.getById(id);
@@ -205,118 +184,88 @@ export class InvoiceService {
       );
     }
 
+    const docLabel = `Invoice ${invoice.invoiceNumber}`;
     const genericRevenueId = await this.accounts.getAccountId('SALES_REVENUE');
 
-    // Per-line category -> granular account resolution (Phase 21.3). A line
-    // with no product, no category, or an unmapped category resolves to the
-    // generic account, reproducing the pre-21.3 single-line behaviour. A
-    // mixed-category invoice gets one revenue line per resolved account,
-    // the buckets reconciled to `invoice.subtotal` so the entry still
-    // balances to the cent despite per-line rounding.
-    const lineCategoryAccounts = await Promise.all(
-      invoice.lineItems.map(async (line) => {
-        const category =
-          line.productId && this.inventoryMover.getProductCategory
-            ? await this.inventoryMover.getProductCategory(line.productId)
-            : undefined;
-        return this.categoryAccounts.resolveForCategory(category);
-      }),
-    );
+    // Resolve every product line's Product once (needed for account
+    // resolution + trackInventory + warehouse).
+    const productById = new Map<ID, Product>();
+    for (const line of invoice.lineItems) {
+      if (line.productId && !productById.has(line.productId)) {
+        const product = await this.products.getProduct(line.productId);
+        if (!product) {
+          throw new Error(`${docLabel}: product "${line.productId}" not found — cannot post.`);
+        }
+        productById.set(line.productId, product);
+      }
+    }
 
-    const revenueContributions = invoice.lineItems.map((line, index) => ({
-      accountId: lineCategoryAccounts[index].revenueAccountId ?? genericRevenueId,
-      amount: line.lineTotal,
-    }));
+    // --- extraJournal: AR / revenue / VAT (the non-inventory side) ---
+    const revenueContributions: { accountId: ID; amount: number }[] = [];
+    for (const line of invoice.lineItems) {
+      const product = line.productId ? productById.get(line.productId) : undefined;
+      const accountId = product
+        ? await this.inventoryAccounts.resolveForProduct(product, 'revenue')
+        : genericRevenueId;
+      revenueContributions.push({ accountId, amount: line.lineTotal });
+    }
     const revenueBuckets =
       revenueContributions.length > 0
         ? bucketByAccount(revenueContributions, invoice.subtotal)
         : [{ accountId: genericRevenueId, amount: invoice.subtotal }];
 
-    const lines: NewJournalLineInput[] = [
-      {
-        accountId: await this.accounts.getAccountId('AR'),
-        description: `Invoice ${invoice.invoiceNumber}`,
-        debit: invoice.total,
-        credit: 0,
-      },
+    const extraJournal: ExtraJournalLine[] = [
+      { accountId: await this.accounts.getAccountId('AR'), debit: invoice.total, credit: 0, description: docLabel },
       ...revenueBuckets.map((bucket) => ({
         accountId: bucket.accountId,
-        description: `Invoice ${invoice.invoiceNumber}`,
         debit: 0,
         credit: bucket.amount,
+        description: docLabel,
       })),
     ];
     if (invoice.taxTotal > 0) {
-      lines.push({
+      extraJournal.push({
         accountId: await this.accounts.getAccountId('VAT_OUTPUT'),
-        description: 'VAT Output',
         debit: 0,
         credit: invoice.taxTotal,
+        description: 'VAT Output',
       });
     }
 
-    const inventoryLines = invoice.lineItems.filter((line) => line.productId);
-    const inventoryLineAccounts = invoice.lineItems
-      .map((line, index) => ({ line, resolved: lineCategoryAccounts[index] }))
-      .filter((entry) => entry.line.productId);
-    const cogsByLine = await Promise.all(
-      inventoryLines.map((line) => this.inventoryMover.calculateCogs(line.productId!, line.quantity, line.warehouseId)),
-    );
-    const roundedCogs = cogsByLine.map(roundToCents);
-    const totalCogs = roundToCents(roundedCogs.reduce((sum, c) => sum + c, 0));
-    if (totalCogs > 0) {
-      const genericCogsId = await this.accounts.getAccountId('COGS');
-      const genericInventoryId = await this.accounts.getAccountId('INVENTORY');
-      const cogsBuckets = bucketByAccount(
-        inventoryLineAccounts.map((entry, i) => ({
-          accountId: entry.resolved.cogsAccountId ?? genericCogsId,
-          amount: roundedCogs[i],
-        })),
-      );
-      const inventoryBuckets = bucketByAccount(
-        inventoryLineAccounts.map((entry, i) => ({
-          accountId: entry.resolved.inventoryAccountId ?? genericInventoryId,
-          amount: roundedCogs[i],
-        })),
-      );
-      for (const bucket of cogsBuckets) {
-        lines.push({
-          accountId: bucket.accountId,
-          description: `Invoice ${invoice.invoiceNumber} - Cost of Sales`,
-          debit: bucket.amount,
-          credit: 0,
-        });
-      }
-      for (const bucket of inventoryBuckets) {
-        lines.push({
-          accountId: bucket.accountId,
-          description: `Invoice ${invoice.invoiceNumber} - Inventory`,
-          debit: 0,
-          credit: bucket.amount,
-        });
-      }
+    // --- inventory lines: one per product line (issue at WAC) ---
+    const lines: InventoryTransactionLine[] = [];
+    for (const line of invoice.lineItems) {
+      if (!line.productId) continue;
+      const product = productById.get(line.productId)!;
+      const tracked = Boolean(product.trackInventory);
+      const warehouseId = tracked
+        ? await requireWarehouseId(this.warehouses, line.warehouseId, docLabel)
+        : ((await resolveWarehouseId(this.warehouses, line.warehouseId)) ?? line.warehouseId ?? '');
+      lines.push({
+        productId: product.id,
+        warehouseId,
+        quantityDelta: -line.quantity,
+        costingMode: 'issue',
+        movementType: 'sale',
+        inventoryAccountId: await this.inventoryAccounts.resolveForProduct(product, 'inventory'),
+        contraAccountId: await this.inventoryAccounts.resolveForProduct(product, 'cogs'),
+        sourceDocumentLineId: line.id,
+        nonStock: !tracked,
+      });
     }
 
-    const entry = await this.journalEntryService.postJournalEntry({
-      date: invoice.issueDate,
-      memo: `Invoice ${invoice.invoiceNumber}`,
-      source: 'invoice',
-      postedByUserId,
+    const result = await this.engine.applyInventoryTransaction({
+      postingKey: `invoice:${invoice.id}:post`,
+      sourceType: 'invoice',
+      sourceId: invoice.id,
+      movementDate: toMovementDate(invoice.issueDate),
+      createdBy: postedByUserId ?? SYSTEM_USER_ID,
       lines,
+      extraJournal,
+      journal: { source: 'invoice', memo: docLabel },
     });
 
-    await Promise.all(
-      inventoryLines.map((line) =>
-        this.inventoryMover.recordSaleMovement(
-          line.productId!,
-          line.quantity,
-          `Invoice ${invoice.invoiceNumber}`,
-          line.warehouseId,
-        ),
-      ),
-    );
-
-    return this.repository.update(id, { status: 'sent', journalEntryId: entry.id });
+    return this.repository.update(id, { status: 'sent', journalEntryId: result.journalEntryId });
   }
 
   /**

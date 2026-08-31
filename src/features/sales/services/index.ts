@@ -8,9 +8,14 @@ import { SupabaseQuoteRepository } from '@/repositories/SupabaseQuoteRepository'
 import { SupabaseSalesOrderRepository } from '@/repositories/SupabaseSalesOrderRepository';
 import { SupabaseCreditNoteRepository } from '@/repositories/SupabaseCreditNoteRepository';
 import { SupabaseCustomerReceiptRepository } from '@/repositories/SupabaseCustomerReceiptRepository';
-import { journalEntryService, accountMappingService, categoryAccountMappingService } from '@/features/accounting/services';
+import { journalEntryService, accountMappingService } from '@/features/accounting/services';
 import { invoiceService } from '@/services';
-import { inventoryPoster } from '@/features/inventory/services/inventoryPostingAdapter';
+import {
+  inventoryAccountResolver,
+  periodGuardedInventoryPostingEngine,
+} from '@/features/inventory/services/inventoryPostingEngineInstance';
+import { productService } from '@/features/inventory/services/productService';
+import { warehouseService } from '@/features/inventory/services/warehouseService';
 import { supabase } from '@/config/supabase';
 
 export type { CreateQuoteDTO } from './quoteService';
@@ -77,11 +82,12 @@ export const quoteService = new QuoteService(quoteRepository, salesOrderReposito
 export const salesOrderService = new SalesOrderService(salesOrderRepository, sharedInvoiceRepository);
 export const creditNoteService = new CreditNoteService(
   creditNoteRepository,
-  journalEntryService,
+  periodGuardedInventoryPostingEngine,
   invoiceService,
-  inventoryPoster,
   accountMappingService,
-  categoryAccountMappingService,
+  inventoryAccountResolver,
+  productService,
+  warehouseService,
 );
 export const customerReceiptService = new CustomerReceiptService(
   customerReceiptRepository,

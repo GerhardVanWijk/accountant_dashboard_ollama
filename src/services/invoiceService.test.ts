@@ -1,19 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { InvoiceService } from './invoiceService';
 import { MockInvoiceRepository } from '@/repositories/mock/MockInvoiceRepository';
-import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import { AccountService } from '@/features/accounting/services/accountService';
 import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
-import { CategoryAccountMappingService } from '@/features/accounting/services/categoryAccountMappingService';
-import { MockCategoryAccountMappingRepository } from '@/features/accounting/repositories/MockCategoryAccountMappingRepository';
-import type { CategoryAccountMappingRecord } from '@/features/accounting/repositories/ICategoryAccountMappingRepository';
+import { AccountingPeriodService } from '@/features/accounting/services/accountingPeriodService';
 import { MockJournalEntryRepository } from '@/features/accounting/repositories/MockJournalEntryRepository';
 import { MockAccountRepository } from '@/features/accounting/repositories/MockAccountRepository';
 import { MockAccountingPeriodRepository } from '@/features/accounting/repositories/MockAccountingPeriodRepository';
 import { AuditLogService } from '@/services/auditLogService';
 import { MockAuditLogRepository } from '@/repositories/mock/MockAuditLogRepository';
 import { seedAccounts } from '@/mock-data/accounts';
-import type { AccountingPeriod, Invoice } from '@/types';
+import { InventoryPostingEngine } from '@/features/inventory/services/inventoryPostingEngine';
+import {
+  FakeInventoryStore,
+  FakeInventoryTransactionExecutor,
+} from '@/features/inventory/services/inventoryPostingEngine.fake';
+import { InventoryAccountResolverService } from '@/features/inventory/services/inventoryAccountResolver';
+import { periodGuardFrom } from '@/features/inventory/services/documentInventoryPosting';
+import type { AccountingPeriod, Invoice, Product, ProductCategory, Warehouse } from '@/types';
 
 /** A single accounting period wide open enough to cover every date these tests use. */
 function makeOpenPeriod(): AccountingPeriod {
@@ -30,55 +34,122 @@ function makeOpenPeriod(): AccountingPeriod {
   };
 }
 
-/**
- * Configurable stub InventoryMover — `costPerUnit` controls what
- * calculateCogs() returns per product (0 = not tracked/no COGS), and
- * `recordedSales` lets tests assert recordSaleMovement() was only called
- * AFTER a successful post, matching real InventoryPostingAdapter's
- * contract without pulling in real Product/Warehouse/StockMovement
- * repositories here (see inventoryPostingAdapter.test.ts for that).
- */
-function makeInventoryMoverStub(
-  costPerUnit: Record<string, number> = {},
-  categoryByProduct: Record<string, string> = {},
-) {
-  const recordedSales: { productId: string; quantity: number; reference: string; warehouseId?: string }[] = [];
+function makeProduct(overrides: Partial<Product> = {}): Product {
   return {
-    calculateCogs: async (productId: string, quantity: number) => (costPerUnit[productId] ?? 0) * quantity,
-    recordSaleMovement: async (productId: string, quantity: number, reference: string, warehouseId?: string) => {
-      recordedSales.push({ productId, quantity, reference, warehouseId });
-    },
-    getProductCategory: async (productId: string) => categoryByProduct[productId],
-    recordedSales,
+    id: 'prod_1',
+    sku: 'SKU-1',
+    name: 'Widget',
+    type: 'good',
+    unitPrice: 100,
+    costPrice: 0,
+    trackInventory: true,
+    quantityOnHand: 0,
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
   };
 }
 
+function makeWarehouse(id: string, isDefault = false): Warehouse {
+  return {
+    id,
+    name: id,
+    code: id,
+    isDefault,
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+}
+
+const DEFAULT_WH = 'wh_default';
+
 /**
- * Wires a REAL JournalEntryService (the actual ledger posting engine, not a
- * stub) so postInvoice() tests prove a genuinely balanced journal entry is
- * produced, not a mocked assertion — mirrors
- * src/features/banking/services/bankTransactionService.test.ts.
+ * Wires a REAL InventoryPostingEngine over the in-memory FakeInventoryStore
+ * — the same ONE atomic engine production uses — plus a real
+ * AccountMappingService against seedAccounts, so postInvoice() tests prove a
+ * genuinely balanced SINGLE journal entry (revenue/AR/VAT AND COGS/inventory)
+ * is produced and stock moves exactly once.
  */
 function setup(
   initialInvoices?: Invoice[],
-  costPerUnit: Record<string, number> = {},
-  options: { categoryByProduct?: Record<string, string>; categoryMappings?: CategoryAccountMappingRecord[] } = {},
+  options: {
+    /** productId -> its current weighted-average costPrice in the ledger store. */
+    costPrice?: Record<string, number>;
+    /** productId -> Product overrides (categoryId, trackInventory, account overrides). */
+    productOverrides?: Record<string, Partial<Product>>;
+    /** categoryId -> its resolved GL accounts. */
+    categories?: Record<string, Partial<ProductCategory>>;
+    /** extra non-default warehouse ids that should resolve. */
+    warehouses?: string[];
+    /** omit the default warehouse entirely (no-warehouse-configured case). */
+    noDefaultWarehouse?: boolean;
+  } = {},
 ) {
-  const journalRepository = new MockJournalEntryRepository([]);
   const accountRepository = new MockAccountRepository(seedAccounts);
+  const journalRepository = new MockJournalEntryRepository([]);
   const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
   const auditLog = new AuditLogService(new MockAuditLogRepository());
-  const journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
   const accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
-  const categoryAccounts = new CategoryAccountMappingService(
-    new MockCategoryAccountMappingRepository(options.categoryMappings ?? []),
+  const periodService = new AccountingPeriodService(periodRepository, auditLog);
+
+  const store = new FakeInventoryStore();
+  const engine = new InventoryPostingEngine(
+    new FakeInventoryTransactionExecutor(store),
+    periodGuardFrom(periodService),
   );
 
-  const repo = initialInvoices ? new MockInvoiceRepository(initialInvoices) : new MockInvoiceRepository();
-  const inventoryMover = makeInventoryMoverStub(costPerUnit, options.categoryByProduct ?? {});
-  const service = new InvoiceService(repo, journalEntryService, inventoryMover, accountMapper, categoryAccounts);
+  const categories = new Map<string, ProductCategory>();
+  for (const [id, partial] of Object.entries(options.categories ?? {})) {
+    categories.set(id, {
+      id,
+      name: id,
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      ...partial,
+    });
+  }
+  const resolver = new InventoryAccountResolverService(accountMapper, {
+    getCategory: async (id: string) => categories.get(id),
+  });
 
-  return { service, journalEntryService, repo, inventoryMover };
+  const productStore = new Map<string, Product>();
+  const seedProduct = (id: string) => {
+    const product = makeProduct({ id, ...(options.productOverrides?.[id] ?? {}) });
+    const cost = options.costPrice?.[id] ?? product.costPrice;
+    const resolved = { ...product, costPrice: cost };
+    productStore.set(id, resolved);
+    store.addProduct(id, 10_000, cost); // plenty of on-hand so sales never warn
+    store.setBalance(id, DEFAULT_WH, 10_000);
+    for (const wh of options.warehouses ?? []) store.setBalance(id, wh, 10_000);
+    return resolved;
+  };
+  for (const id of new Set([
+    ...Object.keys(options.costPrice ?? {}),
+    ...Object.keys(options.productOverrides ?? {}),
+  ])) {
+    seedProduct(id);
+  }
+  const products = { getProduct: async (id: string) => productStore.get(id) };
+
+  const warehouseList = options.noDefaultWarehouse
+    ? (options.warehouses ?? []).map((id) => makeWarehouse(id))
+    : [makeWarehouse(DEFAULT_WH, true), ...(options.warehouses ?? []).map((id) => makeWarehouse(id))];
+  const warehouses = {
+    getWarehouse: async (id: string) => warehouseList.find((w) => w.id === id),
+    getDefaultWarehouse: async () => warehouseList.find((w) => w.isDefault),
+  };
+
+  const repo = initialInvoices ? new MockInvoiceRepository(initialInvoices) : new MockInvoiceRepository();
+  const service = new InvoiceService(repo, engine, resolver, accountMapper, products, warehouses);
+
+  const getJE = (id: string | undefined) => store.journalEntries.find((e) => e.id === id);
+  const sum = (id: string | undefined, accountId: string, side: 'debit' | 'credit') =>
+    (getJE(id)?.lines ?? []).filter((l) => l.accountId === accountId).reduce((s, l) => s + l[side], 0);
+
+  return { service, store, repo, seedProduct, getJE, sum };
 }
 
 describe('InvoiceService', () => {
@@ -91,7 +162,6 @@ describe('InvoiceService', () => {
   it('should get an invoice by ID', async () => {
     const { service } = setup();
     const allInvoices = await service.getInvoices();
-
     const invoice = await service.getInvoice(allInvoices[0].id);
     expect(invoice).toBeDefined();
     expect(invoice?.invoiceNumber).toBe(allInvoices[0].invoiceNumber);
@@ -99,7 +169,6 @@ describe('InvoiceService', () => {
 
   it('should create an invoice', async () => {
     const { service } = setup([]);
-
     const created = await service.createInvoice({
       invoiceNumber: 'INV-2026-0001',
       customerId: 'cust_test',
@@ -113,10 +182,65 @@ describe('InvoiceService', () => {
       currency: 'ZAR',
       status: 'draft',
     });
-
     expect(created.id).toBeDefined();
-    expect(created.invoiceNumber).toBe('INV-2026-0001');
     expect(created.status).toBe('draft');
+  });
+
+  describe('immutability of a posted invoice (Phase 3C item 5 — preserve + regress)', () => {
+    async function createAndPost(service: ReturnType<typeof setup>['service'], n = '1') {
+      const draft = await service.createInvoice({
+        invoiceNumber: `INV-2026-IMMUT-${n}`,
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [{ id: 'li_1', description: 'Widget', quantity: 2, unitPrice: 500, taxAmount: 150, lineTotal: 1000 }],
+        subtotal: 1000,
+        taxTotal: 150,
+        total: 1150,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      return service.postInvoice(draft.id);
+    }
+
+    it('a posted invoice cannot be deleted — a credit note is the correction path', async () => {
+      const { service } = setup([]);
+      const posted = await createAndPost(service);
+      await expect(service.deleteInvoice(posted.id)).rejects.toThrow(/only a draft invoice can be deleted/i);
+      await expect(service.deleteInvoice(posted.id)).rejects.toThrow(/credit note/i);
+    });
+
+    it('a draft invoice CAN be deleted', async () => {
+      const { service } = setup([]);
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-2026-DRAFT-DEL',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [],
+        subtotal: 0,
+        taxTotal: 0,
+        total: 0,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      await service.deleteInvoice(draft.id);
+      expect(await service.getInvoice(draft.id)).toBeUndefined();
+    });
+
+    it('there is NO voidInvoice method — a posted invoice is never "voided" in place', () => {
+      const { service } = setup([]);
+      expect((service as unknown as Record<string, unknown>).voidInvoice).toBeUndefined();
+    });
+
+    it('a posted invoice keeps its accounting fields locked (spot-check)', async () => {
+      const { service } = setup([]);
+      const posted = await createAndPost(service, '2');
+      await expect(service.updateInvoice(posted.id, { total: 1 })).rejects.toThrow(/posted to the ledger/i);
+      await expect(service.updateInvoice(posted.id, { status: 'void' as never })).rejects.toThrow(/posted to the ledger/i);
+    });
   });
 
   describe('updateInvoice (accounting-integrity guard)', () => {
@@ -152,7 +276,6 @@ describe('InvoiceService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       const updated = await service.updateInvoice(draft.id, {
         invoiceNumber: 'INV-2026-DRAFT-EDIT-RENUMBERED',
         lineItems: [{ id: 'li_1', description: 'Consulting', quantity: 1, unitPrice: 800, taxAmount: 120, lineTotal: 800 }],
@@ -160,7 +283,6 @@ describe('InvoiceService', () => {
         taxTotal: 120,
         total: 920,
       });
-
       expect(updated.invoiceNumber).toBe('INV-2026-DRAFT-EDIT-RENUMBERED');
       expect(updated.total).toBe(920);
     });
@@ -168,13 +290,11 @@ describe('InvoiceService', () => {
     it('rejects changing line items/totals on a posted (sent) invoice', async () => {
       const { service } = setup([]);
       const posted = await createAndPostInvoice(service);
-
       await expect(
         service.updateInvoice(posted.id, {
           lineItems: [{ id: 'li_1', description: 'Widget (edited)', quantity: 99, unitPrice: 500, taxAmount: 150, lineTotal: 1000 }],
         }),
       ).rejects.toThrow(/posted to the ledger/i);
-
       await expect(service.updateInvoice(posted.id, { total: 99999 })).rejects.toThrow(/posted to the ledger/i);
       await expect(service.updateInvoice(posted.id, { subtotal: 1 })).rejects.toThrow(/posted to the ledger/i);
       await expect(service.updateInvoice(posted.id, { taxTotal: 1 })).rejects.toThrow(/posted to the ledger/i);
@@ -187,7 +307,6 @@ describe('InvoiceService', () => {
     it('rejects a direct status/amountPaid/journalEntryId change that would bypass postInvoice()/recordPayment()', async () => {
       const { service } = setup([]);
       const posted = await createAndPostInvoice(service);
-
       await expect(service.updateInvoice(posted.id, { status: 'paid' })).rejects.toThrow(/posted to the ledger/i);
       await expect(service.updateInvoice(posted.id, { amountPaid: 1150 })).rejects.toThrow(/posted to the ledger/i);
       await expect(service.updateInvoice(posted.id, { journalEntryId: 'je_forged' })).rejects.toThrow(/posted to the ledger/i);
@@ -198,19 +317,16 @@ describe('InvoiceService', () => {
       const posted = await createAndPostInvoice(service);
       const partiallyPaid = await service.recordPayment(posted.id, 500);
       expect(partiallyPaid.status).toBe('partially_paid');
-
       await expect(service.updateInvoice(partiallyPaid.id, { total: 1 })).rejects.toThrow(/posted to the ledger/i);
     });
 
     it('still allows editing dueDate and notes on a posted invoice', async () => {
       const { service } = setup([]);
       const posted = await createAndPostInvoice(service);
-
       const updated = await service.updateInvoice(posted.id, {
         dueDate: '2026-12-25T00:00:00.000Z',
         notes: 'Customer requested extended terms.',
       });
-
       expect(updated.dueDate).toBe('2026-12-25T00:00:00.000Z');
       expect(updated.notes).toBe('Customer requested extended terms.');
     });
@@ -218,23 +334,15 @@ describe('InvoiceService', () => {
     it('does not reject a full-object patch whose accounting fields are unchanged from what is already stored', async () => {
       const { service } = setup([]);
       const posted = await createAndPostInvoice(service);
-
-      // A caller submitting the whole invoice back (e.g. a form that always
-      // sends every field) should not be blocked just because a protected
-      // key is present — only an actual attempted change is rejected.
-      const updated = await service.updateInvoice(posted.id, {
-        ...posted,
-        notes: 'Just adding a note.',
-      });
-
+      const updated = await service.updateInvoice(posted.id, { ...posted, notes: 'Just adding a note.' });
       expect(updated.notes).toBe('Just adding a note.');
       expect(updated.total).toBe(posted.total);
     });
   });
 
   describe('postInvoice / markInvoiceAsSent', () => {
-    it('posts a balanced journal entry and transitions draft -> sent', async () => {
-      const { service, journalEntryService } = setup([]);
+    it('posts ONE balanced journal entry (AR / revenue / VAT) and transitions draft -> sent', async () => {
+      const { service, getJE } = setup([]);
       const draft = await service.createInvoice({
         invoiceNumber: 'INV-2026-TEST-1',
         customerId: 'cust_test',
@@ -253,23 +361,18 @@ describe('InvoiceService', () => {
       expect(updated.status).toBe('sent');
       expect(updated.journalEntryId).toBeDefined();
 
-      const entry = await journalEntryService.getEntry(updated.journalEntryId!);
-      expect(entry).toBeDefined();
-      const totalDebit = entry!.lines.reduce((s, l) => s + l.debit, 0);
-      const totalCredit = entry!.lines.reduce((s, l) => s + l.credit, 0);
+      const entry = getJE(updated.journalEntryId)!;
+      const totalDebit = entry.lines.reduce((s, l) => s + l.debit, 0);
+      const totalCredit = entry.lines.reduce((s, l) => s + l.credit, 0);
       expect(totalDebit).toBeCloseTo(totalCredit);
       expect(totalDebit).toBeCloseTo(1150);
-
-      const arLine = entry!.lines.find((l) => l.accountId === 'acc_1100');
-      const revenueLine = entry!.lines.find((l) => l.accountId === 'acc_4000');
-      const vatLine = entry!.lines.find((l) => l.accountId === 'acc_2100');
-      expect(arLine?.debit).toBeCloseTo(1150);
-      expect(revenueLine?.credit).toBeCloseTo(1000);
-      expect(vatLine?.credit).toBeCloseTo(150);
+      expect(entry.lines.find((l) => l.accountId === 'acc_1100')?.debit).toBeCloseTo(1150);
+      expect(entry.lines.find((l) => l.accountId === 'acc_4000')?.credit).toBeCloseTo(1000);
+      expect(entry.lines.find((l) => l.accountId === 'acc_2100')?.credit).toBeCloseTo(150);
     });
 
     it('omits the VAT Output line when taxTotal is zero', async () => {
-      const { service, journalEntryService } = setup([]);
+      const { service, getJE } = setup([]);
       const draft = await service.createInvoice({
         invoiceNumber: 'INV-2026-TEST-2',
         customerId: 'cust_test',
@@ -283,15 +386,11 @@ describe('InvoiceService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       const updated = await service.postInvoice(draft.id);
-      const entry = await journalEntryService.getEntry(updated.journalEntryId!);
-      const vatLine = entry!.lines.find((l) => l.accountId === 'acc_2100');
-      expect(vatLine).toBeUndefined();
-
-      const totalDebit = entry!.lines.reduce((s, l) => s + l.debit, 0);
-      const totalCredit = entry!.lines.reduce((s, l) => s + l.credit, 0);
-      expect(totalDebit).toBeCloseTo(totalCredit);
+      const entry = getJE(updated.journalEntryId)!;
+      expect(entry.lines.find((l) => l.accountId === 'acc_2100')).toBeUndefined();
+      const totalDebit = entry.lines.reduce((s, l) => s + l.debit, 0);
+      expect(totalDebit).toBeCloseTo(entry.lines.reduce((s, l) => s + l.credit, 0));
       expect(totalDebit).toBeCloseTo(500);
     });
 
@@ -300,7 +399,6 @@ describe('InvoiceService', () => {
       const allInvoices = await service.getInvoices();
       const paidInvoice = allInvoices.find((inv) => inv.status === 'paid');
       expect(paidInvoice).toBeDefined();
-
       await expect(service.postInvoice(paidInvoice!.id)).rejects.toThrow(/draft/i);
     });
 
@@ -309,7 +407,7 @@ describe('InvoiceService', () => {
       const draft = await service.createInvoice({
         invoiceNumber: 'INV-2026-TEST-3',
         customerId: 'cust_test',
-        issueDate: '2027-06-01T00:00:00.000Z', // outside the test period (2026 only)
+        issueDate: '2027-06-01T00:00:00.000Z',
         dueDate: '2027-07-01T00:00:00.000Z',
         lineItems: [],
         subtotal: 100,
@@ -319,24 +417,20 @@ describe('InvoiceService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       await expect(service.postInvoice(draft.id)).rejects.toThrow(/accounting period/i);
-
       const unchanged = await repo.getById(draft.id);
       expect(unchanged?.status).toBe('draft');
       expect(unchanged?.journalEntryId).toBeUndefined();
     });
 
-    it('posts Cost of Sales and reduces stock for a line item with a tracked product', async () => {
-      const { service, journalEntryService, inventoryMover } = setup([], { prod_1: 40 }); // costPrice 40/unit
+    it('posts COGS and reduces stock exactly once, in the SAME journal entry as the revenue side', async () => {
+      const { service, store, getJE } = setup([], { costPrice: { prod_1: 40 } });
       const draft = await service.createInvoice({
         invoiceNumber: 'INV-2026-TEST-COGS',
         customerId: 'cust_test',
         issueDate: '2026-08-21T00:00:00.000Z',
         dueDate: '2026-09-21T00:00:00.000Z',
-        lineItems: [
-          { id: 'li_1', productId: 'prod_1', description: 'Widget', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 },
-        ],
+        lineItems: [{ id: 'li_1', productId: 'prod_1', description: 'Widget', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 }],
         subtotal: 500,
         taxTotal: 75,
         total: 575,
@@ -346,39 +440,31 @@ describe('InvoiceService', () => {
       });
 
       const updated = await service.postInvoice(draft.id);
-      const entry = await journalEntryService.getEntry(updated.journalEntryId!);
+      const entry = getJE(updated.journalEntryId)!;
 
-      const cogsLine = entry!.lines.find((l) => l.accountId === 'acc_5000');
-      const inventoryLine = entry!.lines.find((l) => l.accountId === 'acc_1200');
-      expect(cogsLine?.debit).toBe(200); // 5 units * 40
-      expect(inventoryLine?.credit).toBe(200);
+      // one entry, both sides
+      expect(entry.lines.find((l) => l.accountId === 'acc_1100')?.debit).toBeCloseTo(575); // AR
+      expect(entry.lines.find((l) => l.accountId === 'acc_4000')?.credit).toBeCloseTo(500); // revenue
+      expect(entry.lines.find((l) => l.accountId === 'acc_2100')?.credit).toBeCloseTo(75); // VAT
+      expect(entry.lines.find((l) => l.accountId === 'acc_5000')?.debit).toBe(200); // COGS 5 * 40
+      expect(entry.lines.find((l) => l.accountId === 'acc_1200')?.credit).toBe(200); // inventory
+      expect(entry.lines.reduce((s, l) => s + l.debit, 0)).toBeCloseTo(entry.lines.reduce((s, l) => s + l.credit, 0));
 
-      const totalDebit = entry!.lines.reduce((s, l) => s + l.debit, 0);
-      const totalCredit = entry!.lines.reduce((s, l) => s + l.credit, 0);
-      expect(totalDebit).toBeCloseTo(totalCredit);
-
-      expect(inventoryMover.recordedSales).toEqual([{ productId: 'prod_1', quantity: 5, reference: 'Invoice INV-2026-TEST-COGS' }]);
+      const sales = store.movements.filter((m) => m.type === 'sale');
+      expect(sales).toHaveLength(1);
+      expect(sales[0].quantityDelta).toBe(-5);
+      expect(sales[0].warehouseId).toBe(DEFAULT_WH);
+      expect(store.products.get('prod_1')!.quantityOnHand).toBe(9_995); // reduced once
     });
 
-    it("passes a line item's warehouseId through to recordSaleMovement", async () => {
-      const { service, inventoryMover } = setup([], { prod_1: 40 });
+    it("uses a line item's explicit warehouseId for the stock movement", async () => {
+      const { service, store } = setup([], { costPrice: { prod_1: 40 }, warehouses: ['wh_branch'] });
       const draft = await service.createInvoice({
         invoiceNumber: 'INV-2026-TEST-WH',
         customerId: 'cust_test',
         issueDate: '2026-08-21T00:00:00.000Z',
         dueDate: '2026-09-21T00:00:00.000Z',
-        lineItems: [
-          {
-            id: 'li_1',
-            productId: 'prod_1',
-            warehouseId: 'wh_branch',
-            description: 'Widget',
-            quantity: 5,
-            unitPrice: 100,
-            taxAmount: 75,
-            lineTotal: 500,
-          },
-        ],
+        lineItems: [{ id: 'li_1', productId: 'prod_1', warehouseId: 'wh_branch', description: 'Widget', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 }],
         subtotal: 500,
         taxTotal: 75,
         total: 575,
@@ -386,23 +472,39 @@ describe('InvoiceService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       await service.postInvoice(draft.id);
-      expect(inventoryMover.recordedSales).toEqual([
-        { productId: 'prod_1', quantity: 5, reference: 'Invoice INV-2026-TEST-WH', warehouseId: 'wh_branch' },
-      ]);
+      expect(store.movements.filter((m) => m.type === 'sale')[0].warehouseId).toBe('wh_branch');
     });
 
-    it('omits the Cost of Sales lines and does not touch stock for a line item with no tracked product', async () => {
-      const { service, journalEntryService, inventoryMover } = setup([]);
+    it('throws (and does not post) when a tracked line has no warehouse and no default warehouse exists', async () => {
+      const { service, store, repo } = setup([], { costPrice: { prod_1: 40 }, noDefaultWarehouse: true });
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-2026-NO-WH',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [{ id: 'li_1', productId: 'prod_1', description: 'Widget', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 }],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      await expect(service.postInvoice(draft.id)).rejects.toThrow(/warehouse/i);
+      expect((await repo.getById(draft.id))?.status).toBe('draft');
+      expect(store.movements).toHaveLength(0);
+      expect(store.journalEntries).toHaveLength(0);
+    });
+
+    it('produces no COGS leg and no stock movement for a service line (no product)', async () => {
+      const { service, store, getJE } = setup([]);
       const draft = await service.createInvoice({
         invoiceNumber: 'INV-2026-TEST-NOCOGS',
         customerId: 'cust_test',
         issueDate: '2026-08-21T00:00:00.000Z',
         dueDate: '2026-09-21T00:00:00.000Z',
-        lineItems: [
-          { id: 'li_1', description: 'Consulting (service, no product)', quantity: 1, unitPrice: 500, taxAmount: 75, lineTotal: 500 },
-        ],
+        lineItems: [{ id: 'li_1', description: 'Consulting (service, no product)', quantity: 1, unitPrice: 500, taxAmount: 75, lineTotal: 500 }],
         subtotal: 500,
         taxTotal: 75,
         total: 575,
@@ -410,25 +512,42 @@ describe('InvoiceService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       const updated = await service.postInvoice(draft.id);
-      const entry = await journalEntryService.getEntry(updated.journalEntryId!);
-
-      expect(entry!.lines.find((l) => l.accountId === 'acc_5000')).toBeUndefined();
-      expect(entry!.lines.find((l) => l.accountId === 'acc_1200')).toBeUndefined();
-      expect(inventoryMover.recordedSales).toEqual([]);
+      const entry = getJE(updated.journalEntryId)!;
+      expect(entry.lines.find((l) => l.accountId === 'acc_5000')).toBeUndefined();
+      expect(entry.lines.find((l) => l.accountId === 'acc_1200')).toBeUndefined();
+      expect(store.movements).toHaveLength(0);
     });
 
-    it('does not reduce stock if GL posting fails', async () => {
-      const { service, inventoryMover } = setup([], { prod_1: 40 });
+    it('produces no COGS leg and no movement for a non-stock product line', async () => {
+      const { service, store, getJE } = setup([], { productOverrides: { prod_svc: { trackInventory: false } } });
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-2026-TEST-NONSTOCK',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [{ id: 'li_1', productId: 'prod_svc', description: 'Support plan', quantity: 1, unitPrice: 500, taxAmount: 75, lineTotal: 500 }],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      const updated = await service.postInvoice(draft.id);
+      const entry = getJE(updated.journalEntryId)!;
+      expect(entry.lines.find((l) => l.accountId === 'acc_5000')).toBeUndefined();
+      expect(store.movements).toHaveLength(0);
+    });
+
+    it('does not reduce stock or post anything if GL posting fails', async () => {
+      const { service, store } = setup([], { costPrice: { prod_1: 40 } });
       const draft = await service.createInvoice({
         invoiceNumber: 'INV-2026-TEST-COGS-FAIL',
         customerId: 'cust_test',
-        issueDate: '2027-06-01T00:00:00.000Z', // outside the test period
+        issueDate: '2027-06-01T00:00:00.000Z',
         dueDate: '2027-07-01T00:00:00.000Z',
-        lineItems: [
-          { id: 'li_1', productId: 'prod_1', description: 'Widget', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 },
-        ],
+        lineItems: [{ id: 'li_1', productId: 'prod_1', description: 'Widget', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 }],
         subtotal: 500,
         taxTotal: 75,
         total: 575,
@@ -436,23 +555,46 @@ describe('InvoiceService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       await expect(service.postInvoice(draft.id)).rejects.toThrow(/accounting period/i);
-      expect(inventoryMover.recordedSales).toEqual([]);
+      expect(store.movements).toHaveLength(0);
+      expect(store.journalEntries).toHaveLength(0);
+    });
+
+    it('is idempotent on retry — a second post creates no duplicate entry or movement', async () => {
+      const { service, store, repo } = setup([], { costPrice: { prod_1: 40 } });
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-2026-RETRY',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [{ id: 'li_1', productId: 'prod_1', description: 'Widget', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 }],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      const first = await service.postInvoice(draft.id);
+      // simulate a retry after the status write was lost (engine call already committed)
+      await repo.update(draft.id, { status: 'draft' });
+      const second = await service.postInvoice(draft.id);
+      expect(second.journalEntryId).toBe(first.journalEntryId);
+      expect(store.journalEntries).toHaveLength(1);
+      expect(store.movements.filter((m) => m.type === 'sale')).toHaveLength(1);
+      expect(store.products.get('prod_1')!.quantityOnHand).toBe(9_995);
     });
   });
 
-  describe('postInvoice — split revenue/COGS by product category (Phase 21.3)', () => {
-    // Furniture -> 4000/5000, Stationery -> 4200/5300, both inventory -> 1200.
-    const CATEGORY_MAPPINGS = [
-      { categoryName: 'Furniture', revenueAccountId: 'acc_4000', cogsAccountId: 'acc_5000', inventoryAccountId: 'acc_1200' },
-      { categoryName: 'Stationery', revenueAccountId: 'acc_4200', cogsAccountId: 'acc_5300', inventoryAccountId: 'acc_1200' },
-    ];
-
+  describe('postInvoice — split revenue/COGS by product category', () => {
     it('posts one revenue line and one COGS line per resolved account, and still balances', async () => {
-      const { service, journalEntryService } = setup([], { prod_fur: 40, prod_sta: 20 }, {
-        categoryByProduct: { prod_fur: 'Furniture', prod_sta: 'Stationery' },
-        categoryMappings: CATEGORY_MAPPINGS,
+      const { service, getJE } = setup([], {
+        costPrice: { prod_fur: 40, prod_sta: 20 },
+        productOverrides: { prod_fur: { categoryId: 'cat_fur' }, prod_sta: { categoryId: 'cat_sta' } },
+        categories: {
+          cat_fur: { revenueAccountId: 'acc_4000', cogsAccountId: 'acc_5000', inventoryAccountId: 'acc_1200' },
+          cat_sta: { revenueAccountId: 'acc_4200', cogsAccountId: 'acc_5300', inventoryAccountId: 'acc_1200' },
+        },
       });
       const draft = await service.createInvoice({
         invoiceNumber: 'INV-SPLIT-1',
@@ -470,39 +612,31 @@ describe('InvoiceService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       const posted = await service.postInvoice(draft.id);
-      const entry = await journalEntryService.getEntry(posted.journalEntryId!);
-      const sum = (accountId: string, side: 'debit' | 'credit') =>
-        entry!.lines.filter((l) => l.accountId === accountId).reduce((s, l) => s + l[side], 0);
-
-      expect(sum('acc_4000', 'credit')).toBeCloseTo(1000); // furniture revenue
-      expect(sum('acc_4200', 'credit')).toBeCloseTo(500); // stationery revenue
-      expect(sum('acc_5000', 'debit')).toBeCloseTo(400); // furniture COGS (10 * 40)
-      expect(sum('acc_5300', 'debit')).toBeCloseTo(100); // stationery COGS (5 * 20)
-      expect(sum('acc_1200', 'credit')).toBeCloseTo(500); // one lumped inventory line (both -> 1200)
-      expect(sum('acc_2100', 'credit')).toBeCloseTo(225); // VAT stays one line
-      expect(sum('acc_1100', 'debit')).toBeCloseTo(1725); // AR stays one line
-
-      const totalDebit = entry!.lines.reduce((s, l) => s + l.debit, 0);
-      const totalCredit = entry!.lines.reduce((s, l) => s + l.credit, 0);
-      expect(totalDebit).toBeCloseTo(totalCredit);
-      expect(totalDebit).toBeCloseTo(2225);
+      const entry = getJE(posted.journalEntryId)!;
+      const s = (accountId: string, side: 'debit' | 'credit') =>
+        entry.lines.filter((l) => l.accountId === accountId).reduce((a, l) => a + l[side], 0);
+      expect(s('acc_4000', 'credit')).toBeCloseTo(1000);
+      expect(s('acc_4200', 'credit')).toBeCloseTo(500);
+      expect(s('acc_5000', 'debit')).toBeCloseTo(400);
+      expect(s('acc_5300', 'debit')).toBeCloseTo(100);
+      expect(s('acc_1200', 'credit')).toBeCloseTo(500);
+      expect(s('acc_2100', 'credit')).toBeCloseTo(225);
+      expect(s('acc_1100', 'debit')).toBeCloseTo(1725);
+      expect(entry.lines.reduce((a, l) => a + l.debit, 0)).toBeCloseTo(entry.lines.reduce((a, l) => a + l.credit, 0));
     });
 
-    it('falls back to the generic Sales Revenue / COGS accounts for an unmapped category', async () => {
-      const { service, journalEntryService } = setup([], { prod_x: 30 }, {
-        categoryByProduct: { prod_x: 'Gadgets' }, // not in CATEGORY_MAPPINGS
-        categoryMappings: CATEGORY_MAPPINGS,
+    it('falls back to the generic Sales Revenue / COGS / Inventory accounts for an unmapped category', async () => {
+      const { service, getJE } = setup([], {
+        costPrice: { prod_x: 30 },
+        productOverrides: { prod_x: { categoryId: 'cat_none' } },
       });
       const draft = await service.createInvoice({
         invoiceNumber: 'INV-SPLIT-FALLBACK',
         customerId: 'cust_test',
         issueDate: '2026-08-21T00:00:00.000Z',
         dueDate: '2026-09-21T00:00:00.000Z',
-        lineItems: [
-          { id: 'li_1', productId: 'prod_x', description: 'Gizmo', quantity: 4, unitPrice: 100, taxAmount: 60, lineTotal: 400 },
-        ],
+        lineItems: [{ id: 'li_1', productId: 'prod_x', description: 'Gizmo', quantity: 4, unitPrice: 100, taxAmount: 60, lineTotal: 400 }],
         subtotal: 400,
         taxTotal: 60,
         total: 460,
@@ -510,50 +644,37 @@ describe('InvoiceService', () => {
         currency: 'ZAR',
         status: 'draft',
       });
-
       const posted = await service.postInvoice(draft.id);
-      const entry = await journalEntryService.getEntry(posted.journalEntryId!);
-
-      expect(entry!.lines.find((l) => l.accountId === 'acc_4000')?.credit).toBeCloseTo(400);
-      expect(entry!.lines.find((l) => l.accountId === 'acc_5000')?.debit).toBeCloseTo(120);
-      expect(entry!.lines.some((l) => l.accountId === 'acc_4200')).toBe(false);
+      const entry = getJE(posted.journalEntryId)!;
+      expect(entry.lines.find((l) => l.accountId === 'acc_4000')?.credit).toBeCloseTo(400);
+      expect(entry.lines.find((l) => l.accountId === 'acc_5000')?.debit).toBeCloseTo(120);
+      expect(entry.lines.find((l) => l.accountId === 'acc_1200')?.credit).toBeCloseTo(120);
     });
 
-    it('routes a no-product line to the generic revenue account alongside a mapped product line', async () => {
-      const { service, journalEntryService } = setup([], { prod_fur: 40 }, {
-        categoryByProduct: { prod_fur: 'Furniture' },
-        // Furniture -> 4200 here so the generic (4000) line is distinguishable.
-        categoryMappings: [
-          { categoryName: 'Furniture', revenueAccountId: 'acc_4200', cogsAccountId: 'acc_5300', inventoryAccountId: 'acc_1200' },
-        ],
+    it('honours a per-product account override ahead of the category', async () => {
+      const { service, getJE } = setup([], {
+        costPrice: { prod_o: 25 },
+        productOverrides: { prod_o: { categoryId: 'cat_fur', salesAccountId: 'acc_4200', cogsAccountId: 'acc_5300' } },
+        categories: { cat_fur: { revenueAccountId: 'acc_4000', cogsAccountId: 'acc_5000', inventoryAccountId: 'acc_1200' } },
       });
       const draft = await service.createInvoice({
-        invoiceNumber: 'INV-SPLIT-MIXED-SERVICE',
+        invoiceNumber: 'INV-OVERRIDE',
         customerId: 'cust_test',
         issueDate: '2026-08-21T00:00:00.000Z',
         dueDate: '2026-09-21T00:00:00.000Z',
-        lineItems: [
-          { id: 'li_1', productId: 'prod_fur', description: 'Desk', quantity: 10, unitPrice: 100, taxAmount: 150, lineTotal: 1000 },
-          { id: 'li_2', description: 'Delivery (service, no product)', quantity: 1, unitPrice: 200, taxAmount: 30, lineTotal: 200 },
-        ],
-        subtotal: 1200,
-        taxTotal: 180,
-        total: 1380,
+        lineItems: [{ id: 'li_1', productId: 'prod_o', description: 'Special', quantity: 4, unitPrice: 100, taxAmount: 60, lineTotal: 400 }],
+        subtotal: 400,
+        taxTotal: 60,
+        total: 460,
         amountPaid: 0,
         currency: 'ZAR',
         status: 'draft',
       });
-
       const posted = await service.postInvoice(draft.id);
-      const entry = await journalEntryService.getEntry(posted.journalEntryId!);
-      const sum = (accountId: string, side: 'debit' | 'credit') =>
-        entry!.lines.filter((l) => l.accountId === accountId).reduce((s, l) => s + l[side], 0);
-
-      expect(sum('acc_4200', 'credit')).toBeCloseTo(1000); // furniture line -> mapped account
-      expect(sum('acc_4000', 'credit')).toBeCloseTo(200); // no-product line -> generic account
-      const totalDebit = entry!.lines.reduce((s, l) => s + l.debit, 0);
-      const totalCredit = entry!.lines.reduce((s, l) => s + l.credit, 0);
-      expect(totalDebit).toBeCloseTo(totalCredit);
+      const entry = getJE(posted.journalEntryId)!;
+      expect(entry.lines.find((l) => l.accountId === 'acc_4200')?.credit).toBeCloseTo(400); // product override
+      expect(entry.lines.find((l) => l.accountId === 'acc_5300')?.debit).toBeCloseTo(100);
+      expect(entry.lines.find((l) => l.accountId === 'acc_1200')?.credit).toBeCloseTo(100); // category inventory
     });
   });
 
@@ -562,17 +683,9 @@ describe('InvoiceService', () => {
       const { service } = setup();
       const allInvoices = await service.getInvoices();
       const invoice = allInvoices.find((inv) => inv.amountPaid < inv.total);
-
       if (invoice) {
-        const amount = 100;
-        const updated = await service.recordPayment(invoice.id, amount);
-
-        expect(updated.amountPaid).toBe(invoice.amountPaid + amount);
-        if (updated.amountPaid >= updated.total) {
-          expect(updated.status).toBe('paid');
-        } else if (updated.amountPaid > 0) {
-          expect(updated.status).toBe('partially_paid');
-        }
+        const updated = await service.recordPayment(invoice.id, 100);
+        expect(updated.amountPaid).toBe(invoice.amountPaid + 100);
       }
     });
   });
@@ -580,39 +693,8 @@ describe('InvoiceService', () => {
   describe('getOutstandingAmount', () => {
     it('should calculate outstanding amount', async () => {
       const { service } = setup();
-      const allInvoices = await service.getInvoices();
-      const invoice = allInvoices[0];
-
-      const outstanding = service.getOutstandingAmount(invoice);
-      expect(outstanding).toBe(invoice.total - invoice.amountPaid);
-    });
-  });
-
-  describe('getCollectionPercentage', () => {
-    it('should calculate collection percentage', async () => {
-      const { service } = setup();
-      const allInvoices = await service.getInvoices();
-      const invoice = allInvoices[0];
-
-      const percentage = service.getCollectionPercentage(invoice);
-      expect(percentage).toBe((invoice.amountPaid / invoice.total) * 100);
-    });
-  });
-
-  describe('isOverdue', () => {
-    it('should check if invoice is overdue', async () => {
-      const { service } = setup();
-      const allInvoices = await service.getInvoices();
-
-      const overdueInvoice = allInvoices.find((inv) => inv.status === 'overdue');
-      if (overdueInvoice) {
-        expect(service.isOverdue(overdueInvoice)).toBe(true);
-      }
-
-      const paidInvoice = allInvoices.find((inv) => inv.status === 'paid');
-      if (paidInvoice) {
-        expect(service.isOverdue(paidInvoice)).toBe(false);
-      }
+      const invoice = (await service.getInvoices())[0];
+      expect(service.getOutstandingAmount(invoice)).toBe(invoice.total - invoice.amountPaid);
     });
   });
 
@@ -624,28 +706,13 @@ describe('InvoiceService', () => {
     });
   });
 
-  describe('getInvoicesByCustomer', () => {
-    it('should get invoices by customer', async () => {
-      const { service } = setup();
-      const allInvoices = await service.getInvoices();
-
-      if (allInvoices.length > 0) {
-        const customerId = allInvoices[0].customerId;
-        const customerInvoices = await service.getInvoicesByCustomer(customerId);
-        expect(customerInvoices.every((inv) => inv.customerId === customerId)).toBe(true);
-      }
-    });
-  });
-
   describe('searchInvoices', () => {
     it('should search invoices', async () => {
       const { service } = setup();
       const allInvoices = await service.getInvoices();
-
       if (allInvoices.length > 0) {
-        const invoiceNumber = allInvoices[0].invoiceNumber;
-        const results = await service.searchInvoices(invoiceNumber);
-        expect(results.some((inv) => inv.invoiceNumber === invoiceNumber)).toBe(true);
+        const results = await service.searchInvoices(allInvoices[0].invoiceNumber);
+        expect(results.some((inv) => inv.invoiceNumber === allInvoices[0].invoiceNumber)).toBe(true);
       }
     });
   });

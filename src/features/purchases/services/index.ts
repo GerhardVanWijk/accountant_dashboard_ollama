@@ -4,9 +4,14 @@ import { PaymentService } from './paymentService';
 import { SupabaseBillRepository } from '@/repositories/SupabaseBillRepository';
 import { SupabasePurchaseOrderRepository } from '@/repositories/SupabasePurchaseOrderRepository';
 import { SupabasePaymentRepository } from '@/repositories/SupabasePaymentRepository';
-import { journalEntryService, accountMappingService, categoryAccountMappingService } from '@/features/accounting/services';
+import { journalEntryService, accountMappingService } from '@/features/accounting/services';
 import { taxRateService } from '@/features/tax/services';
-import { inventoryPoster } from '@/features/inventory/services/inventoryPostingAdapter';
+import {
+  inventoryAccountResolver,
+  periodGuardedInventoryPostingEngine,
+} from '@/features/inventory/services/inventoryPostingEngineInstance';
+import { productService } from '@/features/inventory/services/productService';
+import { warehouseService } from '@/features/inventory/services/warehouseService';
 import { fixedAssetService } from '@/features/assets/services';
 import { supabase } from '@/config/supabase';
 
@@ -18,37 +23,41 @@ export { PurchaseOrderService } from './purchaseOrderService';
 export { PaymentService } from './paymentService';
 
 /**
- * Wires the services to their Phase 0 mock repositories, and BillService/
- * PurchaseOrderService/PaymentService to the real GL posting engine
- * (journalEntryService) — the same shared singleton
- * bankTransactionService.ts posts through — so a bill/PO-receipt/payment
- * posted here is immediately visible in the trial balance and subject to
- * accountingPeriodService's period-open rule.
- * Hooks depend on these singletons instead of importing repositories directly.
+ * Wires the Purchases services to the shared singletons. Phase 3:
+ * `PurchaseOrderService.recordReceipt()` and `BillService.postBill()` post
+ * their inventory / GRNI / AP side through the ONE atomic inventory posting
+ * engine (`periodGuardedInventoryPostingEngine`) — one journal entry per
+ * document, WAC + stock moved in the same RPC, accounts resolved
+ * product → category → generic key via `inventoryAccountResolver`. They no
+ * longer take a `JournalPoster` or the deprecated `CategoryAccountMappingService`.
  *
  * `purchaseOrderService` is declared BEFORE `billService` and passed
- * directly to it (not a fresh lookup) so `postBill()`'s GRNI check
- * (`purchaseOrders.getPurchaseOrder()`) always sees the SAME in-memory PO
- * store the Purchase Orders page reads/writes — the same
- * "two-disconnected-singletons" bug class already fixed once for
- * InvoiceService/CustomerService in this codebase, avoided here by
- * construction rather than caught later.
+ * directly to it so `postBill()`'s GRNI check sees the SAME in-memory PO
+ * store the Purchase Orders page reads/writes.
+ *
+ * `paymentService` still posts through `journalEntryService` directly — it
+ * touches no inventory and is out of Phase 3 scope.
+ *
+ * TODO(Queen — instances.ts): inject engine / resolver / product /
+ * warehouse from a single composition root.
  */
 export const purchaseOrderService = new PurchaseOrderService(
   new SupabasePurchaseOrderRepository(supabase),
-  journalEntryService,
-  inventoryPoster,
-  accountMappingService,
+  periodGuardedInventoryPostingEngine,
+  inventoryAccountResolver,
+  productService,
+  warehouseService,
 );
 export const billService = new BillService(
   new SupabaseBillRepository(supabase),
-  journalEntryService,
+  periodGuardedInventoryPostingEngine,
   taxRateService,
-  inventoryPoster,
   purchaseOrderService,
   fixedAssetService,
   accountMappingService,
-  categoryAccountMappingService,
+  inventoryAccountResolver,
+  productService,
+  warehouseService,
 );
 export const paymentService = new PaymentService(
   new SupabasePaymentRepository(supabase),

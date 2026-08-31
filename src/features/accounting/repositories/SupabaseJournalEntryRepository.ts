@@ -143,7 +143,10 @@ export class SupabaseJournalEntryRepository implements IJournalEntryRepository {
 
     const { data, error } = await this.client.rpc('create_journal_entry_with_lines', {
       p_company_id: companyId,
-      p_entry_number: entity.entryNumber,
+      // A blank number → the DB allocates it atomically via
+      // `allocate_journal_number` (migration 0033). `JournalEntryService`
+      // stopped computing the number in Phase 3C.
+      p_entry_number: entity.entryNumber || null,
       p_date: entity.date,
       p_memo: entity.memo ?? null,
       p_status: entity.status,

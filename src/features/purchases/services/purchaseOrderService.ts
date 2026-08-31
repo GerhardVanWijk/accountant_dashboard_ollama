@@ -1,33 +1,17 @@
-import type { Bill, ID, PurchaseOrder } from '@/types';
+import type { Bill, ID, Product, PurchaseOrder } from '@/types';
 import type { IPurchaseOrderRepository } from '@/repositories/IPurchaseOrderRepository';
-import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
+import { SYSTEM_USER_ID } from '@/features/accounting/services';
+import type { InventoryAccountResolver } from '@/features/inventory/services/inventoryAccountResolver';
+import type { InventoryTransactionLine } from '@/features/inventory/services/inventoryPostingEngine';
+import {
+  type DocumentProductLookup,
+  type DocumentWarehouseResolver,
+  type InventoryTransactionPoster,
+  requireWarehouseId,
+  toMovementDate,
+} from '@/features/inventory/services/documentInventoryPosting';
 
 export type CreatePurchaseOrderDTO = Omit<PurchaseOrder, 'id' | 'createdAt' | 'updatedAt'>;
-
-/**
- * Minimal surface of JournalEntryService this service depends on. Mirrors
- * src/features/sales/services/creditNoteService.ts's JournalPoster.
- */
-export interface JournalPoster {
-  postJournalEntry(input: {
-    date: string;
-    memo?: string;
-    source: string;
-    lines: NewJournalLineInput[];
-    postedByUserId?: ID;
-  }): Promise<{ id: ID }>;
-}
-
-/**
- * Minimal surface of InventoryPoster this service depends on
- * (src/features/inventory/services/inventoryPostingAdapter.ts) — recording
- * the physical stock receipt and its GL value at PO-receipt time, per
- * SA_ACCOUNTING_MASTER_SPEC.md §22's 3-way PO/GRN/Invoice matching.
- */
-export interface InventoryReceiver {
-  isTrackedInventory(productId: ID): Promise<boolean>;
-  recordReceiptMovement(productId: ID, quantity: number, unitCost: number, reference: string, warehouseId?: ID): Promise<void>;
-}
 
 /**
  * Business-logic layer for purchase orders.
@@ -37,9 +21,17 @@ export interface InventoryReceiver {
 export class PurchaseOrderService {
   constructor(
     private readonly repository: IPurchaseOrderRepository,
-    private readonly journalEntryService: JournalPoster,
-    private readonly inventoryReceiver: InventoryReceiver,
-    private readonly accounts: AccountMapper,
+    /**
+     * The ONE atomic inventory posting engine. `recordReceipt()` hands it
+     * one `receipt` line per tracked-inventory line — the engine posts
+     * DR <category Inventory> / CR GRNI, blends WAC and moves stock in a
+     * single RPC. No separate journal post, no separate stock call.
+     */
+    private readonly engine: InventoryTransactionPoster,
+    /** Product → category → generic-key resolution for the Inventory / GRNI accounts (now category-aware). */
+    private readonly inventoryAccounts: InventoryAccountResolver,
+    private readonly products: DocumentProductLookup,
+    private readonly warehouses: DocumentWarehouseResolver,
   ) {}
 
   async getPurchaseOrders(): Promise<PurchaseOrder[]> {
@@ -133,51 +125,42 @@ export class PurchaseOrderService {
       throw new Error(`Cannot record receipt for cancelled purchase order "${id}".`);
     }
 
-    const inventoryLines = [];
+    const docLabel = `PO ${po.poNumber}`;
+    const trackedLines: { line: PurchaseOrder['lineItems'][number]; product: Product }[] = [];
     for (const line of po.lineItems) {
-      if (line.productId && (await this.inventoryReceiver.isTrackedInventory(line.productId))) {
-        inventoryLines.push(line);
-      }
+      if (!line.productId) continue;
+      const product = await this.products.getProduct(line.productId);
+      if (product?.trackInventory) trackedLines.push({ line, product });
     }
-    const inventoryValue = inventoryLines.reduce((sum, line) => sum + line.lineTotal, 0);
     const receivedDate = new Date().toISOString();
 
     let journalEntryId: ID | undefined;
-    if (inventoryValue > 0) {
-      const lines: NewJournalLineInput[] = [
-        {
-          accountId: await this.accounts.getAccountId('INVENTORY'),
-          description: `PO ${po.poNumber} - Goods Received`,
-          debit: inventoryValue,
-          credit: 0,
-        },
-        {
-          accountId: await this.accounts.getAccountId('GRNI'),
-          description: `PO ${po.poNumber} - GRNI`,
-          debit: 0,
-          credit: inventoryValue,
-        },
-      ];
-      const entry = await this.journalEntryService.postJournalEntry({
-        date: receivedDate,
-        memo: `Goods Received - PO ${po.poNumber}`,
-        source: 'purchase_order_receipt',
-        postedByUserId,
+    if (trackedLines.length > 0) {
+      const lines: InventoryTransactionLine[] = [];
+      for (const { line, product } of trackedLines) {
+        lines.push({
+          productId: product.id,
+          warehouseId: await requireWarehouseId(this.warehouses, line.warehouseId, docLabel),
+          quantityDelta: line.quantity,
+          costingMode: 'receipt',
+          unitCostIn: line.unitPrice,
+          inventoryAccountId: await this.inventoryAccounts.resolveForProduct(product, 'inventory'),
+          contraAccountId: await this.inventoryAccounts.resolveKey('GRNI'),
+          sourceDocumentLineId: line.id,
+          nonStock: false,
+        });
+      }
+      const result = await this.engine.applyInventoryTransaction({
+        postingKey: `purchase_order:${po.id}:receipt`,
+        sourceType: 'purchase_order',
+        sourceId: po.id,
+        movementDate: toMovementDate(receivedDate),
+        createdBy: postedByUserId ?? SYSTEM_USER_ID,
         lines,
+        extraJournal: [],
+        journal: { source: 'purchase_order_receipt', memo: `Goods Received - ${docLabel}` },
       });
-      journalEntryId = entry.id;
-
-      await Promise.all(
-        inventoryLines.map((line) =>
-          this.inventoryReceiver.recordReceiptMovement(
-            line.productId!,
-            line.quantity,
-            line.unitPrice,
-            `PO ${po.poNumber}`,
-            line.warehouseId,
-          ),
-        ),
-      );
+      journalEntryId = result.journalEntryId;
     }
 
     return this.repository.update(id, { status: 'received', receivedDate, journalEntryId });

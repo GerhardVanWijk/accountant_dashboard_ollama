@@ -4,6 +4,7 @@ import {
   ArrowLeftRightIcon,
   BanknoteIcon,
   BookOpenIcon,
+  BoxesIcon,
   BuildingIcon,
   Building2Icon,
   CalculatorIcon,
@@ -98,6 +99,7 @@ export const navGroups: NavGroup[] = [
       { title: 'Company', href: '/companies', icon: BuildingIcon },
       { title: 'Customers', href: '/sales/customers', icon: HandCoinsIcon },
       { title: 'Suppliers', href: '/purchases/vendors', icon: TruckIcon },
+      { title: 'Inventory', href: '/inventory', icon: BoxesIcon },
     ],
   },
   {
@@ -117,6 +119,16 @@ export const navGroups: NavGroup[] = [
       { title: 'Purchase Orders', href: '/purchases/orders', icon: ClipboardCheckIcon },
       { title: 'Supplier Payments', href: '/purchases/payments', icon: BanknoteIcon },
       { title: 'Vendor Aging', href: '/purchases/aging', icon: CalendarClockIcon },
+    ],
+  },
+  {
+    title: 'Inventory',
+    items: [
+      { title: 'Overview', href: '/inventory', icon: BoxesIcon },
+      { title: 'Products', href: '/inventory/products', icon: PackageIcon },
+      { title: 'Categories', href: '/inventory/categories', icon: ListTreeIcon },
+      { title: 'Warehouses', href: '/inventory/warehouses', icon: WarehouseIcon },
+      { title: 'Stock Movements', href: '/inventory/movements', icon: ArrowLeftRightIcon },
     ],
   },
   {
@@ -158,14 +170,17 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    title: 'Assets & Inventory',
+    title: 'Fixed Assets',
     items: [
       { title: 'Fixed Assets', href: '/assets/register', icon: SquareStackIcon },
       { title: 'Depreciation', href: '/assets/depreciation', icon: TrendingDownIcon },
       { title: 'Disposals', href: '/assets/disposals', icon: Trash2Icon },
       { title: 'Asset Tax Register', href: '/assets/tax-register', icon: FileTextIcon },
-      { title: 'Products', href: '/inventory/products', icon: PackageIcon },
-      { title: 'Warehouses', href: '/inventory/warehouses', icon: WarehouseIcon },
+    ],
+  },
+  {
+    title: 'Leases',
+    items: [
       { title: 'Lease Register', href: '/leases/register', icon: FileSignatureIcon },
       { title: 'Lease Amortization', href: '/leases/amortization', icon: CalendarClockIcon },
     ],
@@ -237,6 +252,9 @@ export const segmentLabels: Record<string, string> = {
   register: 'Register',
   inventory: 'Inventory',
   products: 'Products',
+  categories: 'Categories',
+  warehouses: 'Warehouses',
+  movements: 'Stock Movements',
   reports: 'Reports',
   'income-statement': 'Income Statement',
   'balance-sheet': 'Balance Sheet',

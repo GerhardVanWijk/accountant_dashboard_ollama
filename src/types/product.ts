@@ -45,4 +45,32 @@ export interface Product extends BaseEntity {
 
   /** Defaults to `'weighted_average'` when absent — every existing product keeps behaving exactly as before. */
   valuationMethod?: ValuationMethod;
+
+  // --- Inventory Accounting Module (Phase 2) additions. All optional; a
+  // product with none set behaves exactly as before. See
+  // docs/INVENTORY_ARCHITECTURE.md §13.2 and migrations 0024–0025.
+
+  /** FK to `ProductCategory`. `category` (the free-text string above) is kept during the transition and stays populated. */
+  categoryId?: ID;
+  /** Text shown on sales documents when different from `description`. */
+  salesDescription?: string;
+  /** Text shown on purchase documents / to suppliers when different from `description`. */
+  purchaseDescription?: string;
+  /** Default supplier this product is bought from. */
+  preferredSupplierId?: ID;
+  /** The supplier's own code/SKU for this product. */
+  supplierItemCode?: ID;
+  /** Quantity to bring the item back up to when reordering (distinct from `reorderLevel`, the trigger point). */
+  reorderQuantity?: number;
+  /** Target stock level to hold (min/ideal on-hand). */
+  preferredStockLevel?: number;
+  /**
+   * Optional per-product GL account overrides. When set, they win over the
+   * product's category mapping, which wins over the generic AccountMappingKey.
+   * Never a literal code/UUID in a posting service.
+   */
+  salesAccountId?: ID;
+  inventoryAccountId?: ID;
+  cogsAccountId?: ID;
+  purchaseAccountId?: ID;
 }
