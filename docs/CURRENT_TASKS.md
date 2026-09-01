@@ -10,9 +10,9 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` complete
 
 ## WHERE WE STAND — 2026-09-01 (git reality check)
 
-Every initiative in this file has shipped to `origin/main` **except Inventory Phase 9B**,
-which is committed + pushed on branch `phase-9b-relationship-design-and-code` and **not yet
-merged**. The per-section checkboxes below have been updated to match git.
+Everything in this file has shipped to `origin/main`. As of 2026-09-01 the
+`phase-9b-relationship-design-and-code` branch was fast-forward-merged to `main`
+(`4ac5277..2b07407`) and pushed → Cloudflare Pages auto-deploy triggered.
 
 | Initiative | State | Commit(s) |
 |---|---|---|
@@ -20,8 +20,8 @@ merged**. The per-section checkboxes below have been updated to match git.
 | Bank Statement Reconciliation + evidence model (P1 / P2) | **shipped to `main`** | `fa4aae1` `7481ef8` `3ccdafa` |
 | Vertex Form System + page-layout foundation (P3A–P3I) | **shipped to `main`** | `62f0905` |
 | Inventory Accounting Module — Phases 0–8 + 9A | **shipped to `main`** | `40f10fb` `4ac5277` |
-| Inventory Phase 9B — normalized document-line tables | **committed on branch, NOT merged; runtime flag OFF** | `38f6b78` `465c10f` |
-| Inventory UX Correction Pass (see `# INVENTORY UX CORRECTION PASS` below) | **committed on `phase-9b-…` branch; review APPROVED** | `6d203fc` |
+| Inventory Phase 9B — normalized document-line tables | **shipped to `main`; runtime flag `NORMALIZED_DOCUMENT_LINES_ENABLED` still OFF** | `38f6b78` `465c10f` |
+| Inventory UX Correction Pass (see `# INVENTORY UX CORRECTION PASS` below) | **shipped to `main`; deployed** | `6d203fc` `2b07407` |
 
 ### Still genuinely open
 
@@ -30,8 +30,8 @@ merged**. The per-section checkboxes below have been updated to match git.
 - **Live-Postgres inventory-posting E2E** — never run (needs a throwaway Supabase project);
   `inventory_transaction_log` is still 0 rows, no engine write has touched live data.
 - **Reconciliation demo-data live seed** — Correction Pass §18 / §20 (needs a live DB write, awaiting go-ahead).
-- **Phase 9B** — open a PR + merge to `main`; then a *separate* review to flip
-  `NORMALIZED_DOCUMENT_LINES_ENABLED` after forward dual-write parity is tested against the live DB.
+- **Phase 9B projection flag** — `NORMALIZED_DOCUMENT_LINES_ENABLED` is OFF. Flipping it is a
+  *separate later review* that must first see forward dual-write parity tested against the live DB.
 - **Inventory Phases 10–14** — not started: Fixed-Asset nav cleanup · DB role-aware permissions/audit ·
   Office National data · accounting-invariant regression tests · reconciliation/investigator UI.
 
@@ -1032,8 +1032,14 @@ utilities verified present in the compiled CSS bundle. Manual checklist handed t
 
 ## Deploy
 
-- [ ] Cloudflare — deploys only from `main`. Requires merging `phase-9b-relationship-design-and-code`
-      (which also carries Phase 9B, flag OFF) **or** cherry-picking `6d203fc` onto `main`. Awaiting the user's call on scope.
+- [x] **Merged to `main` + deployed (2026-09-01).** User chose "merge whole branch". Fast-forward
+      `4ac5277..2b07407`, pushed to `origin/main` → Cloudflare Pages auto-build/deploy triggered.
+      Full gate re-run on `main`: type-check ✅ / lint ✅ / **1925 tests** ✅ / `vite build` ✅.
+      Phase 9B rode along (reviews 9B-A→9B-E approved; migrations 0037–0042 already live on
+      Supabase; `NORMALIZED_DOCUMENT_LINES_ENABLED` stays OFF). Its `deleteProduct()` history
+      guard and `issueCreditNote()` per-line over-return validation are now live (both pure bug fixes).
+- [ ] Human browser QA on the live deploy (checklist in the review report — nav / header / detail
+      sheet / global search / profile menu at 1440·1280·mobile).
 
 ---
 
