@@ -7,9 +7,12 @@ import {
   type DocumentProductLookup,
   type DocumentWarehouseResolver,
   type InventoryTransactionPoster,
+  projectDocumentLinesBestEffort,
   requireWarehouseId,
   toMovementDate,
 } from '@/features/inventory/services/documentInventoryPosting';
+import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
+import { NoopDocumentLineProjector } from '@/repositories/NoopDocumentLineProjector';
 
 export type CreatePurchaseOrderDTO = Omit<PurchaseOrder, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -32,6 +35,8 @@ export class PurchaseOrderService {
     private readonly inventoryAccounts: InventoryAccountResolver,
     private readonly products: DocumentProductLookup,
     private readonly warehouses: DocumentWarehouseResolver,
+    /** Phase 9B (docs/ACCOUNTING_RELATIONSHIPS.md §17-18) — see InvoiceService's identical parameter for the full rationale. */
+    private readonly lineProjector: IDocumentLineProjector = new NoopDocumentLineProjector(),
   ) {}
 
   async getPurchaseOrders(): Promise<PurchaseOrder[]> {
@@ -44,16 +49,22 @@ export class PurchaseOrderService {
 
   async createPurchaseOrder(data: CreatePurchaseOrderDTO): Promise<PurchaseOrder> {
     const now = new Date().toISOString();
-    return this.repository.create({
+    const po = await this.repository.create({
       ...data,
       id: '',
       createdAt: now,
       updatedAt: now,
     });
+    await projectDocumentLinesBestEffort(this.lineProjector, po.id, po.lineItems, `Purchase Order ${po.poNumber}`);
+    return po;
   }
 
   async updatePurchaseOrder(id: string, patch: Partial<PurchaseOrder>): Promise<PurchaseOrder> {
-    return this.repository.update(id, patch);
+    const updated = await this.repository.update(id, patch);
+    if ('lineItems' in patch) {
+      await projectDocumentLinesBestEffort(this.lineProjector, updated.id, updated.lineItems, `Purchase Order ${updated.poNumber}`);
+    }
+    return updated;
   }
 
   /** Permanently removes a draft purchase order. Once sent/received/converted it's a real commitment and must be cancelled instead of deleted. */

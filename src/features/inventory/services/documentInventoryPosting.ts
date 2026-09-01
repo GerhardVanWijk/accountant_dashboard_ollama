@@ -1,9 +1,10 @@
-import type { ID, Product, Warehouse } from '@/types';
+import type { DocumentLineItem, ID, Product, Warehouse } from '@/types';
 import type {
   InventoryTransactionRequest,
   InventoryTransactionResult,
   OpenPeriodGuard,
 } from './inventoryPostingEngine';
+import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
 
 /**
  * Shared glue between the Sales / Purchases document services
@@ -75,6 +76,30 @@ export async function requireWarehouseId(
     `${docLabel}: cannot post — a tracked-inventory line has no warehouse and no default warehouse is configured. ` +
       `Assign a warehouse to the line or set a default warehouse (Inventory → Warehouses) before posting.`,
   );
+}
+
+/**
+ * Best-effort call into an `IDocumentLineProjector` (Phase 9B —
+ * docs/ACCOUNTING_RELATIONSHIPS.md §17-18, docs/PHASE_9B_DESIGN.md). The
+ * projection table is explicitly NOT authoritative — a failure here must
+ * never fail (or roll back) the document write it accompanies, so this
+ * swallows any error, logging a warning instead of throwing. With
+ * `NORMALIZED_DOCUMENT_LINES_ENABLED` false (the default —
+ * src/config/featureFlags.ts), `projector.sync()` itself already no-ops, so
+ * this call is inert; this wrapper is what stays safe even once that flag
+ * flips true and the underlying table/RPC has some transient problem.
+ */
+export async function projectDocumentLinesBestEffort(
+  projector: IDocumentLineProjector,
+  documentId: ID,
+  lines: readonly DocumentLineItem[],
+  docLabel: string,
+): Promise<void> {
+  try {
+    await projector.sync(documentId, lines);
+  } catch (error) {
+    console.warn(`${docLabel}: normalized line projection failed (jsonb lineItems remains authoritative and unaffected):`, error);
+  }
 }
 
 /** Anything that can answer "which accounting period covers this date" (AccountingPeriodService does). */

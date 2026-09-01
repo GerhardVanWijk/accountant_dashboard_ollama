@@ -11,10 +11,13 @@ import {
   type DocumentProductLookup,
   type DocumentWarehouseResolver,
   type InventoryTransactionPoster,
+  projectDocumentLinesBestEffort,
   requireWarehouseId,
   resolveWarehouseId,
   toMovementDate,
 } from '@/features/inventory/services/documentInventoryPosting';
+import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
+import { NoopDocumentLineProjector } from '@/repositories/NoopDocumentLineProjector';
 
 export type CreateCreditNoteDTO = Omit<CreditNote, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -55,6 +58,8 @@ export class CreditNoteService {
     private readonly inventoryAccounts: InventoryAccountResolver,
     private readonly products: DocumentProductLookup,
     private readonly warehouses: DocumentWarehouseResolver,
+    /** Phase 9B (docs/ACCOUNTING_RELATIONSHIPS.md §17-18) — see InvoiceService's identical parameter for the full rationale. */
+    private readonly lineProjector: IDocumentLineProjector = new NoopDocumentLineProjector(),
   ) {}
 
   async getCreditNotes(): Promise<CreditNote[]> {
@@ -67,16 +72,22 @@ export class CreditNoteService {
 
   async createCreditNote(data: CreateCreditNoteDTO): Promise<CreditNote> {
     const now = new Date().toISOString();
-    return this.repository.create({
+    const creditNote = await this.repository.create({
       ...data,
       id: '',
       createdAt: now,
       updatedAt: now,
     });
+    await projectDocumentLinesBestEffort(this.lineProjector, creditNote.id, creditNote.lineItems, `Credit Note ${creditNote.creditNoteNumber}`);
+    return creditNote;
   }
 
   async updateCreditNote(id: string, patch: Partial<CreditNote>): Promise<CreditNote> {
-    return this.repository.update(id, patch);
+    const updated = await this.repository.update(id, patch);
+    if ('lineItems' in patch) {
+      await projectDocumentLinesBestEffort(this.lineProjector, updated.id, updated.lineItems, `Credit Note ${updated.creditNoteNumber}`);
+    }
+    return updated;
   }
 
   /**
@@ -140,29 +151,88 @@ export class CreditNoteService {
       }
     }
 
-    // New guard: a return line's quantity may not exceed what was invoiced
-    // for that product on the linked invoice.
+    // Return-quantity guard. Phase 9B (docs/ACCOUNTING_RELATIONSHIPS.md §4):
+    // a line that carries `originalInvoiceLineId` is validated against THAT
+    // specific invoice line (plus whatever any other already-posted credit
+    // note already returned against that same line) — the fix for two
+    // lines on one invoice sharing a product, which the old
+    // whole-invoice/whole-product aggregate below could not tell apart. A
+    // line with no `originalInvoiceLineId` (older data, or a credit note
+    // that deliberately targets the product rather than one line) falls
+    // back to that same aggregate check as before, ALSO now netted against
+    // prior posted credit notes' aggregate returns — the old version only
+    // ever compared against the current credit note's own lines, so two
+    // separate credit notes could together over-return a product with
+    // neither one alone tripping the guard.
     if (isReturn && creditNote.invoiceId) {
       const invoice = await this.invoiceService.getInvoice(creditNote.invoiceId);
       if (invoice) {
-        const invoicedByProduct = new Map<ID, number>();
-        for (const line of invoice.lineItems) {
-          if (line.productId) {
-            invoicedByProduct.set(line.productId, (invoicedByProduct.get(line.productId) ?? 0) + line.quantity);
+        const invoiceLineById = new Map(invoice.lineItems.map((line) => [line.id, line]));
+
+        const priorPostedNotes = (await this.repository.getAll()).filter(
+          (cn) => cn.id !== creditNote.id && cn.invoiceId === creditNote.invoiceId && cn.status !== 'draft' && cn.status !== 'void',
+        );
+        const priorReturnedByLine = new Map<ID, number>();
+        const priorReturnedByProduct = new Map<ID, number>();
+        for (const priorNote of priorPostedNotes) {
+          for (const line of priorNote.lineItems) {
+            if (!line.productId) continue;
+            if (line.originalInvoiceLineId) {
+              priorReturnedByLine.set(
+                line.originalInvoiceLineId,
+                (priorReturnedByLine.get(line.originalInvoiceLineId) ?? 0) + line.quantity,
+              );
+            } else {
+              priorReturnedByProduct.set(line.productId, (priorReturnedByProduct.get(line.productId) ?? 0) + line.quantity);
+            }
           }
         }
-        const returnedByProduct = new Map<ID, number>();
+
+        const returningByLine = new Map<ID, number>();
+        const returningByProduct = new Map<ID, number>();
         for (const line of creditNote.lineItems) {
-          if (line.productId) {
-            returnedByProduct.set(line.productId, (returnedByProduct.get(line.productId) ?? 0) + line.quantity);
+          if (!line.productId) continue;
+          if (line.originalInvoiceLineId) {
+            returningByLine.set(line.originalInvoiceLineId, (returningByLine.get(line.originalInvoiceLineId) ?? 0) + line.quantity);
+          } else {
+            returningByProduct.set(line.productId, (returningByProduct.get(line.productId) ?? 0) + line.quantity);
           }
         }
-        for (const [productId, returnedQty] of returnedByProduct) {
-          const invoicedQty = invoicedByProduct.get(productId) ?? 0;
-          if (returnedQty > invoicedQty + 1e-9) {
+
+        // Line-specific check.
+        for (const [invoiceLineId, returningQty] of returningByLine) {
+          const invoiceLine = invoiceLineById.get(invoiceLineId);
+          if (!invoiceLine) {
             throw new Error(
-              `${docLabel}: return quantity ${returnedQty} for product "${productId}" exceeds the ${invoicedQty} invoiced on invoice "${creditNote.invoiceId}".`,
+              `${docLabel}: original invoice line "${invoiceLineId}" not found on invoice "${creditNote.invoiceId}".`,
             );
+          }
+          const alreadyReturned = priorReturnedByLine.get(invoiceLineId) ?? 0;
+          if (alreadyReturned + returningQty > invoiceLine.quantity + 1e-9) {
+            throw new Error(
+              `${docLabel}: return quantity ${returningQty} for invoice line "${invoiceLineId}" (already ${alreadyReturned} ` +
+                `returned against that line) exceeds the ${invoiceLine.quantity} invoiced on that line.`,
+            );
+          }
+        }
+
+        // Legacy/no-line-link fallback: aggregate by product across the whole invoice.
+        if (returningByProduct.size > 0) {
+          const invoicedByProduct = new Map<ID, number>();
+          for (const line of invoice.lineItems) {
+            if (line.productId) {
+              invoicedByProduct.set(line.productId, (invoicedByProduct.get(line.productId) ?? 0) + line.quantity);
+            }
+          }
+          for (const [productId, returningQty] of returningByProduct) {
+            const invoicedQty = invoicedByProduct.get(productId) ?? 0;
+            const alreadyReturned = priorReturnedByProduct.get(productId) ?? 0;
+            if (alreadyReturned + returningQty > invoicedQty + 1e-9) {
+              throw new Error(
+                `${docLabel}: return quantity ${returningQty} for product "${productId}" (already ${alreadyReturned} returned) ` +
+                  `exceeds the ${invoicedQty} invoiced on invoice "${creditNote.invoiceId}".`,
+              );
+            }
           }
         }
       }

@@ -19,7 +19,16 @@ import {
 } from '@/features/inventory/services/inventoryPostingEngine.fake';
 import { InventoryAccountResolverService } from '@/features/inventory/services/inventoryAccountResolver';
 import { periodGuardFrom } from '@/features/inventory/services/documentInventoryPosting';
-import type { AccountingPeriod, Product, ProductCategory, Warehouse } from '@/types';
+import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
+import type { AccountingPeriod, DocumentLineItem, ID, Product, ProductCategory, Warehouse } from '@/types';
+
+/** Records every sync() call — the spy used by the Phase 9B projection test. */
+class SpyLineProjector implements IDocumentLineProjector {
+  calls: { documentId: ID; lines: readonly DocumentLineItem[] }[] = [];
+  async sync(documentId: ID, lines: readonly DocumentLineItem[]): Promise<void> {
+    this.calls.push({ documentId, lines });
+  }
+}
 
 function makeOpenPeriod(): AccountingPeriod {
   return {
@@ -75,6 +84,7 @@ async function setup(
   options: {
     products?: Record<string, Partial<Product>>;
     categories?: Record<string, Partial<ProductCategory>>;
+    lineProjector?: IDocumentLineProjector;
   } = {},
 ) {
   const accountRepository = new MockAccountRepository(seedAccounts);
@@ -144,6 +154,7 @@ async function setup(
     resolver,
     products,
     warehouses,
+    options.lineProjector,
   );
 
   const getJE = (id: string | undefined) => store.journalEntries.find((e) => e.id === id);
@@ -391,6 +402,238 @@ describe('CreditNoteService', () => {
       });
       const issued = await service.issueCreditNote(draft.id);
       await expect(service.issueCreditNote(issued.id)).rejects.toThrow(/draft/i);
+    });
+  });
+
+  describe('normalized-line projection (Phase 9B — docs/ACCOUNTING_RELATIONSHIPS.md §17-18)', () => {
+    it('projects lineItems on create', async () => {
+      const projector = new SpyLineProjector();
+      const { service } = await setup({ lineProjector: projector });
+      const draft = await service.createCreditNote({
+        creditNoteNumber: 'CN-2026-PROJ',
+        customerId: 'cust_test',
+        issueDate: '2026-08-05T00:00:00.000Z',
+        reason: 'other',
+        lineItems: [{ id: 'cnl_1', description: 'Adjustment', quantity: 1, unitPrice: 50, taxAmount: 7.5, lineTotal: 50 }],
+        subtotal: 50,
+        taxTotal: 7.5,
+        total: 57.5,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+      expect(projector.calls).toEqual([{ documentId: draft.id, lines: draft.lineItems }]);
+    });
+  });
+
+  describe('original-line evidence (Phase 9B — docs/ACCOUNTING_RELATIONSHIPS.md §4)', () => {
+    async function invoiceWithTwoLinesSameProduct(invoiceService: Awaited<ReturnType<typeof setup>>['invoiceService']) {
+      return invoiceService.createInvoice({
+        invoiceNumber: 'INV-TWO-LINES-SAME-PRODUCT',
+        customerId: 'cust_test',
+        issueDate: '2026-08-01T00:00:00.000Z',
+        dueDate: '2026-08-31T00:00:00.000Z',
+        lineItems: [
+          { id: 'il_a', productId: 'prod_1', description: 'Widget (batch A)', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 },
+          { id: 'il_b', productId: 'prod_1', description: 'Widget (batch B)', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 1000,
+        taxTotal: 150,
+        total: 1150,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'sent',
+      });
+    }
+
+    it('credits a specific invoice line without touching the other line for the same product', async () => {
+      const { service, invoiceService } = await setup({ products: { prod_1: {} } });
+      const invoice = await invoiceWithTwoLinesSameProduct(invoiceService);
+
+      // Return all 5 of line A — line B (also qty 5, same product) is untouched.
+      const draft = await service.createCreditNote({
+        creditNoteNumber: 'CN-LINE-A-FULL',
+        customerId: 'cust_test',
+        invoiceId: invoice.id,
+        issueDate: '2026-08-05T00:00:00.000Z',
+        reason: 'return',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_1', originalInvoiceLineId: 'il_a', description: 'Widget', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+      const issued = await service.issueCreditNote(draft.id);
+      expect(issued.status).toBe('issued');
+    });
+
+    it('allows partial credit of one line and rejects a second credit that would over-credit that same line', async () => {
+      const { service, invoiceService } = await setup({ products: { prod_1: {} } });
+      const invoice = await invoiceWithTwoLinesSameProduct(invoiceService);
+
+      const first = await service.createCreditNote({
+        creditNoteNumber: 'CN-LINE-A-PARTIAL-1',
+        customerId: 'cust_test',
+        invoiceId: invoice.id,
+        issueDate: '2026-08-05T00:00:00.000Z',
+        reason: 'return',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_1', originalInvoiceLineId: 'il_a', description: 'Widget', quantity: 3, unitPrice: 100, taxAmount: 45, lineTotal: 300 },
+        ],
+        subtotal: 300,
+        taxTotal: 45,
+        total: 345,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+      const issuedFirst = await service.issueCreditNote(first.id);
+      expect(issuedFirst.status).toBe('issued');
+
+      // Line A had qty 5; 3 already credited — crediting 2 more is fine (=5 total).
+      const second = await service.createCreditNote({
+        creditNoteNumber: 'CN-LINE-A-PARTIAL-2',
+        customerId: 'cust_test',
+        invoiceId: invoice.id,
+        issueDate: '2026-08-06T00:00:00.000Z',
+        reason: 'return',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_1', originalInvoiceLineId: 'il_a', description: 'Widget', quantity: 2, unitPrice: 100, taxAmount: 30, lineTotal: 200 },
+        ],
+        subtotal: 200,
+        taxTotal: 30,
+        total: 230,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+      expect((await service.issueCreditNote(second.id)).status).toBe('issued');
+
+      // A third credit note against line A (now fully returned) must be rejected.
+      const third = await service.createCreditNote({
+        creditNoteNumber: 'CN-LINE-A-OVER',
+        customerId: 'cust_test',
+        invoiceId: invoice.id,
+        issueDate: '2026-08-07T00:00:00.000Z',
+        reason: 'return',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_1', originalInvoiceLineId: 'il_a', description: 'Widget', quantity: 1, unitPrice: 100, taxAmount: 15, lineTotal: 100 },
+        ],
+        subtotal: 100,
+        taxTotal: 15,
+        total: 115,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+      await expect(service.issueCreditNote(third.id)).rejects.toThrow(/exceeds/i);
+
+      // Line B (same product, untouched) still has its full qty 5 available.
+      const lineB = await service.createCreditNote({
+        creditNoteNumber: 'CN-LINE-B-FULL',
+        customerId: 'cust_test',
+        invoiceId: invoice.id,
+        issueDate: '2026-08-08T00:00:00.000Z',
+        reason: 'return',
+        lineItems: [
+          { id: 'li_1', productId: 'prod_1', originalInvoiceLineId: 'il_b', description: 'Widget', quantity: 5, unitPrice: 100, taxAmount: 75, lineTotal: 500 },
+        ],
+        subtotal: 500,
+        taxTotal: 75,
+        total: 575,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+      expect((await service.issueCreditNote(lineB.id)).status).toBe('issued');
+    });
+
+    it('rejects crediting more than one specific invoice line ever invoiced, even under the old aggregate-by-product total', async () => {
+      const { service, invoiceService } = await setup({ products: { prod_1: {} } });
+      const invoice = await invoiceWithTwoLinesSameProduct(invoiceService);
+
+      const draft = await service.createCreditNote({
+        creditNoteNumber: 'CN-LINE-A-TOO-MUCH',
+        customerId: 'cust_test',
+        invoiceId: invoice.id,
+        issueDate: '2026-08-05T00:00:00.000Z',
+        reason: 'return',
+        // Line A only had qty 5 — crediting 6 against it must fail even
+        // though the whole invoice (10 units across both lines) could
+        // technically absorb it under the old product-only aggregate.
+        lineItems: [
+          { id: 'li_1', productId: 'prod_1', originalInvoiceLineId: 'il_a', description: 'Widget', quantity: 6, unitPrice: 100, taxAmount: 90, lineTotal: 600 },
+        ],
+        subtotal: 600,
+        taxTotal: 90,
+        total: 690,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+      await expect(service.issueCreditNote(draft.id)).rejects.toThrow(/exceeds/i);
+    });
+
+    it('financial-only credit (no originalInvoiceLineId, non-return reason) needs no line evidence and is unaffected', async () => {
+      const { service, invoiceService } = await setup({ products: { prod_1: {} } });
+      const invoice = await invoiceWithTwoLinesSameProduct(invoiceService);
+
+      const draft = await service.createCreditNote({
+        creditNoteNumber: 'CN-FINANCIAL-ONLY',
+        customerId: 'cust_test',
+        invoiceId: invoice.id,
+        issueDate: '2026-08-05T00:00:00.000Z',
+        reason: 'discount',
+        lineItems: [
+          { id: 'li_1', description: 'Volume discount', quantity: 1, unitPrice: 100, taxAmount: 15, lineTotal: 100 },
+        ],
+        subtotal: 100,
+        taxTotal: 15,
+        total: 115,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+      expect((await service.issueCreditNote(draft.id)).status).toBe('issued');
+    });
+
+    it('records the credit note line id (not the original invoice line id) as the stock movement source evidence', async () => {
+      const { service, invoiceService, store } = await setup({ products: { prod_1: {} } });
+      const invoice = await invoiceWithTwoLinesSameProduct(invoiceService);
+
+      const draft = await service.createCreditNote({
+        creditNoteNumber: 'CN-SOURCE-EVIDENCE',
+        customerId: 'cust_test',
+        invoiceId: invoice.id,
+        issueDate: '2026-08-05T00:00:00.000Z',
+        reason: 'return',
+        lineItems: [
+          { id: 'cn_li_1', productId: 'prod_1', originalInvoiceLineId: 'il_a', description: 'Widget', quantity: 2, unitPrice: 100, taxAmount: 30, lineTotal: 200 },
+        ],
+        subtotal: 200,
+        taxTotal: 30,
+        total: 230,
+        amountAllocated: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        allocations: [],
+      });
+      await service.issueCreditNote(draft.id);
+      const movement = store.movements.find((m) => m.type === 'sales_return');
+      expect(movement?.sourceDocumentLineId).toBe('cn_li_1');
+      expect(movement?.sourceDocumentType).toBe('credit_note');
     });
   });
 

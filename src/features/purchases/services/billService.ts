@@ -11,9 +11,12 @@ import {
   type DocumentProductLookup,
   type DocumentWarehouseResolver,
   type InventoryTransactionPoster,
+  projectDocumentLinesBestEffort,
   requireWarehouseId,
   toMovementDate,
 } from '@/features/inventory/services/documentInventoryPosting';
+import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
+import { NoopDocumentLineProjector } from '@/repositories/NoopDocumentLineProjector';
 
 /**
  * Minimal surface of TaxRateService this service depends on — resolving a
@@ -86,6 +89,8 @@ export class BillService {
     private readonly inventoryAccounts: InventoryAccountResolver,
     private readonly products: DocumentProductLookup,
     private readonly warehouses: DocumentWarehouseResolver,
+    /** Phase 9B (docs/ACCOUNTING_RELATIONSHIPS.md §17-18) — see InvoiceService's identical parameter for the full rationale. */
+    private readonly lineProjector: IDocumentLineProjector = new NoopDocumentLineProjector(),
   ) {}
 
   async getBills(): Promise<Bill[]> {
@@ -98,12 +103,14 @@ export class BillService {
 
   async createBill(data: CreateBillDTO): Promise<Bill> {
     const now = new Date().toISOString();
-    return this.repository.create({
+    const bill = await this.repository.create({
       ...data,
       id: '',
       createdAt: now,
       updatedAt: now,
     });
+    await projectDocumentLinesBestEffort(this.lineProjector, bill.id, bill.lineItems, `Bill ${bill.billNumber}`);
+    return bill;
   }
 
   /**
@@ -126,7 +133,11 @@ export class BillService {
           `Raise a supplier return or reverse the journal entry to correct it.`,
       );
     }
-    return this.repository.update(id, patch);
+    const updated = await this.repository.update(id, patch);
+    if ('lineItems' in patch) {
+      await projectDocumentLinesBestEffort(this.lineProjector, updated.id, updated.lineItems, `Bill ${updated.billNumber}`);
+    }
+    return updated;
   }
 
   /**

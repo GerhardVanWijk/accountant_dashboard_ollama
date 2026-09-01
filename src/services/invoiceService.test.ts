@@ -17,7 +17,16 @@ import {
 } from '@/features/inventory/services/inventoryPostingEngine.fake';
 import { InventoryAccountResolverService } from '@/features/inventory/services/inventoryAccountResolver';
 import { periodGuardFrom } from '@/features/inventory/services/documentInventoryPosting';
-import type { AccountingPeriod, Invoice, Product, ProductCategory, Warehouse } from '@/types';
+import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
+import type { AccountingPeriod, DocumentLineItem, ID, Invoice, Product, ProductCategory, Warehouse } from '@/types';
+
+/** Records every sync() call — the spy used by the Phase 9B projection tests. */
+class SpyLineProjector implements IDocumentLineProjector {
+  calls: { documentId: ID; lines: readonly DocumentLineItem[] }[] = [];
+  async sync(documentId: ID, lines: readonly DocumentLineItem[]): Promise<void> {
+    this.calls.push({ documentId, lines });
+  }
+}
 
 /** A single accounting period wide open enough to cover every date these tests use. */
 function makeOpenPeriod(): AccountingPeriod {
@@ -85,6 +94,7 @@ function setup(
     warehouses?: string[];
     /** omit the default warehouse entirely (no-warehouse-configured case). */
     noDefaultWarehouse?: boolean;
+    lineProjector?: IDocumentLineProjector;
   } = {},
 ) {
   const accountRepository = new MockAccountRepository(seedAccounts);
@@ -143,7 +153,7 @@ function setup(
   };
 
   const repo = initialInvoices ? new MockInvoiceRepository(initialInvoices) : new MockInvoiceRepository();
-  const service = new InvoiceService(repo, engine, resolver, accountMapper, products, warehouses);
+  const service = new InvoiceService(repo, engine, resolver, accountMapper, products, warehouses, options.lineProjector);
 
   const getJE = (id: string | undefined) => store.journalEntries.find((e) => e.id === id);
   const sum = (id: string | undefined, accountId: string, side: 'debit' | 'credit') =>
@@ -184,6 +194,79 @@ describe('InvoiceService', () => {
     });
     expect(created.id).toBeDefined();
     expect(created.status).toBe('draft');
+  });
+
+  describe('normalized-line projection (Phase 9B — docs/ACCOUNTING_RELATIONSHIPS.md §17-18)', () => {
+    it('projects lineItems on create, and again on an update that touches lineItems', async () => {
+      const projector = new SpyLineProjector();
+      const { service } = setup([], { lineProjector: projector });
+      const created = await service.createInvoice({
+        invoiceNumber: 'INV-2026-PROJ-1',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [{ id: 'li_1', description: 'Widget', quantity: 1, unitPrice: 100, taxAmount: 15, lineTotal: 100 }],
+        subtotal: 100,
+        taxTotal: 15,
+        total: 115,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      expect(projector.calls).toHaveLength(1);
+      expect(projector.calls[0]).toEqual({ documentId: created.id, lines: created.lineItems });
+
+      await service.updateInvoice(created.id, {
+        lineItems: [{ id: 'li_1', description: 'Widget (qty corrected)', quantity: 2, unitPrice: 100, taxAmount: 30, lineTotal: 200 }],
+      });
+      expect(projector.calls).toHaveLength(2);
+      expect(projector.calls[1].lines[0].quantity).toBe(2);
+    });
+
+    it('does NOT re-project on an update that does not touch lineItems', async () => {
+      const projector = new SpyLineProjector();
+      const { service } = setup([], { lineProjector: projector });
+      const created = await service.createInvoice({
+        invoiceNumber: 'INV-2026-PROJ-2',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [],
+        subtotal: 0,
+        taxTotal: 0,
+        total: 0,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      expect(projector.calls).toHaveLength(1);
+
+      await service.updateInvoice(created.id, { notes: 'internal note only' });
+      expect(projector.calls).toHaveLength(1);
+    });
+
+    it('does not fail createInvoice when the projector itself throws', async () => {
+      const throwingProjector: IDocumentLineProjector = {
+        sync: async () => {
+          throw new Error('simulated projection failure');
+        },
+      };
+      const { service } = setup([], { lineProjector: throwingProjector });
+      const created = await service.createInvoice({
+        invoiceNumber: 'INV-2026-PROJ-3',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [],
+        subtotal: 0,
+        taxTotal: 0,
+        total: 0,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      expect(created.id).toBeDefined();
+    });
   });
 
   describe('immutability of a posted invoice (Phase 3C item 5 — preserve + regress)', () => {

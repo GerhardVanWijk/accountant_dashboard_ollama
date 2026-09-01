@@ -1,4 +1,4 @@
-import type { Invoice } from '@/types';
+import type { CreditNoteLineItem, Invoice } from '@/types';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
 import { QuoteService } from './quoteService';
 import { SalesOrderService } from './salesOrderService';
@@ -17,6 +17,7 @@ import {
 import { productService } from '@/features/inventory/services/productService';
 import { warehouseService } from '@/features/inventory/services/warehouseService';
 import { supabase } from '@/config/supabase';
+import { SupabaseDocumentLineProjector } from '@/repositories/SupabaseDocumentLineProjector';
 
 export type { CreateQuoteDTO } from './quoteService';
 export type { CreateSalesOrderDTO } from './salesOrderService';
@@ -78,6 +79,16 @@ const sharedInvoiceRepository = new SharedInvoiceRepositoryAdapter();
  * allocation and the Invoices page always see the same in-memory invoice
  * data, per this dispatch's brief.
  */
+// Phase 9B (docs/PHASE_9B_DESIGN.md): no-ops until
+// NORMALIZED_DOCUMENT_LINES_ENABLED (src/config/featureFlags.ts) is
+// flipped true AND migration 0041 has actually been applied.
+const creditNoteLineProjector = new SupabaseDocumentLineProjector(supabase, {
+  projectorName: 'creditNoteLineProjector',
+  lineTable: 'credit_note_lines',
+  foreignKeyColumn: 'credit_note_id',
+  extraColumns: (line) => ({ original_invoice_line_id: (line as CreditNoteLineItem).originalInvoiceLineId ?? null }),
+});
+
 export const quoteService = new QuoteService(quoteRepository, salesOrderRepository);
 export const salesOrderService = new SalesOrderService(salesOrderRepository, sharedInvoiceRepository);
 export const creditNoteService = new CreditNoteService(
@@ -88,6 +99,7 @@ export const creditNoteService = new CreditNoteService(
   inventoryAccountResolver,
   productService,
   warehouseService,
+  creditNoteLineProjector,
 );
 export const customerReceiptService = new CustomerReceiptService(
   customerReceiptRepository,

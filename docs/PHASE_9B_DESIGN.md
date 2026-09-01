@@ -1,0 +1,254 @@
+# Phase 9B — Relationship Implementation Design + Code
+
+Status: design authored, migrations authored (**NOT applied**), the two standalone
+integrity fixes (product delete guard, credit-note original-line evidence) are
+shipped and tested, the normalized-line dual-write projector is shipped and
+tested **disabled by default** (`NORMALIZED_DOCUMENT_LINES_ENABLED = false`).
+No commits. No pushes. No Office National writes — every Supabase call made
+during this design pass was a read-only `SELECT`.
+
+This document is the Review 9B-A deliverable. It complements
+`docs/ACCOUNTING_RELATIONSHIPS.md` (Phase 9A) rather than repeating it.
+
+---
+
+## 1. Final normalized schema
+
+Four new tables, one per document type, all following the exact
+header-stays-jsonb / lines-get-normalized pattern already proven by
+`supplier_return_lines` / `opening_stock_batch_lines` (migration 0029):
+
+- `invoice_lines` (migration `0038`)
+- `bill_lines` (migration `0039`) — adds `fixed_asset_details jsonb`
+- `purchase_order_lines` (migration `0040`)
+- `credit_note_lines` (migration `0041`) — adds `original_invoice_line_id uuid`
+  (composite FK to `invoice_lines`)
+
+Common shape (see each migration file for the exact DDL — not duplicated here):
+
+```
+id uuid primary key                    -- = DocumentLineItem.id, preserved exactly
+company_id uuid not null
+<document>_id uuid not null            -- invoice_id / bill_id / purchase_order_id / credit_note_id
+line_number integer not null           -- 1-based position in the jsonb array
+product_id uuid                        -- nullable
+warehouse_id uuid                      -- nullable
+description text not null
+quantity numeric(14,3) not null        -- check (quantity > 0)
+unit_price numeric(14,4) not null
+tax_rate_id uuid                       -- nullable
+tax_amount numeric(14,2) not null default 0
+line_total numeric(14,2) not null
+created_at / updated_at timestamptz
+```
+
+Constraints: `unique (<document>_id, line_number)`, `unique (company_id, id)`
+(candidate key for the credit-note FK below), composite
+`(company_id, <document>_id) → (company_id, id)` FK with `on delete cascade`
+back to the header, composite `(company_id, product_id/warehouse_id/tax_rate_id)`
+FKs to `products`/`warehouses`/`tax_rates` — all following the tenant-safe
+composite-FK convention migration 0029 established. RLS: the same
+`all_own_company` policy shape every other document table already uses.
+
+Migration `0037` adds the two prerequisite `unique (company_id, id)` keys this
+needed and that were **verified missing** on the live project during this
+design pass (`bills`, `purchase_orders`, `products`, `warehouses`,
+`suppliers`, `tax_rates` already had theirs from migration 0029; `invoices`
+and `credit_notes` did not).
+
+## 2. JSONB → normalized field mapping
+
+| `DocumentLineItem` field | Normalized column | Type | Nullability | FK | Backfill rule |
+|---|---|---|---|---|---|
+| `id` | `id` | uuid | not null (PK) | — | EXACT — copied verbatim, never regenerated |
+| — | `company_id` | uuid | not null | → companies | from the parent document's `company_id` |
+| — | `<document>_id` | uuid | not null | composite → header | from the parent document's `id` |
+| — | `line_number` | integer | not null | — | jsonb array position (`with ordinality`), 1-based |
+| `productId` | `product_id` | uuid | **nullable** | composite → products | EXACT if it resolves to a same-company product, else NULL (never guessed) |
+| `warehouseId` | `warehouse_id` | uuid | nullable | composite → warehouses | same rule as `productId` |
+| `description` | `description` | text | not null | — | EXACT, empty string if absent |
+| `quantity` | `quantity` | numeric(14,3) | not null, `> 0` | — | EXACT; a legacy line with qty ≤ 0 is skipped, not coerced (verified zero such rows live) |
+| `unitPrice` | `unit_price` | numeric(14,4) | not null | — | EXACT |
+| `taxRateId` | `tax_rate_id` | uuid | nullable | composite → tax_rates | same rule as `productId` |
+| `taxAmount` | `tax_amount` | numeric(14,2) | not null | — | EXACT |
+| `lineTotal` | `line_total` | numeric(14,2) | not null | — | EXACT |
+| `fixedAssetDetails` (bill only) | `fixed_asset_details` | jsonb | nullable | — | EXACT passthrough, no further normalization (small nested object, same treatment as other jsonb-nested fields elsewhere) |
+| `originalInvoiceLineId` (credit note only — **new field**, `src/types/creditNote.ts`) | `original_invoice_line_id` | uuid | nullable | composite → invoice_lines | EXACT only if it resolves to an `invoice_lines` row that already exists (i.e. the referenced invoice was itself backfilled/created after 0038) — otherwise NULL |
+| **`discount`** | — | — | — | **NOT MAPPED** — no such field exists anywhere in `DocumentLineItem` or the live jsonb today (verified). Listed in the Phase 9B brief's field checklist but nothing to carry forward; would be a genuinely new feature, out of this migration's additive-only scope. |
+
+## 3. Authority / transition strategy
+
+| | AUTHORITATIVE NOW | TRANSITIONAL | AUTHORITATIVE TARGET |
+|---|---|---|---|
+| `invoices.line_items` (jsonb) | ✅ every reader (postInvoice, aging, dashboards, reports) | stays exactly as-is | becomes read-only projection once every reader has migrated (separate, later, reviewed phase — **not scheduled**) |
+| `invoice_lines` / `bill_lines` / `purchase_order_lines` / `credit_note_lines` | not yet queried by anything | dual-write only, `NORMALIZED_DOCUMENT_LINES_ENABLED` gated | becomes the queryable source for per-product/category reporting once populated + verified |
+| `CreditNoteLineItem.originalInvoiceLineId` (the DTO field) | ✅ **already authoritative today** — `issueCreditNote()` validates against it now | — | stays authoritative; `credit_note_lines.original_invoice_line_id` is its durable projection |
+
+No permanent dual-source ambiguity: the moment the normalized tables are
+promoted to authoritative for a given reader, that reader stops reading
+`line_items` — never both, per-field, forever. Until then, `line_items` wins
+every conflict because nothing reads the normalized tables yet.
+
+## 4. Rollout (the actual sequencing this design depends on)
+
+1. This PR (code + authored-not-applied migrations) merges. Behavior is
+   **unchanged** — `NORMALIZED_DOCUMENT_LINES_ENABLED = false` makes every
+   new class introduced here inert; `deleteProduct()`'s guard and
+   `issueCreditNote()`'s line-specific validation are the only behavior
+   changes, and both are pure wins (a hard-delete-with-no-check bug and an
+   over-credit bug, respectively — see §8/§9).
+2. Separate, reviewed step: apply migrations `0037`→`0042` to the target
+   database (in order; `0042`'s backfill depends on `0038`/`0041` existing).
+3. Separate, reviewed one-line commit: flip
+   `NORMALIZED_DOCUMENT_LINES_ENABLED` to `true` in
+   `src/config/featureFlags.ts`.
+4. Only after step 3 do new/edited documents start populating the normalized
+   tables going forward. Report-layer work to actually query them is
+   explicitly **NOT part of Phase 9B** (see §15's "Do not change Phase-8
+   reports yet").
+
+## 5. Forward invoice evidence (already true before this phase, reconfirmed)
+
+`InvoiceService.postInvoice()` (`src/services/invoiceService.ts`) already
+builds, per tracked-inventory line: `sourceDocumentLineId: line.id` on the
+`InventoryTransactionLine` handed to `post_inventory_transaction()`, which
+writes `stock_movements.source_document_line_id = line.id`,
+`.unit_cost`/`.total_cost` = the WAC blended in that same RPC call. This
+phase adds nothing new to that chain — it was already correct
+(docs/ACCOUNTING_RELATIONSHIPS.md §0/§2). What Phase 9B adds is a normalized
+`invoice_lines.id` row that shares that same `id`, so once §4's rollout
+completes, a query can join `stock_movements.source_document_line_id` →
+`invoice_lines.id` → `invoice_lines.product_id` directly instead of
+re-parsing jsonb.
+
+## 6. Forward purchase evidence (already true, reconfirmed)
+
+Same story for `purchaseOrderService.recordReceipt()` /
+`billService.postBill()` — already correct (docs/ACCOUNTING_RELATIONSHIPS.md
+§0/§3). One thing explicitly **NOT authored** here: a
+`bill_lines.source_purchase_order_line_id` column linking a bill line back to
+the PO line it derived from. No current code populates that relationship at
+the line level (only at the document level — `bills.purchase_order_id`), and
+authoring a FK for a relationship nothing writes would itself be the
+"manufactured relationship" the brief prohibits. Flagged as a candidate for
+a follow-up phase, once/if `billService` starts copying line-level PO
+provenance forward.
+
+## 7. Stock movement source-line evidence
+
+Unchanged by this phase — already consistent across every current workflow
+(docs/ACCOUNTING_RELATIONSHIPS.md §5). The `credit_note_lines` table adds
+`original_invoice_line_id`, which is a NEW relationship
+(credit-note-line → invoice-line) distinct from the EXISTING
+`stock_movements.source_document_line_id` (movement → credit-note's own
+line, unchanged) — see the test
+`'records the credit note line id (not the original invoice line id) as the
+stock movement source evidence'` in `creditNoteService.test.ts`, which pins
+down that these two relationships are NOT the same thing and must not be
+confused.
+
+## 8. Journal relationship — decision
+
+**Decision: no schema change to `journal_entries` or `journal_lines`.**
+Per the brief's steer (§10) and the Phase 9A finding that
+`inventory_transaction_log(source_type, source_id) → journal_entry_id`
+already gives inventory postings a structured reverse-lookup, and every
+document already carries its own `journal_entry_id` forward-FK — a
+"journal → source" reverse lookup for non-inventory postings (payments,
+customer receipts, bank transactions) has no current caller that needs it.
+Adding `journal_entries.source_id` now, with nothing reading it, would be
+exactly the kind of speculative column the brief warns against. Revisit only
+if a real investigation/reporting need for that reverse lookup appears.
+
+## 9. Product-delete fix
+
+`src/features/inventory/services/productService.ts` — `deleteProduct()` now
+calls `hasAccountingHistory()` (checks `stock_movements`, `invoices`,
+`bills`, `purchase_orders`, `credit_notes`, `supplier_returns`,
+`opening_stock_batches` — every place a `productId` can appear) and
+deactivates (`status: 'inactive'`) instead of hard-deleting when true. Zero
+history → hard delete, same as before. 5 new tests in
+`productService.test.ts`. This was a real, live gap (previously a bare
+`DELETE FROM products`, no check at all — see
+docs/ACCOUNTING_RELATIONSHIPS.md §12) and ships in this PR independent of
+the migrations.
+
+## 10. Credit-note original-line fix
+
+`src/types/creditNote.ts` adds `CreditNoteLineItem.originalInvoiceLineId?: ID`.
+`creditNoteService.issueCreditNote()`'s return-quantity guard now validates
+per-line when that field is set (netted against every other already-posted
+credit note's returns against that SAME line, not just the current note's
+own lines — closing a second latent bug: the old guard only ever compared
+against its own lines, so two separate credit notes could together
+over-return a product with neither one alone tripping it), and falls back to
+the old whole-invoice/whole-product aggregate when it isn't (financial-only
+credits, or older data). 6 new tests in `creditNoteService.test.ts` covering
+exactly the brief's list: same product on multiple invoice lines, partial
+credit, second credit against the same line, over-credit rejection,
+financial-only credit (no line evidence required), and stock-movement source
+evidence. This ships in this PR independent of the migrations too — it only
+touches the in-memory DTO, not any new table.
+
+## 11. Realised-margin evidence boundary
+
+Unchanged from docs/ACCOUNTING_RELATIONSHIPS.md §14's contract, restated
+precisely per this phase's brief:
+
+> **Historical realised margin: NOT AVAILABLE** for any sale whose
+> `stock_movements` row predates migration 0022 (no `unit_cost`,
+> `source_document_type`, or `source_document_line_id` recorded at the time)
+> — verified 100% true for Office National's current 284 movements
+> (docs/ACCOUNTING_RELATIONSHIPS.md §10). **Forward transactions — every sale
+> posted through `post_inventory_transaction()` from migration 0031 onward —
+> already carry everything realised margin needs**: `unit_cost`/`total_cost`
+> per movement, `source_document_line_id` back to the exact invoice line.
+> Never computed from current WAC.
+
+The evidence boundary is a **date** (when the posting engine went live for a
+given company/environment), not a schema gap — Phase 9B's normalized tables
+make querying it easier but do not change which transactions have the
+evidence.
+
+## 12. Supplier evidence contract
+
+Unchanged from docs/ACCOUNTING_RELATIONSHIPS.md §15 — Phase 9B adds no new
+supplier relationship. "Supplier profitability" remains an undefined,
+unused term.
+
+## 13. Report unlock criteria
+
+Not implemented in this phase (§20 of the brief: "Do not change Phase-8
+reports yet"). Criteria, for the next phase to check against:
+
+| Report | Minimum required evidence | Forward-data availability | Historical coverage | Incomplete-evidence behavior |
+|---|---|---|---|---|
+| Sales by Product | `invoice_lines.product_id` (or jsonb `productId`) | ✅ today, no schema needed | ✅ today (98.5% of Office National invoice lines already have `productId`) | exclude the line from the product breakdown; report its count separately, never impute a product |
+| Sales by Category | above + `products.category_id` (already FK'd) | ✅ today | ✅ today | same |
+| COGS by Product / Realised Product Margin | `stock_movements.source_document_line_id` + `.unit_cost` for that invoice line | ✅ for every sale posted via `post_inventory_transaction()` (migration 0031+) | ❌ NOT AVAILABLE pre-migration-0022 movements (§11) | report "evidence incomplete" for that product/period, never blend with current WAC |
+| COGS by Category / Realised Category Margin | same, grouped via `product.category_id` | same | same | same |
+| Purchases by Product / by Supplier | `bill_lines.product_id`/`purchase_order_lines.product_id` (or jsonb) + `bills.supplier_id` (already FK'd) | ✅ today | ✅ today (83.8% of Office National bill lines already have `productId`) | exclude + count separately |
+| Purchase Price History | `stock_movements.unit_cost` ordered by `movement_date`, per product | ✅ for post-migration-0031 receipts | ❌ NOT AVAILABLE pre-0022 | same |
+| PPV by Supplier | needs independent verification that the engine's PPV account isolation is correct — not verified in this pass | unknown | unknown | do not report until verified |
+
+## 14. Test matrix — what was added, what already existed
+
+| Area | Status |
+|---|---|
+| Product-delete guard (unused-delete-allowed / stock-movement-blocked / document-line-blocked / deactivate-path) | **NEW — 5 tests, `productService.test.ts`, all passing** |
+| Credit-note original-line (multi-line same product / partial credit / second-credit-same-line / over-credit / financial-only / stock-movement source evidence) | **NEW — 6 tests, `creditNoteService.test.ts`, all passing** |
+| `SupabaseDocumentLineProjector` (disabled no-op / enabled delete+insert+column-mapping / empty-set) | **NEW — 3 tests, `SupabaseDocumentLineProjector.test.ts`, all passing** |
+| Per-service projection wiring (invoice/bill/PO/credit-note: create projects, update-with-lineItems re-projects, update-without-lineItems doesn't, projector failure doesn't fail the document write) | **NEW — 7 tests across `invoiceService.test.ts`/`billService.test.ts`/`purchaseOrderService.test.ts`/`creditNoteService.test.ts`, all passing** |
+| Sales chain (invoice line → product → stock movement → historical COGS → journal), purchase chain (bill/PO line → product → receipt → WAC → journal), tenancy, immutability | **PRE-EXISTING — reverified still green, not re-authored** (`inventoryPostingEngine.test.ts`, `inventoryAccountingMatrix.test.ts`, and the rest of the 1844-test suite) |
+| Normalized-table FK integrity / RLS / cross-tenant rejection at the DB level | **NOT TESTABLE yet — tables don't exist until migrations are applied; this is exactly why §4 sequences migration-apply as a separate step before any DB-level test can run against them** |
+| Historical backfill (`0042`) correctness | **Verified via read-only queries against live data during design (§9A/§10 counts), not via an automated test — there is no automated-test harness for a one-time data migration in this codebase's existing convention (0021-0036 didn't get one either)** |
+
+## 15. Rollback
+
+Every migration here is additive (new tables, new columns via `alter table
+... add column`, new constraints on new/otherwise-untouched columns). None
+drops or alters an existing column. Rollback = `drop table` the four new
+tables (`credit_note_lines` first, for its FK to `invoice_lines`) and drop
+the two `0037` unique constraints — the existing `invoices`/`bills`/etc.
+rows and their `line_items` jsonb are completely unaffected either way, since
+nothing ever became authoritative on the new tables (§3).

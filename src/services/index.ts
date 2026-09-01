@@ -8,9 +8,21 @@ import {
 import { productService } from '@/features/inventory/services/productService';
 import { warehouseService } from '@/features/inventory/services/warehouseService';
 import { supabase } from '@/config/supabase';
+import { SupabaseDocumentLineProjector } from '@/repositories/SupabaseDocumentLineProjector';
 
 export type { CreateInvoiceDTO } from './invoiceService';
 export { InvoiceService } from './invoiceService';
+
+/**
+ * Phase 9B (docs/PHASE_9B_DESIGN.md): no-ops until
+ * NORMALIZED_DOCUMENT_LINES_ENABLED (src/config/featureFlags.ts) is
+ * flipped true AND migrations 0038 has actually been applied.
+ */
+const invoiceLineProjector = new SupabaseDocumentLineProjector(supabase, {
+  projectorName: 'invoiceLineProjector',
+  lineTable: 'invoice_lines',
+  foreignKeyColumn: 'invoice_id',
+});
 
 /**
  * Shared InvoiceService singleton. Phase 3: it no longer posts through
@@ -32,4 +44,5 @@ export const invoiceService = new InvoiceService(
   accountMappingService,
   productService,
   warehouseService,
+  invoiceLineProjector,
 );

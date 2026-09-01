@@ -19,7 +19,16 @@ import {
 } from '@/features/inventory/services/inventoryPostingEngine.fake';
 import { InventoryAccountResolverService } from '@/features/inventory/services/inventoryAccountResolver';
 import { periodGuardFrom } from '@/features/inventory/services/documentInventoryPosting';
-import type { AccountingPeriod, Product, ProductCategory, Warehouse } from '@/types';
+import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
+import type { AccountingPeriod, DocumentLineItem, ID, Product, ProductCategory, Warehouse } from '@/types';
+
+/** Records every sync() call — the spy used by the Phase 9B projection test. */
+class SpyLineProjector implements IDocumentLineProjector {
+  calls: { documentId: ID; lines: readonly DocumentLineItem[] }[] = [];
+  async sync(documentId: ID, lines: readonly DocumentLineItem[]): Promise<void> {
+    this.calls.push({ documentId, lines });
+  }
+}
 
 function makeOpenPeriod(): AccountingPeriod {
   return {
@@ -92,6 +101,7 @@ function makeHarness(options: {
   trackedProducts?: Record<string, Partial<Product>>;
   categories?: Record<string, Partial<ProductCategory>>;
   purchaseOrders?: Record<string, string>;
+  lineProjector?: IDocumentLineProjector;
 } = {}) {
   const accountRepository = new MockAccountRepository(seedAccounts);
   const journalRepository = new MockJournalEntryRepository([]);
@@ -147,6 +157,7 @@ function makeHarness(options: {
     resolver,
     products,
     warehouses,
+    options.lineProjector,
   );
 
   const getJE = (id: string | undefined) => store.journalEntries.find((e) => e.id === id);
@@ -204,6 +215,25 @@ describe('BillService', () => {
       });
       expect(bill.billNumber).toBe('BILL-2026-TEST');
       expect(bill.status).toBe('draft');
+    });
+
+    it('projects lineItems into the normalized-line projector (Phase 9B — docs/ACCOUNTING_RELATIONSHIPS.md §17-18)', async () => {
+      const projector = new SpyLineProjector();
+      const { service } = makeHarness({ lineProjector: projector });
+      const bill = await service.createBill({
+        billNumber: 'BILL-2026-PROJ',
+        supplierId: 'sup_test',
+        issueDate: '2026-08-21',
+        dueDate: '2026-09-21',
+        lineItems: [{ id: 'bl_1', description: 'Freight', quantity: 1, unitPrice: 50, taxAmount: 7.5, lineTotal: 50 }],
+        subtotal: 50,
+        taxTotal: 7.5,
+        total: 57.5,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      expect(projector.calls).toEqual([{ documentId: bill.id, lines: bill.lineItems }]);
     });
   });
 

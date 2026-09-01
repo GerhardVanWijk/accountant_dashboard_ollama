@@ -18,7 +18,16 @@ import {
 } from '@/features/inventory/services/inventoryPostingEngine.fake';
 import { InventoryAccountResolverService } from '@/features/inventory/services/inventoryAccountResolver';
 import { periodGuardFrom } from '@/features/inventory/services/documentInventoryPosting';
-import type { AccountingPeriod, Product, ProductCategory, Warehouse } from '@/types';
+import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
+import type { AccountingPeriod, DocumentLineItem, ID, Product, ProductCategory, Warehouse } from '@/types';
+
+/** Records every sync() call — the spy used by the Phase 9B projection test. */
+class SpyLineProjector implements IDocumentLineProjector {
+  calls: { documentId: ID; lines: readonly DocumentLineItem[] }[] = [];
+  async sync(documentId: ID, lines: readonly DocumentLineItem[]): Promise<void> {
+    this.calls.push({ documentId, lines });
+  }
+}
 
 function makeOpenPeriod(): AccountingPeriod {
   return {
@@ -57,7 +66,7 @@ function makeWarehouse(id: string, isDefault = false): Warehouse {
 
 function setup(
   trackedProducts: Record<string, Partial<Product>> = {},
-  opts: { seed?: boolean; categories?: Record<string, Partial<ProductCategory>> } = {},
+  opts: { seed?: boolean; categories?: Record<string, Partial<ProductCategory>>; lineProjector?: IDocumentLineProjector } = {},
 ) {
   const accountRepository = new MockAccountRepository(seedAccounts);
   const journalRepository = new MockJournalEntryRepository([]);
@@ -93,7 +102,7 @@ function setup(
   };
 
   const repository = opts.seed === false ? new MockPurchaseOrderRepository([]) : new MockPurchaseOrderRepository();
-  const poService = new PurchaseOrderService(repository, engine, resolver, products, warehouses);
+  const poService = new PurchaseOrderService(repository, engine, resolver, products, warehouses, opts.lineProjector);
 
   const getJE = (id: string | undefined) => store.journalEntries.find((e) => e.id === id);
   return { poService, repository, store, getJE };
@@ -140,6 +149,23 @@ describe('PurchaseOrderService', () => {
       });
       expect(po.poNumber).toBe('PO-2026-TEST');
       expect(po.status).toBe('draft');
+    });
+
+    it('projects lineItems into the normalized-line projector (Phase 9B — docs/ACCOUNTING_RELATIONSHIPS.md §17-18)', async () => {
+      const projector = new SpyLineProjector();
+      const { poService: withProjector } = setup({}, { seed: false, lineProjector: projector });
+      const po = await withProjector.createPurchaseOrder({
+        poNumber: 'PO-2026-PROJ',
+        supplierId: 'sup_test',
+        orderDate: '2026-08-21',
+        lineItems: [{ id: 'pol_1', description: 'Widget', quantity: 5, unitPrice: 10, taxAmount: 7.5, lineTotal: 50 }],
+        subtotal: 50,
+        taxTotal: 7.5,
+        total: 57.5,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      expect(projector.calls).toEqual([{ documentId: po.id, lines: po.lineItems }]);
     });
   });
 

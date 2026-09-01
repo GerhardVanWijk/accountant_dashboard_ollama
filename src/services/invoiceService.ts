@@ -11,10 +11,13 @@ import {
   type DocumentProductLookup,
   type DocumentWarehouseResolver,
   type InventoryTransactionPoster,
+  projectDocumentLinesBestEffort,
   requireWarehouseId,
   resolveWarehouseId,
   toMovementDate,
 } from '@/features/inventory/services/documentInventoryPosting';
+import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
+import { NoopDocumentLineProjector } from '@/repositories/NoopDocumentLineProjector';
 
 export type CreateInvoiceDTO = Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -79,6 +82,15 @@ export class InvoiceService {
     private readonly accounts: AccountMapper,
     private readonly products: DocumentProductLookup,
     private readonly warehouses: DocumentWarehouseResolver,
+    /**
+     * Phase 9B (docs/ACCOUNTING_RELATIONSHIPS.md §17-18): projects
+     * `lineItems` into the normalized `invoice_lines` table alongside the
+     * still-authoritative jsonb write. Defaults to a no-op so every
+     * existing call site (every test, every other direct construction of
+     * this service) is unaffected — only the production composition root
+     * (src/services/index.ts) passes the real, flag-gated projector.
+     */
+    private readonly lineProjector: IDocumentLineProjector = new NoopDocumentLineProjector(),
   ) {}
 
   async getInvoices(): Promise<Invoice[]> {
@@ -91,12 +103,14 @@ export class InvoiceService {
 
   async createInvoice(data: CreateInvoiceDTO): Promise<Invoice> {
     const now = new Date().toISOString();
-    return this.repository.create({
+    const invoice = await this.repository.create({
       ...data,
       id: '',
       createdAt: now,
       updatedAt: now,
     });
+    await projectDocumentLinesBestEffort(this.lineProjector, invoice.id, invoice.lineItems, `Invoice ${invoice.invoiceNumber}`);
+    return invoice;
   }
 
   /**
@@ -124,7 +138,11 @@ export class InvoiceService {
         );
       }
     }
-    return this.repository.update(id, patch);
+    const updated = await this.repository.update(id, patch);
+    if ('lineItems' in patch) {
+      await projectDocumentLinesBestEffort(this.lineProjector, updated.id, updated.lineItems, `Invoice ${updated.invoiceNumber}`);
+    }
+    return updated;
   }
 
   /**
