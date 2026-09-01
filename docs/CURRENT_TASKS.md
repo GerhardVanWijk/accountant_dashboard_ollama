@@ -8,6 +8,35 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` complete
 
 ---
 
+## WHERE WE STAND — 2026-09-01 (git reality check)
+
+Every initiative in this file has shipped to `origin/main` **except Inventory Phase 9B**,
+which is committed + pushed on branch `phase-9b-relationship-design-and-code` and **not yet
+merged**. The per-section checkboxes below have been updated to match git.
+
+| Initiative | State | Commit(s) |
+|---|---|---|
+| Browser-Driven UI Correction Pass (§A–M below) | **shipped to `main`** | `170338a` `32cf860` `97a6e38` `6bd22d0` `6eb3b48` |
+| Bank Statement Reconciliation + evidence model (P1 / P2) | **shipped to `main`** | `fa4aae1` `7481ef8` `3ccdafa` |
+| Vertex Form System + page-layout foundation (P3A–P3I) | **shipped to `main`** | `62f0905` |
+| Inventory Accounting Module — Phases 0–8 + 9A | **shipped to `main`** | `40f10fb` `4ac5277` |
+| Inventory Phase 9B — normalized document-line tables | **committed on branch, NOT merged; runtime flag OFF** | `38f6b78` `465c10f` |
+| Inventory UX Correction Pass (see `# INVENTORY UX CORRECTION PASS` below) | **committed on `phase-9b-…` branch; review APPROVED** | `6d203fc` |
+
+### Still genuinely open
+
+- **Visual / browser QA** — never run (no Chrome DevTools / Playwright MCP in this env):
+  Correction Pass §27, P3J, Inventory Phase 4–8 UI. Needs a human pass on the deploy.
+- **Live-Postgres inventory-posting E2E** — never run (needs a throwaway Supabase project);
+  `inventory_transaction_log` is still 0 rows, no engine write has touched live data.
+- **Reconciliation demo-data live seed** — Correction Pass §18 / §20 (needs a live DB write, awaiting go-ahead).
+- **Phase 9B** — open a PR + merge to `main`; then a *separate* review to flip
+  `NORMALIZED_DOCUMENT_LINES_ENABLED` after forward dual-write parity is tested against the live DB.
+- **Inventory Phases 10–14** — not started: Fixed-Asset nav cleanup · DB role-aware permissions/audit ·
+  Office National data · accounting-invariant regression tests · reconciliation/investigator UI.
+
+---
+
 ## A. Global UI fixes
 
 - [x] **1. Global dropdown / select dark-theme fix** — audit every select implementation
@@ -326,7 +355,9 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` complete
 - [x] full test suite: **1069 passed / 155 files** (up from 1045 — +24 tests). Ran twice, no flake.
 - [x] `vite build` clean
 - [x] `.claude/agents/qa-bee.md` restored to HEAD; working tree carries only this pass's changes
-- [ ] **STOP — do not commit, do not push. Wait for final approval.**
+- [x] **STOP — do not commit, do not push. Wait for final approval.** — approved; shipped to
+  `main` (`6bd22d0` / `97a6e38` / `32cf860` / `170338a`), report recorded in `6eb3b48`. §18/§20/§24/§27
+  remain `[~]` (live demo-data seed + browser QA — not doable in this environment).
 
 ---
 
@@ -377,7 +408,7 @@ Must be technically impossible again, not just a written rule.
 | 0.4 | Evidence model audit | Agent 11 | **PASS** | `reconciliation_issues.evidence` is prose `[{label, detail?}]` — every computed number is discarded. None of the requested structured fields exist. Confidence = fixed additive scorecard, exposed as a bare %. Ranking = non-stable confidence-only sort. Supersede-dedupe is broken (string-compares a timestamptz). Needs a structured `evidence_data` jsonb + deterministic ranking key + idempotency key. |
 | 0.5 | Full form inventory | Agent 12 | **PASS** | → `docs/FORM_SYSTEM_AUDIT.md`. ~45 form surfaces; 14 on `form-surface.ts`, ~27 ad-hoc page-inline `max-w-*` dialogs, 7 hand-written AlertDialogs. Purchases domain has **no FormModal layer**. `DialogFooter` sticky but ignored by 40 files. 3 tabbed forms, 3 different hand-rolled height fixes. Dirty-state: nonexistent. Validation UX split RHF/useState. Dark-selects 100% done. Detail side 100% unified. |
 | 0.6 | Shared form infra audit + gap analysis | Agent 12 | **PASS** | Smallest viable new set: `FormShell`, `FormFooter`, `FormTabs`, `useUnsavedChangesPrompt` (removes ~90% of duplication, fixes tab-resize + non-sticky footer). Cheap add-ons: `FormSection`, `FormError`, size-token rename, `ConfirmDialog`. Migration long-poles: 11 useState document forms, the Purchases domain, `StatementImportPanel` wizard. |
-| 0.7 | Queen: consolidate → schema proposal(s) + phased build plan → **user approval gate** | Queen | IN PROGRESS | Both investigations complete. Awaiting Agent 10 (21.1) + Agent 13 (test guard), then consolidated plan → user. |
+| 0.7 | Queen: consolidate → schema proposal(s) + phased build plan → **user approval gate** | Queen | **PASS** | Plan approved (see "0.7 — DECISIONS" below); P1 + P2 built, shipped to `main` (`7481ef8`). |
 
 ## Contamination cleanup (Queen, 2026-08-28)
 
@@ -403,27 +434,31 @@ Must be technically impossible again, not just a written rule.
 | P1.3 | Statement persistence layer | Agent 16 (retry) | **PASS** | Repos `I/Supabase/Mock BankStatement[Line]Repository` + `StatementImportService` (`previewImport`/`confirmImport`, structurally cannot post GL — constructed with only the 2 statement repos). Parser upgrades: `ParsedStatement` wrapper with `openingBalance`/`closingBalance`/`periodStart`/`periodEnd`/`parseErrors[]`; `ParsedStatementLine` gains `valueDate`/`externalRefId`/`runningBalance`/`raw`. MT940 `:60F:`/`:62F:` + OFX `<LEDGERBAL>`/`<DTSTART/END>` metadata extraction. **Per-row errors → `parseErrors[]`, parsing continues** (was: any bad row aborts the file). New pure `utils/sha256.ts` (FIPS-180-4, verified vs test vectors) → order-independent content hash. `computeBalanceCheck` (PART L): `opening + Σ signed == closing` ± R0.01 → `ok`/`null`. **Queen-verified gate: type-check ✅ / lint ✅ / 1188 tests / 167 files (from 1146/162) ✅ / build ✅.** |
 | P1.4 | Part J backfill | Agent 16 (retry) | **PASS (with 1 doc flag)** | 1 `bank_statements` (`df28d259…`, Aug 2026, opening R350,000, **closing R184,068.54**, `balance_check_ok=true`, content-hash) + **87 `bank_statement_lines`** (75 `matched` + bijectively back-linked via `bank_transactions.bank_statement_line_id`, 12 `unmatched`). Every deliberate scenario represented (per-scenario `line_state` table in the expectations doc). **Queen-verified:** 87 lines, `line_count`=87, bijection clean both directions (0 violations), 0 wrong-company rows, closing arithmetic `350000 − 165,931.46 = 184,068.54`. Baseline untouched: 171 JEs, global diff R0.00, GL 1100/1000/1200 = R207,794.04 / R212,270.67 / R1,569,743.20, 11 recon issues, 81/13 bank txns. **DOC FLAG:** closing R184,068.54 vs the expectations doc's earlier "R174,265.22" — the R9,803.32 gap = REC-1007 (receipt dated 31 Aug, reconciled), included per the brief's "≤ 31 Aug" rule. Needs a user call on the cut (see P1.6). |
 | P1.5 | Import UX wizard | Agent 17 | **PASS** | `useStatementImport` hook (state machine `idle→previewing→preview-ready→confirming→done`) + `StatementImportWizard` (5 views in the shared Dialog + `wideFormDialogClass` — no new form primitive). Steps: pick account → upload (+ format override) → preview (format, period, opening/closing, line count, **duplicate banner + "Import anyway" gate**, **parse-issues disclosure**, **balance-integrity note — warns, never blocks Confirm**, read-only line table) → confirm → done ("Reconcile now" / "Close", states nothing was posted to GL). Wired into `BankTransactionsPage` "Import statement" button. **18 new tests.** Old per-line path (`StatementImportPanel`/`Modal`, `importStatementLines`) intact on disk, just no longer referenced by the page (P2 removes it). Reconciliation route doesn't take a statement id yet → `// P2` marker. **Queen-verified gate: type-check ✅ / lint ✅ / 1206 tests / 169 files (from 1188/167) ✅ / build ✅.** |
-| P1.6 | Queen: verify + P1 gate + read-only baseline re-verify + P1 report → **user review** | Queen | **PASS — awaiting user review** | Baseline read-only re-verify (no posting service): 171 JEs · global Σdr−Σcr **R0.00** · 0 unbalanced · AR R207,794.04 · Bank GL R212,270.67 · Inventory GL R1,569,743.20 = valuation exact · 81/13 bank txns · 11 recon issues · outstanding-deposit `unreconciled` · **0 contamination JEs** · 1 bank_statement + 87 lines · 5 category mappings. Full gate green (1206/169, type-check/lint/build). |
+| P1.6 | Queen: verify + P1 gate + read-only baseline re-verify + P1 report → **user review** | Queen | **DONE — reviewed, shipped `7481ef8`** | Baseline read-only re-verify (no posting service): 171 JEs · global Σdr−Σcr **R0.00** · 0 unbalanced · AR R207,794.04 · Bank GL R212,270.67 · Inventory GL R1,569,743.20 = valuation exact · 81/13 bank txns · 11 recon issues · outstanding-deposit `unreconciled` · **0 contamination JEs** · 1 bank_statement + 87 lines · 5 category mappings. Full gate green (1206/169, type-check/lint/build). |
 
-## PART A — Persistent bank statement architecture | superseded by P1
-## PART B — Side-by-side reconciliation workspace | NOT STARTED
-## PART C — Reconciliation line states | NOT STARTED
-## PART D — Line-by-line workflow | NOT STARTED
-## PART E — Trace-everything (clickable record chain, state-preserving) | NOT STARTED
-## PART F — Document proofing (per-line yes/no answers) | NOT STARTED
-## PART G — Reconciliation summary (truthful metrics, no false "100%") | NOT STARTED
-## PART H — Difference Investigator upgrade (sectioned, arithmetic shown) | NOT STARTED
-## PART I — Whole-period proof (statement→books AND books→statement) | NOT STARTED
-## PART J — Run against Office National August data (migrate 94 bank txns under a persistent statement) | NOT STARTED
-## PART K — Bank statement import UX (select acct → upload → preview → confirm → reconcile) | NOT STARTED
-## PART L — Statement balance validation (opening + net == closing) | NOT STARTED
-## PART M–N — Vertex Form System (FormShell/Header/Tabs/Body/Section/Footer, size tokens, tab-resize fix) | NOT STARTED
-## PART O — Accountant-style reconciliation evidence report for every deliberate scenario | NOT STARTED
-## PART P — Accountant-friendly explanations / tooltips | NOT STARTED
-## PART Q — Accounting-safety guardrails (no forced matches, no silent entries, RLS intact) | NOT STARTED
-## PART R — Comprehensive tests (35-point list) | NOT STARTED
-## PART S — Full validation (type-check / lint / test / build / Supabase advisors) | NOT STARTED
-## PART T — Final 47-point report | NOT STARTED
+> **PARTS A–T were re-planned into SUB-PHASE P1 / P2 (below) and the standalone
+> `# P3 — VERTEX FORM SYSTEM` section, all shipped to `main` (`7481ef8` / `62f0905`).
+> The original part list is kept here for traceability.**
+
+## PART A — Persistent bank statement architecture | **DONE via P1** (migration 0020, statement persistence layer)
+## PART B — Side-by-side reconciliation workspace | **DONE via P2.2**
+## PART C — Reconciliation line states | **DONE via P2.2** (state chips on `bank_statement_line`)
+## PART D — Line-by-line workflow | **DONE via P2.2** (Line N of M, Prev/Next, keyboard nav)
+## PART E — Trace-everything (clickable record chain, state-preserving) | **PARTIAL via P2.2** — trace via shared `RecordDetailSheet`, state-preserving; chain stops at the journal entry (only real links followed)
+## PART F — Document proofing (per-line yes/no answers) | **DONE via P2.2** (9-question checklist)
+## PART G — Reconciliation summary (truthful metrics, no false "100%") | **DONE via P2.1** (also §22 of the Correction Pass)
+## PART H — Difference Investigator upgrade (sectioned, arithmetic shown) | **DONE via P2.1** (5 headed sections, literal combination arithmetic)
+## PART I — Whole-period proof (statement→books AND books→statement) | **DONE via P2.1** (`wholePeriodProofService.proveWholePeriod`) + P2.2 (its own tab)
+## PART J — Run against Office National August data (migrate 94 bank txns under a persistent statement) | **DONE via P1.4** (1 statement + 87 lines, bijective back-link)
+## PART K — Bank statement import UX (select acct → upload → preview → confirm → reconcile) | **DONE via P1.5** (`StatementImportWizard`)
+## PART L — Statement balance validation (opening + net == closing) | **DONE via P1.3** (`computeBalanceCheck`)
+## PART M–N — Vertex Form System (FormShell/Header/Tabs/Body/Section/Footer, size tokens, tab-resize fix) | **DONE via the standalone `# P3` section** (`62f0905`)
+## PART O — Accountant-style reconciliation evidence report for every deliberate scenario | **DONE via P2.3** (`OFFICE_NATIONAL_RECON_EXPECTATIONS.md` PART O walk-through)
+## PART P — Accountant-friendly explanations / tooltips | **DONE via P2.2** (`HelpTip` tooltips, evidence-with-basis)
+## PART Q — Accounting-safety guardrails (no forced matches, no silent entries, RLS intact) | **DONE** — SAFETY-0 guard + `StatementImportService` structurally cannot post GL; no match forces a journal
+## PART R — Comprehensive tests (35-point list) | **DONE via P1/P2** — 1249 tests / 177 files at P2 close
+## PART S — Full validation (type-check / lint / test / build / Supabase advisors) | **DONE** — green at every P1/P2 gate; advisors 0 ERROR
+## PART T — Final 47-point report | **DONE** — P1 + P2 review reports delivered; commit/deploy recorded below
 
 ## Overall status
 
@@ -431,7 +466,7 @@ Must be technically impossible again, not just a written rule.
 - **PART 0 investigation** ✅ both audits done.
 - **Phase 21** ✅ 21.1 (inventory, now 4dp via P1.2) / 21.2 (AR recon) / 21.3 (category mapping) + 2 contamination cleanups.
 - **0.7 decisions** ✅ user-approved (migration 0020 as-proposed, faithful Part J, cost_price 4dp, 3 sub-phases).
-- **SUB-PHASE P1** ✅ **COMPLETE — awaiting user review**:
+- **SUB-PHASE P1** ✅ **DONE — reviewed, shipped to `main` (`7481ef8`)**:
   - P1.1 migration 0020 applied (2 tables, 3 enums, evidence_data + dedupe_key, cost_price→numeric(14,4))
   - P1.2 inventory re-restated at 4dp WAC (GL 1200 = valuation R1,569,743.20, R0.00)
   - P1.3 statement persistence layer (repos + `StatementImportService` + parser upgrades + sha256 hash + Part L balance validation)
@@ -439,12 +474,12 @@ Must be technically impossible again, not just a written rule.
   - P1.5 import wizard (select→upload→preview→confirm→reconcile; duplicate/parse/balance warnings)
   - Gate: **1206 tests / 169 files**, type-check/lint/build clean. Baseline read-only re-verified: 0 contamination.
 - **Open questions for the P1 review** (below).
-- **SUB-PHASE P2** ✅ **COMPLETE — awaiting user review**:
+- **SUB-PHASE P2** ✅ **DONE — reviewed, shipped to `main` (`7481ef8`)**:
   - P2.1 engine — statement-line candidate model, `evidence_data` on all 13 detectors, deterministic `dedupe_key` + ranking, sectioned `InvestigationResult`, `proveWholePeriod` both directions, truthful health metrics
   - P2.2 side-by-side workspace — LEFT statement line / RIGHT accounting record / COMPARISON block / evidence-with-basis / line-by-line nav / trace / document-proofing / 5-section investigator / whole-period tab / tooltips
   - P2.3 Office National — 12 regenerated `reconciliation_issues` with full evidence, `OFFICE_NATIONAL_RECON_EXPECTATIONS.md` cross-reference + PART O walk-through, closing balance R184,068.54
   - Gate: **1249 tests / 177 files**, type-check/lint/build clean. Baseline read-only re-verified: 0 contamination, all controls intact.
-- **P3** (Vertex Form System — `FormShell` / `FormFooter` / `FormTabs` / `useUnsavedChangesPrompt` + migrate ~45 forms) BLOCKED on P2 sign-off.
+- **P3** (Vertex Form System — `FormShell` / `FormFooter` / `FormTabs` / `useUnsavedChangesPrompt` + migrate ~45 forms) ✅ **DONE** — ran as its own `# P3 — VERTEX FORM SYSTEM` initiative, shipped to `main` (`62f0905`). Only P3J (visual QA) outstanding.
 
 ### P1 review — user decisions (2026-08-28)
 1. **August closing balance = R184,068.54** — include REC-1007 (31 Aug reconciled receipt). Statement stays at 87 lines as built. `OFFICE_NATIONAL_RECON_EXPECTATIONS.md`'s old R174,265.22 estimate to be updated to R184,068.54 (Agent 20).
@@ -460,7 +495,7 @@ Must be technically impossible again, not just a written rule.
 | P2.1 | Evidence + investigator engine | Agent 18 | **PASS** | `buildBankSideCandidatesFromStatementLines` (+ `source='import'` fallback for accounts with no persisted statement). New `utils/evidence.ts` `buildEvidence` (replaces `confidence.ts`) + `utils/renderExplanation.ts` — all 13 detectors populate `evidenceData` (amount/date/ref-similarity deltas, same-counterparty/direction/account, full met+unmet factor scorecard, `candidateSourceType/Id`, `varianceExplainedCents`, `detectorVersion='2026.08'`); explanation generated FROM evidence; combination detector shows literal arithmetic + `combinationTerms`. `dedupe_key` = `issueType|statementDate(date)|sorted(related ids)` → idempotent supersede (fixes timestamptz bug), total-order ranking (`confidence DESC, |effect| DESC, issueType, dedupeKey`). `InvestigationResult.sections` {exactCauses/strongCandidates/timingItems/structuralIssues/combinationExplanations}. New `wholePeriodProofService.proveWholePeriod` (statement→books + books→statement, pure fn). `reconciliationHealthService` extended (statementLineCount, closing/books balances, statementVsBooksDifference — truthful "no 100% while variance remains" preserved). `SupabaseReconciliationIssueRepository` maps `evidence_data`/`dedupe_key`. 16 additive optional fields on `ReconciliationEvidenceData`. **Queen-verified gate: type-check ✅ / lint ✅ / 1218 tests / 171 files (from 1206/169) ✅ / build ✅.** No DB writes. |
 | P2.2 | Side-by-side reconciliation workspace | Agent 19 (+retry verify pass) | **PASS** | `ReconciliationWorkspace.tsx` rebuilt: LEFT `bank_statement_line` list (date/desc/ref/state-chip/signed-amount, search + state filter) → LEFT detail (date, value date, description, ref, direction, amount, running balance, "Line N of M", statement name); RIGHT counterpart panel (source label/number, contact, accounting date, ref, amount, GL account(s), VAT, journal number, status, recon state) OR the exact "cannot find a corresponding accounting entry" state + 6 missing-in-books workflow buttons; COMPARISON block (amount/date/reference[from `evidenceData.referenceSimilarity`]/direction/account/VAT, ✓/✗/⚠ + delta); candidate evidence via `EvidenceFactors` (met "Why" / unmet "Potential concern", never a bare %); "Line N of M" + Prev/Next + keyboard ←→ + "Investigate R0.16" → investigator auto-run; truthful summary (caps at 99.9% unless `varianceRemaining===0`, "—" when coverage null); trace via shared `RecordDetailSheet` (state-preserving — verified by test); 9-question document-proofing checklist; `DifferenceInvestigatorPanel` 5 headed sections + literal combination arithmetic; `WholePeriodProofPanel` as its own tab (both directions, tagged); `HelpTip` tooltips. Retry pass filled 4 gaps (evidence-delta wiring, `keepMounted` so tab-switch preserves selection, honest+visible missing-in-books notice, extra tests). **Queen-verified gate: type-check ✅ / lint ✅ / 1249 tests / 177 files ✅ / build ✅.** Missing-in-books flows: `search_existing` real (routes to Bank Transactions), the other 5 are visible `// P2` stubs (no statement-line→GL entry point yet). Trace chain stops at journal entry (honours "only real links", shallower than full PART E). |
 | P2.3 | Office National evidence report + re-generate recon issues | Agent 20 (+retry) | **PASS** | DB regen: **12 `reconciliation_issues`**, all `status='open'`, all with rich `evidence_data` (met+unmet factor scorecards, `combinationTerms` arithmetic, generated explanations) + `dedupe_key`, single 2026-08-28 17:37:38 batch, no confidence-40 noise. Offline harness `officeNationalPartJRegen.test.ts`. `docs/OFFICE_NATIONAL_RECON_EXPECTATIONS.md` (705 lines): closing balance R174,265.22 → **R184,068.54** everywhere (superseded-cut note, not open question); **`## Issue cross-reference`** section (line 413) — 12 rows with issue_type/confidence/effect_amount + an `evidence_data` field matrix + expected line_state + resolution + rationale, stale UUIDs replaced with regenerated ids; **`## PART O`** walk-through (line 480) O-1..O-10 (R0.16 / R185.50 / R62.10 / duplicate / wrong-sign / wrong-account[why it's a Books-Integrity finding] / one-to-many / pair / triple / timing) each quoting real evidence values. Outstanding deposit (C2b, conf 70) + payment (C2a, conf 45 auto-safe) both materialise as `missing_bank_side` rows, PAY-2004 also flagged as books→statement timing proof. **Queen-verified:** 12 issues all evidence+dedupe, baseline untouched (171 JEs, global diff R0.00, GL 1100/1000/1200 = R207,794.04 / R212,270.67 / R1,569,743.20, inventory valuation == GL 1200, 1 statement / 87 lines, 81/13, 0 contamination). Gate: type-check ✅ / lint ✅ / **1249 tests / 177 files** ✅ / build ✅. |
-| P2.4 | Queen: verify + gate + baseline re-verify + P2 report → **user review** | Queen | **PASS — awaiting user review** |
+| P2.4 | Queen: verify + gate + baseline re-verify + P2 report → **user review** | Queen | **DONE — reviewed, shipped to `main` (`7481ef8`)** |
 
 ### Commit & deploy (2026-08-29, user-authorised)
 - Committed to `main` in 2 commits and pushed to `origin/main` (`GerhardVanWijk/accountant_dashboard_ollama`):
@@ -492,20 +527,20 @@ Review boundaries: **R1 = P3A** · R2 = P3B+P3C · R3 = P3D · R4 = P3E+P3F+P3G 
 
 | Sub-phase | Scope | Status |
 |---|---|---|
-| **P3A** | Shared page-width foundation + 10-page ancestry audit | **FIXED — awaiting R1 review** |
-| P3B | Vertex Form System primitives (FormShell/Header/Body/Footer/Tabs) | NOT STARTED (blocked on R1) |
-| P3C | Form behaviour standard (create/edit/detail, unsaved-changes, validation, loading) | NOT STARTED |
-| P3D | High-priority form migration (Banking, Customer, Supplier, Company, Invoice, CN, Receipt, Journal) | NOT STARTED |
-| P3E | Purchases + inventory forms | NOT STARTED |
-| P3F | Admin / settings forms | NOT STARTED |
-| P3G | Long-tail form audit (~45-form inventory → MIGRATED/COMPLIANT/N/A/BLOCKED) | NOT STARTED |
-| P3H | Global summary / page-layout re-audit (forms constrained, pages full-width) | NOT STARTED |
-| P3I | Tests for the shared architecture (17-point list) | NOT STARTED |
-| P3J | Visual QA (1440 / 1280 / mobile) | NOT STARTED |
+| **P3A** | Shared page-width foundation + 10-page ancestry audit | **DONE** (R1 approved) — shipped `62f0905` |
+| P3B | Vertex Form System primitives (FormShell/Header/Body/Footer/Tabs) | **DONE** (R2 approved) — shipped `62f0905` |
+| P3C | Form behaviour standard (create/edit/detail, unsaved-changes, validation, loading) | **DONE** (R2 approved) — shipped `62f0905` |
+| P3D | High-priority form migration (Banking, Customer, Supplier, Company, Invoice, CN, Receipt, Journal) | **DONE** (R3 approved) — shipped `62f0905` |
+| P3E | Purchases + inventory forms | **DONE** — shipped `62f0905` |
+| P3F | Admin / settings forms | **DONE** — shipped `62f0905` |
+| P3G | Long-tail form audit (~45-form inventory → MIGRATED/COMPLIANT/N/A/BLOCKED) | **DONE** — shipped `62f0905` |
+| P3H | Global summary / page-layout re-audit (forms constrained, pages full-width) | **DONE** — shipped `62f0905` |
+| P3I | Tests for the shared architecture (17-point list) | **DONE** — shipped `62f0905` |
+| P3J | Visual QA (1440 / 1280 / mobile) | **OUTSTANDING** — no browser tooling in this environment; needs a human pass on the deploy |
 
 ---
 
-## P3A — SHARED PAGE WIDTH FOUNDATION — **FIXED, awaiting R1**
+## P3A — SHARED PAGE WIDTH FOUNDATION — **DONE (R1 approved), shipped `62f0905`**
 
 ### P3A.0 — Root cause (exact)
 
@@ -630,8 +665,8 @@ kept as-is. Visual QA still outstanding (folded into P3H/P3J).
 
 ---
 
-## P3B — VERTEX FORM SYSTEM PRIMITIVES — **PASS, awaiting R2**
-## P3C — FORM BEHAVIOUR STANDARD — **PASS, awaiting R2**
+## P3B — VERTEX FORM SYSTEM PRIMITIVES — **DONE (R2 approved), shipped `62f0905`**
+## P3C — FORM BEHAVIOUR STANDARD — **DONE (R2 approved), shipped `62f0905`**
 
 **Primitives built, ZERO forms migrated** (migration is P3D+, gated on this review). New dir
 `src/components/app/form/`, barrel `@/components/app/form`.
@@ -714,7 +749,7 @@ breakpoint. Items **14–16** (page summary width / report pages / nested contro
 
 ---
 
-## P3D — HIGH-PRIORITY FORM MIGRATION — **PASS, awaiting R3**
+## P3D — HIGH-PRIORITY FORM MIGRATION — **DONE (R3 approved), shipped `62f0905`**
 
 Migrated the brief's priority list onto `FormShell` / `FormHeader` / `FormBody` / `FormTabs`
 / `FormFooter`. **Uniform recipe** (so the diff is mechanical and reviewable):
@@ -780,7 +815,7 @@ Migrated the brief's priority list onto `FormShell` / `FormHeader` / `FormBody` 
 
 ---
 
-## P3E — PURCHASES & INVENTORY FORMS — **PASS, awaiting R4 (checkpoint)**
+## P3E — PURCHASES & INVENTORY FORMS — **DONE, shipped `62f0905`**
 
 Same uniform recipe as P3D. **Purchases + Inventory + Assets now have the `*FormModal`
 layer they lacked** (the audit's "most inconsistent module").
@@ -941,6 +976,67 @@ report pages' summary grids (P3A `sm` fix), and the discard-changes prompt.
 
 ---
 
+# INVENTORY UX CORRECTION PASS — NAVIGATION / SEARCH / DETAIL LAYOUT
+
+**Opened:** 2026-09-01 · **Owner:** Queen Bee
+**Scope:** frontend / navigation UX only. NO accounting logic, NO schema, NO DB writes,
+NO migrations. `NORMALIZED_DOCUMENT_LINES_ENABLED` stays OFF. Inventory ↔ GL reconciliation
+lives solely under Inventory → Reports → Inventory Reconciliation.
+**Source:** user's live-browser inspection of the deployed Inventory module (19-point brief).
+**Branch:** `phase-9b-relationship-design-and-code`. **Commit:** `6d203fc`.
+
+## Status
+
+**Two review rounds — APPROVED (user, 2026-09-01). Committed + pushed to the branch.**
+Round-1 approval carried two finishing items (both done in the same commit):
+(1) reconciliation removed from the overview *completely* — no card, no status line, the
+engine is not imported or run from `InventoryOverviewPage`; (2) supplier global-search
+deep-link confirmed working (`SuppliersRoot` already honours `?record=`) + regression tests.
+
+## What changed
+
+| Area | Change |
+|---|---|
+| **Sidebar nav** | New `quickAccess` `NavItem` flag — Organisation → Inventory is a shortcut that no longer claims `/inventory/*` as its active section (root cause of the "jumps back to Organisation" bug). `isNavItemActive()` / `groupHoldsActive()` / `isAccordionGroup()` / `activeAccordionGroupTitle()` extracted to `navigation.ts`; most-specific match wins, so the Inventory group stays expanded with the correct child active across every subpage. `sectionForPath()` (breadcrumbs) uses the same rules. |
+| **Inventory group order** | Overview · Products · Categories · Warehouses · Stock Movements · Operations · Reports. |
+| **Overview header** | Hierarchy: primary **New item** (green) · grouped **Stock actions ▾** · utility **Import** / **Export ▾** (inline ≥`md`) · **Reports** ghost link → `/inventory/reports` (was `/reports`, ≥`lg`) · responsive **More ▾** overflow (`< lg`). |
+| **Overview layout** | Register is full-width; summary strip tightened. **Reconciliation card + engine removed from this page.** |
+| **Item detail sheet** | `RecordDetailSheet` shared: `overflow-x-hidden`, body padding `p-4 → sm:p-6`, title `truncate → line-clamp-2` + `overflow-wrap:anywhere`, field values `overflow-wrap:anywhere`, `min-w-0` on scroll container. `InventoryItemDetailSheet`: `sm:max-w-2xl → sm:max-w-3xl lg:max-w-4xl`; tab strip `overflow-x-auto no-scrollbar` + `flex-none` triggers (local scroll, hidden bar); SKU stacked over product name; responsive `grid-cols-1 sm:grid-cols-2` field grids. |
+| **Labels** | `getTaxRateLabel()` returns a human label (`"Standard rate — 15%"`) or `"Unknown tax rate"` — never a raw UUID. |
+| **Table columns** | `DataTableColumn` gains `hideBelowLg` / `hideBelowXl`. Preferred supplier / Committed / Reorder demoted to `xl`-only (still on the detail sheet). |
+| **Global search** | **Root cause:** `CommandDialog` never wrapped its children in `<Command>` (the cmdk context provider was missing → palette inert). Fixed. Rewrite: instant navigation index + lazy product/customer/supplier record index (loads once on first open, filtered client-side — typing never fetches); loading / empty / error states; every result deep-links via `?record=` (products, customers, suppliers all consistent — `SuppliersRoot` already supported it). ⌘/Ctrl-K, Esc, arrows, Enter. |
+| **User menu** | Company settings → `/companies` (was a dead duplicate of `/settings`). |
+| **Test infra** | `tests/setup.ts`: `ResizeObserver` + `Element.prototype.scrollIntoView` jsdom stubs (cmdk needs them). |
+
+## Files (21: 17 modified, 4 new)
+
+`src/lib/app/navigation.ts` + `navigation.test.ts` + `navigation-active.test.ts` (new) ·
+`src/components/app/app-sidebar.tsx` · `data-table.tsx` · `record-detail-sheet.tsx` ·
+`user-menu.tsx` + test · `global-search.tsx` + `global-search-records.ts` (new) + `global-search.test.tsx` (new) ·
+`src/components/ui/shadcn/command.tsx` ·
+`src/features/inventory/pages/InventoryOverviewPage.tsx` + test ·
+`components/InventoryItemDetailSheet.tsx` + test · `components/InventoryTable.tsx` + test · `constants.ts` ·
+`src/features/suppliers/pages/SuppliersRoot.test.tsx` (new) · `tests/setup.ts`.
+
+## Gate
+
+- type-check ✅ · lint (`--report-unused-disable-directives --max-warnings 0`) ✅ ·
+  **tests 1925 / 1925 (263 files)** (from 1902) ✅ · `vite build` ✅
+- Accounting logic changed: **NO** · DB writes: **NONE** · normalized-line flag: **OFF**
+
+## Browser QA
+
+**Not performed** — no Chrome DevTools / Playwright MCP in this environment. Responsive
+utilities verified present in the compiled CSS bundle. Manual checklist handed to the user
+(1440/1920, 1280, mobile, global search, profile menu) — still to be run on the deploy.
+
+## Deploy
+
+- [ ] Cloudflare — deploys only from `main`. Requires merging `phase-9b-relationship-design-and-code`
+      (which also carries Phase 9B, flag OFF) **or** cherry-picking `6d203fc` onto `main`. Awaiting the user's call on scope.
+
+---
+
 # INVENTORY ACCOUNTING MODULE — MAJOR FEATURE
 
 **Opened:** 2026-08-30 · **Owner:** Queen Bee
@@ -959,7 +1055,7 @@ R3 = core Inventory UI/navigation · R4 = purchasing/sales/accounting integratio
 imports · R6 = reports/printing/export · R7 = Office National backfill + reconciliation · R8 = full
 regression/QA.
 
-## PHASE 0 — COMPLETE INVENTORY AUDIT — **DONE, awaiting Review 1**
+## PHASE 0 — COMPLETE INVENTORY AUDIT — **DONE (Review 1 approved)**
 
 Ran 6 parallel read-only audit agents (schema/migrations · services/costing · GL integration ·
 navigation/UI/Fixed-Assets · import/export/print/reports · demo-data/permissions/tests), cross-checked
@@ -1005,7 +1101,7 @@ FOR REVIEW 1"): (A) costing-model scope, (B) relational categories, (C) supplier
   new lean `InventoryOverviewPage`. `docs/ROUTES.md` updated.
 - Gate: type-check ✅ · lint ✅ · 1290 tests ✅ · build ✅.
 
-## PHASE 2 — INVENTORY DOMAIN MODEL + MIGRATIONS — **REVIEW 2C HYBRID → STOP before any `apply_migration`**
+## PHASE 2 — INVENTORY DOMAIN MODEL + MIGRATIONS — **DONE (Reviews 2C + 3A approved), migrations 0021–0030 applied, shipped `40f10fb`**
 
 - `supabase/migrations/` folder adopted (fork G); 0000–0020 backfilled from the live DB. Physical
   filenames `20260830120021__0021_...` … `20260830120030__0030_...` (timestamp-prefixed so they sort
@@ -1078,10 +1174,12 @@ Phase-3 follow-up).
 Supabase repos verified column-compatible with the applied schema; **NOT wired into `instances.ts`**
 (that + GL posting DI = the first Phase 3 task).
 
-- **NOT committed. NO pushes.**
-- [ ] **STOP — Review 3A migration gate.** 25-point report delivered. Do NOT start Phase 3
-      accounting posting until this gate is approved.
-## PHASE 3 — INVENTORY ACCOUNTING ENGINE — **COMPLETE → STOP at Review 3B (awaiting review)**
+- Shipped to `main` (`40f10fb`).
+- [x] **STOP — Review 3A migration gate.** 25-point report delivered. **APPROVED** — migrations
+      0021–0030 applied; Phase 3 proceeded (Reviews 3B / 3C-A / 3C-B all approved below).
+## PHASE 3 — INVENTORY ACCOUNTING ENGINE — **DONE (Review 3B approved), migrations 0031–0032 applied, shipped `40f10fb`**
+> **Live-Postgres inventory-posting E2E is still outstanding** — needs a throwaway Supabase project;
+> `inventory_transaction_log` is still 0 rows on the live project, no engine write has touched live data.
 
 **Item 1 — performance index migration:** analysed all `unindexed_foreign_keys` INFOs individually
 (32 pre-apply + 22 more from the 0027–0031 tables = 54 now). **No migration warranted** — every real
@@ -1190,7 +1288,7 @@ Gate: type-check ✅ / lint ✅ / **1432 tests (194 files)** ✅ / build ✅.
 
 - [x] **Review 3B — APPROVED.** Proceed to Phase 3C.
 
-## PHASE 3C — HARDENING — **MIGRATIONS 0033–0036 APPLIED (Review 3C-A gate), awaiting Review 3C-B**
+## PHASE 3C — HARDENING — **DONE (Reviews 3C-A + 3C-B approved), migrations 0033–0036 applied, shipped `40f10fb`**
 
 Applied 2026-08-30 one-at-a-time with per-migration verification. Recorded versions
 `20260830221042__0033` … `20260830221256__0036` (local files renamed to match). No commit, no push,
@@ -1252,7 +1350,7 @@ still 0 rows). Office National contamination: NONE.
 - [x] **Review 3C-A — APPROVED.** Migrations 0033–0036 applied under the controlled procedure.
 - [x] **Review 3C-B — APPROVED. Phase 3 closed** — accounting engine ready for frontend integration.
 
-## PHASE 4 — CORE INVENTORY FRONTEND — **COMPLETE, awaiting Review 4**
+## PHASE 4 — CORE INVENTORY FRONTEND — **DONE (Review 4 approved), shipped `40f10fb`** (browser QA of the UI still outstanding)
 
 UI/UX + service integration over the Phase-3 engine. No engine redesign. Real hook/service data
 throughout (correct empty states, no fabricated business numbers). No commit, no push. Phase 5 NOT started.
@@ -1297,9 +1395,10 @@ Phase 3) / `vite build` ✅.
 Every change is behind strict type-check + lint + the full suite + a production build; layout uses
 the established responsive Tailwind + Vertex components.
 
-- [ ] **STOP — Review 4.** Report delivered. Do NOT start the import/reporting build. Do NOT commit/push.
+- [x] **STOP — Review 4.** Report delivered. **APPROVED** — shipped to `main` (`40f10fb`).
+  Browser QA of the Phase 4 UI still outstanding (no browser tooling in this env).
 
-## PHASE 5 — STOCK TAKE SYSTEM / WORKFLOWS — **COMPLETE, awaiting Review 5**
+## PHASE 5 — STOCK TAKE SYSTEM / WORKFLOWS — **DONE (Review 5 approved), shipped `40f10fb`**
 
 Draft-then-post UI over every Phase-3 workflow service (stockAdjustmentService /
 stockTransferService / stockTakeService / supplierReturnService /
@@ -1357,10 +1456,9 @@ never be entered without it.
 **1589 tests (210 files)** ✅ (+42 vs Phase 4) / `vite build` ✅. No Office National writes.
 No commits, no pushes.
 
-- [ ] **STOP — Review 5.** Report delivered. Do NOT start the import framework
-  (Phase 6). Do NOT commit/push.
+- [x] **STOP — Review 5.** Report delivered. **APPROVED** — shipped to `main` (`40f10fb`).
 
-## PHASE 6 — SHARED IMPORT FRAMEWORK — **COMPLETE, awaiting Review 6**
+## PHASE 6 — SHARED IMPORT FRAMEWORK — **DONE (Review 6 approved), shipped `40f10fb` / `4ac5277`**
 
 One reusable import engine (`src/features/import/`) — CSV/XLS/XLSX, generic column
 mapping, row-level validation, duplicate detection, execution, result reporting — NOT
@@ -1421,10 +1519,9 @@ pushes.
 conditional — "if the architecture fits cleanly"; the shape fits, left as a follow-up
 adapter) and an XLSX (vs CSV) error-report export.
 
-- [ ] **STOP — Review 6.** Report delivered. Do NOT start Phase 7 (print/export/reports).
-  Do NOT commit/push.
+- [x] **STOP — Review 6.** Report delivered. **APPROVED** — shipped to `main` (`40f10fb` / `4ac5277`).
 
-## PHASE 7 — SHARED PRINT / EXPORT INFRASTRUCTURE — **COMPLETE, awaiting Review 7**
+## PHASE 7 — SHARED PRINT / EXPORT INFRASTRUCTURE — **DONE (Review 7 approved), shipped `4ac5277`**
 
 One reusable print/export engine (`src/features/export/`) — structured-data CSV/XLSX
 export, a shared printable report shell, and one `ExportMenu` — reused across
@@ -1518,10 +1615,9 @@ header/footer, company logo (no such field exists on `Company` yet — branding 
 name/registration/VAT only), and a separate export row-limit distinct from the
 existing XLSX 20,000-row import limit.
 
-- [ ] **STOP — Review 7.** Report delivered. Do NOT start Phase 8 (inventory report
-  analytics). Do NOT commit/push.
+- [x] **STOP — Review 7.** Report delivered. **APPROVED** — shipped to `main` (`4ac5277`).
 
-## PHASE 8 — INVENTORY REPORTS & ANALYTICS — **COMPLETE, awaiting Review 8**
+## PHASE 8 — INVENTORY REPORTS & ANALYTICS — **DONE (Review 8 approved), shipped `4ac5277`**
 
 14 reports + one hub over the authoritative inventory/accounting data — never
 independently recalculated. Full data-availability audit, per-report purpose/source/
@@ -1576,15 +1672,48 @@ test re-verified clean) / build ✅. No Office National writes — every report 
 read-only, no service mutation imported anywhere in `pages/reports/`. No commits, no
 pushes.
 
-- [ ] **STOP — Review 8.** Report delivered. Do NOT start Phase 9 (relationships). Do
-  NOT commit/push.
+- [x] **STOP — Review 8.** Report delivered. **APPROVED** — shipped to `main` (`4ac5277`).
 
-## PHASE 9 — RELATIONSHIPS — NOT STARTED
+## PHASE 9 — RELATIONSHIPS
+
+### PHASE 9A — RELATIONSHIP AUDIT — **DONE, shipped to `main` (`4ac5277`)**
+Full relationship audit → `docs/ACCOUNTING_RELATIONSHIPS.md` (sales/purchase chains, stock-movement
+source-line evidence, journal reverse-lookup, product-delete gap, credit-note over-return gap,
+realised-margin evidence boundary, supplier-evidence contract, report-unlock criteria).
+
+### PHASE 9B — NORMALIZED DOCUMENT-LINE TABLES — **CODE COMPLETE, committed on branch `phase-9b-relationship-design-and-code` (`38f6b78` / `465c10f`), NOT merged to `main`**
+- Design: `docs/PHASE_9B_DESIGN.md`. Migrations **0037–0042 APPLIED** to Supabase (schema + exact
+  backfill): `invoice_lines` 198 / `bill_lines` 68 / `purchase_order_lines` 0 / `credit_note_lines` 6.
+  Full parity (0 missing / 0 extra / 0 field mismatch), zero accounting impact, Office National uncontaminated.
+- Two standalone integrity fixes shipped in the same branch: `deleteProduct()` history guard
+  (deactivate instead of hard-delete); `issueCreditNote()` per-line return-quantity validation.
+- Dual-write projector (`SupabaseDocumentLineProjector`) + `DocumentLineParityChecker` shipped
+  **disabled** — `NORMALIZED_DOCUMENT_LINES_ENABLED = false`; jsonb `line_items` is still authoritative.
+- Reviews 9B-A → 9B-E complete on the branch.
+- [ ] **Open a PR and merge `phase-9b-relationship-design-and-code` → `main`.**
+- [ ] **Separate later review:** flip `NORMALIZED_DOCUMENT_LINES_ENABLED` to `true` — only after
+      forward dual-write parity is tested against the live DB via `DocumentLineParityChecker`
+      (needs a service-role client).
+- Deferred by design (documented in `docs/PHASE_9B_DESIGN.md`): `bill_lines.source_purchase_order_line_id`
+  line-level PO→bill provenance (§6); `journal_entries.source_id` reverse lookup (§8); `discount`
+  field mapping (§2); report-layer queries against the normalized tables (§13 — the next phase).
+
 ## PHASE 10 — FIXED ASSET CLEANUP — NOT STARTED
+Strip Products / Warehouses out of the "Fixed Assets" nav grouping (cosmetic, zero-risk per Phase 0).
+
 ## PHASE 11 — PERMISSIONS / AUDIT — NOT STARTED
+Inventory RLS is still UI/service-only (`useCanAccess`); DB stays coarse company-tenant. `AuditAction`
+coverage for inventory. (App-wide role-aware DB authz is the separate unscheduled task at the bottom of this file.)
+
 ## PHASE 12 — OFFICE NATIONAL DATA — NOT STARTED (SQL/migration only)
+
 ## PHASE 13 — ACCOUNTING INVARIANT TESTS — NOT STARTED
+Regression tests for the GL 1200 ↔ valuation tie — flagged as the highest re-contamination risk;
+currently has no regression test.
+
 ## PHASE 14 — RECONCILIATION / INVESTIGATOR UI — NOT STARTED
+Surface `reconcileInventory()` in the Difference Investigator + evidence UI. Also picks up reconcile
+Check F (movement evidence), deferred here from Phases 3/8.
 
 Phase 14 consumes the Phase 3 `reconcileInventory()` result in the Difference Investigator and
 evidence UI; it does not defer the reconciliation engine itself.
