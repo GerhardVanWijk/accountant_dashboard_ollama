@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import type { DocumentLineItem } from '@/types';
 
 function line(overrides: Partial<DocumentLineItem> = {}): DocumentLineItem {
@@ -119,5 +119,127 @@ describe('SupabaseDocumentLineProjector — enabled', () => {
 
     vi.doUnmock('@/config/featureFlags');
     vi.resetModules();
+  });
+});
+
+describe('isProjectableLineQuantity', () => {
+  it('accepts only a strictly positive finite quantity (matching migration 0042 / the check constraint)', async () => {
+    const { isProjectableLineQuantity } = await import('./SupabaseDocumentLineProjector');
+    expect(isProjectableLineQuantity(2)).toBe(true);
+    expect(isProjectableLineQuantity(0.001)).toBe(true);
+    expect(isProjectableLineQuantity('3')).toBe(true); // legacy jsonb numeric string, like ::numeric > 0
+    expect(isProjectableLineQuantity(0)).toBe(false);
+    expect(isProjectableLineQuantity(-1)).toBe(false);
+    expect(isProjectableLineQuantity(Number.NaN)).toBe(false);
+    expect(isProjectableLineQuantity(null)).toBe(false);
+    expect(isProjectableLineQuantity(undefined)).toBe(false);
+    expect(isProjectableLineQuantity('')).toBe(false);
+  });
+});
+
+describe('SupabaseDocumentLineProjector — non-positive quantity handling', () => {
+  function enabledClient() {
+    const inserted: Record<string, unknown>[][] = [];
+    const deleted: unknown[][] = [];
+    const client = {
+      from: vi.fn((table: string) => ({
+        delete: () => ({
+          eq: (...args: unknown[]) => {
+            deleted.push([table, ...args]);
+            return Promise.resolve({ error: null });
+          },
+        }),
+        insert: vi.fn((rows: Record<string, unknown>[]) => {
+          inserted.push(rows);
+          return Promise.resolve({ error: null });
+        }),
+        select: () => ({
+          order: () => ({ limit: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 'company_1' }, error: null }) }) }),
+        }),
+      })),
+    };
+    return { client, inserted, deleted };
+  }
+
+  async function makeProjector(client: unknown) {
+    vi.resetModules();
+    vi.doMock('@/config/featureFlags', () => ({ NORMALIZED_DOCUMENT_LINES_ENABLED: true }));
+    const { SupabaseDocumentLineProjector } = await import('./SupabaseDocumentLineProjector');
+    return new SupabaseDocumentLineProjector(client as never, {
+      projectorName: 'test',
+      lineTable: 'invoice_lines',
+      foreignKeyColumn: 'invoice_id',
+    });
+  }
+
+  afterEach(() => {
+    vi.doUnmock('@/config/featureFlags');
+    vi.resetModules();
+  });
+
+  it('projects a positive-quantity line', async () => {
+    const { client, inserted } = enabledClient();
+    const projector = await makeProjector(client);
+    await projector.sync('doc_1', [line({ id: 'li_1', quantity: 5 })]);
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toEqual([expect.objectContaining({ id: 'li_1', line_number: 1, quantity: 5 })]);
+  });
+
+  it('skips a zero-quantity line entirely (clears prior rows, no insert)', async () => {
+    const { client, inserted, deleted } = enabledClient();
+    const projector = await makeProjector(client);
+    await projector.sync('doc_1', [line({ id: 'li_zero', quantity: 0 })]);
+    expect(deleted).toEqual([['invoice_lines', 'invoice_id', 'doc_1']]);
+    expect(inserted).toEqual([]);
+  });
+
+  it('skips a negative-quantity line entirely', async () => {
+    const { client, inserted } = enabledClient();
+    const projector = await makeProjector(client);
+    await projector.sync('doc_1', [line({ id: 'li_neg', quantity: -3 })]);
+    expect(inserted).toEqual([]);
+  });
+
+  it('projects only the valid lines of a mixed set, preserving each line\'s original 1-based position', async () => {
+    const { client, inserted } = enabledClient();
+    const projector = await makeProjector(client);
+    await projector.sync('doc_1', [
+      line({ id: 'li_1', quantity: 4 }),   // position 1 — kept
+      line({ id: 'li_2', quantity: 0 }),   // position 2 — skipped
+      line({ id: 'li_3', quantity: 2 }),   // position 3 — kept, line_number stays 3
+    ]);
+    expect(inserted).toHaveLength(1);
+    const rows = inserted[0];
+    expect(rows.map((r) => [r.id, r.line_number])).toEqual([
+      ['li_1', 1],
+      ['li_3', 3],
+    ]);
+  });
+
+  it('does not weaken the projection\'s non-authoritative contract: an insert failure still surfaces to the caller (which swallows it)', async () => {
+    vi.resetModules();
+    vi.doMock('@/config/featureFlags', () => ({ NORMALIZED_DOCUMENT_LINES_ENABLED: true }));
+    const client = {
+      from: vi.fn(() => ({
+        delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        insert: () => Promise.resolve({ error: { message: 'quantity check violation' } }),
+        select: () => ({ order: () => ({ limit: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 'company_1' }, error: null }) }) }) }),
+      })),
+    };
+    const { SupabaseDocumentLineProjector } = await import('./SupabaseDocumentLineProjector');
+    const projector = new SupabaseDocumentLineProjector(client as never, { projectorName: 't', lineTable: 'invoice_lines', foreignKeyColumn: 'invoice_id' });
+    await expect(projector.sync('doc_1', [line({ id: 'li_1', quantity: 2 })])).rejects.toThrow(/quantity check violation/);
+    vi.doUnmock('@/config/featureFlags');
+    vi.resetModules();
+  });
+
+  it('never touches the source jsonb table — only the configured line table', async () => {
+    const { client } = enabledClient();
+    const projector = await makeProjector(client);
+    await projector.sync('doc_1', [line({ id: 'li_1', quantity: 1 }), line({ id: 'li_2', quantity: 0 })]);
+    const tablesTouched = new Set((client.from as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]));
+    // 'companies' is the company-id resolution read; the projection write only ever hits the line table.
+    expect(tablesTouched).toEqual(new Set(['companies', 'invoice_lines']));
+    expect(tablesTouched.has('invoices')).toBe(false);
   });
 });

@@ -252,3 +252,238 @@ tables (`credit_note_lines` first, for its FK to `invoice_lines`) and drop
 the two `0037` unique constraints — the existing `invoices`/`bills`/etc.
 rows and their `line_items` jsonb are completely unaffected either way, since
 nothing ever became authoritative on the new tables (§3).
+
+## 16. Review 9B-B QA fixes (for Review 9B-C)
+
+Review 9B-B returned **NEEDS WORK** on three items. All three are addressed
+on this branch; no new commit yet (Review 9B-C gate).
+
+1. **Migration-contract coverage for 0037-0042** — new
+   `src/repositories/normalizedLineMigrations.test.ts` (39 cases), same
+   static-SQL approach as `inventoryMigrations.test.ts`. Proves: 0037-0042
+   sort ascending after 0036; 0037 precedes every line table + the backfill;
+   0038 precedes 0041 (FK target); all four line tables exist with the jsonb
+   `id` as their own PK (no synthetic key), `product_id` nullable, the
+   composite tenant-safe FKs (`(company_id, <fk>)` → header / products /
+   warehouses / tax_rates), their own `unique (company_id, id)`, RLS enabled
+   + the coarse `all_own_company` policy; `bill_lines.fixed_asset_details`
+   (+ its mutual-exclusion CHECK); `credit_note_lines.original_invoice_line_id`
+   (nullable, composite FK to `invoice_lines`); no migration 0037-0042 drops
+   a table/column, retypes a column, truncates, or touches `line_items`;
+   0042 preserves each jsonb line `id` verbatim (`(l->>'id')::uuid`, no
+   `gen_random_uuid`), is idempotent (`on conflict (id) do nothing` ×4),
+   preserves order (`with ordinality`), resolves every ref exactly-or-NULL,
+   populates **and** raises a NOTICE for all four orphan counters, fabricates
+   no historical WAC/cost/stock-movement data, never `UPDATE`/`DELETE`s a
+   header table; the feature flag ships `false`.
+
+2. **0042 orphan observability** — `v_orphaned_warehouses` and
+   `v_orphaned_tax_rates` were declared but never populated or reported.
+   Fixed: a single pre-backfill CTE (`all_lines` — exactly the `quantity > 0`
+   lines the INSERTs consider) now `LEFT JOIN`s products / warehouses /
+   tax_rates and assigns all three counters, raised together in a
+   `normalized_line_backfill (pre): …` NOTICE. A post-backfill block then
+   counts credit-note lines whose `originalInvoiceLineId` did not resolve to
+   a just-created `invoice_lines` row (`v_orphaned_original_invoice_lines`)
+   and raises a `normalized_line_backfill (post): …` NOTICE. Each non-zero
+   counter also gets its own loud per-kind restatement. The exact-only
+   policy is unchanged — an unresolved reference is still written `NULL`,
+   never guessed; `jsonb_array_elements` is now `coalesce(…, '[]'::jsonb)`-
+   guarded so a NULL `line_items` cannot abort the run.
+
+3. **Dual-write parity checker** — new
+   `src/repositories/DocumentLineParityChecker.ts` (+ 12-case test, +
+   `documentLineParityCheckerInstance.ts`). Deterministic, **read-only**
+   (only `select`; never insert/update/delete/rpc; never a service
+   singleton; never mutates or repairs either side). Per document type it
+   reports `documentCount` / `jsonbLineCount` / `normalizedLineCount` /
+   `matchedLineCount`, the exact line-ID set diff, and per matched line
+   compares `line_number`, `description`, `quantity`, `unit_price`,
+   `tax_amount`, `line_total` (each rounded to its column scale),
+   `product_id` / `warehouse_id` / `tax_rate_id`, plus
+   `fixed_asset_details` (bill, structural) and `original_invoice_line_id`
+   (credit note). Classification is exactly `MATCH` /
+   `MISSING_NORMALIZED_LINE` / `EXTRA_NORMALIZED_LINE` / `FIELD_MISMATCH`;
+   every finding carries both raw line objects + a per-field breakdown. A
+   `quantity <= 0` jsonb line is excluded (matching 0042), surfaced in
+   `excludedZeroQtyJsonbLineIds`. A set-in-jsonb / NULL-in-projection ref
+   mismatch is tagged `possiblyExpectedBackfillNull` so a reviewer can tell
+   an expected exact-only historical nulling from a projector defect. It
+   cannot run against the DB until 0037-0042 are applied — it is the gate
+   the future "enable the projection" review must pass first.
+
+### Pre-apply read-only inspection (Office National, project `bcaffvpibpitpuqglszn`)
+
+Every query below was a `SELECT` — no writes, no RPC, no service calls.
+Migrations applied on the project stop at **0036** (0037-0042 not applied).
+Only "Office National Demo (Pty) Ltd" holds data; the two "test" companies
+are empty.
+
+| Integrity check | Result |
+|---|---|
+| jsonb line elements total (invoice/bill/PO/credit-note) | 272 |
+| line elements missing an `id` | **0** |
+| duplicate line `id` within one document | **0** |
+| line `id` colliding across documents/tables | **0** |
+| orphaned `productId` refs | **0** (258/272 lines carry one) |
+| orphaned `warehouseId` refs | **0** (0/272 carry one — all default-warehouse) |
+| orphaned `taxRateId` refs | **0** (272/272 carry one) |
+| orphaned `originalInvoiceLineId` refs | **0** (0/6 credit-note lines carry one → all backfill NULL) |
+| lines with `quantity <= 0` | **0** |
+
+| Expected normalized row count | Value |
+|---|---|
+| `invoice_lines` | **198** |
+| `bill_lines` | **68** |
+| `purchase_order_lines` | **0** |
+| `credit_note_lines` | **6** |
+| `bill_lines.fixed_asset_details` non-null | **0** |
+
+| Accounting baseline | Value |
+|---|---|
+| `journal_entries` | 171 (all `posted`) |
+| `journal_lines` | 705 |
+| `stock_movements` | 284 |
+| `inventory_transaction_log` | 0 |
+| global debit total | 4 838 209.61 |
+| global credit total | 4 838 209.61 |
+| trial balance (debit − credit) | **0.00 — balanced** |
+| GL 1200 (Inventory) | 1 569 743.20 |
+| GL 1210 (Inventory in Transit) | 0.00 |
+| inventory valuation (Σ stock_balances.qty × product WAC) | 1 569 743.20 |
+| inventory valuation (Σ products.qty_on_hand × WAC) | 1 569 743.20 |
+| `reconcileInventory` (GL 1200 vs valuation) | **balanced — difference 0.00** |
+
+No STOP condition. 0042's exact backfill would resolve every reference and
+null nothing on this data.
+
+## 17. Review 9B-C — controlled apply of 0037-0042 (2026-09-01)
+
+Review 9B-C authorized applying 0037-0042 (schema + backfill only — **not**
+the runtime flag). Applied in order via the Supabase MCP against project
+`bcaffvpibpitpuqglszn`. Pre-apply baseline re-read immediately before 0037
+and matched §16 exactly.
+
+| Migration | Result | Verification |
+|---|---|---|
+| 0037 prereq keys | applied | `invoices_company_id_id_key` + `credit_notes_company_id_id_key` UNIQUE (company_id, id) both present; DDL-only, no row change |
+| 0038 invoice_lines | applied | table + RLS + `invoice_lines_all_own_company` policy; `product_id` nullable; 5 FKs (header cascade + products/warehouses/tax_rates composite); 8 indexes; empty |
+| 0039 bill_lines | applied | as 0038 + `fixed_asset_details jsonb` + `check (fixed_asset_details is null or product_id is null)`; empty |
+| 0040 purchase_order_lines | applied | as 0038; empty; expected pre-backfill count 0 |
+| 0041 credit_note_lines | applied | as 0038 + `original_invoice_line_id uuid` nullable + composite FK → `invoice_lines(company_id, id)`; 6 FKs, 9 indexes; empty |
+| 0042 exact backfill | applied | see below |
+
+**0042 NOTICE / orphan counts** (reconstructed read-only — the backfill's own
+counters): unresolved products **0**, warehouses **0**, tax rates **0**,
+original invoice lines **0**. No per-kind restatement fired. Nothing nulled
+for being unresolvable.
+
+**Actual normalized row counts (expected = actual):** `invoice_lines`
+**198** / `bill_lines` **68** / `purchase_order_lines` **0** /
+`credit_note_lines` **6** / `bill_lines.fixed_asset_details` non-null **0**.
+
+**Stable-ID:** every jsonb line `id` present verbatim in its table — 0
+missing, 0 extra, 0 `line_number` vs jsonb-ordinal mismatch, across all
+198 + 68 + 6 rows. No regenerated ids. `invoices.line_items` fingerprint
+unchanged (`a01f7c25e0ab21bd7c9d74ab1a32c68c` before and after).
+
+**Parity (DocumentLineParityChecker semantics, executed read-only as the
+postgres role so RLS does not hide rows — the class's live run needs a
+service-role client not configured in this environment; the class itself has
+12 passing unit tests):**
+
+| type | docs | jsonb lines | normalized | MATCH | MISSING | EXTRA | FIELD MISMATCH |
+|---|---|---|---|---|---|---|---|
+| invoice | 65 | 198 | 198 | 198 | 0 | 0 | 0 |
+| bill | 31 | 68 | 68 | 68 | 0 | 0 | 0 |
+| purchase_order | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| credit_note | 6 | 6 | 6 | 6 | 0 | 0 | 0 |
+
+**Credit-note original line:** all 6 `credit_note_lines.original_invoice_line_id`
+are NULL (historic credit notes carry no `originalInvoiceLineId`). Correct —
+not inferred.
+
+**Accounting non-impact (before → after, identical):** journal_entries
+171→171, journal_lines 705→705, stock_movements 284→284,
+inventory_transaction_log 0→0, GL 1200 R1 569 743.20 unchanged, GL 1210 R0.00
+unchanged, inventory valuation R1 569 743.20 unchanged, global debit/credit
+R4 838 209.61 unchanged, trial-balance diff R0.00, products fingerprint
+(`quantity_on_hand`/`cost_price`) unchanged
+(`a7c742e7ddf85c1b642ec6712361d1b2`).
+
+**Advisors (after − before):** no new *security* category; the +4
+`auth_allow_anonymous_sign_ins` are one per new table's `all_own_company`
+policy — the same coarse-tenant policy shape every existing document table
+already trips (project-wide design, not a 9B regression). Performance: +17
+`unindexed_foreign_keys` (INFO — the composite `(company_id, <fk>)` FKs, same
+INFO the 0029 inventory line tables produce) and +18 `unused_index` (INFO —
+nothing queries these tables yet; flag OFF). No new WARN/ERROR. No
+missing-RLS, no RLS-without-policy, no SECURITY DEFINER, no mutable
+search_path (0042 is a `DO` block, not a function).
+
+**Full app gate (re-run post-apply):** typecheck clean, lint
+`--max-warnings 0` clean, tests **1895 / 1895** (260 files), build clean.
+
+## 18. Phase 9B-E — repository hardening (2026-09-01, for Review 9B-E)
+
+1. **Migration history filenames corrected.** `apply_migration` recorded
+   the six under its own timestamps, not the repo files' placeholders. The
+   six local files were `git mv`'d to the exact recorded versions — SQL
+   semantics unchanged, no reapply, remote history untouched:
+
+   | logical | local file (now) — matches `schema_migrations.version` |
+   |---|---|
+   | 0037 | `20260901152836__0037_prereq_company_id_id_keys.sql` |
+   | 0038 | `20260901152855__0038_invoice_lines_table.sql` |
+   | 0039 | `20260901152905__0039_bill_lines_table.sql` |
+   | 0040 | `20260901152915__0040_purchase_order_lines_table.sql` |
+   | 0041 | `20260901152928__0041_credit_note_lines_table.sql` |
+   | 0042 | `20260901153040__0042_normalized_line_backfill.sql` |
+
+   Local history now aligns exactly with remote — a future `supabase db
+   push` sees all six as already applied and reruns none. Ordering
+   preserved (all six `> 0036`'s `20260830221256`, strictly ascending).
+
+2. **Projector non-positive-quantity behavior fixed.**
+   `SupabaseDocumentLineProjector` now filters lines through
+   `isProjectableLineQuantity()` — the same `quantity > 0` rule migration
+   0042 uses and the tables enforce (`check (quantity > 0)`). A
+   zero/negative/missing/non-numeric quantity line is omitted from the
+   projection (never coerced; the authoritative jsonb keeps it untouched),
+   so one bad legacy line can no longer fail the whole document's
+   projection. `line_number` stays the line's ORIGINAL 1-based jsonb array
+   position (not re-sequenced after a skip) — consistent with 0042's
+   `with ordinality` and `DocumentLineParityChecker`. No DB CHECK was
+   weakened. 8 new tests (positive / zero / negative / mixed valid+invalid
+   with position preservation / non-authoritative contract intact / source
+   jsonb table never touched / the pure predicate).
+
+3. **Historical realised margin — unchanged and NOT manufactured.**
+   Normalizing the lines does not create any historical COGS / WAC /
+   realised-margin data. Per §11: realised margin remains **NOT AVAILABLE**
+   for any sale whose `stock_movements` row pre-dates migration 0022 (no
+   `unit_cost` / `source_document_line_id` recorded at the time). 0042
+   touched no cost column. `invoice_lines` carries no cost column at all —
+   it is a copy of the priced sales line, not a costing record. Forward
+   sales posted through `post_inventory_transaction()` (0031+) still carry
+   full realised-margin evidence on the movement, exactly as before.
+
+### Final applied-migration result (recorded)
+
+`invoice_lines` **198** · `bill_lines` **68** · `purchase_order_lines` **0**
+· `credit_note_lines` **6** · `bill_lines.fixed_asset_details` non-null
+**0**. Parity: **0 missing / 0 extra / 0 field mismatch** across all four
+types. Accounting unchanged before→after: JE **171**, journal lines
+**705**, stock movements **284**, GL 1200 **R1 569 743.20**, GL 1210
+**R0.00**, inventory valuation **R1 569 743.20**, debit = credit
+**R4 838 209.61**, trial-balance difference **R0.00**, products
+`quantity_on_hand`/`cost_price` fingerprint unchanged.
+
+## 19. STATUS
+
+Migrations 0037-0042 **APPLIED** (schema + exact backfill); local filenames
+now match remote history. `NORMALIZED_DOCUMENT_LINES_ENABLED` **stays
+`false`** — runtime authority is still the jsonb `line_items`; the
+normalized tables are an inert, verified projection. Full parity, zero
+accounting impact, Office National uncontaminated. No Cloudflare deploy.
+No new commit / push — stop for Review 9B-E.
