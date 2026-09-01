@@ -72,4 +72,22 @@ describe('UserMenu', () => {
     expect(screen.getByText('Account')).toBeInTheDocument();
     expect(screen.queryByText('Lerato Mokoena')).not.toBeInTheDocument();
   });
+
+  it('routes "Profile settings" and "Company settings" to their real, distinct pages', async () => {
+    renderMenu({
+      id: 'user_1',
+      firstName: 'Thandi',
+      lastName: 'Mokoena',
+      email: 'thandi@example.co.za',
+      role: 'accountant',
+      companyId: 'company_1',
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    screen.getByRole('button', { name: /open account menu/i }).click();
+    expect(await screen.findByRole('menuitem', { name: /profile settings/i })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('menuitem', { name: /company settings/i })).toHaveAttribute('href', '/companies');
+  });
 });

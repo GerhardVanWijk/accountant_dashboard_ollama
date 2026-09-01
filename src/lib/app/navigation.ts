@@ -64,6 +64,16 @@ export interface NavItem {
    * honestly. Remove this flag as each module is actually ported (M1+).
    */
   comingSoon?: boolean;
+  /**
+   * A convenience shortcut that duplicates an item owned by a dedicated
+   * operational group elsewhere (e.g. Organisation → Inventory, whose real
+   * home is the Inventory group). Clicking it navigates normally, but it is
+   * excluded from active-state / group-expansion computation so it never
+   * steals the "active section" from the operational group while the user
+   * is inside that module's subpages. It only highlights on its own exact
+   * route. See AppSidebar's accordion logic + navigation.sectionForPath.
+   */
+  quickAccess?: boolean;
 }
 
 export interface NavGroup {
@@ -99,7 +109,7 @@ export const navGroups: NavGroup[] = [
       { title: 'Company', href: '/companies', icon: BuildingIcon },
       { title: 'Customers', href: '/sales/customers', icon: HandCoinsIcon },
       { title: 'Suppliers', href: '/purchases/vendors', icon: TruckIcon },
-      { title: 'Inventory', href: '/inventory', icon: BoxesIcon },
+      { title: 'Inventory', href: '/inventory', icon: BoxesIcon, quickAccess: true },
     ],
   },
   {
@@ -125,12 +135,12 @@ export const navGroups: NavGroup[] = [
     title: 'Inventory',
     items: [
       { title: 'Overview', href: '/inventory', icon: BoxesIcon },
-      { title: 'Operations', href: '/inventory/operations', icon: ClipboardCheckIcon },
-      { title: 'Reports', href: '/inventory/reports', icon: FileBarChartIcon },
       { title: 'Products', href: '/inventory/products', icon: PackageIcon },
       { title: 'Categories', href: '/inventory/categories', icon: ListTreeIcon },
       { title: 'Warehouses', href: '/inventory/warehouses', icon: WarehouseIcon },
       { title: 'Stock Movements', href: '/inventory/movements', icon: ArrowLeftRightIcon },
+      { title: 'Operations', href: '/inventory/operations', icon: ClipboardCheckIcon },
+      { title: 'Reports', href: '/inventory/reports', icon: FileBarChartIcon },
     ],
   },
   {
@@ -298,14 +308,72 @@ export const segmentLabels: Record<string, string> = {
   leases: 'Leases',
 };
 
-/** Section a route belongs to, used as the middle breadcrumb crumb. */
+/**
+ * True when a nav item's route matches the current path. `/` only matches
+ * exactly; a `quickAccess` shortcut matches only its own exact route (it
+ * never claims the module's subpages — those belong to the dedicated
+ * operational group); every other item matches its route or any nested path.
+ */
+export function isNavItemActive(
+  pathname: string,
+  item: Pick<NavItem, 'href' | 'quickAccess'>,
+): boolean {
+  if (item.href === '/') return pathname === '/';
+  if (item.quickAccess) return pathname === item.href;
+  return pathname === item.href || pathname.startsWith(`${item.href}/`);
+}
+
+/** True when the group contains the active route (quick-access items excluded). */
+export function groupHoldsActive(group: NavGroup, pathname: string): boolean {
+  return group.items.some((item) => !item.quickAccess && isNavItemActive(pathname, item));
+}
+
+/** Multi-item groups are the collapsible accordion sections; single-item groups render flat. */
+export function isAccordionGroup(group: NavGroup): boolean {
+  return group.items.length > 1;
+}
+
+/**
+ * Which accordion section the sidebar should keep expanded for a route.
+ * `quickAccess` items never count, and when two sections both match, the one
+ * with the most specific match (longest matched href) wins — so an
+ * operational group beats a broad parent, and navigating between a module's
+ * pages keeps that module's section open.
+ */
+export function activeAccordionGroupTitle(groups: NavGroup[], pathname: string): string | null {
+  let best: { title: string; length: number } | null = null;
+  for (const group of groups) {
+    if (!isAccordionGroup(group)) continue;
+    for (const item of group.items) {
+      if (item.quickAccess || !isNavItemActive(pathname, item)) continue;
+      if (!best || item.href.length > best.length) {
+        best = { title: group.title, length: item.href.length };
+      }
+    }
+  }
+  return best?.title ?? null;
+}
+
+/**
+ * Section a route belongs to, used as the middle breadcrumb crumb.
+ *
+ * `quickAccess` items are skipped: Organisation → Inventory would otherwise
+ * claim every `/inventory/*` route as living under "Organisation", when its
+ * real section is the dedicated "Inventory" group. A more specific match
+ * (longer `href`) always wins over a shorter prefix match so a nested
+ * operational group is preferred over a broad parent.
+ */
 export function sectionForPath(pathname: string): string | null {
+  let best: { title: string; length: number } | null = null;
   for (const group of navGroups) {
     if (group.title === 'Overview') continue;
-    const match = group.items.some(
-      (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
-    );
-    if (match) return group.title;
+    for (const item of group.items) {
+      if (item.quickAccess) continue;
+      const matches = pathname === item.href || pathname.startsWith(`${item.href}/`);
+      if (matches && (!best || item.href.length > best.length)) {
+        best = { title: group.title, length: item.href.length };
+      }
+    }
   }
-  return null;
+  return best?.title ?? null;
 }

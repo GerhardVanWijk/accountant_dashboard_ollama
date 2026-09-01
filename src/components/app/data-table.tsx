@@ -53,8 +53,12 @@ export interface DataTableColumn<T> {
   align?: 'left' | 'right' | 'center';
   headClassName?: string;
   cellClassName?: string;
-  /** Hides the column below the `md` breakpoint. */
+  /** Hides the column below the `md` breakpoint (768px). */
   hideBelowMd?: boolean;
+  /** Hides the column below the `lg` breakpoint (1024px) — for lower-priority columns on mid-size laptops. */
+  hideBelowLg?: boolean;
+  /** Hides the column below the `xl` breakpoint (1280px) — for the widest registers, keeps narrow laptops scroll-free. */
+  hideBelowXl?: boolean;
 }
 
 export interface DataTableFilter<T> {
@@ -352,6 +356,8 @@ export function DataTable<T>({
                         'px-4 text-xs font-medium tracking-wide text-muted-foreground uppercase',
                         alignClass[column.align ?? 'left'],
                         column.hideBelowMd && 'hidden md:table-cell',
+                        column.hideBelowLg && 'hidden lg:table-cell',
+                        column.hideBelowXl && 'hidden xl:table-cell',
                         column.headClassName,
                       )}
                     >
@@ -418,6 +424,8 @@ export function DataTable<T>({
                             'px-4 py-3',
                             alignClass[column.align ?? 'left'],
                             column.hideBelowMd && 'hidden md:table-cell',
+                            column.hideBelowLg && 'hidden lg:table-cell',
+                            column.hideBelowXl && 'hidden xl:table-cell',
                             column.cellClassName,
                           )}
                         >

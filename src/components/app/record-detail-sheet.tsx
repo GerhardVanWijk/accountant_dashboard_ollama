@@ -49,16 +49,16 @@ export function RecordDetailSheet({
 }: RecordDetailSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className={cn('w-full gap-0 overflow-y-auto sm:max-w-lg', className)}>
+      <SheetContent className={cn('w-full gap-0 overflow-x-hidden overflow-y-auto sm:max-w-lg', className)}>
         <SheetHeader className="border-b border-border">
-          <div className="flex items-center gap-2 pr-8">
-            <SheetTitle className="truncate">{title}</SheetTitle>
-            {titleAdornment}
+          <div className="flex items-start gap-2 pr-8">
+            <SheetTitle className="min-w-0 [overflow-wrap:anywhere] line-clamp-2">{title}</SheetTitle>
+            {titleAdornment ? <span className="mt-0.5 shrink-0">{titleAdornment}</span> : null}
           </div>
           {description ? <SheetDescription>{description}</SheetDescription> : null}
         </SheetHeader>
 
-        <div className="flex flex-1 flex-col gap-6 p-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 sm:p-6">
           {state === 'loading' && (
             <div role="status" className="flex flex-1 items-center justify-center gap-3 py-12 text-muted-foreground">
               <Loader2 className="size-5 animate-spin" aria-hidden="true" />
@@ -106,9 +106,9 @@ export function RecordDetailSection({ title, actions, children, className }: { t
 /** A label/value pair — the most common row shape inside a detail section. */
 export function RecordDetailField({ label, value, className }: { label: string; value: ReactNode; className?: string }) {
   return (
-    <div className={cn('flex flex-col gap-0.5', className)}>
+    <div className={cn('flex min-w-0 flex-col gap-0.5', className)}>
       <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm text-foreground">{value}</span>
+      <span className="text-sm text-foreground [overflow-wrap:anywhere]">{value}</span>
     </div>
   );
 }

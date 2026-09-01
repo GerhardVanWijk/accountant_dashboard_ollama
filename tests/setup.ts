@@ -144,6 +144,33 @@ if (typeof globalThis.PointerEvent === 'undefined') {
 }
 
 /**
+ * jsdom has no `ResizeObserver`. cmdk (the command palette behind the global
+ * search) instantiates one on mount to keep its list sized. A no-op stub is
+ * enough — no test asserts on resize-driven behaviour, and real browsers
+ * provide the real thing.
+ */
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+  if (typeof window !== 'undefined') {
+    window.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+  }
+}
+
+/**
+ * jsdom implements no `Element.prototype.scrollIntoView`. cmdk calls it to
+ * keep the highlighted command-palette item in view. A no-op keeps the
+ * component mounting cleanly in tests.
+ */
+if (typeof Element !== 'undefined' && typeof Element.prototype.scrollIntoView !== 'function') {
+  Element.prototype.scrollIntoView = function scrollIntoView() {};
+}
+
+/**
  * Workaround for a Node/jsdom `localStorage` interop gap: Node 22+ defines
  * its own experimental global `localStorage` (behind `--localstorage-file`,
  * unset here) which shadows jsdom's working `window.localStorage`

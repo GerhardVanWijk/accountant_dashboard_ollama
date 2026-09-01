@@ -20,7 +20,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/shadcn/sidebar';
-import type { NavGroup } from '@/lib/app/navigation';
+import {
+  activeAccordionGroupTitle,
+  groupHoldsActive,
+  isNavItemActive,
+} from '@/lib/app/navigation';
 import { useVisibleNavGroups } from '@/features/auth/hooks/useVisibleNavGroups';
 import { CURRENT_FINANCIAL_YEAR, CURRENT_PERIOD_LABEL } from '@/lib/app/format';
 import { cn } from '@/lib/utils';
@@ -39,23 +43,6 @@ const badgeToneClass = {
   negative: 'bg-status-negative-muted text-status-negative',
 };
 
-function isItemActive(pathname: string, href: string) {
-  if (href === '/') return pathname === '/';
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-function groupHoldsActive(group: NavGroup, pathname: string) {
-  return group.items.some((item) => isItemActive(pathname, item.href));
-}
-
-/**
- * Only the multi-item accordion groups participate (single-item groups
- * like Overview/Help render flat, with no expand/collapse state at all).
- */
-function isAccordionGroup(group: NavGroup): boolean {
-  return group.items.length > 1;
-}
-
 export function AppSidebar() {
   const { pathname } = useLocation();
   const navGroups = useVisibleNavGroups();
@@ -69,9 +56,9 @@ export function AppSidebar() {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
 
   useEffect(() => {
-    const activeGroup = navGroups.find((group) => isAccordionGroup(group) && groupHoldsActive(group, pathname));
-    if (activeGroup) {
-      setOpenGroup(activeGroup.title);
+    const activeTitle = activeAccordionGroupTitle(navGroups, pathname);
+    if (activeTitle) {
+      setOpenGroup(activeTitle);
     }
   }, [pathname, navGroups]);
 
@@ -111,7 +98,7 @@ export function AppSidebar() {
           // The single-item Overview and Help groups render flat.
           if (group.items.length === 1) {
             const item = group.items[0];
-            const active = isItemActive(pathname, item.href);
+            const active = isNavItemActive(pathname, item);
             return (
               <SidebarGroup key={group.title} className="py-1">
                 <SidebarGroupContent>
@@ -171,7 +158,7 @@ export function AppSidebar() {
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {group.items.map((item) => {
-                        const active = isItemActive(pathname, item.href);
+                        const active = isNavItemActive(pathname, item);
                         return (
                           <SidebarMenuItem key={item.href}>
                             <SidebarMenuButton
@@ -207,7 +194,7 @@ export function AppSidebar() {
                     {group.items.map((item) => (
                       <SidebarMenuItem key={`rail-${item.href}`}>
                         <SidebarMenuButton
-                          isActive={isItemActive(pathname, item.href)}
+                          isActive={isNavItemActive(pathname, item)}
                           tooltip={item.title}
                           render={
                             <Link to={item.href}>

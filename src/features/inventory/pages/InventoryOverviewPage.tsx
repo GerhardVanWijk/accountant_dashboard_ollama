@@ -1,10 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDownIcon, FileBarChart2Icon, Loader2, PackagePlusIcon, UploadIcon } from 'lucide-react';
+import {
+  ChevronDownIcon,
+  FileBarChart2Icon,
+  Loader2,
+  MoreHorizontalIcon,
+  PackagePlusIcon,
+  UploadIcon,
+} from 'lucide-react';
 import type { Product } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
-import { Button, buttonVariants } from '@/components/ui/shadcn/button';
+import { Button } from '@/components/ui/shadcn/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,10 +36,8 @@ import { useWarehouses } from '../hooks/useWarehouses';
 import { useStockMovements } from '../hooks/useStockMovements';
 import { useStockBalances } from '../hooks/useStockBalances';
 import { useProductCategories } from '../hooks/useProductCategories';
-import { useInventoryReconciliation } from '../hooks/useInventoryReconciliation';
 import { InventoryTable } from '../components/InventoryTable';
 import { InventoryItemDetailSheet } from '../components/InventoryItemDetailSheet';
-import { InventoryReconciliationCard } from '../components/InventoryReconciliationCard';
 import { ProductFormModal } from '../components/ProductFormModal';
 import { calculateInventoryTotals } from '../utils/calculateInventoryTotals';
 import { STOCK_STATE_LABEL, type InventoryRow } from '../utils/buildInventoryRows';
@@ -88,12 +93,17 @@ type Dialog =
 const RECENT_WINDOW_DAYS = 30;
 
 /**
- * Inventory module home — route `/inventory`. The full landing page over the
- * Phase-3 accounting engine: primary actions, a live summary strip, the
- * `reconcileInventory()` card, and the main inventory register. Row click
- * opens the tabbed item detail sheet. Everything is real
+ * Inventory module home — route `/inventory`. The operational landing page:
+ * primary actions, a live summary strip, and the main inventory register.
+ * Row click opens the tabbed item detail sheet. Everything is real
  * service/hook data — a figure with nothing behind it shows a correct
  * zero/empty state, never a fabricated number.
+ *
+ * Inventory ↔ GL reconciliation is deliberately NOT on this page — it is an
+ * accounting-control function and lives at
+ * `/inventory/reports/inventory-reconciliation` (the full report over the
+ * Phase-3 `reconcileInventory()` engine). This page does not import or run
+ * that engine.
  *
  * Workflow quick actions: New item opens a real form; every stock workflow
  * (adjustment / transfer / stock take / supplier return / opening stock)
@@ -112,7 +122,6 @@ export function InventoryOverviewPage() {
   const { categories } = useProductCategories();
   const { suppliers } = useSuppliers();
   const { taxRates } = useAllTaxRates();
-  const reconciliation = useInventoryReconciliation();
 
   const canCreate = useCanAccess('inventory', 'create');
   const canUpdate = useCanAccess('inventory', 'update');
@@ -156,19 +165,15 @@ export function InventoryOverviewPage() {
         description="Goods held for sale or consumption — valuation, stock levels and the tools to keep them accurate."
         actions={
           <>
-            <ExportMenu dataset={exportDataset} allowed={canExport} />
+            {/* Primary action — the one green button. */}
             {canCreate && (
               <Button size="sm" onClick={() => setDialog({ kind: 'new-item' })}>
                 <PackagePlusIcon data-icon="inline-start" />
                 New item
               </Button>
             )}
-            {canImport && (
-              <Button size="sm" variant="outline" onClick={() => setDialog({ kind: 'import' })}>
-                <UploadIcon data-icon="inline-start" />
-                Import
-              </Button>
-            )}
+
+            {/* Grouped workflows. */}
             {canUpdate && (
               <DropdownMenu>
                 <DropdownMenuTrigger render={<Button size="sm" variant="outline" />}>
@@ -189,16 +194,72 @@ export function InventoryOverviewPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            <Link to="/reports" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+
+            {/* Utility actions — inline from md up, folded into the overflow menu below it. */}
+            {canImport && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="hidden md:inline-flex"
+                onClick={() => setDialog({ kind: 'import' })}
+              >
+                <UploadIcon data-icon="inline-start" />
+                Import
+              </Button>
+            )}
+            <span className="hidden md:contents">
+              <ExportMenu dataset={exportDataset} allowed={canExport} />
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="hidden lg:inline-flex"
+              render={<Link to="/inventory/reports" />}
+            >
               <FileBarChart2Icon data-icon="inline-start" />
               Reports
-            </Link>
+            </Button>
+
+            {/* Overflow: everything that isn't shown inline at the current width. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="lg:hidden"
+                    aria-label="More inventory actions"
+                  />
+                }
+              >
+                <MoreHorizontalIcon />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuGroup>
+                  {canImport && (
+                    <DropdownMenuItem className="md:hidden" onClick={() => setDialog({ kind: 'import' })}>
+                      <UploadIcon data-icon="inline-start" />
+                      Import items
+                    </DropdownMenuItem>
+                  )}
+                  {canExport && (
+                    <DropdownMenuItem className="md:hidden" onClick={() => window.print()}>
+                      Print / export
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem render={<Link to="/inventory/reports" />}>
+                    <FileBarChart2Icon data-icon="inline-start" />
+                    Inventory reports
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       />
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+      <SectionCard bodyClassName="p-4 sm:p-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <FigureBlock label="Inventory value" value={formatCurrency(totals.stockValueAtCost)} hint="At weighted-average cost" />
           <FigureBlock
             label="Items in stock"
@@ -225,43 +286,34 @@ export function InventoryOverviewPage() {
         </div>
       </SectionCard>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_minmax(22rem,26rem)]">
-        {loading ? (
-          <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
-            <Loader2 className="size-5 animate-spin" aria-hidden="true" />
-            <p className="text-sm">Loading inventory…</p>
-          </div>
-        ) : error ? (
-          <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            <span>{error.message}</span>
-            <Button variant="outline" size="sm" onClick={() => void refetch()}>
-              Retry
-            </Button>
-          </div>
-        ) : (
-          <SectionCard title="Inventory register" description="Every item with its stock position, valuation and margin." bodyClassName="p-4 sm:p-5">
-            <InventoryTable
-              products={products}
-              balances={balances}
-              categories={categories}
-              suppliers={suppliers}
-              warehouses={warehouses}
-              onSelect={(p) => setSelectedId(p.id)}
-              onVisibleRowsChange={(rows, filters) => {
-                setVisibleRows(rows);
-                setActiveFilters(filters);
-              }}
-            />
-          </SectionCard>
-        )}
-
-        <InventoryReconciliationCard
-          result={reconciliation.result}
-          loading={reconciliation.loading}
-          error={reconciliation.error}
-          onRefresh={() => void reconciliation.refetch()}
-        />
-      </div>
+      {loading ? (
+        <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          <p className="text-sm">Loading inventory…</p>
+        </div>
+      ) : error ? (
+        <div role="alert" className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      ) : (
+        <SectionCard title="Inventory register" description="Every item with its stock position, valuation and margin." bodyClassName="p-4 sm:p-5">
+          <InventoryTable
+            products={products}
+            balances={balances}
+            categories={categories}
+            suppliers={suppliers}
+            warehouses={warehouses}
+            onSelect={(p) => setSelectedId(p.id)}
+            onVisibleRowsChange={(rows, filters) => {
+              setVisibleRows(rows);
+              setActiveFilters(filters);
+            }}
+          />
+        </SectionCard>
+      )}
 
       <InventoryItemDetailSheet
         product={selectedProduct}

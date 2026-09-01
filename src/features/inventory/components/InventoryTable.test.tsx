@@ -97,4 +97,18 @@ describe('InventoryTable', () => {
     expect(within(table).getByText('Furniture')).toBeInTheDocument();
     expect(within(table).getByText('Acme')).toBeInTheDocument();
   });
+
+  it('demotes the lower-priority columns to xl-only so mid-size laptops stay scroll-free', () => {
+    renderTable();
+    const columnHeader = (name: RegExp) => screen.getByRole('columnheader', { name });
+    // Priority columns are always visible on desktop.
+    expect(columnHeader(/^SKU/).className).not.toMatch(/hidden/);
+    expect(columnHeader(/^Product/).className).not.toMatch(/hidden/);
+    expect(columnHeader(/Inventory value/i).className).not.toMatch(/hidden/);
+    expect(columnHeader(/^Status/).className).not.toMatch(/hidden/);
+    // Lower-priority columns only appear at xl (also on the item detail sheet).
+    for (const name of [/Preferred supplier/i, /Committed/i, /^Reorder/i]) {
+      expect(columnHeader(name).className).toMatch(/xl:table-cell/);
+    }
+  });
 });

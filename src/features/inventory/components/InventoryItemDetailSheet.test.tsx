@@ -44,10 +44,29 @@ function renderSheet(overrides: Partial<Parameters<typeof InventoryItemDetailShe
 afterEach(cleanup);
 
 describe('InventoryItemDetailSheet', () => {
-  it('renders the header and the Overview tab by default', () => {
+  it('renders the header (SKU + name on their own lines) and the Overview tab by default', () => {
     renderSheet();
-    expect(screen.getByText('DESK-1 — Oak desk')).toBeInTheDocument();
+    // Title is the SKU over the product name — not one aggressively-truncated line.
+    expect(screen.getAllByText('DESK-1').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Oak desk').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Weighted average')).toBeInTheDocument(); // valuation method on Overview
+  });
+
+  it('shows a human-readable tax rate, never a raw UUID', () => {
+    renderSheet({
+      product: product({ taxRateId: 'tr-uuid-1' }),
+      taxRates: [
+        { id: 'tr-uuid-1', code: 'STD', name: 'Standard rate', rate: 15 } as never,
+      ],
+    });
+    expect(screen.getByText('Standard rate — 15%')).toBeInTheDocument();
+    expect(screen.queryByText('tr-uuid-1')).not.toBeInTheDocument();
+  });
+
+  it('falls back to "Unknown tax rate" (not the id) when the rate cannot be resolved', () => {
+    renderSheet({ product: product({ taxRateId: 'missing-rate-id' }) });
+    expect(screen.getByText('Unknown tax rate')).toBeInTheDocument();
+    expect(screen.queryByText('missing-rate-id')).not.toBeInTheDocument();
   });
 
   it('exposes all eight tabs', () => {
@@ -55,6 +74,19 @@ describe('InventoryItemDetailSheet', () => {
     for (const label of ['Overview', 'Stock', 'Purchasing', 'Sales', 'Transactions', 'Accounting', 'Documents', 'Audit']) {
       expect(screen.getByRole('tab', { name: label })).toBeInTheDocument();
     }
+  });
+
+  it('uses a substantially wider responsive sheet and contains its own horizontal overflow', () => {
+    renderSheet();
+    const content = document.querySelector('[data-slot="sheet-content"]');
+    expect(content?.className).toMatch(/sm:max-w-3xl/);
+    expect(content?.className).toMatch(/lg:max-w-4xl/);
+    // The sheet itself never scrolls sideways…
+    expect(content?.className).toMatch(/overflow-x-hidden/);
+    // …the tab strip absorbs its own overflow, with the scrollbar hidden.
+    const tablist = screen.getByRole('tablist');
+    expect(tablist.className).toMatch(/overflow-x-auto/);
+    expect(tablist.className).toMatch(/no-scrollbar/);
   });
 
   it('the Accounting tab shows the semantic account mapping including Purchase Price Variance', async () => {

@@ -24,7 +24,6 @@ const productA: Product = {
 };
 
 const useProductsMock = vi.fn();
-const useReconMock = vi.fn();
 
 vi.mock('../hooks/useProducts', () => ({ useProducts: () => useProductsMock() }));
 vi.mock('../hooks/useStockAlerts', () => ({ useStockAlerts: () => ({ lowStock: [], outOfStock: [] }) }));
@@ -32,7 +31,6 @@ vi.mock('../hooks/useWarehouses', () => ({ useWarehouses: () => ({ warehouses: [
 vi.mock('../hooks/useStockMovements', () => ({ useStockMovements: () => ({ movements: [] }) }));
 vi.mock('../hooks/useStockBalances', () => ({ useStockBalances: () => ({ balances: [] }) }));
 vi.mock('../hooks/useProductCategories', () => ({ useProductCategories: () => ({ categories: [] }) }));
-vi.mock('../hooks/useInventoryReconciliation', () => ({ useInventoryReconciliation: () => useReconMock() }));
 
 function renderPage() {
   return render(
@@ -53,33 +51,23 @@ describe('InventoryOverviewPage', () => {
       createProduct: vi.fn(),
       updateProduct: vi.fn(),
     });
-    useReconMock.mockReturnValue({
-      result: {
-        subledgerValuation: 1200,
-        inventoryGlBalance: 1200,
-        subledgerVsGl: 0,
-        inTransitValuation: 0,
-        inTransitGlBalance: 0,
-        inTransitVsGl: 0,
-        totalInventoryVsGl: 0,
-        isReconciled: true,
-        findings: [],
-      },
-      loading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
   });
   afterEach(cleanup);
 
-  it('renders the header, the summary strip and the reconciliation card', () => {
+  it('renders the header and the summary strip', () => {
     renderPage();
     expect(screen.getByRole('heading', { name: 'Inventory' })).toBeInTheDocument();
     expect(screen.getByText('Items in stock')).toBeInTheDocument();
     expect(screen.getByText('Low stock')).toBeInTheDocument();
     expect(screen.getByText('Activity (30 days)')).toBeInTheDocument();
-    expect(screen.getByText('Inventory reconciliation')).toBeInTheDocument();
-    expect(screen.getByText('Reconciled')).toBeInTheDocument();
+  });
+
+  it('keeps reconciliation entirely off the operational overview (card, status line and engine)', () => {
+    renderPage();
+    expect(screen.queryByText('Inventory reconciliation')).not.toBeInTheDocument();
+    expect(screen.queryByText(/inventory control:/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /view reconciliation/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Inventory Asset GL — 1200/)).not.toBeInTheDocument();
   });
 
   it('renders the primary actions and the inventory register', () => {
@@ -87,7 +75,7 @@ describe('InventoryOverviewPage', () => {
     expect(screen.getByRole('button', { name: /new item/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^import$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /stock actions/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /reports/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^reports$/i })).toHaveAttribute('href', '/inventory/reports');
     expect(screen.getByText('Oak desk')).toBeInTheDocument();
     expect(screen.getByText('AAA-1')).toBeInTheDocument();
   });

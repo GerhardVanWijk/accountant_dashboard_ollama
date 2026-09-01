@@ -25,15 +25,20 @@ export const MOVEMENT_TYPE_LABELS: Record<StockMovement['type'], string> = {
 export const INVENTORY_CURRENCY: CurrencyCode = 'ZAR';
 
 /**
- * Resolves a Product's taxRateId to a real TaxRate's display name. Takes
- * the caller's already-loaded tax rates (via useTaxRates(), Phase 5 —
- * src/features/tax/) rather than a static local list, since Product.
- * taxRateId now resolves against real TaxRate records
- * (src/mock-data/taxRates.ts).
+ * Resolves a Product's taxRateId to a human-readable TaxRate label — e.g.
+ * "Standard rate — 15%". Takes the caller's already-loaded tax rates (via
+ * useAllTaxRates(), src/features/tax/) rather than a static local list.
+ *
+ * A raw UUID is NEVER returned as a user-facing label: an id that doesn't
+ * resolve (rates still loading, or a rate that was deleted) shows
+ * "Unknown tax rate" instead. Callers that want the underlying id for a
+ * debug tooltip can read `product.taxRateId` directly.
  */
 export function getTaxRateLabel(taxRateId: string | undefined, taxRates: TaxRate[]): string {
   if (!taxRateId) return 'No tax rate';
-  return taxRates.find((t) => t.id === taxRateId)?.name ?? taxRateId;
+  const rate = taxRates.find((t) => t.id === taxRateId);
+  if (!rate) return 'Unknown tax rate';
+  return Number.isFinite(rate.rate) ? `${rate.name} — ${rate.rate}%` : rate.name;
 }
 
 /** Units of measure offered in the Product form's UOM select. */

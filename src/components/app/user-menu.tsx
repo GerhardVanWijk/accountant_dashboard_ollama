@@ -23,9 +23,16 @@ import { toShellUser } from '@/features/auth/utils/shellUser';
  * `supabase.auth.signOut()` — src/stores/authStore.ts) instead of a plain
  * link to /login, which never actually cleared the Supabase session.
  */
+/**
+ * "Profile settings" and "Company settings" previously both pointed at
+ * `/settings`, so the second one appeared to do nothing (no navigation when
+ * already there). They now resolve to their real, distinct pages:
+ * `/settings` (your profile / password / preferences) and `/companies` (the
+ * company details editor — the "Company" screen).
+ */
 const links = [
   { label: 'Profile settings', href: '/settings', icon: UserRound },
-  { label: 'Company settings', href: '/settings', icon: Settings },
+  { label: 'Company settings', href: '/companies', icon: Settings },
   { label: 'Users & permissions', href: '/admin/users', icon: ShieldCheck },
   { label: 'Help centre', href: '/help', icon: BookOpen },
 ];

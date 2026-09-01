@@ -64,7 +64,8 @@ export function InventoryTable({ products, balances, categories, suppliers, ware
       header: 'Preferred supplier',
       cell: (r) => <span className="text-sm text-muted-foreground">{r.supplierName}</span>,
       sortValue: (r) => r.supplierName,
-      hideBelowMd: true,
+      // Lower-priority column — also on the item detail sheet's Purchasing tab.
+      hideBelowXl: true,
     },
     {
       key: 'onHand',
@@ -93,7 +94,8 @@ export function InventoryTable({ products, balances, categories, suppliers, ware
       align: 'right',
       cell: (r) => <span className="figure tabular-nums text-muted-foreground">{qty(r.committed)}</span>,
       sortValue: (r) => r.committed,
-      hideBelowMd: true,
+      // Lower-priority column — also on the item detail sheet's Stock tab.
+      hideBelowXl: true,
     },
     {
       key: 'reorder',
@@ -105,7 +107,8 @@ export function InventoryTable({ products, balances, categories, suppliers, ware
         </span>
       ),
       sortValue: (r) => r.reorderLevel ?? -1,
-      hideBelowMd: true,
+      // Lower-priority column — also on the item detail sheet's Overview/Stock tabs.
+      hideBelowXl: true,
     },
     {
       key: 'avgCost',

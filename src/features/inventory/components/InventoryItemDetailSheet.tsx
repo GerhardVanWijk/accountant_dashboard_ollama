@@ -146,7 +146,7 @@ export function InventoryItemDetailSheet({
           label: 'Overview',
           content: (
             <RecordDetailSection>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
                 <RecordDetailField label="SKU" value={product.sku} />
                 <RecordDetailField label="Barcode" value={product.barcode ?? '—'} />
                 <RecordDetailField label="Item name" value={product.name} />
@@ -197,7 +197,7 @@ export function InventoryItemDetailSheet({
                   ))}
                 </SubTable>
               )}
-              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
+              <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
                 <RecordDetailField label="Company on hand" value={product.quantityOnHand} />
                 <RecordDetailField label="Reorder level" value={product.reorderLevel ?? '—'} />
                 <RecordDetailField label="Current WAC" value={<Amount value={product.costPrice} />} />
@@ -214,7 +214,7 @@ export function InventoryItemDetailSheet({
           label: 'Purchasing',
           content: (
             <RecordDetailSection title="Purchasing">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
                 <RecordDetailField
                   label="Preferred supplier"
                   value={product.preferredSupplierId ? supplierById.get(product.preferredSupplierId) ?? '—' : '—'}
@@ -248,7 +248,7 @@ export function InventoryItemDetailSheet({
           label: 'Sales',
           content: (
             <RecordDetailSection title="Sales">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
                 <RecordDetailField label="Selling price" value={<Amount value={product.unitPrice} />} />
                 <RecordDetailField label="Units sold" value={unitsSold} />
                 <RecordDetailField
@@ -373,11 +373,20 @@ export function InventoryItemDetailSheet({
     <RecordDetailSheet
       open={open}
       onOpenChange={onOpenChange}
-      title={product ? `${product.sku} — ${product.name}` : 'Item'}
+      title={
+        product ? (
+          <span className="flex flex-col gap-0.5">
+            <span className="figure text-xs font-normal text-muted-foreground">{product.sku}</span>
+            <span>{product.name}</span>
+          </span>
+        ) : (
+          'Item'
+        )
+      }
       titleAdornment={product ? <StatusBadge status={product.status} /> : undefined}
       state={state}
       notFoundMessage="This item could not be found — it may have been deleted."
-      className="sm:max-w-2xl"
+      className="sm:max-w-3xl lg:max-w-4xl"
       actions={
         product && onEdit ? (
           <Button size="sm" onClick={onEdit}>
@@ -387,16 +396,26 @@ export function InventoryItemDetailSheet({
       }
     >
       {product && (
-        <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="w-full">
-          <TabsList variant="line" className="w-full justify-start overflow-x-auto">
+        <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="w-full min-w-0">
+          {/*
+            8 tabs: the strip itself scrolls horizontally when it can't fit
+            (narrow sheet / mobile) — hidden scrollbar, small end padding so
+            the first/last tab is never clipped — while the tab *content*
+            below never scrolls sideways. `flex-none` stops the shared
+            `flex-1` trigger rule from squashing the labels.
+          */}
+          <TabsList
+            variant="line"
+            className="no-scrollbar -mb-px w-full justify-start overflow-x-auto pr-2 pb-px"
+          >
             {TABS.map((t) => (
-              <TabsTrigger key={t.value} value={t.value}>
+              <TabsTrigger key={t.value} value={t.value} className="flex-none">
                 {t.label}
               </TabsTrigger>
             ))}
           </TabsList>
           {TABS.map((t) => (
-            <TabsContent key={t.value} value={t.value} keepMounted className="pt-4">
+            <TabsContent key={t.value} value={t.value} keepMounted className="min-w-0 pt-4">
               {t.content}
             </TabsContent>
           ))}
