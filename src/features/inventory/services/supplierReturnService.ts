@@ -11,6 +11,7 @@ import {
   postingProductLookup,
   type PostingProductLookup,
 } from './inventoryPostingEngineInstance';
+import type { AccountingEffectPreview, AccountingPreviewLine } from '../types/accountingPreview';
 
 /** Minimal surface of AuditLogService this service depends on — see stockTakeService.ts's AuditLogger. */
 export interface AuditLogger {
@@ -196,8 +197,21 @@ export class SupplierReturnService {
     return posted;
   }
 
-  /** Applies the one inventory transaction for a supplier-return post. */
-  private async postToEngine(supplierReturn: SupplierReturn, postedBy: ID): Promise<ID | undefined> {
+  /**
+   * The ONE line-building pass shared by `postToEngine()` and
+   * `previewPostEffect()` — computes the WAC carrying value, the supplier
+   * settlement, the VAT reversal and the residual Purchase Price Variance
+   * exactly once. `carryingValue` uses each product's CURRENT weighted-
+   * average cost (`product.costPrice`) — the same value `costingMode:
+   * 'issue'` (no `unitCostOverride`) resolves inside the engine — so the
+   * preview matches what will actually post as long as no other posting for
+   * the same product lands between preview and post.
+   */
+  private async buildReturnLines(supplierReturn: SupplierReturn): Promise<{
+    engine: InventoryTransactionLine[];
+    extraJournal: ExtraJournalLine[];
+    preview: AccountingPreviewLine[];
+  }> {
     // Settlement account: AP for a billed return; GRNI for a return against an
     // un-billed PO receipt (no input VAT was claimed yet, so no VAT leg).
     const isGrni = !supplierReturn.billId && Boolean(supplierReturn.purchaseOrderId);
@@ -211,6 +225,8 @@ export class SupplierReturnService {
     const lines: InventoryTransactionLine[] = [];
     let stockNetCredit = 0; // ex-VAT supplier credit attributable to stock lines
     let nonStockNetCredit = 0;
+    let carryingValue = 0; // Σ quantity × current WAC for stock lines
+    let inventoryAccountId: ID | undefined;
     for (const line of supplierReturn.lineItems) {
       const product = await this.products!.getById(line.productId);
       if (!product) {
@@ -228,6 +244,8 @@ export class SupplierReturnService {
         nonStockNetCredit = roundToCents(nonStockNetCredit + line.lineTotal);
       } else {
         stockNetCredit = roundToCents(stockNetCredit + line.lineTotal);
+        carryingValue = roundToCents(carryingValue + line.quantity * product.costPrice);
+        inventoryAccountId = await this.accountResolver!.resolveForProduct(product, 'inventory');
       }
       lines.push({
         productId: line.productId,
@@ -240,7 +258,7 @@ export class SupplierReturnService {
         ...(nonStock
           ? {}
           : {
-              inventoryAccountId: await this.accountResolver!.resolveForProduct(product, 'inventory'),
+              inventoryAccountId,
               contraAccountId: ppvAccountId,
             }),
       });
@@ -273,6 +291,54 @@ export class SupplierReturnService {
       extraJournal.push({ accountId: await this.accountResolver!.resolveKey('VAT_INPUT'), debit: 0, credit: vatReversal });
     }
 
+    // Preview: the four named figures the workflow shows explicitly (spec §5)
+    // — carrying value, supplier credit, VAT reversal, and the residual PPV,
+    // netted the same way the posted, aggregated GL entry nets it. PPV is
+    // ALWAYS shown, even when the net residual is exactly R0.00.
+    const preview: AccountingPreviewLine[] = [];
+    if (carryingValue > 0 || stockNetCredit > 0) {
+      preview.push({
+        accountId: inventoryAccountId ?? ppvAccountId,
+        debit: 0,
+        credit: carryingValue,
+        source: 'Inventory carrying value (WAC)',
+      });
+    }
+    if (settlementDebit > 0) {
+      preview.push({ accountId: settlementAccountId, debit: settlementDebit, credit: 0, source: 'Supplier credit value' });
+    }
+    if (vatReversal > 0) {
+      preview.push({
+        accountId: await this.accountResolver!.resolveKey('VAT_INPUT'),
+        debit: 0,
+        credit: vatReversal,
+        source: 'VAT reversal',
+      });
+    }
+    if (nonStockNetCredit > 0) {
+      preview.push({
+        accountId: await this.accountResolver!.resolveKey('EXPENSE'),
+        debit: 0,
+        credit: nonStockNetCredit,
+        source: 'Non-stock line credit',
+      });
+    }
+    // Never hide PPV: net = Dr carryingValue − Cr stockNetCredit. Shown even at R0.00.
+    const netPpv = roundToCents(carryingValue - stockNetCredit);
+    preview.push({
+      accountId: ppvAccountId,
+      debit: netPpv > 0 ? netPpv : 0,
+      credit: netPpv < 0 ? -netPpv : 0,
+      source: 'Purchase Price Variance',
+    });
+
+    return { engine: lines, extraJournal, preview };
+  }
+
+  /** Applies the one inventory transaction for a supplier-return post. */
+  private async postToEngine(supplierReturn: SupplierReturn, postedBy: ID): Promise<ID | undefined> {
+    const { engine: lines, extraJournal } = await this.buildReturnLines(supplierReturn);
+
     const result = await this.engine!.applyInventoryTransaction({
       postingKey: `supplier_return:${supplierReturn.id}:post`,
       sourceType: 'supplier_return',
@@ -284,6 +350,23 @@ export class SupplierReturnService {
       audit: { action: 'supplier_return_posted', recordType: 'SupplierReturn', recordId: supplierReturn.id },
     });
     return result.journalEntryId;
+  }
+
+  /**
+   * Pure preview of the GL entry `postSupplierReturn()` would post — built
+   * from the exact same `buildReturnLines()` pass. Posts nothing. Always
+   * includes the Purchase Price Variance line, even at R0.00 (spec: never
+   * hide PPV).
+   */
+  async previewPostEffect(id: ID): Promise<AccountingEffectPreview> {
+    const supplierReturn = await this.requireSupplierReturn(id);
+    if (!this.accountResolver || !this.products) {
+      throw new Error('Cannot preview: the account resolver / product lookup is not available in this context.');
+    }
+    const { preview: lines } = await this.buildReturnLines(supplierReturn);
+    const totalDebit = roundToCents(lines.reduce((sum, l) => sum + l.debit, 0));
+    const totalCredit = roundToCents(lines.reduce((sum, l) => sum + l.credit, 0));
+    return { lines, balanced: totalDebit === totalCredit };
   }
 
   /** Cancels a draft supplier return. A posted return is immutable. */

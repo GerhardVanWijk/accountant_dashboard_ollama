@@ -29,16 +29,8 @@ const useReconMock = vi.fn();
 vi.mock('../hooks/useProducts', () => ({ useProducts: () => useProductsMock() }));
 vi.mock('../hooks/useStockAlerts', () => ({ useStockAlerts: () => ({ lowStock: [], outOfStock: [] }) }));
 vi.mock('../hooks/useWarehouses', () => ({ useWarehouses: () => ({ warehouses: [{ id: 'w1', name: 'Main' }] }) }));
-vi.mock('../hooks/useStockMovements', () => ({
-  useStockMovements: () => ({
-    movements: [],
-    transferStock: vi.fn(),
-    adjustStock: vi.fn(),
-    recordOpeningStock: vi.fn(),
-    refetch: vi.fn(),
-  }),
-}));
-vi.mock('../hooks/useStockBalances', () => ({ useStockBalances: () => ({ balances: [], refetch: vi.fn() }) }));
+vi.mock('../hooks/useStockMovements', () => ({ useStockMovements: () => ({ movements: [] }) }));
+vi.mock('../hooks/useStockBalances', () => ({ useStockBalances: () => ({ balances: [] }) }));
 vi.mock('../hooks/useProductCategories', () => ({ useProductCategories: () => ({ categories: [] }) }));
 vi.mock('../hooks/useInventoryReconciliation', () => ({ useInventoryReconciliation: () => useReconMock() }));
 
@@ -98,6 +90,17 @@ describe('InventoryOverviewPage', () => {
     expect(screen.getByRole('link', { name: /reports/i })).toBeInTheDocument();
     expect(screen.getByText('Oak desk')).toBeInTheDocument();
     expect(screen.getByText('AAA-1')).toBeInTheDocument();
+  });
+
+  it('the Stock actions menu links to each real workflow register, never a direct-mutation dialog', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /stock actions/i }));
+    expect(screen.getByRole('menuitem', { name: /stock adjustment/i })).toHaveAttribute('href', '/inventory/adjustments');
+    expect(screen.getByRole('menuitem', { name: /stock transfer/i })).toHaveAttribute('href', '/inventory/transfers');
+    expect(screen.getByRole('menuitem', { name: /stock take/i })).toHaveAttribute('href', '/inventory/stock-takes');
+    expect(screen.getByRole('menuitem', { name: /supplier return/i })).toHaveAttribute('href', '/inventory/supplier-returns');
+    expect(screen.getByRole('menuitem', { name: /opening stock/i })).toHaveAttribute('href', '/inventory/opening-stock');
+    expect(screen.getByRole('menuitem', { name: /view all operations/i })).toHaveAttribute('href', '/inventory/operations');
   });
 
   it('shows the loading state while products load', () => {

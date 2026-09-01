@@ -1,33 +1,30 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { Warehouse } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { Button } from '@/components/ui/shadcn/button';
+import { Button, buttonVariants } from '@/components/ui/shadcn/button';
 import { useWarehouses } from '../hooks/useWarehouses';
 import { useProducts } from '../hooks/useProducts';
 import { useStockMovements } from '../hooks/useStockMovements';
 import { WarehouseFormModal } from '../components/WarehouseFormModal';
 import { WarehousesTable } from '../components/WarehousesTable';
 import { StockByWarehouseTable } from '../components/StockByWarehouseTable';
-import { StockTransferFormModal } from '../components/StockTransferFormModal';
-import { StockAdjustmentFormModal } from '../components/StockAdjustmentFormModal';
 import type { CreateWarehouseDTO, UpdateWarehouseDTO } from '../services/warehouseService';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
-type DialogState =
-  | { mode: 'create-warehouse' }
-  | { mode: 'edit-warehouse'; warehouse: Warehouse }
-  | { mode: 'transfer' }
-  | { mode: 'adjust' }
-  | null;
+type DialogState = { mode: 'create-warehouse' } | { mode: 'edit-warehouse'; warehouse: Warehouse } | null;
 
 /**
  * Multi-Warehouse Stock — route `/inventory/warehouses`. Real
  * useWarehouses()/useStockMovements() data throughout — all stock
- * quantities come from the stock movement ledger via stockService, never
- * computed here. No literal v0 template exists for multi-warehouse
- * stock — re-skinned onto v0's general PageHeader/SectionCard/Dialog
- * language (M8).
+ * quantities come from the stock movement ledger, never computed here.
+ * No literal v0 template exists for multi-warehouse stock — re-skinned
+ * onto v0's general PageHeader/SectionCard/Dialog language (M8). Stock
+ * adjustment/transfer link straight to their own draft-then-post
+ * registers under `/inventory/*` (Phase 5) — this page never wires a
+ * shortcut that bypasses those lifecycle/posting services with a direct
+ * mutation (docs/DO_NOT_BREAK.md § Inventory & Stock).
  */
 export function WarehousesPage() {
   const {
@@ -40,14 +37,7 @@ export function WarehousesPage() {
     deleteWarehouse,
   } = useWarehouses();
   const { products, loading: productsLoading, error: productsError } = useProducts();
-  const {
-    stockLevels,
-    loading: movementsLoading,
-    error: movementsError,
-    transferStock,
-    adjustStock,
-    recordOpeningStock,
-  } = useStockMovements();
+  const { stockLevels, loading: movementsLoading, error: movementsError } = useStockMovements();
 
   const [dialog, setDialog] = useState<DialogState>(null);
   const canCreate = useCanAccess('inventory', 'create');
@@ -82,12 +72,12 @@ export function WarehousesPage() {
             <div className="flex flex-wrap items-center gap-2">
               {canUpdate && (
                 <>
-                  <Button variant="outline" size="sm" onClick={() => setDialog({ mode: 'adjust' })}>
+                  <Link to="/inventory/adjustments" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
                     Stock adjustment
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setDialog({ mode: 'transfer' })}>
+                  </Link>
+                  <Link to="/inventory/transfers" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
                     Stock transfer
-                  </Button>
+                  </Link>
                 </>
               )}
               {canCreate && (
@@ -136,34 +126,6 @@ export function WarehousesPage() {
         <WarehouseFormModal
           warehouse={dialog.mode === 'edit-warehouse' ? dialog.warehouse : undefined}
           onSubmit={handleWarehouseSubmit}
-          onClose={() => setDialog(null)}
-        />
-      )}
-
-      {dialog?.mode === 'transfer' && (
-        <StockTransferFormModal
-          products={products}
-          warehouses={warehouses}
-          onSubmit={async (input) => {
-            await transferStock(input);
-            setDialog(null);
-          }}
-          onClose={() => setDialog(null)}
-        />
-      )}
-
-      {dialog?.mode === 'adjust' && (
-        <StockAdjustmentFormModal
-          products={products}
-          warehouses={warehouses}
-          onSubmitAdjustment={async (input) => {
-            await adjustStock(input);
-            setDialog(null);
-          }}
-          onSubmitOpening={async (input) => {
-            await recordOpeningStock(input);
-            setDialog(null);
-          }}
           onClose={() => setDialog(null)}
         />
       )}

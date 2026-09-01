@@ -34,7 +34,14 @@ export type AuditAction =
   | 'cost_price_changed'
   | 'inventory_account_mapping_changed'
   | 'stock_import_committed'
-  | 'supplier_return_posted';
+  | 'supplier_return_posted'
+  // Shared Import Framework (Phase 6, docs/IMPORT_EXPORT_ARCHITECTURE.md).
+  // One summary row per completed import run (recordType 'ImportBatch',
+  // recordId a synthetic `import_<timestamp>` — there is no single existing
+  // record an import batch is "about"), in addition to whatever per-record
+  // action (e.g. 'created', 'stock_import_committed') the import's own
+  // create/update calls already log.
+  | 'data_imported';
 
 /**
  * One append-only audit log row. `userId` is supplied by the caller — this

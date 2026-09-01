@@ -19,6 +19,7 @@ import {
   postingProductLookup,
   type PostingProductLookup,
 } from './inventoryPostingEngineInstance';
+import type { AccountingEffectPreview, AccountingPreviewLine } from '../types/accountingPreview';
 
 /**
  * Minimal surface of JournalEntryService a real (Phase 3) posting flow
@@ -60,6 +61,15 @@ const STOCK_WRITTEN_OFF: AuditAction = 'stock_written_off';
 const WRITE_OFF_REASONS: ReadonlySet<StockAdjustment['reason']> = new Set(['write_off', 'shrinkage', 'damage']);
 
 const SYSTEM_USER_ID = 'system';
+
+const REASON_LABEL: Record<StockAdjustment['reason'], string> = {
+  write_off: 'Write-off',
+  shrinkage: 'Shrinkage',
+  damage: 'Damage',
+  stock_gain: 'Stock gain',
+  correction: 'Correction',
+  other: 'Other adjustment',
+};
 
 function roundToCents(value: number): number {
   return Math.round(value * 100) / 100;
@@ -280,13 +290,17 @@ export class StockAdjustmentService {
     return this.repository.updateHeader(id, { status: 'cancelled' });
   }
 
-  /** Builds and applies the one inventory transaction for a stock adjustment post. */
-  private async postToEngine(
+  /**
+   * The ONE line-building pass shared by `postToEngine()` and
+   * `previewAccountingEffect()` — resolves accounts, movement type and
+   * debit/credit sides per line exactly once, so the preview the user
+   * reviews and the transaction that actually posts can never drift apart.
+   */
+  private async buildLines(
     adjustment: StockAdjustment,
-    postedBy: ID,
-    isWriteOff: boolean,
-  ): Promise<{ journalEntryId?: ID }> {
-    const lines: InventoryTransactionLine[] = [];
+  ): Promise<{ engine: InventoryTransactionLine[]; preview: AccountingPreviewLine[] }> {
+    const engine: InventoryTransactionLine[] = [];
+    const preview: AccountingPreviewLine[] = [];
     for (const line of adjustment.lineItems) {
       const product = await this.products!.getById(line.productId);
       if (!product) {
@@ -302,7 +316,10 @@ export class StockAdjustmentService {
           : !isLoss && adjustment.reason === 'stock_gain'
             ? 'stock_gain'
             : 'correction';
-      lines.push({
+      const amount = roundToCents(Math.abs(line.quantityDelta * line.unitCost));
+      const source = `${REASON_LABEL[adjustment.reason]} — ${product.name}`;
+
+      engine.push({
         productId: line.productId,
         warehouseId: line.warehouseId,
         quantityDelta: line.quantityDelta,
@@ -323,7 +340,29 @@ export class StockAdjustmentService {
               contraAccountId: await this.accountResolver!.resolveForProduct(product, 'adjustment'),
             }),
       });
+
+      if (!nonStock) {
+        const inventoryAccountId = await this.accountResolver!.resolveForProduct(product, 'inventory');
+        const adjustmentAccountId = await this.accountResolver!.resolveForProduct(product, 'adjustment');
+        if (isLoss) {
+          preview.push({ accountId: adjustmentAccountId, debit: amount, credit: 0, source });
+          preview.push({ accountId: inventoryAccountId, debit: 0, credit: amount, source });
+        } else {
+          preview.push({ accountId: inventoryAccountId, debit: amount, credit: 0, source });
+          preview.push({ accountId: adjustmentAccountId, debit: 0, credit: amount, source });
+        }
+      }
     }
+    return { engine, preview };
+  }
+
+  /** Builds and applies the one inventory transaction for a stock adjustment post. */
+  private async postToEngine(
+    adjustment: StockAdjustment,
+    postedBy: ID,
+    isWriteOff: boolean,
+  ): Promise<{ journalEntryId?: ID }> {
+    const { engine: lines } = await this.buildLines(adjustment);
 
     const result = await this.engine!.applyInventoryTransaction({
       postingKey: `stock_adjustment:${adjustment.id}:post`,
@@ -341,6 +380,24 @@ export class StockAdjustmentService {
       },
     });
     return { journalEntryId: result.journalEntryId };
+  }
+
+  /**
+   * Pure preview of the GL entry `postAdjustment()` would post — built from
+   * the exact same `buildLines()` pass, so it can never diverge from what
+   * actually posts. Posts nothing. Requires the posting-engine wiring
+   * (account resolver + product lookup) even though it doesn't call the
+   * engine, since it needs the same account resolution.
+   */
+  async previewAccountingEffect(id: ID): Promise<AccountingEffectPreview> {
+    const adjustment = await this.requireAdjustment(id);
+    if (!this.accountResolver || !this.products) {
+      throw new Error('Cannot preview: the account resolver / product lookup is not available in this context.');
+    }
+    const { preview: lines } = await this.buildLines(adjustment);
+    const totalDebit = roundToCents(lines.reduce((sum, l) => sum + l.debit, 0));
+    const totalCredit = roundToCents(lines.reduce((sum, l) => sum + l.credit, 0));
+    return { lines, balanced: totalDebit === totalCredit };
   }
 
   /** `draft | pending_approval → cancelled`. A posted adjustment can never be cancelled. */

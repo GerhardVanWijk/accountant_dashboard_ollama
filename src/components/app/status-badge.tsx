@@ -153,6 +153,16 @@ const statusMap: Record<string, { tone: Tone; label: string }> = {
   expired: { tone: 'neutral', label: 'Expired' },
   confirmed: { tone: 'info', label: 'Confirmed' },
   fulfilled: { tone: 'positive', label: 'Fulfilled' },
+
+  /* Inventory workflows (Phase 5) — StockAdjustment/StockTransfer/StockTake/
+   * SupplierReturn/OpeningStockBatch statuses (src/types/stockAdjustment.ts
+   * etc.). `draft`/`posted`/`cancelled`/`confirmed` above already cover the
+   * statuses shared with other document types. */
+  pending_approval: { tone: 'warning', label: 'Pending approval' },
+  in_transit: { tone: 'warning', label: 'In transit' },
+  completed: { tone: 'positive', label: 'Completed' },
+  counting: { tone: 'info', label: 'Counting' },
+  ready_for_review: { tone: 'warning', label: 'Ready for review' },
 };
 
 export function StatusBadge({

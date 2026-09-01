@@ -8,16 +8,21 @@ import { Button, buttonVariants } from '@/components/ui/shadcn/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
-import { ConfirmDialog } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
+import { ImportWizard } from '@/features/import/components/ImportWizard';
+import { productImportAdapter, openingStockImportAdapter, stockTakeCountImportAdapter } from '@/features/import/adapters';
+import { ExportMenu } from '@/features/export/components/ExportMenu';
+import { PrintableReport } from '@/features/export/components/PrintableReport';
+import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { useProducts } from '../hooks/useProducts';
 import { useStockAlerts } from '../hooks/useStockAlerts';
 import { useWarehouses } from '../hooks/useWarehouses';
@@ -29,17 +34,55 @@ import { InventoryTable } from '../components/InventoryTable';
 import { InventoryItemDetailSheet } from '../components/InventoryItemDetailSheet';
 import { InventoryReconciliationCard } from '../components/InventoryReconciliationCard';
 import { ProductFormModal } from '../components/ProductFormModal';
-import { StockAdjustmentFormModal } from '../components/StockAdjustmentFormModal';
-import { StockTransferFormModal } from '../components/StockTransferFormModal';
 import { calculateInventoryTotals } from '../utils/calculateInventoryTotals';
+import { STOCK_STATE_LABEL, type InventoryRow } from '../utils/buildInventoryRows';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
+
+const INVENTORY_EXPORT_COLUMNS: ExportColumn<InventoryRow>[] = [
+  { key: 'sku', header: 'SKU', accessor: (r) => r.product.sku },
+  { key: 'name', header: 'Product', accessor: (r) => r.product.name },
+  { key: 'category', header: 'Category', accessor: (r) => r.categoryName },
+  { key: 'supplier', header: 'Preferred Supplier', accessor: (r) => r.supplierName },
+  { key: 'onHand', header: 'On Hand', accessor: (r) => (r.product.trackInventory ? r.onHand : null), align: 'right' },
+  { key: 'available', header: 'Available', accessor: (r) => (r.product.trackInventory ? r.available : null), align: 'right' },
+  { key: 'committed', header: 'Committed', accessor: (r) => r.committed, align: 'right' },
+  { key: 'reorder', header: 'Reorder Level', accessor: (r) => r.reorderLevel ?? null, align: 'right' },
+  {
+    key: 'avgCost',
+    header: 'WAC',
+    accessor: (r) => r.avgCost,
+    align: 'right',
+    formatForPrint: (r) => formatCurrency(r.avgCost),
+  },
+  {
+    key: 'value',
+    header: 'Inventory Value',
+    accessor: (r) => r.inventoryValue,
+    align: 'right',
+    formatForPrint: (r) => formatCurrency(r.inventoryValue),
+    total: (rows) => rows.reduce((sum, r) => sum + r.inventoryValue, 0),
+  },
+  {
+    key: 'selling',
+    header: 'Selling Price',
+    accessor: (r) => r.sellingPrice,
+    align: 'right',
+    formatForPrint: (r) => formatCurrency(r.sellingPrice),
+  },
+  {
+    key: 'margin',
+    header: 'Margin %',
+    accessor: (r) => r.marginPercent,
+    align: 'right',
+    formatForPrint: (r) => (r.marginPercent === null ? '—' : `${r.marginPercent.toFixed(1)}%`),
+  },
+  { key: 'status', header: 'Status', accessor: (r) => (r.product.trackInventory ? STOCK_STATE_LABEL[r.stockState] : r.product.status) },
+];
 
 type Dialog =
   | { kind: 'new-item' }
   | { kind: 'edit-item'; product: Product }
-  | { kind: 'adjust' }
-  | { kind: 'transfer' }
-  | { kind: 'phase5'; title: string; description: string }
+  | { kind: 'import' }
   | null;
 
 const RECENT_WINDOW_DAYS = 30;
@@ -52,17 +95,20 @@ const RECENT_WINDOW_DAYS = 30;
  * service/hook data — a figure with nothing behind it shows a correct
  * zero/empty state, never a fabricated number.
  *
- * Workflow quick actions: New item and (legacy) Stock adjustment / transfer
- * open real forms; Stock take / Supplier return / Opening stock / Import open
- * a "coming in the workflow phase" notice — Phase 4 never wires a shortcut
- * that bypasses the approved lifecycle/posting services.
+ * Workflow quick actions: New item opens a real form; every stock workflow
+ * (adjustment / transfer / stock take / supplier return / opening stock)
+ * links straight to its own draft-then-post register under
+ * `/inventory/*` (Phase 5) — this page never wires a shortcut that
+ * bypasses those lifecycle/posting services with a direct mutation.
+ * Import opens the shared import wizard (Phase 6) with the three
+ * Inventory adapters — Products, Opening Stock and Stock Take Counts.
  */
 export function InventoryOverviewPage() {
   const { products, loading, error, refetch, createProduct, updateProduct } = useProducts();
   const { lowStock, outOfStock } = useStockAlerts();
   const { warehouses } = useWarehouses();
-  const { movements, transferStock, adjustStock, recordOpeningStock, refetch: refetchMovements } = useStockMovements();
-  const { balances, refetch: refetchBalances } = useStockBalances();
+  const { movements } = useStockMovements();
+  const { balances } = useStockBalances();
   const { categories } = useProductCategories();
   const { suppliers } = useSuppliers();
   const { taxRates } = useAllTaxRates();
@@ -70,9 +116,13 @@ export function InventoryOverviewPage() {
 
   const canCreate = useCanAccess('inventory', 'create');
   const canUpdate = useCanAccess('inventory', 'update');
+  const canImport = useCanAccess('inventory', 'import');
+  const canExport = useCanAccess('inventory', 'export');
 
   const [dialog, setDialog] = useState<Dialog>(null);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const [visibleRows, setVisibleRows] = useState<InventoryRow[]>([]);
+  const [activeFilters, setActiveFilters] = useState<{ label: string; value: string }[]>([]);
 
   const totals = calculateInventoryTotals(products);
   const trackedInStock = products.filter((p) => p.trackInventory && p.quantityOnHand > 0).length;
@@ -83,10 +133,6 @@ export function InventoryOverviewPage() {
 
   const selectedProduct = products.find((p) => p.id === selectedId);
 
-  async function afterMutation() {
-    await Promise.all([refetch(), refetchMovements(), refetchBalances(), reconciliation.refetch()]);
-  }
-
   async function handleItemSubmit(data: CreateProductDTO | UpdateProductDTO) {
     if (dialog?.kind === 'edit-item') await updateProduct(dialog.product.id, data as UpdateProductDTO);
     else await createProduct(data as CreateProductDTO);
@@ -94,8 +140,14 @@ export function InventoryOverviewPage() {
     await refetch();
   }
 
-  const phase5 = (title: string, description: string) => () =>
-    setDialog({ kind: 'phase5', title, description });
+  const exportDataset: ExportDataset<InventoryRow> = {
+    title: 'Inventory Stock on Hand',
+    subtitle: `${visibleRows.length} of ${products.length} items`,
+    filters: activeFilters,
+    columns: INVENTORY_EXPORT_COLUMNS,
+    rows: visibleRows,
+    filename: `inventory-stock-on-hand-${new Date().toISOString().slice(0, 10)}`,
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -104,48 +156,39 @@ export function InventoryOverviewPage() {
         description="Goods held for sale or consumption — valuation, stock levels and the tools to keep them accurate."
         actions={
           <>
+            <ExportMenu dataset={exportDataset} allowed={canExport} />
             {canCreate && (
               <Button size="sm" onClick={() => setDialog({ kind: 'new-item' })}>
                 <PackagePlusIcon data-icon="inline-start" />
                 New item
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={phase5('Import inventory', 'Bulk import of products, opening stock and stock counts arrives with the import framework (Phase 6). It will use the same preview-and-confirm flow as the bank statement importer — nothing posts to the ledger without confirmation.')}
-            >
-              <UploadIcon data-icon="inline-start" />
-              Import
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button size="sm" variant="outline" />}>
-                Stock actions
-                <ChevronDownIcon data-icon="inline-end" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Movements</DropdownMenuLabel>
-                {canUpdate && <DropdownMenuItem onClick={() => setDialog({ kind: 'adjust' })}>Stock adjustment</DropdownMenuItem>}
-                {canUpdate && <DropdownMenuItem onClick={() => setDialog({ kind: 'transfer' })}>Stock transfer</DropdownMenuItem>}
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Workflows (Phase 5)</DropdownMenuLabel>
-                <DropdownMenuItem
-                  onClick={phase5('Stock take', 'The stock-take workflow (freeze → count → review → post) arrives in Phase 5. Freezing snapshots expected quantities and the frozen unit cost atomically (migration 0036); posting routes the net variance through the inventory posting engine to 5050 Inventory Adjustments.')}
-                >
-                  Stock take
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={phase5('Supplier return', 'The supplier-return workflow arrives in Phase 5. Inventory leaves at weighted-average cost; Accounts Payable and input VAT unwind at the supplier credit value; the difference posts to 5060 Purchase Price Variance.')}
-                >
-                  Supplier return
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={phase5('Opening stock', 'The opening-stock batch workflow arrives in Phase 5. It previews the DR Inventory / CR Opening Balance Equity entry and posts only on explicit confirmation.')}
-                >
-                  Opening stock
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {canImport && (
+              <Button size="sm" variant="outline" onClick={() => setDialog({ kind: 'import' })}>
+                <UploadIcon data-icon="inline-start" />
+                Import
+              </Button>
+            )}
+            {canUpdate && (
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button size="sm" variant="outline" />}>
+                  Stock actions
+                  <ChevronDownIcon data-icon="inline-end" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Workflows</DropdownMenuLabel>
+                    <DropdownMenuItem render={<Link to="/inventory/adjustments" />}>Stock adjustment</DropdownMenuItem>
+                    <DropdownMenuItem render={<Link to="/inventory/transfers" />}>Stock transfer</DropdownMenuItem>
+                    <DropdownMenuItem render={<Link to="/inventory/stock-takes" />}>Stock take</DropdownMenuItem>
+                    <DropdownMenuItem render={<Link to="/inventory/supplier-returns" />}>Supplier return</DropdownMenuItem>
+                    <DropdownMenuItem render={<Link to="/inventory/opening-stock" />}>Opening stock</DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem render={<Link to="/inventory/operations" />}>View all operations</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <Link to="/reports" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
               <FileBarChart2Icon data-icon="inline-start" />
               Reports
@@ -204,6 +247,10 @@ export function InventoryOverviewPage() {
               suppliers={suppliers}
               warehouses={warehouses}
               onSelect={(p) => setSelectedId(p.id)}
+              onVisibleRowsChange={(rows, filters) => {
+                setVisibleRows(rows);
+                setActiveFilters(filters);
+              }}
             />
           </SectionCard>
         )}
@@ -247,48 +294,17 @@ export function InventoryOverviewPage() {
         />
       )}
 
-      {dialog?.kind === 'adjust' && (
-        <StockAdjustmentFormModal
-          products={products}
-          warehouses={warehouses}
-          onSubmitAdjustment={async (input) => {
-            await adjustStock(input);
-            await afterMutation();
-            setDialog(null);
-          }}
-          onSubmitOpening={async (input) => {
-            await recordOpeningStock(input);
-            await afterMutation();
-            setDialog(null);
-          }}
+      <PrintableReport dataset={exportDataset} className="hidden print:block" />
+
+      {dialog?.kind === 'import' && (
+        <ImportWizard
+          adapters={[productImportAdapter, openingStockImportAdapter, stockTakeCountImportAdapter]}
           onClose={() => setDialog(null)}
+          onImported={() => {
+            void refetch();
+          }}
         />
       )}
-
-      {dialog?.kind === 'transfer' && (
-        <StockTransferFormModal
-          products={products}
-          warehouses={warehouses}
-          onSubmit={async (input) => {
-            await transferStock(input);
-            await afterMutation();
-            setDialog(null);
-          }}
-          onClose={() => setDialog(null)}
-        />
-      )}
-
-      <ConfirmDialog
-        open={dialog?.kind === 'phase5'}
-        onOpenChange={(next) => {
-          if (!next) setDialog(null);
-        }}
-        title={dialog?.kind === 'phase5' ? dialog.title : ''}
-        description={dialog?.kind === 'phase5' ? dialog.description : ''}
-        confirmLabel="Got it"
-        cancelLabel="Close"
-        onConfirm={() => setDialog(null)}
-      />
     </div>
   );
 }

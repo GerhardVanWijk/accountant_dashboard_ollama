@@ -11,6 +11,7 @@ import {
   postingProductLookup,
   type PostingProductLookup,
 } from './inventoryPostingEngineInstance';
+import type { AccountingEffectPreview, AccountingPreviewLine } from '../types/accountingPreview';
 
 /** Minimal surface of AuditLogService this service depends on — see stockTakeService.ts's AuditLogger. */
 export interface AuditLogger {
@@ -45,17 +46,8 @@ export interface ConfirmBatchArg {
   confirmed: boolean;
 }
 
-/** One leg of the previewed opening-stock GL entry. */
-export interface PreviewLine {
-  accountId: ID;
-  debit: number;
-  credit: number;
-}
-
-export interface AccountingEffectPreview {
-  lines: PreviewLine[];
-  balanced: boolean;
-}
+/** @deprecated use the shared `AccountingPreviewLine` from `../types/accountingPreview`. Kept as an alias so existing imports of this name keep compiling. */
+export type PreviewLine = AccountingPreviewLine;
 
 /**
  * docs/INVENTORY_ACCOUNTING.md § "Opening stock batch": the debit side is
@@ -163,9 +155,9 @@ export class OpeningStockBatchService {
     const offsetAccountId =
       batch.offsetAccountId ??
       (this.accountResolver ? await this.accountResolver.resolveKey('OPENING_BALANCE_EQUITY') : OPENING_BALANCE_EQUITY_KEY);
-    const lines: PreviewLine[] = [
-      { accountId: inventoryAccountId, debit: total, credit: 0 },
-      { accountId: offsetAccountId, debit: 0, credit: total },
+    const lines: AccountingPreviewLine[] = [
+      { accountId: inventoryAccountId, debit: total, credit: 0, source: 'Opening balance — inventory' },
+      { accountId: offsetAccountId, debit: 0, credit: total, source: 'Opening balance — equity offset' },
     ];
     const totalDebit = roundToCents(lines.reduce((sum, l) => sum + l.debit, 0));
     const totalCredit = roundToCents(lines.reduce((sum, l) => sum + l.credit, 0));

@@ -1,5 +1,26 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
+import { configure } from '@testing-library/dom';
+
+/**
+ * Phase 7 (print/export): every page that wires up ExportMenu also renders
+ * a `<PrintableReport>` alongside the interactive view — a second, real
+ * `<table>` with the SAME row text, kept in the DOM at all times (only
+ * `hidden print:block`, a CSS class jsdom doesn't apply) so `window.print()`
+ * can show it. Without this, `getByText`/`getByRole` queries against
+ * ordinary row content become ambiguous ("Found multiple elements") in
+ * EVERY test for EVERY page that exports, not just the ones this phase
+ * touched directly. `PrintableReport`'s root carries `data-print-only="true"`
+ * and `defaultIgnore` here tells text queries to skip it. Deliberately NOT
+ * scoped off `aria-hidden` in general — Base UI's Dialog/Sheet/Dropdown
+ * primitives legitimately apply `aria-hidden="true"` to background content
+ * while a portal is open, and a real regression
+ * (src/features/banking/components/ReconciliationWorkspace.test.tsx —
+ * "Line 1 of 3" went unqueryable once its ancestor sheet was open) showed
+ * that ignoring all `aria-hidden` content blinds queries to real, currently-
+ * visible UI too.
+ */
+configure({ defaultIgnore: 'script, style, [data-print-only="true"], [data-print-only="true"] *' });
 
 /**
  * ─────────────────────────────────────────────────────────────────────────

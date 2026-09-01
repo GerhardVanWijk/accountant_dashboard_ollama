@@ -71,3 +71,27 @@ describe('DataTable — clickable rows (audit rule: applicable records must be c
     expect(onRowClick).not.toHaveBeenCalled();
   });
 });
+
+describe('DataTable — onVisibleRowsChange (export/print infrastructure, Phase 7)', () => {
+  it('reports every row and no active filters on mount when there is no search/filter', () => {
+    const onVisibleRowsChange = vi.fn();
+    render(<DataTable rows={rows} columns={columns} getRowKey={(r) => r.id} onVisibleRowsChange={onVisibleRowsChange} />);
+    expect(onVisibleRowsChange).toHaveBeenCalledWith(rows, []);
+  });
+
+  it('reports only the search-matched rows, never the paginated subset, plus a "Search" filter descriptor', () => {
+    const onVisibleRowsChange = vi.fn();
+    render(
+      <DataTable
+        rows={rows}
+        columns={columns}
+        getRowKey={(r) => r.id}
+        searchable={(r) => r.name}
+        onVisibleRowsChange={onVisibleRowsChange}
+      />,
+    );
+    onVisibleRowsChange.mockClear();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Alpha' } });
+    expect(onVisibleRowsChange).toHaveBeenCalledWith([rows[0]], [{ label: 'Search', value: 'Alpha' }]);
+  });
+});

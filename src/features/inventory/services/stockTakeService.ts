@@ -12,6 +12,7 @@ import {
   stockTakeFreezeExecutor,
   type PostingProductLookup,
 } from './inventoryPostingEngineInstance';
+import type { AccountingEffectPreview, AccountingPreviewLine } from '../types/accountingPreview';
 
 /**
  * Minimal surface of AuditLogService this service depends on — an
@@ -294,9 +295,16 @@ export class StockTakeService {
     return posted;
   }
 
-  /** Applies the one net-variance inventory transaction for a stock-take post. */
-  private async postToEngine(stockTake: StockTake, postedBy: ID): Promise<ID | undefined> {
-    const lines: InventoryTransactionLine[] = [];
+  /**
+   * The ONE variance line-building pass shared by `postToEngine()` and
+   * `previewPostEffect()` — zero-variance lines are skipped in both, so the
+   * preview shows exactly what will post.
+   */
+  private async buildVarianceLines(
+    stockTake: StockTake,
+  ): Promise<{ engine: InventoryTransactionLine[]; preview: AccountingPreviewLine[] }> {
+    const engine: InventoryTransactionLine[] = [];
+    const preview: AccountingPreviewLine[] = [];
     for (const line of stockTake.lineItems) {
       if (line.varianceQty === 0) continue;
       const product = await this.products!.getById(line.productId);
@@ -306,7 +314,7 @@ export class StockTakeService {
         );
       }
       const nonStock = !product.trackInventory;
-      lines.push({
+      engine.push({
         productId: line.productId,
         warehouseId: line.warehouseId,
         quantityDelta: line.varianceQty,
@@ -325,7 +333,28 @@ export class StockTakeService {
               contraAccountId: await this.accountResolver!.resolveForProduct(product, 'adjustment'),
             }),
       });
+
+      if (!nonStock) {
+        const amount = roundToCents(Math.abs(line.varianceQty * line.unitCost));
+        const sign = line.varianceQty > 0 ? '+' : '';
+        const source = `Variance: ${product.name} (${sign}${line.varianceQty} @ frozen WAC ${line.unitCost.toFixed(2)})`;
+        const inventoryAccountId = await this.accountResolver!.resolveForProduct(product, 'inventory');
+        const adjustmentAccountId = await this.accountResolver!.resolveForProduct(product, 'adjustment');
+        if (line.varianceQty < 0) {
+          preview.push({ accountId: adjustmentAccountId, debit: amount, credit: 0, source });
+          preview.push({ accountId: inventoryAccountId, debit: 0, credit: amount, source });
+        } else {
+          preview.push({ accountId: inventoryAccountId, debit: amount, credit: 0, source });
+          preview.push({ accountId: adjustmentAccountId, debit: 0, credit: amount, source });
+        }
+      }
     }
+    return { engine, preview };
+  }
+
+  /** Applies the one net-variance inventory transaction for a stock-take post. */
+  private async postToEngine(stockTake: StockTake, postedBy: ID): Promise<ID | undefined> {
+    const { engine: lines } = await this.buildVarianceLines(stockTake);
     if (lines.length === 0) return undefined;
 
     const result = await this.engine!.applyInventoryTransaction({
@@ -339,6 +368,22 @@ export class StockTakeService {
       audit: { action: 'stock_take_posted', recordType: 'StockTake', recordId: stockTake.id },
     });
     return result.journalEntryId;
+  }
+
+  /**
+   * Pure preview of the net-variance GL entry `postStockTake()` would post —
+   * built from the exact same `buildVarianceLines()` pass. Posts nothing.
+   * Zero-variance lines are omitted from the preview, same as the post.
+   */
+  async previewPostEffect(id: ID): Promise<AccountingEffectPreview> {
+    const stockTake = await this.requireStockTake(id);
+    if (!this.accountResolver || !this.products) {
+      throw new Error('Cannot preview: the account resolver / product lookup is not available in this context.');
+    }
+    const { preview: lines } = await this.buildVarianceLines(stockTake);
+    const totalDebit = roundToCents(lines.reduce((sum, l) => sum + l.debit, 0));
+    const totalCredit = roundToCents(lines.reduce((sum, l) => sum + l.credit, 0));
+    return { lines, balanced: totalDebit === totalCredit };
   }
 
   /** Cancels a stock take. A posted take is immutable and cannot be cancelled. */

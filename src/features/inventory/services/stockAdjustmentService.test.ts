@@ -271,5 +271,54 @@ describe('StockAdjustmentService', () => {
       expect(kit.store.products.get('prod_1')!.quantityOnHand).toBe(20);
       expect(kit.store.journalEntries[0].status).toBe('reversed');
     });
+
+    describe('previewAccountingEffect — built from the same line-builder as postAdjustment', () => {
+      it('loss preview: Dr Inventory Adjustments / Cr Inventory, balanced, matches the posted entry exactly', async () => {
+        kit.seed(makeProduct({ id: 'prod_1' }), { quantityOnHand: 20, costPrice: 100, warehouseId: WH });
+        const adj = await posting.createAdjustment(makeAdjustment()); // -5, -3 @ 100 = -800
+        const preview = await posting.previewAccountingEffect(adj.id);
+
+        expect(preview.balanced).toBe(true);
+        const debit = preview.lines.filter((l) => l.debit > 0);
+        const credit = preview.lines.filter((l) => l.credit > 0);
+        expect(debit.every((l) => l.accountId === 'acc-INVENTORY_ADJUSTMENT')).toBe(true);
+        expect(credit.every((l) => l.accountId === 'acc-INVENTORY')).toBe(true);
+        expect(debit.reduce((s, l) => s + l.debit, 0)).toBe(800);
+        expect(credit.reduce((s, l) => s + l.credit, 0)).toBe(800);
+        expect(preview.lines.every((l) => l.source.includes('Write-off'))).toBe(true);
+
+        const posted = await posting.postAdjustment(adj.id);
+        const je = kit.store.journalEntries.find((j) => j.id === posted.journalEntryId)!;
+        expect(je.lines.find((l) => l.accountId === 'acc-INVENTORY_ADJUSTMENT')!.debit).toBe(
+          debit.reduce((s, l) => s + l.debit, 0),
+        );
+      });
+
+      it('gain preview: Dr Inventory / Cr Inventory Adjustments, balanced', async () => {
+        kit.seed(makeProduct({ id: 'prod_1' }), { quantityOnHand: 10, costPrice: 6, warehouseId: WH });
+        const adj = await posting.createAdjustment(
+          makeAdjustment({ reason: 'stock_gain', lineItems: [line({ id: 'g1', quantityDelta: 2, unitCost: 6 })] }),
+        );
+        const preview = await posting.previewAccountingEffect(adj.id);
+
+        expect(preview.balanced).toBe(true);
+        expect(preview.lines.find((l) => l.debit > 0)!.accountId).toBe('acc-INVENTORY');
+        expect(preview.lines.find((l) => l.credit > 0)!.accountId).toBe('acc-INVENTORY_ADJUSTMENT');
+        expect(preview.lines.every((l) => l.source.includes('Stock gain'))).toBe(true);
+      });
+
+      it('posts nothing — no movement or journal entry is created by preview alone', async () => {
+        kit.seed(makeProduct({ id: 'prod_1' }), { quantityOnHand: 20, costPrice: 100, warehouseId: WH });
+        const adj = await posting.createAdjustment(makeAdjustment());
+        await posting.previewAccountingEffect(adj.id);
+        expect(kit.store.movements).toHaveLength(0);
+        expect(kit.store.journalEntries).toHaveLength(0);
+      });
+
+      it('throws when the posting engine is not wired (no account resolver/product lookup)', async () => {
+        const adj = await service.createAdjustment(makeAdjustment());
+        await expect(service.previewAccountingEffect(adj.id)).rejects.toThrow(/not available/i);
+      });
+    });
   });
 });

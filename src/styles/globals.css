@@ -148,3 +148,51 @@
     background-color: color-mix(in oklab, var(--foreground) 32%, transparent);
   }
 }
+
+/*
+ * Shared Print / Export Infrastructure (Phase 7,
+ * docs/IMPORT_EXPORT_ARCHITECTURE.md § Print). Application-wide print
+ * safety net — the sidebar/topbar/toaster chrome is hidden here so a page
+ * that forgets its own `print:hidden` still prints something reasonable;
+ * a page's actual printable content is its own `<PrintableReport>`
+ * (rendered `hidden print:block`, invisible on screen, the only thing
+ * `@media print` below doesn't hide). Purely additive — every rule here
+ * is scoped to `@media print`, so normal screen styles are untouched.
+ */
+@media print {
+  html,
+  body {
+    background: white;
+    color: black;
+  }
+
+  [data-slot='sidebar'],
+  [data-slot='sidebar-rail'],
+  [data-slot='sidebar-trigger'],
+  [data-slot='app-topbar'],
+  .toaster {
+    display: none !important;
+  }
+
+  .app-shell main {
+    padding: 0;
+  }
+
+  /* A printed table repeats its header on every page (where the browser
+     supports it) and never splits a row across a page break. */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tr,
+  img {
+    break-inside: avoid;
+  }
+
+  @page {
+    margin: 1.5cm;
+  }
+}

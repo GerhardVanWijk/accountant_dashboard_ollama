@@ -186,6 +186,52 @@ describe('SupplierReturnService', () => {
       expect(lineOf(je, 'acc-AP')).toBeUndefined();
     });
 
+    describe('previewPostEffect — built from the same line-builder as postSupplierReturn, never hides PPV', () => {
+      it('refund == WAC: PPV line is shown explicitly at R0.00, never omitted', async () => {
+        const line = makeLine({ productId: 'prod-1', warehouseId: WH, quantity: 10, unitPrice: 9, taxAmount: 0 });
+        const ret = await posting.createSupplierReturn(makeReturn({ lineItems: [line] }));
+        const preview = await posting.previewPostEffect(ret.id);
+
+        expect(preview.balanced).toBe(true);
+        const ppv = preview.lines.find((l) => l.source === 'Purchase Price Variance')!;
+        expect(ppv).toBeDefined();
+        expect(ppv.debit).toBe(0);
+        expect(ppv.credit).toBe(0);
+        expect(kit.store.journalEntries).toHaveLength(0); // preview posts nothing
+      });
+
+      it('refund > WAC: preview PPV credit matches the posted entry exactly', async () => {
+        const line = makeLine({ productId: 'prod-1', warehouseId: WH, quantity: 10, unitPrice: 10, taxAmount: 0 });
+        const ret = await posting.createSupplierReturn(makeReturn({ lineItems: [line] }));
+        const preview = await posting.previewPostEffect(ret.id);
+
+        expect(preview.lines.find((l) => l.source === 'Inventory carrying value (WAC)')!.credit).toBe(90);
+        expect(preview.lines.find((l) => l.source === 'Supplier credit value')!.debit).toBe(100);
+        expect(preview.lines.find((l) => l.source === 'Purchase Price Variance')!.credit).toBe(10);
+
+        const posted = await posting.postSupplierReturn(ret.id);
+        const je = kit.store.journalEntries.find((j) => j.id === posted.journalEntryId)!;
+        expect(lineOf(je, 'acc-PURCHASE_PRICE_VARIANCE')!.credit).toBe(10);
+      });
+
+      it('with VAT: shows the VAT reversal row separately from the supplier credit row, and balances', async () => {
+        const line = makeLine({ productId: 'prod-1', warehouseId: WH, quantity: 10, unitPrice: 10, taxAmount: 15 });
+        const ret = await posting.createSupplierReturn(makeReturn({ lineItems: [line] }));
+        const preview = await posting.previewPostEffect(ret.id);
+
+        expect(preview.lines.find((l) => l.source === 'VAT reversal')!.credit).toBe(15);
+        expect(preview.lines.find((l) => l.source === 'Supplier credit value')!.debit).toBe(115);
+        const totalDebit = preview.lines.reduce((s, l) => s + l.debit, 0);
+        const totalCredit = preview.lines.reduce((s, l) => s + l.credit, 0);
+        expect(totalDebit).toBe(totalCredit);
+      });
+
+      it('throws when the posting engine is not wired', async () => {
+        const ret = await service.createSupplierReturn(makeReturn());
+        await expect(service.previewPostEffect(ret.id)).rejects.toThrow(/not available/i);
+      });
+    });
+
     it('is idempotent — a re-post is blocked and the engine never double-posts', async () => {
       const { ret } = await post({ unitPrice: 10 });
       await expect(posting.postSupplierReturn(ret.id)).rejects.toThrow(/only a draft/i);

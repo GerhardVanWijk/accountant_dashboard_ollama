@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Loader2, Plus, Users } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Loader2, Plus, UploadIcon, Users } from 'lucide-react';
 import type { Customer } from '@/types';
 import { FigureBlock } from '@/components/app/figure';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
@@ -18,8 +18,31 @@ import { useCustomerMutations } from '../hooks/useCustomerMutations';
 import { CustomerTable } from '../components/CustomerTable';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
+import { ImportWizard } from '@/features/import/components/ImportWizard';
+import { customerImportAdapter } from '@/features/import/adapters';
+import { ExportMenu } from '@/features/export/components/ExportMenu';
+import { PrintableReport } from '@/features/export/components/PrintableReport';
+import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { invoicesToOpenItems } from '../mock-data/openItems';
 import { calculateFleetSummary } from '../utils/customerFinancials';
+
+const CUSTOMER_EXPORT_COLUMNS: ExportColumn<Customer>[] = [
+  { key: 'code', header: 'Customer Code', accessor: (c) => c.customerNumber },
+  { key: 'name', header: 'Name', accessor: (c) => c.name },
+  { key: 'email', header: 'Email', accessor: (c) => c.email ?? null },
+  { key: 'phone', header: 'Phone', accessor: (c) => c.phone ?? null },
+  { key: 'vat', header: 'VAT Number', accessor: (c) => c.taxNumber ?? null },
+  { key: 'terms', header: 'Payment Terms', accessor: (c) => c.paymentTerms ?? null },
+  {
+    key: 'balance',
+    header: 'Balance',
+    accessor: (c) => c.balance,
+    align: 'right',
+    formatForPrint: (c) => formatCurrency(c.balance),
+    total: (rows) => rows.reduce((sum, c) => sum + c.balance, 0),
+  },
+  { key: 'status', header: 'Status', accessor: (c) => (c.creditHold ? 'On hold' : c.status) },
+];
 
 export interface CustomerListPageProps {
   onView: (customer: Customer) => void;
@@ -49,6 +72,11 @@ export function CustomerListPage({ onView, onCreate, onEdit }: CustomerListPageP
   const { invoices } = useInvoices();
   const canCreate = useCanAccess('customer_management', 'create');
   const canUpdate = useCanAccess('customer_management', 'update');
+  const canImport = useCanAccess('customer_management', 'import');
+  const canExport = useCanAccess('customer_management', 'export');
+  const [importOpen, setImportOpen] = useState(false);
+  const [visibleCustomers, setVisibleCustomers] = useState<Customer[]>(customers);
+  const [activeFilters, setActiveFilters] = useState<{ label: string; value: string }[]>([]);
 
   const openItems = useMemo(() => invoicesToOpenItems(invoices), [invoices]);
   const fleetSummary = useMemo(
@@ -65,18 +93,36 @@ export function CustomerListPage({ onView, onCreate, onEdit }: CustomerListPageP
     refetch();
   }
 
+  const exportDataset: ExportDataset<Customer> = {
+    title: 'Customers',
+    subtitle: `${visibleCustomers.length} of ${customers.length} accounts`,
+    filters: activeFilters,
+    columns: CUSTOMER_EXPORT_COLUMNS,
+    rows: visibleCustomers,
+    filename: `customers-${new Date().toISOString().slice(0, 10)}`,
+  };
+
   return (
     <>
       <PageHeader
         title="Customers"
         description="Search, filter, and manage your accounts-receivable customer master list."
         actions={
-          canCreate ? (
-            <Button size="sm" onClick={onCreate}>
-              <Plus data-icon="inline-start" />
-              New customer
-            </Button>
-          ) : undefined
+          <>
+            <ExportMenu dataset={exportDataset} allowed={canExport} />
+            {canImport && (
+              <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+                <UploadIcon data-icon="inline-start" />
+                Import
+              </Button>
+            )}
+            {canCreate && (
+              <Button size="sm" onClick={onCreate}>
+                <Plus data-icon="inline-start" />
+                New customer
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -156,8 +202,22 @@ export function CustomerListPage({ onView, onCreate, onEdit }: CustomerListPageP
             onView={onView}
             onEdit={canUpdate ? onEdit : undefined}
             onToggleActive={canUpdate ? (customer) => void handleToggleActive(customer) : undefined}
+            onVisibleRowsChange={(rows, filters) => {
+              setVisibleCustomers(rows);
+              setActiveFilters(filters);
+            }}
           />
         </SectionCard>
+      )}
+
+      <PrintableReport dataset={exportDataset} className="hidden print:block" />
+
+      {importOpen && (
+        <ImportWizard
+          adapters={[customerImportAdapter]}
+          onClose={() => setImportOpen(false)}
+          onImported={() => void refetch()}
+        />
       )}
     </>
   );

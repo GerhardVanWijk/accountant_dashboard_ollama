@@ -316,4 +316,42 @@ describe('StockTakeService', () => {
       expect(kit.store.journalEntries).toHaveLength(1);
     });
   });
+
+  describe('previewPostEffect — built from the same variance-line-builder as postStockTake', () => {
+    it('single negative variance preview matches the posted entry exactly, and posts nothing', async () => {
+      kit.seed(makeProduct({ id: 'prod-1' }), { quantityOnHand: 10, costPrice: 25, warehouseId: 'wh-1' });
+      const st = await service.createStockTake(makeStockTake());
+      await drive(st.id); // counted 7 → -3
+
+      const preview = await service.previewPostEffect(st.id);
+      expect(preview.balanced).toBe(true);
+      expect(preview.lines.find((l) => l.debit > 0)!.accountId).toBe('acc-INVENTORY_ADJUSTMENT');
+      expect(preview.lines.find((l) => l.credit > 0)!.accountId).toBe('acc-INVENTORY');
+      expect(preview.lines.reduce((s, l) => s + l.debit, 0)).toBe(75);
+      expect(preview.lines[0].source).toMatch(/Variance: .* \(-3 @ frozen WAC 25\.00\)/);
+      expect(kit.store.movements).toHaveLength(0);
+      expect(kit.store.journalEntries).toHaveLength(0);
+
+      const posted = await service.postStockTake(st.id, 'user-9');
+      const je = kit.store.journalEntries.find((j) => j.id === posted.journalEntryId)!;
+      expect(je.lines.find((l) => l.accountId === 'acc-INVENTORY_ADJUSTMENT')!.debit).toBe(75);
+    });
+
+    it('omits zero-variance lines, same as the post', async () => {
+      kit.seed(makeProduct({ id: 'p1', sku: 'A' }), { quantityOnHand: 10, costPrice: 4, warehouseId: 'wh-1' });
+      kit.seed(makeProduct({ id: 'p3', sku: 'C' }), { quantityOnHand: 10, costPrice: 2, warehouseId: 'wh-1' });
+      const st = await service.createStockTake(makeStockTake());
+      await service.freeze(st.id);
+      const frozen = await service.getStockTake(st.id);
+      const byProduct = new Map(frozen!.lineItems.map((l) => [l.productId, l.id]));
+      await service.enterCounts(st.id, [
+        { lineId: byProduct.get('p1')!, countedQty: 13 }, // +3
+        { lineId: byProduct.get('p3')!, countedQty: 10 }, // 0
+      ]);
+      await service.markReadyForReview(st.id);
+
+      const preview = await service.previewPostEffect(st.id);
+      expect(preview.lines).toHaveLength(2); // one debit + one credit for p1 only
+    });
+  });
 });

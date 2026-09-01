@@ -25,6 +25,8 @@ export interface CustomerTableProps {
    * Omit to hide the column.
    */
   overdueByCustomerId?: Map<string, number>;
+  /** Reports the current search/filter/sort result (Phase 7 export/print infrastructure) — see `DataTable`'s own doc comment. */
+  onVisibleRowsChange?: (rows: Customer[], activeFilters: { label: string; value: string }[]) => void;
 }
 
 /**
@@ -34,7 +36,7 @@ export interface CustomerTableProps {
  * PartyTable pattern. Real Customer fields only — no v0 Party fields
  * (code, category, a single `contact` object) this domain doesn't have.
  */
-export function CustomerTable({ customers, onView, onEdit, onToggleActive, overdueByCustomerId }: CustomerTableProps) {
+export function CustomerTable({ customers, onView, onEdit, onToggleActive, overdueByCustomerId, onVisibleRowsChange }: CustomerTableProps) {
   const columns: DataTableColumn<Customer>[] = [
     {
       key: 'name',
@@ -171,6 +173,7 @@ export function CustomerTable({ customers, onView, onEdit, onToggleActive, overd
       caption="Customer accounts"
       onRowClick={(c) => onView(c)}
       getRowAriaLabel={(c) => `Open customer ${c.name}`}
+      onVisibleRowsChange={onVisibleRowsChange}
     />
   );
 }

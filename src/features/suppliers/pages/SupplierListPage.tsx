@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Loader2, Plus, Truck } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Loader2, Plus, Truck, UploadIcon } from 'lucide-react';
 import { FigureBlock } from '@/components/app/figure';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
@@ -16,7 +16,24 @@ import type { UseSuppliersResult } from '../hooks/useSuppliers';
 import { SupplierTable } from '../components/SupplierTable';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useBills } from '@/features/purchases/hooks';
+import { ImportWizard } from '@/features/import/components/ImportWizard';
+import { supplierImportAdapter } from '@/features/import/adapters';
+import { ExportMenu } from '@/features/export/components/ExportMenu';
+import { PrintableReport } from '@/features/export/components/PrintableReport';
+import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { calculateFleetSummary } from '../utils/supplierFinancials';
+import type { Supplier } from '@/types';
+
+/** Never bank details, per spec §10 — "do not export sensitive banking data by default." */
+const SUPPLIER_EXPORT_COLUMNS: ExportColumn<Supplier>[] = [
+  { key: 'code', header: 'Supplier Code', accessor: (s) => s.supplierNumber },
+  { key: 'name', header: 'Name', accessor: (s) => s.name },
+  { key: 'email', header: 'Email', accessor: (s) => s.email ?? null },
+  { key: 'phone', header: 'Phone', accessor: (s) => s.phone ?? null },
+  { key: 'vat', header: 'VAT Number', accessor: (s) => s.taxNumber ?? null },
+  { key: 'terms', header: 'Payment Terms', accessor: (s) => s.paymentTerms ?? null },
+  { key: 'status', header: 'Status', accessor: (s) => (s.onHold ? 'On hold' : s.status) },
+];
 
 export interface SupplierListPageProps {
   suppliersState: UseSuppliersResult;
@@ -49,11 +66,25 @@ export function SupplierListPage({ suppliersState, onView, onEdit, onCreate }: S
   const { bills } = useBills();
   const canCreate = useCanAccess('supplier_management', 'create');
   const canUpdate = useCanAccess('supplier_management', 'update');
+  const canImport = useCanAccess('supplier_management', 'import');
+  const canExport = useCanAccess('supplier_management', 'export');
+  const [importOpen, setImportOpen] = useState(false);
+  const [visibleSuppliers, setVisibleSuppliers] = useState<Supplier[]>(suppliers);
+  const [activeFilters, setActiveFilters] = useState<{ label: string; value: string }[]>([]);
 
   const fleetSummary = useMemo(
     () => calculateFleetSummary(suppliers, bills),
     [suppliers, bills],
   );
+
+  const exportDataset: ExportDataset<Supplier> = {
+    title: 'Suppliers',
+    subtitle: `${visibleSuppliers.length} of ${suppliers.length} accounts`,
+    filters: activeFilters,
+    columns: SUPPLIER_EXPORT_COLUMNS,
+    rows: visibleSuppliers,
+    filename: `suppliers-${new Date().toISOString().slice(0, 10)}`,
+  };
 
   return (
     <>
@@ -61,12 +92,21 @@ export function SupplierListPage({ suppliersState, onView, onEdit, onCreate }: S
         title="Suppliers"
         description="Manage vendor accounts, credit terms, and accounts-payable standing."
         actions={
-          canCreate ? (
-            <Button size="sm" onClick={onCreate}>
-              <Plus data-icon="inline-start" />
-              Add supplier
-            </Button>
-          ) : undefined
+          <>
+            <ExportMenu dataset={exportDataset} allowed={canExport} />
+            {canImport && (
+              <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+                <UploadIcon data-icon="inline-start" />
+                Import
+              </Button>
+            )}
+            {canCreate && (
+              <Button size="sm" onClick={onCreate}>
+                <Plus data-icon="inline-start" />
+                Add supplier
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -159,8 +199,22 @@ export function SupplierListPage({ suppliersState, onView, onEdit, onCreate }: S
                   }
                 : undefined
             }
+            onVisibleRowsChange={(rows, filters) => {
+              setVisibleSuppliers(rows);
+              setActiveFilters(filters);
+            }}
           />
         </SectionCard>
+      )}
+
+      <PrintableReport dataset={exportDataset} className="hidden print:block" />
+
+      {importOpen && (
+        <ImportWizard
+          adapters={[supplierImportAdapter]}
+          onClose={() => setImportOpen(false)}
+          onImported={() => void refetch()}
+        />
       )}
     </>
   );

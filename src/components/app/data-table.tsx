@@ -9,7 +9,7 @@
  * Ported verbatim from accounting-v0-frontend/components/app/data-table.tsx.
  */
 
-import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, ChevronsUpDown, Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/shadcn/button';
@@ -104,6 +104,7 @@ export function DataTable<T>({
   renderDetail,
   onRowClick,
   getRowAriaLabel,
+  onVisibleRowsChange,
 }: {
   rows: T[];
   columns: DataTableColumn<T>[];
@@ -140,6 +141,20 @@ export function DataTable<T>({
   onRowClick?: (row: T) => void;
   /** Accessible name for a clickable row — defaults to a generic "Open record" if omitted. */
   getRowAriaLabel?: (row: T) => string;
+  /**
+   * Reports the current search/filter/sort result — every matching row,
+   * BEFORE pagination — any time it changes, plus a human-readable
+   * description of the active search term/filters (never their raw
+   * `value`s — a filter option's own `label`). The table never exposes
+   * its pagination state (`page`/`pageSize` stay internal), only this:
+   * the export/print infrastructure
+   * (docs/IMPORT_EXPORT_ARCHITECTURE.md § Print/Export) is the intended
+   * consumer — "export what's currently filtered" always means the full
+   * filtered result, never just the visible page of 12, and a printed
+   * report shows what filters produced it (spec §17). Omit for a table
+   * nothing exports.
+   */
+  onVisibleRowsChange?: (rows: T[], activeFilters: { label: string; value: string }[]) => void;
 }) {
   const [term, setTerm] = useState('');
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
@@ -180,6 +195,39 @@ export function DataTable<T>({
 
     return next;
   }, [rows, term, filterValues, filters, searchable, columns, sortKey, sortDirection]);
+
+  const activeFilters = useMemo(() => {
+    const active: { label: string; value: string }[] = [];
+    if (searchable && term.trim()) active.push({ label: 'Search', value: term.trim() });
+    for (const filter of filters ?? []) {
+      const value = filterValues[filter.key];
+      if (value && value !== 'all') {
+        const optionLabel = filter.options.find((o) => o.value === value)?.label ?? value;
+        active.push({ label: filter.label, value: optionLabel });
+      }
+    }
+    return active;
+  }, [searchable, term, filters, filterValues]);
+
+  // `visible`/`activeFilters` are recomputed from `columns`/`filters`/
+  // `searchable`, which every real caller passes as a fresh array/function
+  // literal on every render (never memoized) — a naive effect keyed on
+  // those objects would fire (and call `onVisibleRowsChange`, which every
+  // caller uses to setState) on EVERY render regardless of whether the
+  // result actually changed, and a caller's own re-render then triggers
+  // this render again: an infinite loop. Only fire when the result's
+  // actual content (row identity/order, active filter descriptions)
+  // differs from last time — a cheap signature string, not a deep-equal.
+  const visibleSignature = onVisibleRowsChange
+    ? visible.map(getRowKey).join(' ') + '::' + JSON.stringify(activeFilters)
+    : '';
+  const lastSignatureRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!onVisibleRowsChange || lastSignatureRef.current === visibleSignature) return;
+    lastSignatureRef.current = visibleSignature;
+    onVisibleRowsChange(visible, activeFilters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleSignature]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);

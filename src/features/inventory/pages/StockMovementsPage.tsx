@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { StockMovement } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
@@ -8,6 +8,10 @@ import { Amount } from '@/components/app/figure';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/app/format';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
+import { ExportMenu } from '@/features/export/components/ExportMenu';
+import { PrintableReport } from '@/features/export/components/PrintableReport';
+import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { useProducts } from '../hooks/useProducts';
 import { useWarehouses } from '../hooks/useWarehouses';
 import { useStockMovements } from '../hooks/useStockMovements';
@@ -21,6 +25,22 @@ interface MovementRow {
   when: string;
 }
 
+/** Preserves append-only evidence (spec §12) — every export field is a real column of `StockMovement`, nothing recomputed. */
+const MOVEMENT_EXPORT_COLUMNS: ExportColumn<MovementRow>[] = [
+  { key: 'when', header: 'Date', accessor: (r) => new Date(r.when) },
+  { key: 'sku', header: 'SKU', accessor: (r) => r.productSku },
+  { key: 'product', header: 'Product', accessor: (r) => r.productName },
+  { key: 'warehouse', header: 'Warehouse', accessor: (r) => r.warehouseName },
+  { key: 'type', header: 'Movement Type', accessor: (r) => MOVEMENT_TYPE_LABELS[r.movement.type] },
+  { key: 'qty', header: 'Quantity Change', accessor: (r) => r.movement.quantityDelta, align: 'right' },
+  { key: 'unitCost', header: 'Unit Cost', accessor: (r) => r.movement.unitCost ?? null, align: 'right' },
+  { key: 'value', header: 'Value', accessor: (r) => r.movement.totalCost ?? null, align: 'right' },
+  { key: 'sourceType', header: 'Source Type', accessor: (r) => r.movement.sourceDocumentType ?? null },
+  { key: 'sourceDocument', header: 'Source Document', accessor: (r) => r.movement.sourceDocumentId ?? null },
+  { key: 'reference', header: 'Reference', accessor: (r) => r.movement.reference ?? null },
+  { key: 'reversal', header: 'Reverses Movement', accessor: (r) => r.movement.reversalOfMovementId ?? null },
+];
+
 /**
  * Stock movement ledger — route `/inventory/movements`. The append-only
  * record of every quantity change, with the historical unit cost, value and
@@ -31,6 +51,9 @@ export function StockMovementsPage() {
   const { movements, loading, error, refetch } = useStockMovements();
   const { products } = useProducts();
   const { warehouses } = useWarehouses();
+  const canExport = useCanAccess('inventory', 'export');
+  const [visibleRows, setVisibleRows] = useState<MovementRow[]>([]);
+  const [activeFilters, setActiveFilters] = useState<{ label: string; value: string }[]>([]);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const warehouseById = useMemo(() => new Map(warehouses.map((w) => [w.id, w])), [warehouses]);
@@ -48,6 +71,15 @@ export function StockMovementsPage() {
         })),
     [movements, productById, warehouseById],
   );
+
+  const exportDataset: ExportDataset<MovementRow> = {
+    title: 'Stock Movements',
+    subtitle: `${visibleRows.length} of ${movements.length} movements`,
+    filters: activeFilters,
+    columns: MOVEMENT_EXPORT_COLUMNS,
+    rows: visibleRows,
+    filename: `stock-movements-${new Date().toISOString().slice(0, 10)}`,
+  };
 
   const totalIn = movements.filter((m) => m.quantityDelta > 0).reduce((s, m) => s + m.quantityDelta, 0);
   const totalOut = movements.filter((m) => m.quantityDelta < 0).reduce((s, m) => s + Math.abs(m.quantityDelta), 0);
@@ -187,6 +219,7 @@ export function StockMovementsPage() {
       <PageHeader
         title="Stock movements"
         description="The append-only ledger of every quantity change — the single record of why stock moved."
+        actions={<ExportMenu dataset={exportDataset} allowed={canExport} />}
       />
 
       <SectionCard>
@@ -223,9 +256,15 @@ export function StockMovementsPage() {
             pageSize={20}
             emptyTitle="No stock movements"
             emptyDescription="Movements appear here as documents post and stock actions are recorded."
+            onVisibleRowsChange={(rows, filters) => {
+              setVisibleRows(rows);
+              setActiveFilters(filters);
+            }}
           />
         </SectionCard>
       )}
+
+      <PrintableReport dataset={exportDataset} className="hidden print:block" />
     </div>
   );
 }

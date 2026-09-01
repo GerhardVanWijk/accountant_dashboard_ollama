@@ -214,5 +214,44 @@ describe('StockTransferService', () => {
       expect(kit.store.journalEntries).toHaveLength(1);
       expect(kit.store.movements.filter((m) => m.type === 'transfer_out')).toHaveLength(2);
     });
+
+    describe('preview*Effect — built from the same line-builder as the real post', () => {
+      it('previewCompleteEffect: no GL impact, always balanced, posts nothing', async () => {
+        const transfer = await posting.createTransfer(makeTransfer());
+        const preview = await posting.previewCompleteEffect(transfer.id);
+        expect(preview.lines).toHaveLength(0);
+        expect(preview.balanced).toBe(true);
+      });
+
+      it('previewDispatchEffect: Dr 1210 / Cr inventory, balanced, matches the posted dispatch entry', async () => {
+        const transfer = await posting.createTransfer(makeTransfer()); // 6 units of prod_1 @ WAC 3
+        const preview = await posting.previewDispatchEffect(transfer.id);
+
+        expect(preview.balanced).toBe(true);
+        expect(preview.lines.find((l) => l.debit > 0)!.accountId).toBe('acc-INVENTORY_IN_TRANSIT');
+        expect(preview.lines.find((l) => l.credit > 0)!.accountId).toBe('acc-INVENTORY');
+        expect(preview.lines.reduce((s, l) => s + l.debit, 0)).toBe(18);
+        expect(kit.store.journalEntries).toHaveLength(0); // preview posts nothing
+
+        const dispatched = await posting.dispatch(transfer.id);
+        const je = kit.store.journalEntries.find((j) => j.id === dispatched.dispatchedJournalEntryId)!;
+        expect(je.lines.find((l) => l.accountId === 'acc-INVENTORY_IN_TRANSIT')!.debit).toBe(18);
+      });
+
+      it('previewReceiveEffect: Dr inventory / Cr 1210, balanced, only valid once in transit', async () => {
+        const transfer = await posting.createTransfer(makeTransfer());
+        await posting.dispatch(transfer.id);
+        const preview = await posting.previewReceiveEffect(transfer.id);
+
+        expect(preview.balanced).toBe(true);
+        expect(preview.lines.find((l) => l.debit > 0)!.accountId).toBe('acc-INVENTORY');
+        expect(preview.lines.find((l) => l.credit > 0)!.accountId).toBe('acc-INVENTORY_IN_TRANSIT');
+      });
+
+      it('throws when the posting engine is not wired', async () => {
+        const transfer = await service.createTransfer(makeTransfer());
+        await expect(service.previewDispatchEffect(transfer.id)).rejects.toThrow(/not available/i);
+      });
+    });
   });
 });

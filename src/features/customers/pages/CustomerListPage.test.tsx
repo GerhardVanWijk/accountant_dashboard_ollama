@@ -112,4 +112,17 @@ describe('CustomerListPage', () => {
     render(<CustomerListPage {...noopProps} />);
     expect(screen.getByRole('button', { name: /new customer/i })).toBeInTheDocument();
   });
+
+  it('hides Export for a user without customer_management:export (Phase 7)', () => {
+    mockedUseCustomers.mockReturnValue({ customers: [baseCustomer()], loading: false, error: null, refetch: vi.fn() });
+    render(<CustomerListPage {...noopProps} />);
+    expect(screen.queryByRole('button', { name: /^export$/i })).not.toBeInTheDocument();
+  });
+
+  it('shows Export once the user holds customer_management:export, disabled state tied to row count', () => {
+    usePermissionStore.getState().setPermissions('c1', [makePermission({ action: 'export' })]);
+    mockedUseCustomers.mockReturnValue({ customers: [baseCustomer()], loading: false, error: null, refetch: vi.fn() });
+    render(<CustomerListPage {...noopProps} />);
+    expect(screen.getByRole('button', { name: /^export$/i })).toBeEnabled();
+  });
 });

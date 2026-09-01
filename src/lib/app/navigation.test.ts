@@ -16,10 +16,12 @@ describe('navigation — Inventory module', () => {
     expect(titles.indexOf('Inventory')).toBeGreaterThan(titles.indexOf('Purchases & Expenses'));
   });
 
-  it('the Inventory group links Overview / Products / Categories / Warehouses / Stock Movements', () => {
+  it('the Inventory group links Overview / Operations / Reports / Products / Categories / Warehouses / Stock Movements', () => {
     const items = group('Inventory')!.items;
     expect(items.map((i) => i.href)).toEqual([
       '/inventory',
+      '/inventory/operations',
+      '/inventory/reports',
       '/inventory/products',
       '/inventory/categories',
       '/inventory/warehouses',

@@ -1299,10 +1299,286 @@ the established responsive Tailwind + Vertex components.
 
 - [ ] **STOP — Review 4.** Report delivered. Do NOT start the import/reporting build. Do NOT commit/push.
 
-## PHASE 5 — STOCK TAKE SYSTEM / WORKFLOWS — NOT STARTED
-## PHASE 6 — IMPORT FRAMEWORK — NOT STARTED
-## PHASE 7 — EXPORT / PRINTING — NOT STARTED
-## PHASE 8 — INVENTORY REPORTS — NOT STARTED
+## PHASE 5 — STOCK TAKE SYSTEM / WORKFLOWS — **COMPLETE, awaiting Review 5**
+
+Draft-then-post UI over every Phase-3 workflow service (stockAdjustmentService /
+stockTransferService / stockTakeService / supplierReturnService /
+openingStockBatchService) — no engine changes, no migrations, no Office National writes.
+
+**Step 0 (approved):** shared `AccountingEffectPreview` contract + `previewXEffect()` on
+all five services (same line-building pass that posts — preview can never drift from what
+posts); shared `AccountingPreview` table component; supplier-return PPV line always shown,
+even at R0.00; transfer preview corrected to the product's live WAC; inventory statuses
+added to `StatusBadge`.
+
+**Steps 1–5 — one register per workflow**, each: `use<Workflow>()` hook →
+`<Workflow>LinesEditor` → `<Workflow>DocumentForm(Modal)` (draft header + lines) →
+`<Workflow>Detail(Sheet)` (register/preview/lifecycle actions, `AccountingPreview` wired
+to the real `previewXEffect()`) → `<Workflow>sTable` → `<Workflow>sPage`, routed under
+`/inventory/*`:
+
+- `/inventory/adjustments` — draft → pending_approval → posted (or cancelled); posted can
+  be reversed.
+- `/inventory/transfers` — draft → in_transit → completed (dispatch/receive, two GL legs)
+  **or** draft → completed immediate (GL-neutral) — both branches are the service's own,
+  not a UI choice.
+- `/inventory/stock-takes` — draft (scope only, no manual lines) → counting (freeze
+  snapshots `expectedQty`/frozen WAC server-side; counts entered in place) →
+  ready_for_review → posted.
+- `/inventory/supplier-returns` — draft → posted; PPV always shown in the preview.
+- `/inventory/opening-stock` — draft → confirmed, gated behind an explicit
+  "I confirm this opening balance is accurate" checkbox in the UI (the service's own
+  `{ confirmed: true }` contract), not a plain click-to-post button.
+
+**Step 6 — Operations hub + navigation:** new `/inventory/operations` landing page
+(`InventoryOperationsPage`) linking to all five registers with a pending-count badge per
+workflow, real hook data only; "Operations" added to the Inventory nav group (position 2,
+after Overview); breadcrumb segment labels added for every new route.
+
+**Step 7 — InventoryOverview integration + legacy UI removed:** `InventoryOverviewPage`'s
+"Stock actions" menu now links straight to the five real registers (plus "View all
+operations") instead of opening the old single-delta `StockAdjustmentFormModal` /
+`StockTransferFormModal` dialogs or a Phase-5 "coming soon" `ConfirmDialog`; same swap on
+`WarehousesPage`'s quick actions. The two legacy direct-mutation form components
+(`StockAdjustmentForm(Modal)`, `StockTransferForm(Modal)` — the ones that called
+`stockService.adjustStock/transferStock` directly, bypassing the lifecycle/posting
+services) are deleted; nothing references them any more. Fixed a pre-existing Base-UI
+`DropdownMenuLabel` crash (`Menu.Group` context) uncovered by testing the now-real menu.
+
+**Step 8 — permission sweep:** every one of the five pages now gates "New …" on
+`useCanAccess('inventory','create')`, the register's Delete action on `'delete'`, and the
+ENTIRE detail-sheet action bar (submit/approve/post/dispatch/receive/complete/freeze/
+mark-ready/confirm/cancel/reverse) on `'update'` via a new `canManage` prop — previously
+none of the five pages checked permissions at all. A user without `inventory:update` sees
+every register as read-only; a stock-take's `onSaveCounts` is also gated so counts can
+never be entered without it.
+
+**Gate:** type-check ✅ / lint (`--max-warnings 0`, tracked `src/`) ✅ /
+**1589 tests (210 files)** ✅ (+42 vs Phase 4) / `vite build` ✅. No Office National writes.
+No commits, no pushes.
+
+- [ ] **STOP — Review 5.** Report delivered. Do NOT start the import framework
+  (Phase 6). Do NOT commit/push.
+
+## PHASE 6 — SHARED IMPORT FRAMEWORK — **COMPLETE, awaiting Review 6**
+
+One reusable import engine (`src/features/import/`) — CSV/XLS/XLSX, generic column
+mapping, row-level validation, duplicate detection, execution, result reporting — NOT
+Inventory-only. Full architecture, the accounting-safety boundary for every
+accounting-adjacent adapter, and known limitations: `docs/IMPORT_EXPORT_ARCHITECTURE.md`.
+
+**Audit (step 1):** reused `banking/utils/statementParsers.ts`'s quoted-CSV parsing
+approach (as an independent copy — banking-specific, not a dependency to take) and
+`StatementImportWizard.tsx`'s visual idiom; no XLS/XLSX library, column mapping, generic
+validation model, duplicate-detection abstraction, or product/customer/supplier import
+existed anywhere before this phase.
+
+**Engine:** `parsers/` (CSV hand-rolled; XLS/XLSX via `xlsx@0.18.5` — SheetJS, the only
+maintained npm package; `npm audit` flags a known no-fix-available advisory, mitigated
+by file-size/row limits and never evaluating formulas, not eliminated — see the doc's §
+Known issues) → `mapping.ts` (exact-normalized-match alias suggestion only, never fuzzy)
+→ `types.ts`'s `ImportAdapter<T,C>` contract → `hooks/useImportWizard.ts` (the pipeline
+state machine) → `components/ImportWizard.tsx` (the one shared UI, Vertex form shell).
+
+**Five adapters** (`adapters/`): Inventory Products (SKU/name/pricing/category/
+supplier/tax; WAC protection — never rewrites `costPrice` on a SKU with stock on hand),
+Opening Stock (creates one `draft` batch only, never posts — Phase 5's own confirm gate
+still required), Stock Take Counts (writes only `countedQty` onto an already-frozen
+sheet's existing lines — `expectedQty`/frozen WAC are physically unreachable from this
+adapter), Customers, Suppliers (bank details are not an import field at all — cannot be
+set or overwritten by any spreadsheet). None post to the GL except by creating an
+inert draft (Opening Stock) that a human must still explicitly confirm.
+
+**UI integration:** `InventoryOverviewPage`'s Import button (was a "coming soon"
+placeholder) now opens the real wizard with all three Inventory adapters;
+`CustomerListPage`/`SupplierListPage` each gained their own gated Import button.
+
+**Permissions:** every adapter gates on `useCanAccess(feature, 'import')` — `inventory`
+for the three Inventory adapters, this codebase's real `customer_management`/
+`supplier_management` feature keys for the other two (verified against those pages' own
+`useCanAccess()` calls, not guessed). No new RLS.
+
+**Audit:** new `AuditAction` value `data_imported` (text column, no migration) — one
+summary row per run (counts + filename, never the parsed rows or the file itself) via
+`services/importAuditService.ts`.
+
+**A real bug found and fixed along the way:** `useImportWizard`'s adapter-context load
+for a single-adapter wizard unconditionally forced the step back to `'file'` once its
+own async load resolved — if that (real reference-data fetch) outlasted the user's file
+upload, it would silently discard whatever step the user had already reached. Caught by
+the wizard's own integration test, not by inspection; fixed by splitting context-loading
+from step-navigation (`loadAdapterContext()` vs `selectAdapter()`).
+
+**Gate:** type-check ✅ / lint (`--max-warnings 0`, tracked `src/`, incl.
+`--report-unused-disable-directives`) ✅ / **102 new tests (13 files)** covering every
+parser, mapping, normalization helper, all five adapters (incl. WAC protection and the
+frozen-stock-take-scope boundary specifically), and a full `ImportWizard`
+file→mapping→review→execute→result integration test / build: pending final full-suite
+run. No Office National writes (all tests run against mocks/fakes). No commits, no
+pushes.
+
+**Not built (documented, not silently dropped):** Price-list import (spec marked it
+conditional — "if the architecture fits cleanly"; the shape fits, left as a follow-up
+adapter) and an XLSX (vs CSV) error-report export.
+
+- [ ] **STOP — Review 6.** Report delivered. Do NOT start Phase 7 (print/export/reports).
+  Do NOT commit/push.
+
+## PHASE 7 — SHARED PRINT / EXPORT INFRASTRUCTURE — **COMPLETE, awaiting Review 7**
+
+One reusable print/export engine (`src/features/export/`) — structured-data CSV/XLSX
+export, a shared printable report shell, and one `ExportMenu` — reused across
+Customers/Suppliers/Inventory/Stock Movements/Stock Takes/Operations, not built
+per-page. Full architecture, formatting rules, and known limitations added as
+`# PART B` of `docs/IMPORT_EXPORT_ARCHITECTURE.md` (Part A is Phase 6's import engine).
+
+**Audit (step 1):** no CSV/XLSX export, print stylesheet, or shared export model
+existed anywhere before this phase; the only prior "export" was ad hoc and unwired.
+Reused Phase 6's adapter-contract idiom (`ExportColumn<T>`/`ExportDataset<T>`) and
+Tailwind's built-in `print:` variant instead of a hand-rolled `@media print`
+stylesheet for hiding individual screen-only controls.
+
+**Engine:** `types.ts` (`ExportColumn<T>`/`ExportDataset<T>`/`ExportOptions` — export
+always reads structured data via `accessor`, never React table markup) → `csvExport.ts`
+(UTF-8 BOM, quote/comma/newline escaping, numeric values stay numeric, totals row) →
+`xlsxExport.ts` (genuine SheetJS cells — `{ cellDates: true }` after a test caught
+dates being written as serial numbers instead — real number/date types, never a
+formula cell, sheet name truncated to Excel's 31-char limit) → `PrintableReport.tsx`
+(the one printable shell: company name/reg/VAT via `useCompany()`, title, subtitle,
+active filters, generated timestamp, table, totals, footer — no sidebar/nav/buttons/
+filters/modal chrome, ever) → `ExportMenu.tsx` (Print/Save PDF via `window.print()`,
+Export CSV, Export Excel; `allowed` prop gates rendering entirely; disabled with zero
+rows; busy state during XLSX generation).
+
+**Print mechanism:** browser-native only — "Print / Save PDF" opens the OS print
+dialog, no PDF-generation dependency added. `globals.css` gained one `@media print`
+block hiding `[data-slot='sidebar']`/`app-topbar`/toaster app-chrome and giving tables
+sane page-break behavior; individual screen-only controls hide via `print:hidden`
+instead of stylesheet bloat.
+
+**Export what's filtered, not what's paginated:** `DataTable` gained
+`onVisibleRowsChange(rows, activeFilters)`, reporting the full search/filter/sort
+result — never just the current page of 12 — plus human-readable filter descriptions
+(option labels, never raw values), so a page's export/print dataset and its printed
+report both reflect what the user is actually looking at.
+
+**Wired into 9 surfaces:** Customers (code/name/email/phone/VAT/terms/balance/status —
+no sensitive fields), Suppliers (same shape, explicitly no banking data — verified by
+a new negative test), Inventory (SKU→Margin/Status, using the existing valuation
+contract, never independently recalculated), Stock Movements (full append-only
+evidence trail incl. reversal linkage), Stock Take count sheets (Blind: SKU/Product/
+blank write-in only; Standard: adds Expected Qty; neither ever shows WAC/unit cost —
+Phase 5's printing placeholder, now real) and results (Expected/Counted/Variance/
+Frozen WAC/Variance Value/Reason once counting is done), and the four Operations
+registers (Adjustments/Transfers/Supplier Returns/Opening Stock — list/history level
+only, no per-document PDFs yet, per spec).
+
+**Money formatting, deliberately split:** CSV/XLSX numeric columns are always real
+numbers (`1234.56`, never `"R 1,234.56"`); the printed report is the only place money
+renders as formatted currency text — enforced per-column via an explicit
+`formatForPrint` on top of the plain numeric `accessor`, not inferred.
+
+**Permissions:** every surface's `ExportMenu`/count-sheet export gates on
+`useCanAccess(feature, 'export')` against that surface's real feature key
+(`customer_management`/`supplier_management`/`inventory`) — no new RLS, consistent
+with Phase 5/6.
+
+**A real bug found and fixed along the way:** the first `onVisibleRowsChange`
+implementation kept a naive `useEffect([visible, activeFilters])`. Every real caller
+constructs its `columns`/`filters` as fresh array/function literals per render
+(never memoized) — harmless before this phase, but since the effect calls the
+parent's `setState`, a fresh-reference re-render → effect fires → parent re-renders →
+fresh references again became an infinite loop, pegging a test-runner worker's CPU for
+27+ minutes before being caught (not a slow test — a genuinely hung one, confirmed via
+direct process inspection). This is a real production bug: it would have hung the
+browser on every page using the new export wiring, not just in tests. Fixed by
+comparing a cheap content signature (row-key + filter-descriptor string, via
+`useRef`) instead of object identity, so the callback only fires when the actual
+result changes. A second, narrower regression surfaced while re-running the full
+suite: always mounting `PrintableReport` (a second, real `<table>` with identical row
+text, `hidden print:block` only — a CSS class jsdom doesn't apply) made ordinary
+`getByText` queries ambiguous across every exporting page's tests. Fixed with a
+dedicated `data-print-only` marker plus a global RTL `defaultIgnore` — deliberately
+NOT scoped off `aria-hidden` generally, since Base UI's own Dialog/Sheet/Dropdown
+primitives legitimately apply `aria-hidden` to background content while a portal is
+open, and doing so first broke an unrelated, pre-existing banking test for exactly
+that reason before being narrowed.
+
+**Gate:** type-check ✅ / lint (`--max-warnings 0`, tracked `src/`, incl.
+`--report-unused-disable-directives`) ✅ / **full suite: 1735 tests, 228 files, all
+passing** (new export/print tests plus every pre-existing test re-verified clean after
+the two fixes above) / build ✅ (`vite build`, one pre-existing informational
+chunk-size warning, no errors). No Office National writes — print/export is read-only,
+no DB mutations. No commits, no pushes.
+
+**Not built (documented, not silently dropped, per spec):** per-document Operations
+PDFs (list/history export only), slow-moving/dead-stock/profitability/valuation-by-date
+report analytics (Phase 8), a true running page-footer beyond the browser's own print
+header/footer, company logo (no such field exists on `Company` yet — branding is
+name/registration/VAT only), and a separate export row-limit distinct from the
+existing XLSX 20,000-row import limit.
+
+- [ ] **STOP — Review 7.** Report delivered. Do NOT start Phase 8 (inventory report
+  analytics). Do NOT commit/push.
+
+## PHASE 8 — INVENTORY REPORTS & ANALYTICS — **COMPLETE, awaiting Review 8**
+
+14 reports + one hub over the authoritative inventory/accounting data — never
+independently recalculated. Full data-availability audit, per-report purpose/source/
+formula/limitations: `docs/INVENTORY_REPORTS.md`.
+
+**Audit (step 1, before any screen was built):** classified every proposed report
+A (fully supported) / B (derived but honest) / C (cannot be built without fabricating
+a relationship). Found: `InvoiceLineItem`/`BillLineItem` carry no `productId` anywhere
+in this schema, and `StockMovement` carries no `supplierId` — so Category/Supplier
+"sales," "COGS," "margin," and "purchase activity/profitability" are all class C and
+were NOT built as such; Margin Analysis is current-theoretical only. Reconciliation
+Check F (movement evidence) stays deferred to Phase 14 per its own pre-existing doc
+comment. Full table in `docs/INVENTORY_REPORTS.md` §0.
+
+**Route:** `/inventory/reports` hub (STOCK/MOVEMENT/CONTROL/ANALYSIS groups) + 14
+report routes, added to the Inventory nav group between Operations and Products.
+
+**Shared infrastructure (new):** `src/features/inventory/reports/` — pure,
+independently-tested row builders (`buildStockOnHandRows`, `buildLowStockRows`,
+`buildOutOfStockRows`, `buildAdjustmentReportRows`, `buildTransferReportRows`,
+`buildStockTakeVarianceRows`, `buildWarehouseAnalysisRows`,
+`buildCategoryAnalysisRows`, `buildSupplierAnalysisRows`, `buildMarginAnalysisRows`,
+`buildSlowMovingRows`) + `dateRange.ts` (This Month/Last Month/This Quarter/This
+Financial Year — real `FinancialYear` records, never hardcoded/Custom) +
+`useStockOnHandData()` (one combined fetch, avoiding N+1 across 8 report pages) +
+`InventoryReportShell`/`DateRangeControl` (shared chrome, reusing Phase 7's
+ExportMenu/PrintableReport — no bespoke per-report export code).
+
+**Reports built:** Stock on Hand, Inventory Valuation (line-level + the real
+`reconcileInventory()` GL reconciliation reused verbatim), Low Stock (documented
+`max(reorderQuantity, preferredStockLevel − available)` formula), Out of Stock, Stock
+Movement (date-range report view alongside the unchanged operational ledger page),
+Stock Adjustments (line-level, gain/loss/write-off totals), Transfers (in-transit
+days), Stock Take Variance (frozen evidence only, counted lines only), Inventory
+Reconciliation (full A–G sectioned report over the Phase 3B engine, Check F shown as
+an honest "not run"), Warehouse Analysis, Category Analysis (stock/value only, limit
+documented on-screen), Supplier Analysis (inventory position only, never
+"profitability"), Margin Analysis (current theoretical, labeled everywhere), Slow-
+Moving/Dead Stock (economic-movement definition excludes transfers, matching
+`reconcileInventory()`'s own convention; `lastSaleAt` tracked separately from
+`lastMovementAt`).
+
+**Not built (documented, not silently dropped):** per-document Operations PDFs (list/
+history level only, per spec), inline row-click drill-down from a report page into a
+detail sheet, sales/COGS/margin/purchase-activity columns anywhere the schema can't
+support them honestly.
+
+**Gate:** type-check ✅ / lint (`--max-warnings 0`, incl.
+`--report-unused-disable-directives`) ✅ / **full suite: 1825 tests, 256 files, all
+passing** (90 new tests for this phase's builders/hooks/pages, plus every pre-existing
+test re-verified clean) / build ✅. No Office National writes — every report page is
+read-only, no service mutation imported anywhere in `pages/reports/`. No commits, no
+pushes.
+
+- [ ] **STOP — Review 8.** Report delivered. Do NOT start Phase 9 (relationships). Do
+  NOT commit/push.
+
 ## PHASE 9 — RELATIONSHIPS — NOT STARTED
 ## PHASE 10 — FIXED ASSET CLEANUP — NOT STARTED
 ## PHASE 11 — PERMISSIONS / AUDIT — NOT STARTED

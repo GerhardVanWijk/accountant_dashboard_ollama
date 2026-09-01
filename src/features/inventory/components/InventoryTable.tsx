@@ -13,11 +13,13 @@ interface Props {
   suppliers: Supplier[];
   warehouses: Warehouse[];
   onSelect: (product: Product) => void;
+  /** Reports the current search/filter/sort result (Phase 7 export/print infrastructure) — see `DataTable`'s own doc comment. */
+  onVisibleRowsChange?: (rows: InventoryRow[], activeFilters: { label: string; value: string }[]) => void;
 }
 
 const qty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
 
-export function InventoryTable({ products, balances, categories, suppliers, warehouses, onSelect }: Props) {
+export function InventoryTable({ products, balances, categories, suppliers, warehouses, onSelect, onVisibleRowsChange }: Props) {
   const rows = useMemo(
     () => buildInventoryRows(products, balances, categories, suppliers),
     [products, balances, categories, suppliers],
@@ -213,6 +215,7 @@ export function InventoryTable({ products, balances, categories, suppliers, ware
       onRowClick={(r) => onSelect(r.product)}
       getRowAriaLabel={(r) => `Open ${r.product.name}`}
       caption={`${products.length} item${products.length === 1 ? '' : 's'}`}
+      onVisibleRowsChange={onVisibleRowsChange}
     />
   );
 }

@@ -26,6 +26,8 @@ export interface SupplierTableProps {
    * and Status). Omit to hide the column.
    */
   outstandingBySupplierId?: Map<string, number>;
+  /** Reports the current search/filter/sort result (Phase 7 export/print infrastructure) — see `DataTable`'s own doc comment. */
+  onVisibleRowsChange?: (rows: Supplier[], activeFilters: { label: string; value: string }[]) => void;
 }
 
 /**
@@ -37,7 +39,7 @@ export interface SupplierTableProps {
  * filter bar. Real Supplier fields only — no v0 Party fields (code,
  * a single `contact` object) this domain doesn't have.
  */
-export function SupplierTable({ suppliers, onView, onEdit, onToggleHold, onToggleStatus, outstandingBySupplierId }: SupplierTableProps) {
+export function SupplierTable({ suppliers, onView, onEdit, onToggleHold, onToggleStatus, outstandingBySupplierId, onVisibleRowsChange }: SupplierTableProps) {
   const columns: DataTableColumn<Supplier>[] = [
     {
       key: 'name',
@@ -181,6 +183,7 @@ export function SupplierTable({ suppliers, onView, onEdit, onToggleHold, onToggl
       caption="Supplier accounts"
       onRowClick={(s) => onView(s)}
       getRowAriaLabel={(s) => `Open supplier ${s.name}`}
+      onVisibleRowsChange={onVisibleRowsChange}
     />
   );
 }

@@ -48,6 +48,27 @@ import { ProductsPage } from '@/features/inventory/pages/ProductsPage';
 import { WarehousesPage } from '@/features/inventory/pages/WarehousesPage';
 import { CategoriesPage } from '@/features/inventory/pages/CategoriesPage';
 import { StockMovementsPage } from '@/features/inventory/pages/StockMovementsPage';
+import { StockAdjustmentsPage } from '@/features/inventory/pages/StockAdjustmentsPage';
+import { StockTransfersPage } from '@/features/inventory/pages/StockTransfersPage';
+import { StockTakesPage } from '@/features/inventory/pages/StockTakesPage';
+import { SupplierReturnsPage } from '@/features/inventory/pages/SupplierReturnsPage';
+import { OpeningStockBatchesPage } from '@/features/inventory/pages/OpeningStockBatchesPage';
+import { InventoryOperationsPage } from '@/features/inventory/pages/InventoryOperationsPage';
+import { InventoryReportsHubPage } from '@/features/inventory/pages/reports/InventoryReportsHubPage';
+import { StockOnHandReportPage } from '@/features/inventory/pages/reports/StockOnHandReportPage';
+import { InventoryValuationReportPage } from '@/features/inventory/pages/reports/InventoryValuationReportPage';
+import { LowStockReportPage } from '@/features/inventory/pages/reports/LowStockReportPage';
+import { OutOfStockReportPage } from '@/features/inventory/pages/reports/OutOfStockReportPage';
+import { StockMovementReportPage } from '@/features/inventory/pages/reports/StockMovementReportPage';
+import { StockAdjustmentReportPage } from '@/features/inventory/pages/reports/StockAdjustmentReportPage';
+import { TransferReportPage } from '@/features/inventory/pages/reports/TransferReportPage';
+import { StockTakeVarianceReportPage } from '@/features/inventory/pages/reports/StockTakeVarianceReportPage';
+import { InventoryReconciliationReportPage } from '@/features/inventory/pages/reports/InventoryReconciliationReportPage';
+import { CategoryAnalysisReportPage } from '@/features/inventory/pages/reports/CategoryAnalysisReportPage';
+import { WarehouseAnalysisReportPage } from '@/features/inventory/pages/reports/WarehouseAnalysisReportPage';
+import { SupplierAnalysisReportPage } from '@/features/inventory/pages/reports/SupplierAnalysisReportPage';
+import { MarginAnalysisReportPage } from '@/features/inventory/pages/reports/MarginAnalysisReportPage';
+import { SlowMovingReportPage } from '@/features/inventory/pages/reports/SlowMovingReportPage';
 import { AssetRegisterPage } from '@/features/assets/pages/AssetRegisterPage';
 import { DepreciationPage } from '@/features/assets/pages/DepreciationPage';
 import { DisposalsPage } from '@/features/assets/pages/DisposalsPage';
@@ -174,6 +195,27 @@ export const routes: RouteObject[] = [
           { path: 'inventory/categories', element: <PermissionRoute feature="inventory" action="read"><CategoriesPage /></PermissionRoute> },
           { path: 'inventory/warehouses', element: <PermissionRoute feature="inventory" action="read"><WarehousesPage /></PermissionRoute> },
           { path: 'inventory/movements', element: <PermissionRoute feature="inventory" action="read"><StockMovementsPage /></PermissionRoute> },
+          { path: 'inventory/adjustments', element: <PermissionRoute feature="inventory" action="read"><StockAdjustmentsPage /></PermissionRoute> },
+          { path: 'inventory/transfers', element: <PermissionRoute feature="inventory" action="read"><StockTransfersPage /></PermissionRoute> },
+          { path: 'inventory/stock-takes', element: <PermissionRoute feature="inventory" action="read"><StockTakesPage /></PermissionRoute> },
+          { path: 'inventory/supplier-returns', element: <PermissionRoute feature="inventory" action="read"><SupplierReturnsPage /></PermissionRoute> },
+          { path: 'inventory/opening-stock', element: <PermissionRoute feature="inventory" action="read"><OpeningStockBatchesPage /></PermissionRoute> },
+          { path: 'inventory/operations', element: <PermissionRoute feature="inventory" action="read"><InventoryOperationsPage /></PermissionRoute> },
+          { path: 'inventory/reports', element: <PermissionRoute feature="inventory" action="read"><InventoryReportsHubPage /></PermissionRoute> },
+          { path: 'inventory/reports/stock-on-hand', element: <PermissionRoute feature="inventory" action="read"><StockOnHandReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/valuation', element: <PermissionRoute feature="inventory" action="read"><InventoryValuationReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/low-stock', element: <PermissionRoute feature="inventory" action="read"><LowStockReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/out-of-stock', element: <PermissionRoute feature="inventory" action="read"><OutOfStockReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/movements', element: <PermissionRoute feature="inventory" action="read"><StockMovementReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/adjustments', element: <PermissionRoute feature="inventory" action="read"><StockAdjustmentReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/transfers', element: <PermissionRoute feature="inventory" action="read"><TransferReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/stock-take-variance', element: <PermissionRoute feature="inventory" action="read"><StockTakeVarianceReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/inventory-reconciliation', element: <PermissionRoute feature="inventory" action="read"><InventoryReconciliationReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/category-analysis', element: <PermissionRoute feature="inventory" action="read"><CategoryAnalysisReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/warehouse-analysis', element: <PermissionRoute feature="inventory" action="read"><WarehouseAnalysisReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/supplier-analysis', element: <PermissionRoute feature="inventory" action="read"><SupplierAnalysisReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/margin-analysis', element: <PermissionRoute feature="inventory" action="read"><MarginAnalysisReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/slow-moving', element: <PermissionRoute feature="inventory" action="read"><SlowMovingReportPage /></PermissionRoute> },
           { path: 'assets/register', element: <AssetRegisterPage /> },
           { path: 'assets/depreciation', element: <DepreciationPage /> },
           { path: 'assets/disposals', element: <DisposalsPage /> },

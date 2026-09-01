@@ -10,6 +10,7 @@ import {
   postingProductLookup,
   type PostingProductLookup,
 } from './inventoryPostingEngineInstance';
+import type { AccountingEffectPreview, AccountingPreviewLine } from '../types/accountingPreview';
 
 /**
  * Minimal surface of JournalEntryService the real (Phase 3) dispatch/receipt
@@ -222,25 +223,53 @@ export class StockTransferService {
     });
   }
 
-  /** Builds the dispatch / receive in-transit leg (one line per product, one warehouse). */
-  private async postTransferLeg(transfer: StockTransfer, leg: 'dispatch' | 'receive'): Promise<ID | undefined> {
+  /**
+   * The ONE line-building pass for a dispatch/receive in-transit leg —
+   * shared by `postTransferLeg()` and `previewDispatchEffect()`/
+   * `previewReceiveEffect()`, so the preview and the post can never drift.
+   */
+  private async buildTransferLegLines(
+    transfer: StockTransfer,
+    leg: 'dispatch' | 'receive',
+  ): Promise<{ engine: InventoryTransactionLine[]; preview: AccountingPreviewLine[] }> {
     const transitAccountId = await this.accountResolver!.resolveKey('INVENTORY_IN_TRANSIT');
     const warehouseId = leg === 'dispatch' ? transfer.fromWarehouseId : transfer.toWarehouseId;
-    const lines: InventoryTransactionLine[] = [];
+    const engine: InventoryTransactionLine[] = [];
+    const preview: AccountingPreviewLine[] = [];
     for (const line of transfer.lineItems) {
       const product = await this.products!.getById(line.productId);
       if (!product) {
         throw new Error(`Cannot ${leg} "${transfer.transferNumber}": product "${line.productId}" not found.`);
       }
-      lines.push({
+      const inventoryAccountId = await this.accountResolver!.resolveForProduct(product, 'inventory');
+      engine.push({
         productId: line.productId,
         warehouseId,
         quantityDelta: leg === 'dispatch' ? -line.quantity : line.quantity,
         costingMode: leg === 'dispatch' ? 'transfer_out' : 'transfer_in',
-        inventoryAccountId: await this.accountResolver!.resolveForProduct(product, 'inventory'),
+        inventoryAccountId,
         contraAccountId: transitAccountId,
       });
+      // No unitCostOverride is passed above — the engine values transfer_out/
+      // transfer_in at the product's CURRENT WAC, not the line's stored
+      // unitCost (which only reflects the cost at the time the line was
+      // added). The preview must use the same current cost to match.
+      const amount = roundToCents(line.quantity * product.costPrice);
+      const source = `${leg === 'dispatch' ? 'Dispatch' : 'Receipt'} — ${product.name}`;
+      if (leg === 'dispatch') {
+        preview.push({ accountId: transitAccountId, debit: amount, credit: 0, source });
+        preview.push({ accountId: inventoryAccountId, debit: 0, credit: amount, source });
+      } else {
+        preview.push({ accountId: inventoryAccountId, debit: amount, credit: 0, source });
+        preview.push({ accountId: transitAccountId, debit: 0, credit: amount, source });
+      }
     }
+    return { engine, preview };
+  }
+
+  /** Builds the dispatch / receive in-transit leg (one line per product, one warehouse). */
+  private async postTransferLeg(transfer: StockTransfer, leg: 'dispatch' | 'receive'): Promise<ID | undefined> {
+    const { engine: lines } = await this.buildTransferLegLines(transfer, leg);
     const result = await this.engine!.applyInventoryTransaction({
       postingKey: `stock_transfer:${transfer.id}:${leg}`,
       sourceType: 'stock_transfer',
@@ -250,6 +279,40 @@ export class StockTransferService {
       lines,
     });
     return result.journalEntryId;
+  }
+
+  private requirePostingWiring(): void {
+    if (!this.accountResolver || !this.products) {
+      throw new Error('Cannot preview: the account resolver / product lookup is not available in this context.');
+    }
+  }
+
+  private static balancedPreview(lines: AccountingPreviewLine[]): AccountingEffectPreview {
+    const totalDebit = roundToCents(lines.reduce((sum, l) => sum + l.debit, 0));
+    const totalCredit = roundToCents(lines.reduce((sum, l) => sum + l.credit, 0));
+    return { lines, balanced: totalDebit === totalCredit };
+  }
+
+  /** Pure preview of the dispatch GL entry (Dr 1210 Inventory in Transit / Cr inventory). Posts nothing. */
+  async previewDispatchEffect(id: ID): Promise<AccountingEffectPreview> {
+    this.requirePostingWiring();
+    const transfer = await this.requireTransfer(id);
+    const { preview } = await this.buildTransferLegLines(transfer, 'dispatch');
+    return StockTransferService.balancedPreview(preview);
+  }
+
+  /** Pure preview of the receipt GL entry (Dr inventory / Cr 1210 Inventory in Transit). Posts nothing. */
+  async previewReceiveEffect(id: ID): Promise<AccountingEffectPreview> {
+    this.requirePostingWiring();
+    const transfer = await this.requireTransfer(id);
+    const { preview } = await this.buildTransferLegLines(transfer, 'receive');
+    return StockTransferService.balancedPreview(preview);
+  }
+
+  /** An immediate transfer is GL-neutral — no journal posts. Always returns an empty, balanced preview. */
+  async previewCompleteEffect(_id: ID): Promise<AccountingEffectPreview> {
+    void _id;
+    return { lines: [], balanced: true };
   }
 
   /**
