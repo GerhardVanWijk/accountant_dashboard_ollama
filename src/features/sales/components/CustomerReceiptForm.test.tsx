@@ -58,7 +58,7 @@ describe('CustomerReceiptForm presetInvoiceId', () => {
       />,
     );
 
-    expect(screen.getByLabelText(/customer/i)).toHaveValue('cust_1');
+    expect(screen.getByRole('combobox', { name: /customer/i })).toHaveTextContent('Acme Traders');
     expect(screen.getByLabelText(/amount received/i)).toHaveValue(950);
     expect(screen.getByText(/INV-0001.*outstanding.*950/i)).toBeInTheDocument();
   });

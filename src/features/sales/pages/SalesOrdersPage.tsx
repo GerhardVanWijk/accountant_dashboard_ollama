@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
@@ -49,6 +49,8 @@ export function SalesOrdersPage() {
 
   const [formState, setFormState] = useState<FormState>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Set after a successful SO -> invoice conversion so the notice can deep-link to the new draft invoice. */
+  const [convertedInvoice, setConvertedInvoice] = useState<{ id: string; number: string } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { salesOrders, isLoading, error, refetch } = useSalesOrders();
@@ -78,6 +80,7 @@ export function SalesOrdersPage() {
 
   async function handleTransition(action: (id: string) => Promise<unknown>, id: string, message: string) {
     setActionError(null);
+    setConvertedInvoice(null);
     try {
       await action(id);
       setNotice(message);
@@ -99,10 +102,11 @@ export function SalesOrdersPage() {
 
   async function handleConvert(id: string) {
     setActionError(null);
+    setNotice(null);
     try {
       const invoice = await convertToInvoice(id);
       await refetch();
-      setNotice(`Converted to draft Invoice ${invoice.invoiceNumber}. Find it on the Invoices page.`);
+      setConvertedInvoice({ id: invoice.id, number: invoice.invoiceNumber });
       closeRecord();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not convert sales order to an invoice.');
@@ -129,6 +133,19 @@ export function SalesOrdersPage() {
           </p>
         )}
 
+        {convertedInvoice && (
+          <p role="status" className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">
+            Converted to draft invoice{' '}
+            <Link
+              to={`/sales/invoices?record=${convertedInvoice.id}`}
+              className="font-semibold underline underline-offset-2 hover:no-underline"
+            >
+              {convertedInvoice.number}
+            </Link>
+            {' — '}view invoice
+          </p>
+        )}
+
         {isLoading ? (
           <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
             <Loader2 className="size-5 animate-spin" aria-hidden="true" />
@@ -144,6 +161,7 @@ export function SalesOrdersPage() {
             customers={customerMap}
             onSelect={(id) => {
               setNotice(null);
+              setConvertedInvoice(null);
               setActionError(null);
               openRecord(id);
             }}

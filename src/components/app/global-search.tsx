@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Loader2, PackageIcon, Search, UsersRound } from 'lucide-react';
+import { Building2, CornerDownLeft, Loader2, PackageIcon, Search, UsersRound } from 'lucide-react';
 
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -20,11 +20,19 @@ import {
 } from '@/components/app/global-search-records';
 
 /**
- * Global command palette (⌘/Ctrl-K or the header button). Navigation index
- * is available instantly; product / customer / supplier records load once
- * on first open and are filtered client-side by cmdk thereafter, so typing
- * never triggers a fetch. Record groups only render once the user has typed
- * something, keeping the initial view a short, scannable page list.
+ * Global command palette (⌘/Ctrl-K or the header button).
+ *
+ * A compact command palette (docs brief Part A): ~680px wide, results
+ * capped at 60vh and scrolling inside their own region, one clean surface
+ * with the search field integrated into the top edge (no nested grey box),
+ * tight grouped rows, a subtle brand-green selected state and a keyboard
+ * hint footer.
+ *
+ * The navigation index is available instantly; product / customer /
+ * supplier records load once on first open and are filtered client-side by
+ * cmdk thereafter, so typing never triggers a fetch. Before the user types,
+ * the palette shows a short "Jump to" list of common destinations rather
+ * than repeating the input's own placeholder sentence.
  */
 const RECORD_META: Record<
   GlobalSearchRecordType,
@@ -69,6 +77,21 @@ export function GlobalSearch({ className }: { className?: string }) {
     [navGroups],
   );
 
+  /** A short list of common destinations for the pre-typing state. */
+  const jumpTo = useMemo(() => {
+    const seen = new Set<string>();
+    const picks: typeof screens = [];
+    for (const group of navGroups) {
+      const first = group.items.find((i) => !i.comingSoon);
+      if (first && !seen.has(first.href)) {
+        seen.add(first.href);
+        picks.push({ ...first, section: group.title });
+      }
+      if (picks.length >= 6) break;
+    }
+    return picks;
+  }, [navGroups]);
+
   const recordsByType = useMemo(() => {
     return (['product', 'customer', 'supplier'] as GlobalSearchRecordType[]).map((type) => ({
       type,
@@ -103,7 +126,6 @@ export function GlobalSearch({ className }: { className?: string }) {
         onOpenChange={setOpen}
         title="Search"
         description="Search pages, products, customers and suppliers"
-        className="sm:max-w-xl"
       >
         <CommandInput
           placeholder="Search pages, products, customers and suppliers…"
@@ -112,9 +134,19 @@ export function GlobalSearch({ className }: { className?: string }) {
         />
         <CommandList>
           {!hasQuery ? (
-            <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-              Search pages, products, customers and suppliers
-            </p>
+            <CommandGroup heading="Jump to">
+              {jumpTo.map((screen) => (
+                <CommandItem
+                  key={screen.href}
+                  value={`jump ${screen.title}`}
+                  onSelect={() => go(screen.href)}
+                >
+                  <screen.icon />
+                  <span>{screen.title}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">{screen.section}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
           ) : (
             <CommandEmpty>
               {loading ? 'Searching…' : `No results for “${query.trim()}”`}
@@ -150,11 +182,11 @@ export function GlobalSearch({ className }: { className?: string }) {
                       onSelect={() => go(record.href)}
                     >
                       <meta.icon />
-                      <div className="flex min-w-0 flex-col">
-                        <span className="truncate">{record.code}</span>
-                        <span className="truncate text-xs text-muted-foreground">{record.name}</span>
-                      </div>
-                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{meta.label}</span>
+                      <span className="font-medium">{record.code}</span>
+                      <span className="min-w-0 truncate text-muted-foreground">{record.name}</span>
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                        {meta.label}
+                      </span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -176,6 +208,24 @@ export function GlobalSearch({ className }: { className?: string }) {
             </p>
           )}
         </CommandList>
+
+        <div className="flex shrink-0 items-center gap-4 border-t border-border px-3.5 py-2 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Kbd>↑</Kbd>
+            <Kbd>↓</Kbd>
+            Navigate
+          </span>
+          <span className="flex items-center gap-1">
+            <Kbd>
+              <CornerDownLeft className="size-3" />
+            </Kbd>
+            Open
+          </span>
+          <span className="flex items-center gap-1">
+            <Kbd>Esc</Kbd>
+            Close
+          </span>
+        </div>
       </CommandDialog>
     </>
   );

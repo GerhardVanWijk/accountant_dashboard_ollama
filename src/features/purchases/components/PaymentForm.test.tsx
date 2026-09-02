@@ -58,7 +58,8 @@ describe('PaymentForm presetBillId', () => {
       />,
     );
 
-    expect(screen.getByLabelText(/supplier/i)).toHaveValue('sup_1');
+    // Supplier picker is now the shared SupplierCombobox — its trigger shows the name.
+    expect(screen.getByRole('combobox', { name: /supplier/i })).toHaveTextContent('Highveld Steel');
     expect(screen.getByLabelText(/payment amount/i)).toHaveValue(1000);
   });
 

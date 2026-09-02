@@ -5,6 +5,7 @@ import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { CustomerCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateCreditNoteDTO } from '../services';
@@ -49,6 +50,12 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
   const [invoiceId, setInvoiceId] = useState<string>('');
   const [issueDate, setIssueDate] = useState(today());
   const [reason, setReason] = useState<CreditNoteReason>('return');
+  /**
+   * Free-text explanation shown and required when `reason === 'other'`
+   * (docs brief Part I). Persisted to its own `credit_notes.reason_details`
+   * column (migration 0043) — kept distinct from `notes`.
+   */
+  const [reasonDetail, setReasonDetail] = useState('');
   const [notes, setNotes] = useState('');
   const [lineItems, setLineItems] = useState<CreateCreditNoteDTO['lineItems']>([
     { id: `li_${Date.now()}`, description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 },
@@ -66,6 +73,9 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
     setFormError(null);
     if (!creditNoteNumber.trim()) return setFormError('Credit note number is required.');
     if (!customerId) return setFormError('Select a customer.');
+    if (reason === 'other' && !reasonDetail.trim()) {
+      return setFormError('Specify the reason for this credit note.');
+    }
     if (lineItems.length === 0 || lineItems.some((li) => !li.description.trim() || li.quantity <= 0)) {
       return setFormError('Every line item needs a description and a quantity greater than zero.');
     }
@@ -78,6 +88,7 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
         invoiceId: invoiceId || undefined,
         issueDate,
         reason,
+        reasonDetails: reason === 'other' ? reasonDetail.trim() : undefined,
         lineItems,
         subtotal,
         taxTotal,
@@ -86,7 +97,7 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
         currency: 'ZAR',
         status: 'draft',
         allocations: [],
-        notes: notes || undefined,
+        notes: notes.trim() || undefined,
       });
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not save credit note.');
@@ -105,20 +116,15 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
         </Field>
         <Field>
           <FieldLabel htmlFor="cn-customer">Customer</FieldLabel>
-          <NativeSelect
+          <CustomerCombobox
             id="cn-customer"
-            value={customerId}
-            onChange={(e) => {
-              setCustomerId(e.target.value);
+            customers={customers}
+            value={customerId || null}
+            onChange={(v) => {
+              setCustomerId(v ?? '');
               setInvoiceId('');
             }}
-          >
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </NativeSelect>
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="cn-invoice">Against invoice (optional)</FieldLabel>
@@ -145,6 +151,19 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
           <FieldLabel htmlFor="cn-issue-date">Issue date</FieldLabel>
           <Input id="cn-issue-date" type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
         </Field>
+        {reason === 'other' && (
+          <Field className="sm:col-span-2">
+            <FieldLabel htmlFor="cn-reason-detail">Specify reason</FieldLabel>
+            <Textarea
+              id="cn-reason-detail"
+              rows={2}
+              value={reasonDetail}
+              onChange={(e) => setReasonDetail(e.target.value)}
+              placeholder="Explain why this credit note is being raised"
+              aria-label="Specify reason"
+            />
+          </Field>
+        )}
       </div>
 
       <SalesLineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} products={products} warehouses={warehouses} />

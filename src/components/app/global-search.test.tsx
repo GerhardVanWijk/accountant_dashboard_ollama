@@ -48,11 +48,31 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('GlobalSearch', () => {
-  it('opens from the header button and shows the initial hint', () => {
+  it('opens from the header button and shows "Jump to" shortcuts, not a duplicated hint', () => {
     renderSearch();
     fireEvent.click(screen.getByRole('button', { name: /search everything/i }));
     expect(screen.getByPlaceholderText(/search pages, products, customers and suppliers/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/search pages, products, customers and suppliers/i).length).toBeGreaterThan(0);
+    // The pre-typing state offers common destinations instead of repeating
+    // the input's own placeholder sentence as body text (docs brief Part A).
+    expect(screen.getByText('Jump to')).toBeInTheDocument();
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    // The only element repeating the placeholder sentence is the sr-only
+    // DialogDescription — there is no visible body paragraph doing it.
+    const echoes = screen.queryAllByText(
+      (_, el) =>
+        el?.tagName === 'P' &&
+        !el.closest('[data-slot="dialog-header"]') &&
+        /^search pages, products, customers and suppliers$/i.test((el.textContent ?? '').trim()),
+    );
+    expect(echoes).toHaveLength(0);
+  });
+
+  it('shows the keyboard hint footer', () => {
+    renderSearch();
+    fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
+    expect(screen.getByText('Navigate')).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
+    expect(screen.getByText('Close')).toBeInTheDocument();
   });
 
   it('opens with Ctrl/Cmd+K', () => {

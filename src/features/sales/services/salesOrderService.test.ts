@@ -96,6 +96,19 @@ describe('SalesOrderService', () => {
       const fulfilled = orders.find((o) => o.status === 'fulfilled')!;
       await expect(salesOrderService.convertToInvoice(fulfilled.id)).rejects.toThrow(/fulfilled/i);
     });
+
+    it('rejects a second conversion even if the order status was moved back off "fulfilled"', async () => {
+      const orders = await salesOrderService.getSalesOrders();
+      const confirmed = orders.find((o) => o.status === 'confirmed')!;
+
+      const first = await salesOrderService.convertToInvoice(confirmed.id);
+      // Simulate the order being edited back to a pre-fulfilled state.
+      await salesOrderRepository.update(confirmed.id, { status: 'confirmed' });
+
+      await expect(salesOrderService.convertToInvoice(confirmed.id)).rejects.toThrow(
+        new RegExp(`already converted to invoice ${first.invoiceNumber}`, 'i'),
+      );
+    });
   });
 
   describe('getSalesOrdersByCustomer', () => {

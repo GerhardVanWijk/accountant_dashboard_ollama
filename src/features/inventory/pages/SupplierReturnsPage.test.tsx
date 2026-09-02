@@ -68,8 +68,10 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     sku: 'SKU-1',
     name: 'Widget',
     trackInventory: true,
+    quantityOnHand: 25,
     costPrice: 10,
     unitPrice: 20,
+    status: 'active',
     isActive: true,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -174,9 +176,11 @@ describe('SupplierReturnsPage', () => {
     await screen.findByText(/no supplier returns yet/i);
 
     fireEvent.click(screen.getAllByRole('button', { name: /new return/i })[0]);
-    fireEvent.change(screen.getByLabelText(/^supplier$/i), { target: { value: 'sup_1' } });
+    // Supplier defaults to the first (and only) supplier — the shared SupplierCombobox
+    // is not a native <select>, so there is nothing to fire a change event at here.
     fireEvent.click(screen.getByRole('button', { name: /add line/i }));
-    fireEvent.change(screen.getByLabelText('Product'), { target: { value: 'prod_1' } });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Product' }));
+    fireEvent.click(screen.getByRole('option', { name: /Widget/ }));
 
     mockedGetSupplierReturns.mockResolvedValue([makeSupplierReturn()]);
     fireEvent.click(screen.getByRole('button', { name: /create draft/i }));

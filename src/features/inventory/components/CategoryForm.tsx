@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, type Control } from 'react-hook-form';
 import { z } from 'zod';
 import type { Account, ProductCategory, TaxRate } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { SearchableSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter, FormSection } from '@/components/app/form';
 import type {
   CreateProductCategoryDTO,
@@ -52,6 +53,46 @@ function toDefaults(category?: ProductCategory): CategoryFormValues {
 
 const blankToUndefined = (v: string | undefined) => (v && v.length > 0 ? v : undefined);
 
+type AccountFieldName = 'revenueAccountId' | 'cogsAccountId' | 'inventoryAccountId' | 'adjustmentAccountId';
+
+/**
+ * GL-account picker — a `SearchableSelect` rather than a native `<select>`
+ * because the filtered lists run long (31 expense accounts for COGS /
+ * adjustments). Clearing the value falls back to the standard account.
+ * Declared at module scope so it is not remounted on every parent render.
+ */
+function AccountSelect({
+  control,
+  name,
+  id,
+  list,
+}: {
+  control: Control<CategoryFormValues>;
+  name: AccountFieldName;
+  id: string;
+  list: Account[];
+}) {
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <SearchableSelect
+          id={id}
+          aria-label={id}
+          options={list.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: `${a.code} ${a.name}` }))}
+          value={field.value || null}
+          onChange={(v) => field.onChange(v ?? '')}
+          placeholder="Use standard account"
+          searchPlaceholder="Search code or name…"
+          emptyMessage="No accounts match."
+          clearable
+        />
+      )}
+    />
+  );
+}
+
 export function CategoryForm({ category, accounts, taxRates, onSubmit, onCancel, onDirtyChange }: CategoryFormProps) {
   const {
     register,
@@ -76,16 +117,6 @@ export function CategoryForm({ category, accounts, taxRates, onSubmit, onCancel,
   });
 
   const byType = (types: Account['type'][]) => accounts.filter((a) => types.includes(a.type));
-  const accountOptions = (list: Account[]) => (
-    <>
-      <option value="">Use standard account</option>
-      {list.map((a) => (
-        <option key={a.id} value={a.id}>
-          {a.code} — {a.name}
-        </option>
-      ))}
-    </>
-  );
 
   return (
     <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
@@ -123,27 +154,19 @@ export function CategoryForm({ category, accounts, taxRates, onSubmit, onCancel,
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="cat-rev">Sales revenue</FieldLabel>
-              <NativeSelect id="cat-rev" {...register('revenueAccountId')}>
-                {accountOptions(byType(['revenue']))}
-              </NativeSelect>
+              <AccountSelect control={control} name="revenueAccountId" id="cat-rev" list={byType(['revenue'])} />
             </Field>
             <Field>
               <FieldLabel htmlFor="cat-cogs">Cost of goods sold</FieldLabel>
-              <NativeSelect id="cat-cogs" {...register('cogsAccountId')}>
-                {accountOptions(byType(['expense']))}
-              </NativeSelect>
+              <AccountSelect control={control} name="cogsAccountId" id="cat-cogs" list={byType(['expense'])} />
             </Field>
             <Field>
               <FieldLabel htmlFor="cat-inv">Inventory asset</FieldLabel>
-              <NativeSelect id="cat-inv" {...register('inventoryAccountId')}>
-                {accountOptions(byType(['asset']))}
-              </NativeSelect>
+              <AccountSelect control={control} name="inventoryAccountId" id="cat-inv" list={byType(['asset'])} />
             </Field>
             <Field>
               <FieldLabel htmlFor="cat-adj">Inventory adjustments</FieldLabel>
-              <NativeSelect id="cat-adj" {...register('adjustmentAccountId')}>
-                {accountOptions(byType(['expense']))}
-              </NativeSelect>
+              <AccountSelect control={control} name="adjustmentAccountId" id="cat-adj" list={byType(['expense'])} />
             </Field>
             <Field>
               <FieldLabel htmlFor="cat-tax">Default tax rate</FieldLabel>

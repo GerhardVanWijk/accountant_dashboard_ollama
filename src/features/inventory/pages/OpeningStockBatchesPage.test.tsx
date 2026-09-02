@@ -58,8 +58,10 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     sku: 'SKU-1',
     name: 'Widget',
     trackInventory: true,
+    quantityOnHand: 0,
     costPrice: 10,
     unitPrice: 20,
+    status: 'active',
     isActive: true,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -149,7 +151,8 @@ describe('OpeningStockBatchesPage', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: /new batch/i })[0]);
     fireEvent.click(screen.getByRole('button', { name: /add line/i }));
-    fireEvent.change(screen.getByLabelText('Product'), { target: { value: 'prod_1' } });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Product' }));
+    fireEvent.click(screen.getByRole('option', { name: /Widget/ }));
 
     mockedGetBatches.mockResolvedValue([makeBatch()]);
     fireEvent.click(screen.getByRole('button', { name: /create draft/i }));

@@ -55,7 +55,7 @@ describe('FormShell — sizing (P3B.1 / P3I #1-#4, #7)', () => {
       </FormShell>,
     );
     const el = shell()!;
-    expect(el.className).toContain('sm:max-w-4xl'); // lg width
+    expect(el.className).toContain('sm:max-w-[72rem]'); // lg width — shared business-document width (Part E)
     expect(el.className).toContain('md:h-[min(calc(100dvh-2rem),52rem)]'); // lg fixed height
   });
 

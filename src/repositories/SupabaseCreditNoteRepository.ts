@@ -11,6 +11,7 @@ interface CreditNoteRow {
   invoice_id: string | null;
   issue_date: string;
   reason: string;
+  reason_details: string | null;
   line_items: DocumentLineItem[];
   subtotal: number;
   tax_total: number;
@@ -35,6 +36,7 @@ function rowToCreditNote(row: CreditNoteRow): CreditNote {
     invoiceId: row.invoice_id ?? undefined,
     issueDate: row.issue_date,
     reason: row.reason as CreditNote['reason'],
+    reasonDetails: row.reason_details ?? undefined,
     lineItems: row.line_items ?? [],
     subtotal: Number(row.subtotal),
     taxTotal: Number(row.tax_total),
@@ -55,6 +57,8 @@ function creditNoteToRow(entity: Partial<CreditNote>): Record<string, unknown> {
   if (entity.invoiceId !== undefined) row.invoice_id = entity.invoiceId;
   if (entity.issueDate !== undefined) row.issue_date = entity.issueDate;
   if (entity.reason !== undefined) row.reason = entity.reason;
+  // Present-but-empty (reason switched away from 'other') collapses to NULL, never ''.
+  if (entity.reasonDetails !== undefined) row.reason_details = entity.reasonDetails ? entity.reasonDetails : null;
   if (entity.lineItems !== undefined) row.line_items = entity.lineItems;
   if (entity.subtotal !== undefined) row.subtotal = entity.subtotal;
   if (entity.taxTotal !== undefined) row.tax_total = entity.taxTotal;
