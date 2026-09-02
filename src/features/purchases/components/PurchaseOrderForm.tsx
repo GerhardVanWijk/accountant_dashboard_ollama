@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { SupplierCombobox } from '@/components/app/combobox';
 import { FigureBlock } from '@/components/app/figure';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
@@ -91,13 +91,12 @@ export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCanc
         </Field>
         <Field>
           <FieldLabel htmlFor="po-supplier">Supplier</FieldLabel>
-          <NativeSelect id="po-supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </NativeSelect>
+          <SupplierCombobox
+            id="po-supplier"
+            suppliers={suppliers}
+            value={supplierId || null}
+            onChange={(v) => setSupplierId(v ?? '')}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="po-order-date">Order Date</FieldLabel>

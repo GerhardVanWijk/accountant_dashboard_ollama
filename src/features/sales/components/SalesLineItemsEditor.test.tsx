@@ -1,7 +1,26 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import type { DocumentLineItem, Product, TaxRate } from '@/types';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
+
+afterEach(cleanup);
+
+/** Open the ProductCombobox and click the row whose visible text matches. */
+function pickProduct(match: RegExp | string) {
+  fireEvent.click(screen.getByRole('combobox', { name: 'Product' }));
+  const rows = screen.getAllByRole('option');
+  const target = rows.find((r) =>
+    typeof match === 'string' ? r.textContent?.includes(match) : match.test(r.textContent ?? ''),
+  );
+  if (!target) throw new Error(`No product row matching ${match}`);
+  fireEvent.click(target);
+}
+
+/** Open the ProductCombobox and choose the "Custom line" row. */
+function pickCustomLine() {
+  fireEvent.click(screen.getByRole('combobox', { name: 'Product' }));
+  fireEvent.click(screen.getByRole('option', { name: /custom line/i }));
+}
 
 function makeProduct(overrides: Partial<Product> = {}): Product {
   return {
@@ -72,7 +91,7 @@ describe('SalesLineItemsEditor product picker', () => {
       <SalesLineItemsEditor lineItems={[makeLine()]} onChange={onChange} taxRates={taxRates} products={products} />,
     );
 
-    fireEvent.change(screen.getByLabelText('Product'), { target: { value: 'prod_1' } });
+    pickProduct('Test Widget');
 
     expect(onChange).toHaveBeenCalledTimes(1);
     const [updated] = onChange.mock.calls[0][0] as DocumentLineItem[];
@@ -90,7 +109,7 @@ describe('SalesLineItemsEditor product picker', () => {
 
     render(<SalesLineItemsEditor lineItems={[makeLine()]} onChange={onChange} taxRates={[]} products={products} />);
 
-    fireEvent.change(screen.getByLabelText('Product'), { target: { value: 'prod_1' } });
+    pickProduct('Test Widget');
 
     const [updated] = onChange.mock.calls[0][0] as DocumentLineItem[];
     expect(updated.taxRateId).toBeUndefined();
@@ -103,7 +122,7 @@ describe('SalesLineItemsEditor product picker', () => {
 
     render(<SalesLineItemsEditor lineItems={[line]} onChange={onChange} taxRates={[]} products={products} />);
 
-    fireEvent.change(screen.getByLabelText('Product'), { target: { value: '' } });
+    pickCustomLine();
 
     const [updated] = onChange.mock.calls[0][0] as DocumentLineItem[];
     expect(updated.productId).toBeUndefined();

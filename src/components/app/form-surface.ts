@@ -39,7 +39,12 @@
  * - `md`  — standard master records: Customer, Supplier, Product, Employee,
  *           Company. The default.
  * - `lg`  — complex accounting transactions with a line-item editor: Invoice,
- *           Credit Note, Receipt, Bill, Supplier Payment, Journal Entry.
+ *           Credit Note, Receipt, Bill, Supplier Payment, Journal Entry,
+ *           Sales Order, Quote, Purchase Order. This is the shared
+ *           "business-document" width (docs brief Part E) — wide enough for
+ *           a full Product / Description / Qty / Price / Tax / Total line
+ *           grid without the table feeling squeezed, and still responsive
+ *           (`w-[calc(100vw-2rem)]` floor) on a 1280px laptop.
  * - `xl`  — multi-section / multi-step workflows: Bank Statement Import,
  *           reconciliation configuration, advanced accounting settings.
  */
@@ -49,10 +54,10 @@ export const FORM_SIZES: readonly FormSize[] = ['sm', 'md', 'lg', 'xl'] as const
 
 /** Width cap per size, for a form rendered in a Dialog. */
 export const formSizeWidthClass: Record<FormSize, string> = {
-  sm: 'sm:max-w-lg', //   32rem
-  md: 'sm:max-w-2xl', //  42rem
-  lg: 'sm:max-w-4xl', //  56rem
-  xl: 'sm:max-w-6xl', //  72rem
+  sm: 'sm:max-w-lg', //      32rem
+  md: 'sm:max-w-2xl', //     42rem
+  lg: 'sm:max-w-[72rem]', // 1152px — shared business-document width (Part E)
+  xl: 'sm:max-w-[80rem]', // 1280px — multi-section workflows
 };
 
 /**

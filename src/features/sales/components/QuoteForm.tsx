@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { CustomerCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateQuoteDTO } from '../services';
@@ -104,19 +104,13 @@ export function QuoteForm({ customers, quote, defaultQuoteNumber, onSubmit, onCa
         </Field>
         <Field>
           <FieldLabel htmlFor="quote-customer">Customer</FieldLabel>
-          <NativeSelect
+          <CustomerCombobox
             id="quote-customer"
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
+            customers={customers}
+            value={customerId || null}
+            onChange={(v) => setCustomerId(v ?? '')}
             disabled={isSubmitting}
-          >
-            <option value="">Select customer</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </NativeSelect>
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="quote-issue-date">Issue date</FieldLabel>

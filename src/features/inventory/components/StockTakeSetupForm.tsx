@@ -5,6 +5,7 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/fiel
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { SearchableSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateStockTakeDTO, UpdateStockTakeDTO } from '../services/stockTakeService';
 
@@ -123,14 +124,15 @@ export function StockTakeSetupForm({ stockTake, warehouses, categories, onSubmit
         {scope === 'category' && (
           <Field>
             <FieldLabel htmlFor="stk-category">Category</FieldLabel>
-            <NativeSelect id="stk-category" value={categoryId} onChange={(e) => markDirty(setCategoryId)(e.target.value)}>
-              <option value="">Select…</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </NativeSelect>
+            <SearchableSelect
+              id="stk-category"
+              aria-label="Category"
+              options={categories.map((c) => ({ value: c.id, label: c.name }))}
+              value={categoryId || null}
+              onChange={(id) => markDirty(setCategoryId)(id ?? '')}
+              placeholder="Select a category"
+              emptyMessage="No categories match."
+            />
           </Field>
         )}
 

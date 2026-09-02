@@ -3,6 +3,7 @@ import type { AssetCategory, DepreciationMethod, DocumentLineItem, FixedAssetLin
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { ProductCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS } from '@/features/assets/constants';
 
@@ -103,20 +104,20 @@ export function LineItemsEditor({
    */
   const gridColsClass =
     showAssetColumn && showWarehouseColumn
-      ? 'sm:grid-cols-[1fr_70px_140px_2fr_80px_100px_140px_100px_100px_36px]'
+      ? 'sm:grid-cols-[minmax(200px,1.1fr)_64px_150px_minmax(160px,1fr)_84px_120px_150px_92px_120px_36px]'
       : showAssetColumn
-        ? 'sm:grid-cols-[1fr_70px_2fr_80px_100px_140px_100px_100px_36px]'
+        ? 'sm:grid-cols-[minmax(220px,1.2fr)_64px_minmax(180px,1fr)_84px_120px_150px_92px_120px_36px]'
         : showWarehouseColumn
-          ? 'sm:grid-cols-[1fr_140px_2fr_80px_100px_140px_100px_100px_36px]'
-          : 'sm:grid-cols-[1fr_2fr_80px_100px_140px_100px_100px_36px]';
+          ? 'sm:grid-cols-[minmax(220px,1.2fr)_150px_minmax(180px,1fr)_84px_120px_150px_92px_120px_36px]'
+          : 'sm:grid-cols-[minmax(240px,1.3fr)_minmax(200px,1fr)_84px_120px_150px_92px_120px_36px]';
   const headerGridColsClass =
     showAssetColumn && showWarehouseColumn
-      ? 'grid-cols-[1fr_70px_140px_2fr_80px_100px_140px_100px_100px_36px]'
+      ? 'grid-cols-[minmax(200px,1.1fr)_64px_150px_minmax(160px,1fr)_84px_120px_150px_92px_120px_36px]'
       : showAssetColumn
-        ? 'grid-cols-[1fr_70px_2fr_80px_100px_140px_100px_100px_36px]'
+        ? 'grid-cols-[minmax(220px,1.2fr)_64px_minmax(180px,1fr)_84px_120px_150px_92px_120px_36px]'
         : showWarehouseColumn
-          ? 'grid-cols-[1fr_140px_2fr_80px_100px_140px_100px_100px_36px]'
-          : 'grid-cols-[1fr_2fr_80px_100px_140px_100px_100px_36px]';
+          ? 'grid-cols-[minmax(220px,1.2fr)_150px_minmax(180px,1fr)_84px_120px_150px_92px_120px_36px]'
+          : 'grid-cols-[minmax(240px,1.3fr)_minmax(200px,1fr)_84px_120px_150px_92px_120px_36px]';
 
   function updateLine(index: number, patch: Partial<DocumentLineItem>) {
     const merged = { ...lineItems[index], ...patch };
@@ -134,7 +135,7 @@ export function LineItemsEditor({
    * different product replaces what was there. "Custom line" (empty
    * value) clears productId but leaves manually-typed fields alone.
    */
-  function selectProduct(index: number, productId: string) {
+  function selectProduct(index: number, productId: string | null) {
     if (!productId) {
       updateLine(index, { productId: undefined });
       return;
@@ -214,21 +215,16 @@ export function LineItemsEditor({
       <div className="flex flex-col gap-3">
         {lineItems.map((item, index) => (
           <div key={item.id} className="flex flex-col gap-0 rounded-lg border border-border sm:border-0">
-            <div className={`grid grid-cols-2 gap-3 p-3 sm:items-center sm:p-0 ${gridColsClass}`}>
-              <NativeSelect
-                className="col-span-2 sm:col-span-1"
-                value={item.productId ?? ''}
-                disabled={disabled || Boolean(item.fixedAssetDetails)}
-                onChange={(e) => selectProduct(index, e.target.value)}
-                aria-label="Product"
-              >
-                <option value="">Custom line</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.sku} — {p.name}
-                  </option>
-                ))}
-              </NativeSelect>
+            <div className={`grid grid-cols-2 gap-3 p-3 sm:items-start sm:p-0 ${gridColsClass}`}>
+              <div className="col-span-2 sm:col-span-1">
+                <ProductCombobox
+                  products={products}
+                  value={item.productId ?? null}
+                  onChange={(productId) => selectProduct(index, productId)}
+                  disabled={disabled || Boolean(item.fixedAssetDetails)}
+                  aria-label="Product"
+                />
+              </div>
               {showAssetColumn && (
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <input
@@ -298,17 +294,17 @@ export function LineItemsEditor({
                   </option>
                 ))}
               </NativeSelect>
-              <span className="figure text-right text-sm tabular-nums text-muted-foreground">
+              <span className="figure text-right text-sm tabular-nums text-muted-foreground sm:pt-2">
                 <Amount value={item.taxAmount} plain />
               </span>
-              <span className="figure text-right text-sm font-medium tabular-nums">
+              <span className="figure text-right text-sm font-medium tabular-nums sm:pt-2">
                 <Amount value={item.lineTotal} plain />
               </span>
               <Button
                 variant="ghost"
                 size="icon-sm"
                 type="button"
-                className="justify-self-end text-muted-foreground hover:text-destructive"
+                className="justify-self-end text-muted-foreground hover:text-destructive sm:mt-0.5"
                 onClick={() => removeLine(index)}
                 disabled={disabled}
                 aria-label="Remove line"

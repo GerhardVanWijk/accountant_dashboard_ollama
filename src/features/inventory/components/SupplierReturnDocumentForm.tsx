@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { SupplierCombobox } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateSupplierReturnDTO, UpdateSupplierReturnDTO } from '../services/supplierReturnService';
 import { SupplierReturnLinesEditor } from './SupplierReturnLinesEditor';
@@ -107,14 +107,12 @@ export function SupplierReturnDocumentForm({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="sr-supplier">Supplier</FieldLabel>
-            <NativeSelect id="sr-supplier" value={supplierId} onChange={(e) => markDirty(setSupplierId)(e.target.value)}>
-              <option value="">Select…</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </NativeSelect>
+            <SupplierCombobox
+              id="sr-supplier"
+              suppliers={suppliers}
+              value={supplierId || null}
+              onChange={(id) => markDirty(setSupplierId)(id ?? '')}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="sr-date">Return date</FieldLabel>

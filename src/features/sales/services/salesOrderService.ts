@@ -89,6 +89,17 @@ export class SalesOrderService {
       throw new Error(`Cannot invoice sales order "${orderId}": it has already been fulfilled.`);
     }
 
+    // Belt-and-braces against a double conversion even if the order's
+    // status was somehow moved back off 'fulfilled' — the source
+    // relationship (`invoice.salesOrderId`) is the authority.
+    const existing = await this.invoiceRepository.getAll();
+    const alreadyInvoiced = existing.find((inv) => inv.salesOrderId === order.id);
+    if (alreadyInvoiced) {
+      throw new Error(
+        `Cannot invoice sales order "${orderId}": it was already converted to invoice ${alreadyInvoiced.invoiceNumber}.`,
+      );
+    }
+
     const invoiceNumber = order.orderNumber.startsWith('SO-')
       ? order.orderNumber.replace('SO-', 'INV-')
       : `INV-${Date.now()}`;

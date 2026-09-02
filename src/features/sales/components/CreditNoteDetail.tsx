@@ -111,6 +111,12 @@ export function CreditNoteDetail({
             <div className="text-xs tracking-wide text-muted-foreground uppercase">Reason</div>
             <div className="text-sm font-medium">{REASON_LABELS[creditNote.reason] ?? creditNote.reason}</div>
           </div>
+          {creditNote.reasonDetails && (
+            <div className="sm:col-span-2">
+              <div className="text-xs tracking-wide text-muted-foreground uppercase">Reason detail</div>
+              <div className="text-sm whitespace-pre-wrap">{creditNote.reasonDetails}</div>
+            </div>
+          )}
         </div>
         {company?.vatRegistrationNumber && (
           <p className="mt-4 text-xs text-muted-foreground">VAT Reg. No: {company.vatRegistrationNumber}</p>

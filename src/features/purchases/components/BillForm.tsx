@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { SupplierCombobox } from '@/components/app/combobox';
 import { FigureBlock } from '@/components/app/figure';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
@@ -99,13 +99,12 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel, onD
         </Field>
         <Field>
           <FieldLabel htmlFor="bill-supplier">Supplier</FieldLabel>
-          <NativeSelect id="bill-supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </NativeSelect>
+          <SupplierCombobox
+            id="bill-supplier"
+            suppliers={suppliers}
+            value={supplierId || null}
+            onChange={(v) => setSupplierId(v ?? '')}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="bill-issue-date">Issue Date</FieldLabel>

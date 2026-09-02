@@ -3,6 +3,7 @@ import type { DocumentLineItem, Product, TaxRate, Warehouse } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { ProductCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { computeLine } from '../utils/lineItemCalculations';
 
@@ -15,17 +16,29 @@ export interface SalesLineItemsEditorProps {
   products?: Product[];
   /** Real Warehouses (via useWarehouses()) a tracked-inventory line can be attributed to. */
   warehouses?: Warehouse[];
+  /**
+   * Show read-only stock availability under each tracked-product line (on
+   * hand vs. what this document already commits) and warn when a line asks
+   * for more than is available. Opt-in — only the Sales Order form turns
+   * this on. It never reserves stock, posts, or blocks submit (docs brief
+   * Part R): a Sales Order stays a non-posting commitment document.
+   */
+  showStockAvailability?: boolean;
   disabled?: boolean;
 }
 
 /**
  * v0-styled line-item editor shared by every Sales document form (Invoice,
- * Credit Note, and — since Phase 4 — Quote and Sales Order too). Same
- * `computeLine()` calculation throughout (shared via
- * utils/lineItemCalculations.ts), same product-select/warehouse-select/
- * tax-rate behavior; only the JSX/layout is v0's card-grid rows. Purchases'
- * own `LineItemsEditor.tsx` is a separate component (PO/Bill forms have
- * fixed-asset capitalization that Sales doesn't) — not this file re-used.
+ * Credit Note, Quote and Sales Order). Same `computeLine()` calculation
+ * throughout (shared via utils/lineItemCalculations.ts), same
+ * product-select / warehouse-select / tax-rate behavior.
+ *
+ * The product field is the shared `ProductCombobox` (docs brief Parts B/C)
+ * — searchable by SKU / name / barcode, themed for dark mode, dropdown
+ * anchored downward — and given real width in the row grid so product
+ * identity is legible. Purchases' own `LineItemsEditor.tsx` is a separate
+ * component (PO/Bill forms have fixed-asset capitalization) — not this file
+ * re-used.
  */
 export function SalesLineItemsEditor({
   lineItems,
@@ -33,9 +46,38 @@ export function SalesLineItemsEditor({
   taxRates,
   products = [],
   warehouses = [],
+  showStockAvailability = false,
   disabled = false,
 }: SalesLineItemsEditorProps) {
   const showWarehouseColumn = warehouses.length > 1;
+
+  /**
+   * Units of a product already spoken for by *other* lines on this same
+   * document — so "available" nets out double-ordering the same SKU across
+   * two lines without any stock-reservation model.
+   */
+  function committedElsewhere(productId: string, exceptIndex: number): number {
+    return lineItems.reduce(
+      (sum, li, i) => (i !== exceptIndex && li.productId === productId ? sum + (li.quantity || 0) : sum),
+      0,
+    );
+  }
+
+  function availabilityFor(index: number) {
+    if (!showStockAvailability) return null;
+    const line = lineItems[index];
+    if (!line?.productId) return null;
+    const product = products.find((p) => p.id === line.productId);
+    if (!product || !product.trackInventory) return null;
+    const onHand = product.quantityOnHand;
+    const available = onHand - committedElsewhere(product.id, index);
+    const short = (line.quantity || 0) > available;
+    return { onHand, available, short, ordered: line.quantity || 0 };
+  }
+
+  const gridCols = showWarehouseColumn
+    ? 'sm:grid-cols-[minmax(220px,1.2fr)_150px_minmax(180px,1fr)_84px_120px_150px_92px_120px_36px]'
+    : 'sm:grid-cols-[minmax(240px,1.3fr)_minmax(200px,1fr)_84px_120px_150px_92px_120px_36px]';
 
   function updateLine(index: number, patch: Partial<DocumentLineItem>) {
     const merged = { ...lineItems[index], ...patch };
@@ -46,7 +88,7 @@ export function SalesLineItemsEditor({
   }
 
   /** Selecting a product overwrites description/unit price/tax rate from the real Product record — a deliberate replace, not a merge. */
-  function selectProduct(index: number, productId: string) {
+  function selectProduct(index: number, productId: string | null) {
     if (!productId) {
       updateLine(index, { productId: undefined });
       return;
@@ -92,11 +134,7 @@ export function SalesLineItemsEditor({
       </div>
 
       <div
-        className={`hidden gap-3 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase sm:grid ${
-          showWarehouseColumn
-            ? 'grid-cols-[1fr_140px_2fr_80px_100px_140px_100px_100px_36px]'
-            : 'grid-cols-[1fr_2fr_80px_100px_140px_100px_100px_36px]'
-        }`}
+        className={`hidden gap-3 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase sm:grid ${gridCols}`}
       >
         <span>Product</span>
         {showWarehouseColumn && <span>Warehouse</span>}
@@ -110,29 +148,22 @@ export function SalesLineItemsEditor({
       </div>
 
       <div className="flex flex-col gap-3">
-        {lineItems.map((item, index) => (
+        {lineItems.map((item, index) => {
+          const availability = availabilityFor(index);
+          return (
+          <div key={item.id} className="flex flex-col gap-1">
           <div
-            key={item.id}
-            className={`grid grid-cols-2 gap-3 rounded-lg border border-border p-3 sm:items-center sm:border-0 sm:p-0 ${
-              showWarehouseColumn
-                ? 'sm:grid-cols-[1fr_140px_2fr_80px_100px_140px_100px_100px_36px]'
-                : 'sm:grid-cols-[1fr_2fr_80px_100px_140px_100px_100px_36px]'
-            }`}
+            className={`grid grid-cols-2 gap-3 rounded-lg border border-border p-3 sm:items-start sm:border-0 sm:p-0 ${gridCols}`}
           >
-            <NativeSelect
-              className="col-span-2 sm:col-span-1"
-              value={item.productId ?? ''}
-              disabled={disabled}
-              onChange={(e) => selectProduct(index, e.target.value)}
-              aria-label="Product"
-            >
-              <option value="">Custom line</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.sku} — {p.name}
-                </option>
-              ))}
-            </NativeSelect>
+            <div className="col-span-2 sm:col-span-1">
+              <ProductCombobox
+                products={products}
+                value={item.productId ?? null}
+                onChange={(productId) => selectProduct(index, productId)}
+                disabled={disabled}
+                aria-label="Product"
+              />
+            </div>
             {showWarehouseColumn && (
               <NativeSelect
                 value={item.warehouseId ?? ''}
@@ -189,10 +220,10 @@ export function SalesLineItemsEditor({
                 </option>
               ))}
             </NativeSelect>
-            <span className="figure text-right text-sm tabular-nums text-muted-foreground">
+            <span className="figure text-right text-sm tabular-nums text-muted-foreground sm:pt-2">
               <Amount value={item.taxAmount} plain />
             </span>
-            <span className="figure text-right text-sm font-medium tabular-nums">
+            <span className="figure text-right text-sm font-medium tabular-nums sm:pt-2">
               <Amount value={item.lineTotal} plain />
             </span>
             <Button
@@ -207,7 +238,23 @@ export function SalesLineItemsEditor({
               <Trash2 />
             </Button>
           </div>
-        ))}
+          {availability && (
+            <p
+              className={`px-1 text-xs tabular-nums sm:px-0 ${availability.short ? 'text-status-warning' : 'text-muted-foreground'}`}
+            >
+              On hand {availability.onHand.toLocaleString('en-ZA')} · Available{' '}
+              {availability.available.toLocaleString('en-ZA')}
+              {availability.short && (
+                <>
+                  {' '}
+                  — this line orders {availability.ordered.toLocaleString('en-ZA')}, more than is available.
+                </>
+              )}
+            </p>
+          )}
+          </div>
+          );
+        })}
         {lineItems.length === 0 && (
           <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
             No line items — click &ldquo;Add line&rdquo; to start.

@@ -28,7 +28,24 @@ const ACTION_LABEL: Partial<Record<AuditLogEntry['action'], string>> = {
  * comment), so the actor is shown as its raw stored value rather than a
  * fabricated display name.
  */
-export function RecordAuditHistorySection({ recordType, recordId }: { recordType: string; recordId: string }) {
+export interface RecordAuditHistorySectionProps {
+  recordType: string;
+  recordId: string;
+  /** Section heading. Default "Audit history". */
+  title?: string;
+  /** One-line explainer under the heading — clarifies this is a master-data change log, not the record's business events. */
+  subtitle?: string;
+  /** Copy shown when there are no entries. Default "No audit entries recorded for this record yet." */
+  emptyMessage?: string;
+}
+
+export function RecordAuditHistorySection({
+  recordType,
+  recordId,
+  title = 'Audit history',
+  subtitle,
+  emptyMessage = 'No audit entries recorded for this record yet.',
+}: RecordAuditHistorySectionProps) {
   const [entries, setEntries] = useState<AuditLogEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +68,7 @@ export function RecordAuditHistorySection({ recordType, recordId }: { recordType
 
   if (error) {
     return (
-      <RecordDetailSection title="Audit history">
+      <RecordDetailSection title={title}>
         <p className="text-xs text-status-negative">{error}</p>
       </RecordDetailSection>
     );
@@ -59,7 +76,8 @@ export function RecordAuditHistorySection({ recordType, recordId }: { recordType
 
   if (entries === null) {
     return (
-      <RecordDetailSection title="Audit history">
+      <RecordDetailSection title={title}>
+        {subtitle ? <p className="mb-2 text-xs text-muted-foreground">{subtitle}</p> : null}
         <div role="status" className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
           Loading…
@@ -70,14 +88,16 @@ export function RecordAuditHistorySection({ recordType, recordId }: { recordType
 
   if (entries.length === 0) {
     return (
-      <RecordDetailSection title="Audit history">
-        <p className="text-xs text-muted-foreground">No audit entries recorded for this record yet.</p>
+      <RecordDetailSection title={title}>
+        {subtitle ? <p className="mb-2 text-xs text-muted-foreground">{subtitle}</p> : null}
+        <p className="text-xs text-muted-foreground">{emptyMessage}</p>
       </RecordDetailSection>
     );
   }
 
   return (
-    <RecordDetailSection title="Audit history">
+    <RecordDetailSection title={title}>
+      {subtitle ? <p className="mb-2 text-xs text-muted-foreground">{subtitle}</p> : null}
       <ol className="flex flex-col gap-2">
         {entries.map((entry) => (
           <li key={entry.id} className="rounded-lg border border-border px-3 py-2">

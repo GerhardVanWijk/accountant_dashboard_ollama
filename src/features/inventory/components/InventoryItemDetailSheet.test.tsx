@@ -71,7 +71,7 @@ describe('InventoryItemDetailSheet', () => {
 
   it('exposes all eight tabs', () => {
     renderSheet();
-    for (const label of ['Overview', 'Stock', 'Purchasing', 'Sales', 'Transactions', 'Accounting', 'Documents', 'Audit']) {
+    for (const label of ['Overview', 'Stock', 'Purchasing', 'Sales', 'Transactions', 'Accounting', 'Documents', 'Record activity']) {
       expect(screen.getByRole('tab', { name: label })).toBeInTheDocument();
     }
   });
@@ -80,7 +80,7 @@ describe('InventoryItemDetailSheet', () => {
     renderSheet();
     const content = document.querySelector('[data-slot="sheet-content"]');
     expect(content?.className).toMatch(/sm:max-w-3xl/);
-    expect(content?.className).toMatch(/lg:max-w-4xl/);
+    expect(content?.className).toMatch(/lg:max-w-5xl/);
     // The sheet itself never scrolls sideways…
     expect(content?.className).toMatch(/overflow-x-hidden/);
     // …the tab strip absorbs its own overflow, with the scrollbar hidden.

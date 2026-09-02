@@ -3,6 +3,7 @@ import type { NewOpeningStockLine, Product, Warehouse } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { ProductCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 
 export interface OpeningStockLinesEditorProps {
@@ -70,20 +71,16 @@ export function OpeningStockLinesEditor({ lines, onChange, products, warehouses,
       <div className="flex flex-col gap-3">
         {lines.map((line, index) => (
           <div key={index} className={`grid grid-cols-2 gap-3 rounded-lg border border-border p-3 sm:grid-cols-none sm:gap-3 sm:border-0 sm:p-0 ${GRID_COLS}`}>
-            <NativeSelect
-              className="col-span-2 sm:col-span-1"
-              value={line.productId}
-              disabled={disabled}
-              onChange={(e) => updateLine(index, { productId: e.target.value })}
-              aria-label="Product"
-            >
-              <option value="">Select a product…</option>
-              {trackedProducts.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.sku} — {p.name}
-                </option>
-              ))}
-            </NativeSelect>
+            <div className="col-span-2 sm:col-span-1">
+              <ProductCombobox
+                products={trackedProducts}
+                value={line.productId || null}
+                onChange={(productId) => updateLine(index, { productId: productId ?? '' })}
+                customLineLabel={null}
+                disabled={disabled}
+                aria-label="Product"
+              />
+            </div>
             <NativeSelect
               value={line.warehouseId}
               disabled={disabled}

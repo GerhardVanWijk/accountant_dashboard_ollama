@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { Supplier } from '@/types';
 import { BillFormModal } from './BillFormModal';
 import { PurchaseOrderFormModal } from './PurchaseOrderFormModal';
+import { PaymentFormModal } from './PaymentFormModal';
 
 function supplier(): Supplier {
   return {
@@ -28,12 +29,26 @@ describe('Purchases FormModal layer (P3E — Purchases gains a shared shell)', (
       <BillFormModal suppliers={[supplier()]} defaultBillNumber="BILL-0002" onSubmit={vi.fn()} onClose={vi.fn()} />,
     );
     expect(shell()).toBeInTheDocument();
-    expect(shell().className).toContain('sm:max-w-4xl'); // size="lg"
+    expect(shell().className).toContain('sm:max-w-[72rem]'); // size="lg" — shared business-document width
     expect(screen.getByRole('heading', { name: 'New bill' })).toBeInTheDocument();
     // footer button sits outside the scroll region
     const save = screen.getByRole('button', { name: 'Create Bill' });
     expect(save.closest('[data-slot="form-footer"]')).not.toBeNull();
     expect(save.closest('[data-slot="form-body"]')).toBeNull();
+  });
+
+  it('the Supplier Payment modal uses the narrower "md" width (document-width audit — no line-item grid, so 72rem was dead space)', () => {
+    render(
+      <PaymentFormModal
+        suppliers={[supplier()]}
+        outstandingBills={[]}
+        defaultPaymentNumber="PAY-0002"
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(shell().className).toContain('sm:max-w-2xl'); // size="md" — 42rem
+    expect(shell().className).not.toContain('sm:max-w-[72rem]');
   });
 
   it('a clean modal closes without a discard prompt; an edited one prompts', () => {

@@ -25,6 +25,9 @@ import { formatCurrency } from '@/lib/app/format';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
+import { useInvoices } from '@/features/sales/hooks/useInvoices';
+import { useCustomerList } from '@/features/sales/hooks/useCustomerMap';
+import { useBills } from '@/features/purchases/hooks/useBills';
 import { ImportWizard } from '@/features/import/components/ImportWizard';
 import { productImportAdapter, openingStockImportAdapter, stockTakeCountImportAdapter } from '@/features/import/adapters';
 import { ExportMenu } from '@/features/export/components/ExportMenu';
@@ -122,6 +125,9 @@ export function InventoryOverviewPage() {
   const { categories } = useProductCategories();
   const { suppliers } = useSuppliers();
   const { taxRates } = useAllTaxRates();
+  const { invoices } = useInvoices();
+  const { bills } = useBills();
+  const { customers } = useCustomerList();
 
   const canCreate = useCanAccess('inventory', 'create');
   const canUpdate = useCanAccess('inventory', 'update');
@@ -323,6 +329,9 @@ export function InventoryOverviewPage() {
         categories={categories}
         suppliers={suppliers}
         taxRates={taxRates}
+        invoices={invoices}
+        bills={bills}
+        customers={customers}
         open={Boolean(selectedId)}
         onOpenChange={(next) => {
           if (!next) setSelectedId(undefined);

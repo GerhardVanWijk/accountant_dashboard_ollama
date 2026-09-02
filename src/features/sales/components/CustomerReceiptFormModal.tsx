@@ -12,7 +12,7 @@ export interface CustomerReceiptFormModalProps extends Omit<CustomerReceiptFormP
 export function CustomerReceiptFormModal({ title = 'Record customer receipt', onClose, ...formProps }: CustomerReceiptFormModalProps) {
   const [dirty, setDirty] = useState(false);
   return (
-    <FormShell open onClose={onClose} size="lg" mode="create" isDirty={dirty}>
+    <FormShell open onClose={onClose} size="md" mode="create" isDirty={dirty}>
       <FormHeader title={title} />
       <CustomerReceiptForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
     </FormShell>

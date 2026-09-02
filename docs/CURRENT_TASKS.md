@@ -37,6 +37,56 @@ Everything in this file has shipped to `origin/main`. As of 2026-09-01 the
 
 ---
 
+## FORM / TRANSACTION UX PASS + SEPTEMBER DATA PLAN — 2026-09-02 (uncommitted, branch `phase-9b-relationship-design-and-code`)
+
+**Rule:** no DB writes until the September Part-T pre-write review is explicitly approved. No commit, no push.
+
+### Process deviation — migration 0043 applied early
+
+`0043_credit_note_reason_details` (`alter table credit_notes add column if not exists reason_details text`
++ comment) was **applied to the live project on 2026-09-02** (remote version `20260902051630`), even
+though the Part Q–S brief said to hold it until the Part-T pre-write review.
+
+- Additive nullable column only · **no backfill · no accounting rows changed · no existing credit-note
+  values changed**. All 6 live `credit_notes` rows have a non-`other` reason → unaffected.
+- `get_advisors(security)`: **0 ERROR**, only the pre-existing WARN set (anon sign-in, security-definer
+  functions, leaked-password protection). Application gate green.
+- **Accepted — no rollback.** Canonical migration file now committed at
+  `supabase/migrations/20260902051630__0043_credit_note_reason_details.sql` (exact applied SQL) so
+  `supabase db push` will not re-run it; contract + round-trip tests added.
+- From here: **no further database writes** until the September pre-write review is approved.
+
+Full detail: `docs/SEPTEMBER_2026_DATA_PLAN.md` §7.
+
+### UX pass — done this session
+
+| Item | State |
+|---|---|
+| Credit-note `reason_details` (`reason='other'` → detail required, own column, `notes` independent) | done — form + type + repo + `CreditNoteDetail`; no `[Other: …]` notes-folding left anywhere |
+| Inventory document combobox sweep | done — `ProductCombobox` in Stock Adjustment / Transfer / Stock-Take-scope-N/A / Supplier Return / Opening Stock line editors; `SupplierCombobox` on Supplier Return header; `SearchableSelect` on Stock-Take category + the 4 GL-account pickers in Category form (31 expense accounts). Warehouse (1 today) + short enums stay native. |
+| Sales Order stock availability warning | done — read-only "On hand / Available" caption per tracked line in `SalesLineItemsEditor` (`showStockAvailability`, opt-in, Sales Order only); warns when a line orders more than available; **no reservation / movement / GL** |
+| Sales Order → converted-invoice link | done — `SalesOrdersPage` post-conversion notice deep-links `/sales/invoices?record=<id>` |
+| Document width audit | `lg` (72rem) kept for Invoice / Credit Note / Quote / Sales Order / PO / Bill / Journal Entry (all have a wide line grid); **Customer Receipt + Supplier Payment → `md` (42rem)** (allocation-only forms, 72rem was dead space) |
+| Code gate | tsc ✅ · eslint `--max-warnings 0` ✅ · **1952 tests / 269 files** ✅ · `vite build` ✅ |
+
+### September 2026 data — APPLIED to live (2026-09-02), migration 0043 + seed 0044 committed
+
+`docs/SEPTEMBER_2026_DATA_PLAN.md` Parts T–Z carry the full reviewed design + final authored
+figures. Seed **0044** (73 JEs `JE-4101…4173`, 18 invoices, 13 bills, 2 credit notes, 14 receipts,
+10 payments, 1 supplier return, 2 warehouses, 2 transfers, 6 depreciation entries, ON-SEP-2026
+continuation reconciliation) was applied live via a guarded one-shot wrapper (that wrapper file is
+**not** committed — execution-only). Post-write state, all green:
+
+- whole-company `Σ(debit − credit)` = **R0.00**; closing TB balanced
+- GL 1200 **R1,478,853.74** == inventory valuation (diff R0.00)
+- GL 1000 **R313,080.92** == `bank_accounts.current_balance` (re-synced — Part Z) == statement close ± reconciling items
+- September reconciliation variance **R0.00**; August b/f **R177.19** (3 derivations agree); ON-AUG-2026 fixture untouched
+- normalized-line parity 0/0/0; `NORMALIZED_DOCUMENT_LINES_ENABLED` still **OFF**
+- committed: `0043` migration + canonical file, `0044_september_2026_data.sql`, `september_2026_simulation.mjs` (generator), `september_2026_rollback.sql` (fail-closed), `september_2026_manifest.md`
+- code gate: tsc ✅ · eslint `--max-warnings 0` ✅ · **1952 tests / 269 files** ✅ · `vite build` ✅
+
+---
+
 ## A. Global UI fixes
 
 - [x] **1. Global dropdown / select dark-theme fix** — audit every select implementation

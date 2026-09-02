@@ -5,6 +5,7 @@ import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { SupplierCombobox } from '@/components/app/combobox';
 import { FigureBlock } from '@/components/app/figure';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
@@ -129,13 +130,12 @@ export function PaymentForm({ suppliers, outstandingBills, defaultPaymentNumber,
         </Field>
         <Field>
           <FieldLabel htmlFor="payment-supplier">Supplier</FieldLabel>
-          <NativeSelect id="payment-supplier" value={supplierId} onChange={(e) => handleSupplierChange(e.target.value)}>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </NativeSelect>
+          <SupplierCombobox
+            id="payment-supplier"
+            suppliers={suppliers}
+            value={supplierId || null}
+            onChange={(v) => handleSupplierChange(v ?? '')}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="payment-date">Date</FieldLabel>

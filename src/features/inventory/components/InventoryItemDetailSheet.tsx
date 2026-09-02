@@ -1,5 +1,16 @@
-import { useMemo, useState } from 'react';
-import type { Product, ProductCategory, StockBalance, StockMovement, Supplier, TaxRate, Warehouse } from '@/types';
+import { Fragment, useMemo, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
+import type {
+  Bill,
+  Invoice,
+  Product,
+  ProductCategory,
+  StockBalance,
+  StockMovement,
+  Supplier,
+  TaxRate,
+  Warehouse,
+} from '@/types';
 import {
   RecordDetailField,
   RecordDetailSection,
@@ -31,10 +42,29 @@ export interface InventoryItemDetailSheetProps {
   categories: ProductCategory[];
   suppliers: Supplier[];
   taxRates: TaxRate[];
+  /** Optional — lets the movement ledger resolve the customer on a sale/credit-note movement. */
+  invoices?: Invoice[];
+  /** Optional — lets the movement ledger resolve the supplier on a goods-received movement. */
+  bills?: Bill[];
+  /** Optional — customer id → name, for the movement ledger's Party column. */
+  customers?: { id: string; name: string }[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit?: () => void;
 }
+
+const MOVEMENT_SOURCE_LABELS: Record<string, string> = {
+  invoice: 'Invoice',
+  bill: 'Bill',
+  credit_note: 'Credit note',
+  purchase_order: 'Purchase order',
+  stock_adjustment: 'Stock adjustment',
+  stock_transfer: 'Stock transfer',
+  stock_take: 'Stock take',
+  opening_stock_batch: 'Opening stock',
+  supplier_return: 'Supplier return',
+  reversal: 'Reversal',
+};
 
 function SubTable({ head, children }: { head: string[]; children: React.ReactNode }) {
   return (
@@ -56,6 +86,161 @@ function SubTable({ head, children }: { head: string[]; children: React.ReactNod
           </tr>
         </thead>
         <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Stock movement ledger (docs brief Parts N/O) — one row per movement with
+ * the columns needed to tell the whole story (date, movement, qty,
+ * warehouse, source, party, unit cost, value), and each row expandable to
+ * a full evidence panel: what moved, the source document it came from, the
+ * party, and — folded away under "Technical details" — the raw ids an
+ * auditor needs (movement id, source-document id, reversal link).
+ */
+function MovementLedger({
+  movements,
+  warehouseName,
+  resolveParty,
+}: {
+  movements: StockMovement[];
+  warehouseName: (id: string) => string;
+  resolveParty: (m: StockMovement) => string | undefined;
+}) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  if (movements.length === 0) {
+    return <p className="text-sm text-muted-foreground">This item has no stock movements.</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full min-w-[640px] border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-border bg-muted/40 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            <th className="px-3 py-2 text-left">Date</th>
+            <th className="px-3 py-2 text-left">Movement</th>
+            <th className="px-3 py-2 text-right">Qty</th>
+            <th className="px-3 py-2 text-left">Warehouse</th>
+            <th className="px-3 py-2 text-left">Source</th>
+            <th className="px-3 py-2 text-left">Party</th>
+            <th className="px-3 py-2 text-right">Unit cost</th>
+            <th className="px-3 py-2 text-right">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {movements.map((m) => {
+            const isOpen = expanded === m.id;
+            const source = m.sourceDocumentType
+              ? (MOVEMENT_SOURCE_LABELS[m.sourceDocumentType] ?? m.sourceDocumentType)
+              : null;
+            const party = resolveParty(m);
+            return (
+              <Fragment key={m.id}>
+                <tr
+                  className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/30"
+                  onClick={() => setExpanded(isOpen ? null : m.id)}
+                >
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className="flex items-center gap-1">
+                      <ChevronRight className={cn('size-3.5 text-muted-foreground transition-transform', isOpen && 'rotate-90')} />
+                      {formatDate(m.movementDate ?? m.createdAt)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">{MOVEMENT_TYPE_LABELS[m.type]}</td>
+                  <td className={cn('figure px-3 py-2 text-right tabular-nums', m.quantityDelta < 0 && 'text-negative')}>
+                    {m.quantityDelta > 0 ? `+${m.quantityDelta}` : m.quantityDelta}
+                  </td>
+                  <td className="px-3 py-2">{warehouseName(m.warehouseId)}</td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                    {source ? `${source}${m.reference ? ` ${m.reference}` : ''}` : (m.reference ?? '—')}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{party ?? '—'}</td>
+                  <td className="figure px-3 py-2 text-right tabular-nums">
+                    {m.unitCost != null ? formatCurrency(m.unitCost) : '—'}
+                  </td>
+                  <td className="figure px-3 py-2 text-right tabular-nums">
+                    {m.totalCost != null ? formatCurrency(m.totalCost) : '—'}
+                  </td>
+                </tr>
+                {isOpen && (
+                  <tr className="border-b border-border bg-muted/20 last:border-0">
+                    <td colSpan={8} className="px-3 py-3">
+                      <div className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
+                        <div>
+                          <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Movement</p>
+                          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                            <dt className="text-muted-foreground">Type</dt>
+                            <dd>{MOVEMENT_TYPE_LABELS[m.type]}</dd>
+                            <dt className="text-muted-foreground">Date</dt>
+                            <dd>{formatDate(m.movementDate ?? m.createdAt)}</dd>
+                            <dt className="text-muted-foreground">Quantity</dt>
+                            <dd>{m.quantityDelta > 0 ? `+${m.quantityDelta}` : m.quantityDelta}</dd>
+                            <dt className="text-muted-foreground">Warehouse</dt>
+                            <dd>{warehouseName(m.warehouseId)}</dd>
+                            <dt className="text-muted-foreground">Unit cost</dt>
+                            <dd>{m.unitCost != null ? formatCurrency(m.unitCost) : '—'}</dd>
+                            <dt className="text-muted-foreground">Total value</dt>
+                            <dd>{m.totalCost != null ? formatCurrency(m.totalCost) : '—'}</dd>
+                          </dl>
+                        </div>
+                        <div>
+                          <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Source</p>
+                          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                            <dt className="text-muted-foreground">Document</dt>
+                            <dd>{source ?? '—'}</dd>
+                            <dt className="text-muted-foreground">Reference</dt>
+                            <dd>{m.reference ?? '—'}</dd>
+                            <dt className="text-muted-foreground">Party</dt>
+                            <dd>{party ?? '—'}</dd>
+                            {m.notes ? (
+                              <>
+                                <dt className="text-muted-foreground">Notes</dt>
+                                <dd>{m.notes}</dd>
+                              </>
+                            ) : null}
+                          </dl>
+                        </div>
+                      </div>
+                      <details className="mt-2 text-xs">
+                        <summary className="cursor-pointer text-muted-foreground">Technical details</summary>
+                        <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 font-mono text-[11px] text-muted-foreground">
+                          <dt>Movement ID</dt>
+                          <dd>{m.id}</dd>
+                          {m.sourceDocumentId ? (
+                            <>
+                              <dt>Source doc ID</dt>
+                              <dd>{m.sourceDocumentId}</dd>
+                            </>
+                          ) : null}
+                          {m.sourceDocumentLineId ? (
+                            <>
+                              <dt>Source line ID</dt>
+                              <dd>{m.sourceDocumentLineId}</dd>
+                            </>
+                          ) : null}
+                          {m.reversalOfMovementId ? (
+                            <>
+                              <dt>Reverses</dt>
+                              <dd>{m.reversalOfMovementId}</dd>
+                            </>
+                          ) : null}
+                          {m.createdBy ? (
+                            <>
+                              <dt>Recorded by</dt>
+                              <dd>{m.createdBy}</dd>
+                            </>
+                          ) : null}
+                        </dl>
+                      </details>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
       </table>
     </div>
   );
@@ -109,6 +294,9 @@ export function InventoryItemDetailSheet({
   categories,
   suppliers,
   taxRates,
+  invoices = [],
+  bills = [],
+  customers = [],
   open,
   onOpenChange,
   onEdit,
@@ -117,7 +305,25 @@ export function InventoryItemDetailSheet({
 
   const warehouseById = useMemo(() => new Map(warehouses.map((w) => [w.id, w])), [warehouses]);
   const supplierById = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
+  const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c.name])), [customers]);
+  const invoiceById = useMemo(() => new Map(invoices.map((i) => [i.id, i])), [invoices]);
+  const billById = useMemo(() => new Map(bills.map((b) => [b.id, b])), [bills]);
   const category = product?.categoryId ? categories.find((c) => c.id === product.categoryId) : undefined;
+
+  const warehouseName = (id: string) => warehouseById.get(id)?.name ?? id;
+
+  /** Best-effort party resolution from the movement's structured source link. */
+  function resolveParty(m: StockMovement): string | undefined {
+    if (m.sourceDocumentType === 'invoice' || m.sourceDocumentType === 'credit_note') {
+      const inv = m.sourceDocumentId ? invoiceById.get(m.sourceDocumentId) : undefined;
+      return inv ? customerById.get(inv.customerId) : undefined;
+    }
+    if (m.sourceDocumentType === 'bill') {
+      const bill = m.sourceDocumentId ? billById.get(m.sourceDocumentId) : undefined;
+      return bill ? supplierById.get(bill.supplierId) : undefined;
+    }
+    return undefined;
+  }
 
   const productMovements = useMemo(
     () =>
@@ -286,40 +492,10 @@ export function InventoryItemDetailSheet({
           label: 'Transactions',
           content: (
             <RecordDetailSection title="Stock movement ledger">
-              {productMovements.length === 0 ? (
-                <p className="text-sm text-muted-foreground">This item has no stock movements.</p>
-              ) : (
-                <SubTable head={['Date', 'Type', 'Qty', 'Unit cost', 'Value', 'Source']}>
-                  {productMovements.map((m) => (
-                    <tr key={m.id} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2 whitespace-nowrap">{formatDate(m.movementDate ?? m.createdAt)}</td>
-                      <td className="px-3 py-2">
-                        {MOVEMENT_TYPE_LABELS[m.type]}
-                        {m.reversalOfMovementId && (
-                          <span className="ml-1 text-xs text-muted-foreground">(reverses {m.reversalOfMovementId.slice(0, 8)})</span>
-                        )}
-                      </td>
-                      <td
-                        className={cn(
-                          'figure px-3 py-2 text-right tabular-nums',
-                          m.quantityDelta < 0 && 'text-negative',
-                        )}
-                      >
-                        {m.quantityDelta > 0 ? `+${m.quantityDelta}` : m.quantityDelta}
-                      </td>
-                      <td className="figure px-3 py-2 text-right tabular-nums">
-                        {m.unitCost != null ? formatCurrency(m.unitCost) : '—'}
-                      </td>
-                      <td className="figure px-3 py-2 text-right tabular-nums">
-                        {m.totalCost != null ? formatCurrency(m.totalCost) : '—'}
-                      </td>
-                      <td className="px-3 py-2 text-right text-xs text-muted-foreground">
-                        {m.sourceDocumentType ?? m.reference ?? '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </SubTable>
-              )}
+              <p className="mb-2 text-xs text-muted-foreground">
+                Every stock event for this item, newest first. Click a row for the full evidence — source document, party and accounting trace.
+              </p>
+              <MovementLedger movements={productMovements} warehouseName={warehouseName} resolveParty={resolveParty} />
             </RecordDetailSection>
           ),
         },
@@ -363,8 +539,16 @@ export function InventoryItemDetailSheet({
         },
         {
           value: 'audit',
-          label: 'Audit',
-          content: <RecordAuditHistorySection recordType="Product" recordId={product.id} />,
+          label: 'Record activity',
+          content: (
+            <RecordAuditHistorySection
+              recordType="Product"
+              recordId={product.id}
+              title="Record activity"
+              subtitle="Changes and important actions performed on this item's master data — who changed a price, a cost mapping or the item's configuration, and when. Stock arrivals and issues live in the Transactions tab."
+              emptyMessage="No recorded changes to this product's master data yet."
+            />
+          ),
         },
       ]
     : [];
@@ -386,7 +570,7 @@ export function InventoryItemDetailSheet({
       titleAdornment={product ? <StatusBadge status={product.status} /> : undefined}
       state={state}
       notFoundMessage="This item could not be found — it may have been deleted."
-      className="sm:max-w-3xl lg:max-w-4xl"
+      className="sm:max-w-3xl lg:max-w-5xl xl:max-w-[min(1150px,92vw)]"
       actions={
         product && onEdit ? (
           <Button size="sm" onClick={onEdit}>

@@ -44,6 +44,12 @@ export interface CreditNote extends BaseEntity {
   invoiceId?: ID;
   issueDate: ISODateString;
   reason: CreditNoteReason;
+  /**
+   * Free-text explanation, required by the form when `reason === 'other'`
+   * and null for the other reasons (migration 0043). Kept distinct from
+   * `notes` — this is *why* the credit note exists, not an operational note.
+   */
+  reasonDetails?: string;
   lineItems: CreditNoteLineItem[];
   subtotal: number;
   taxTotal: number;

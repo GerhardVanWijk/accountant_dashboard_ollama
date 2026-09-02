@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { SearchableSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateInvoiceDTO } from '@/services/invoiceService';
@@ -103,19 +103,17 @@ export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading 
         </Field>
         <Field>
           <FieldLabel htmlFor="invoice-customer">Customer</FieldLabel>
-          <NativeSelect
+          <SearchableSelect
             id="invoice-customer"
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
+            aria-label="Customer"
+            options={customerEntries.map(([id, name]) => ({ value: id, label: name }))}
+            value={customerId || null}
+            onChange={(v) => setCustomerId(v ?? '')}
+            placeholder="Select customer"
+            searchPlaceholder="Search customers…"
+            emptyMessage="No customers match."
             disabled={isLoading}
-          >
-            <option value="">Select customer</option>
-            {customerEntries.map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </NativeSelect>
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="invoice-issue-date">Issue date</FieldLabel>
