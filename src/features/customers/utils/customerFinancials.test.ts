@@ -18,6 +18,36 @@ function item(overrides: Partial<OpenItem>): OpenItem {
 }
 
 describe('calculateFinancialSummary', () => {
+  it('defaults availableDeposit to 0 and netPosition to totalOutstanding when no receipts are given', () => {
+    const summary = calculateFinancialSummary({ id: 'cust_test', creditLimit: undefined }, asOf, [
+      item({ dueDate: '2026-09-01', amount: 100, amountOutstanding: 100 }),
+    ]);
+    expect(summary.availableDeposit).toBe(0);
+    expect(summary.netPosition).toBe(100);
+  });
+
+  it('sums unallocatedAmount across receipts into availableDeposit and nets it against outstanding', () => {
+    const summary = calculateFinancialSummary(
+      { id: 'cust_test', creditLimit: undefined },
+      asOf,
+      [item({ dueDate: '2026-09-01', amount: 1000, amountOutstanding: 1000 })],
+      [{ unallocatedAmount: 250 }, { unallocatedAmount: 100 }, { unallocatedAmount: 0 }],
+    );
+    expect(summary.availableDeposit).toBe(350);
+    expect(summary.netPosition).toBe(650);
+  });
+
+  it('netPosition goes negative when the customer holds more deposit than they owe', () => {
+    const summary = calculateFinancialSummary(
+      { id: 'cust_test', creditLimit: undefined },
+      asOf,
+      [item({ dueDate: '2026-09-01', amount: 200, amountOutstanding: 200 })],
+      [{ unallocatedAmount: 500 }],
+    );
+    expect(summary.availableDeposit).toBe(500);
+    expect(summary.netPosition).toBe(-300);
+  });
+
   it('computes totalOutstanding and overdueBalance from open items', () => {
     const source: OpenItem[] = [
       item({ dueDate: '2026-09-01', amount: 100, amountOutstanding: 100 }), // current

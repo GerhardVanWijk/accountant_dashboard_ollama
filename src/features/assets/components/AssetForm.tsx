@@ -1,16 +1,19 @@
 import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { AssetCategory, DepreciationMethod, FixedAsset } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS, ASSETS_CURRENCY } from '../constants';
 import type { CreateFixedAssetDTO, UpdateFixedAssetDTO } from '../services';
+
+const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }));
+const DEPRECIATION_METHOD_OPTIONS = Object.entries(DEPRECIATION_METHOD_LABELS).map(([value, label]) => ({ value, label }));
 
 function isPositiveNumber(value: string): boolean {
   return value.trim() !== '' && !Number.isNaN(Number(value)) && Number(value) > 0;
@@ -94,6 +97,7 @@ export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFor
     handleSubmit,
     watch,
     setValue,
+    control,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<AssetFormValues>({
     resolver: zodResolver(assetSchema),
@@ -161,13 +165,20 @@ export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFor
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="category">Category</FieldLabel>
-          <NativeSelect id="category" {...register('category')}>
-            {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="category"
+            render={({ field, fieldState }) => (
+              <EnumSelect
+                id="category"
+                name="category"
+                value={field.value ?? 'other'}
+                onValueChange={field.onChange}
+                invalid={Boolean(fieldState.error)}
+                options={CATEGORY_OPTIONS}
+              />
+            )}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="acquisitionDate">Acquisition Date</FieldLabel>
@@ -197,13 +208,21 @@ export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFor
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="depreciationMethod">Depreciation Method</FieldLabel>
-          <NativeSelect id="depreciationMethod" disabled={locked} {...register('depreciationMethod')}>
-            {Object.entries(DEPRECIATION_METHOD_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="depreciationMethod"
+            render={({ field, fieldState }) => (
+              <EnumSelect
+                id="depreciationMethod"
+                name="depreciationMethod"
+                disabled={locked}
+                value={field.value ?? 'straight_line'}
+                onValueChange={field.onChange}
+                invalid={Boolean(fieldState.error)}
+                options={DEPRECIATION_METHOD_OPTIONS}
+              />
+            )}
+          />
         </Field>
         {depreciationMethod === 'reducing_balance' && (
           <Field>

@@ -1,26 +1,24 @@
 import { TaxRateService } from './taxRateService';
-import { MockTaxRateRepository } from '@/repositories/mock/MockTaxRateRepository';
+import { SupabaseTaxRateRepository } from '@/repositories/SupabaseTaxRateRepository';
+import { supabase } from '@/config/supabase';
 import { auditLogService } from '@/services/auditLogService';
 
 export type { CreateTaxRateDTO, SupersedeTaxRateInput } from './taxRateService';
 export { TaxRateService } from './taxRateService';
+export { MockTaxRateRepository } from '@/repositories/mock/MockTaxRateRepository';
 
 /**
- * Stays Mock-wired — SupabaseTaxRateRepository is fully built and verified
- * (docs/SUPABASE_MIGRATION_GUIDE.md Phase D), but wiring it in was tried
- * again in Phase E and reverted a second time, with a corrected reason.
- * Phase D's original theory — "flip it once Sales/Purchases migrate too,
- * so both sides reference the same real rows" — turned out to be wrong:
- * migrating Purchases to Supabase (Phase E) changes WHERE `billService`
- * reads from, not WHAT data exists there. `billService.test.ts`'s fixtures
- * reference specific Mock-seeded tax rate ids (e.g. `"tax_std_v2"`); no
- * schema/repository change makes a matching row exist in the (correctly
- * empty) Supabase `tax_rates` table. Swapping this again reproduced the
- * exact same 6 `billService.test.ts` failures Phase D already documented.
- * The real fix isn't a wiring order — it's either seeding real reference
- * data into Supabase, or moving these tests off the shared live singleton
- * onto locally-constructed fixtures, both out of a schema-migration
- * phase's scope. Revisit when there's an actual seeding/test-data strategy,
- * not just "the next phase migrates."
+ * Supabase-wired (2026-09-03). Previously Mock-wired: the app-wide singleton
+ * read the hand-typed `src/mock-data/taxRates.ts` fixtures (ids like
+ * `"tax_std_v2"`) while every real document/product is Supabase-backed and
+ * carries a real `tax_rate_id` UUID. Those two id spaces never intersect,
+ * so `getTaxRateLabel()` and every "pick a rate" dropdown showed
+ * "Unknown tax rate" against real data in the deployed app. The historical
+ * blocker — "the Supabase `tax_rates` table is correctly empty" — no longer
+ * holds: the Office National demo seeded the real STD / ZERO / EXEMPT rows
+ * (2026-08-28). Service tests that used to import this live singleton now
+ * construct their own `new TaxRateService(new MockTaxRateRepository(), …)`
+ * (see `MockTaxRateRepository` re-export above), matching every other
+ * Supabase-wired service barrel's test convention.
  */
-export const taxRateService = new TaxRateService(new MockTaxRateRepository(), auditLogService);
+export const taxRateService = new TaxRateService(new SupabaseTaxRateRepository(supabase), auditLogService);

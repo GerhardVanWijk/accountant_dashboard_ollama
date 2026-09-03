@@ -102,10 +102,18 @@ function setup(
   };
 
   const repository = opts.seed === false ? new MockPurchaseOrderRepository([]) : new MockPurchaseOrderRepository();
-  const poService = new PurchaseOrderService(repository, engine, resolver, products, warehouses, opts.lineProjector);
+  const poService = new PurchaseOrderService(
+    repository,
+    engine,
+    resolver,
+    products,
+    warehouses,
+    opts.lineProjector,
+    auditLog,
+  );
 
   const getJE = (id: string | undefined) => store.journalEntries.find((e) => e.id === id);
-  return { poService, repository, store, getJE };
+  return { poService, repository, store, getJE, auditLog };
 }
 
 describe('PurchaseOrderService', () => {
@@ -342,6 +350,71 @@ describe('PurchaseOrderService', () => {
   describe('calculateOrderValue', () => {
     it('should calculate total order value', async () => {
       expect(typeof (await poService.calculateOrderValue())).toBe('number');
+    });
+  });
+
+  describe('duplicatePurchaseOrder (Phase 4B)', () => {
+    it('produces an independent DRAFT — new number, today, fresh line ids, no billId/journalEntryId/receivedDate', async () => {
+      const { poService: svc, repository } = setup({}, { seed: false });
+      const source = await svc.createPurchaseOrder({
+        poNumber: 'PO-2026-0100',
+        supplierId: 'supp_x',
+        orderDate: '2026-01-01T00:00:00.000Z',
+        expectedDate: '2026-01-15T00:00:00.000Z',
+        lineItems: [
+          { id: 'orig-line-1', description: 'Paper', quantity: 3, unitPrice: 40, taxAmount: 18, lineTotal: 120 },
+        ],
+        subtotal: 120,
+        taxTotal: 18,
+        total: 138,
+        currency: 'ZAR',
+        status: 'received',
+        notes: 'keep me',
+      });
+      await repository.update(source.id, {
+        billId: 'bill-1',
+        journalEntryId: 'je-1',
+        receivedDate: '2026-01-10T00:00:00.000Z',
+      });
+
+      const copy = await svc.duplicatePurchaseOrder(source.id);
+
+      expect(copy.id).not.toBe(source.id);
+      expect(copy.status).toBe('draft');
+      expect(copy.billId).toBeUndefined();
+      expect(copy.journalEntryId).toBeUndefined();
+      expect(copy.receivedDate).toBeUndefined();
+      expect(copy.expectedDate).toBeUndefined();
+      expect(copy.poNumber).toMatch(/^PO-\d{4}-\d{4}$/);
+      expect(copy.poNumber).not.toBe(source.poNumber);
+      expect(copy.notes).toBe('keep me');
+      expect(copy.lineItems[0].id).not.toBe('orig-line-1');
+    });
+
+    it('writes a "created" audit row naming the source PO number', async () => {
+      const { poService: svc, auditLog } = setup({}, { seed: false });
+      const source = await svc.createPurchaseOrder({
+        poNumber: 'PO-2026-0200',
+        supplierId: 'supp_x',
+        orderDate: '2026-01-01T00:00:00.000Z',
+        lineItems: [{ id: 'l1', description: 'Paper', quantity: 1, unitPrice: 40, taxAmount: 6, lineTotal: 40 }],
+        subtotal: 40,
+        taxTotal: 6,
+        total: 46,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      const copy = await svc.duplicatePurchaseOrder(source.id);
+      const logs = await auditLog.getForRecord('PurchaseOrder', copy.id);
+      expect(logs).toHaveLength(1);
+      expect(logs[0].action).toBe('created');
+      expect(logs[0].module).toBe('purchases');
+      expect(logs[0].reason).toContain('PO-2026-0200');
+    });
+
+    it('throws when the source does not exist', async () => {
+      const { poService: svc } = setup({}, { seed: false });
+      await expect(svc.duplicatePurchaseOrder('nope')).rejects.toThrow(/not found/i);
     });
   });
 });

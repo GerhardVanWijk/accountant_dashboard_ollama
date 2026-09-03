@@ -15,12 +15,30 @@ export interface CustomerFinancialSummary {
   availableCredit: number | null;
   /** Sum of document amounts issued this calendar year (paid or not). */
   ytdSales: number;
+  /**
+   * Money this customer has paid that is not yet applied to an invoice — the
+   * sum of `unallocatedAmount` over their receipts (a Customer Deposits
+   * liability). Derived, never a stored mutable balance. 0 when no receipts
+   * are supplied.
+   */
+  availableDeposit: number;
+  /**
+   * `totalOutstanding - availableDeposit`. Positive = the customer still
+   * owes on balance; negative = we hold more of their money than they owe.
+   */
+  netPosition: number;
+}
+
+/** Minimal receipt shape this util needs — avoids a cross-feature type import. */
+export interface CustomerReceiptLike {
+  unallocatedAmount: number;
 }
 
 export function calculateFinancialSummary(
   customer: Pick<Customer, 'id' | 'creditLimit'>,
   asOf: Date = new Date(),
   source: OpenItem[] = getOpenItemsForCustomer(customer.id),
+  receipts: CustomerReceiptLike[] = [],
 ): CustomerFinancialSummary {
   const aging = calculateAging(source, asOf);
   const totalOutstanding = aging.total;
@@ -35,7 +53,10 @@ export function calculateFinancialSummary(
     })
     .reduce((sum, item) => sum + item.amount, 0);
 
-  return { totalOutstanding, overdueBalance, availableCredit, ytdSales };
+  const availableDeposit = Math.round(receipts.reduce((sum, r) => sum + (r.unallocatedAmount || 0), 0) * 100) / 100;
+  const netPosition = Math.round((totalOutstanding - availableDeposit) * 100) / 100;
+
+  return { totalOutstanding, overdueBalance, availableCredit, ytdSales, availableDeposit, netPosition };
 }
 
 /**

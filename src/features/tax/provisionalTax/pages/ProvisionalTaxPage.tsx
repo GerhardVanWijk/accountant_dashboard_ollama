@@ -4,7 +4,7 @@ import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { formatCurrency } from '@/lib/app/format';
 import type { ProvisionalTaxReconciliation } from '@/types/provisionalTax';
 import { useProvisionalTax } from '../hooks/useProvisionalTax';
@@ -83,13 +83,12 @@ export function ProvisionalTaxPage() {
         description="First, second, and voluntary top-up provisional tax payments, estimates, and reconciliation against the final Income Tax computation."
         actions={
           sortedFinancialYears.length > 0 ? (
-            <NativeSelect aria-label="Financial Year" value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
-              {sortedFinancialYears.map((year) => (
-                <option key={year.id} value={year.id}>
-                  {year.name}
-                </option>
-              ))}
-            </NativeSelect>
+            <EnumSelect
+              aria-label="Financial Year"
+              value={activeFinancialYearId ?? ''}
+              onValueChange={setSelectedFinancialYearId}
+              options={sortedFinancialYears.map((year) => ({ value: year.id, label: year.name }))}
+            />
           ) : undefined
         }
       />

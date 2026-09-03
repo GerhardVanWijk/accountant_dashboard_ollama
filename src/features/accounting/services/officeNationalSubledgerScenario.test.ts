@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AccountMapper } from './accountMappingService';
 import type { JournalEntryService } from './journalEntryService';
-import { reconcileAccountsReceivable, reconcileAccountsPayable } from './subledgerReconciliation';
+import { reconcileAccountsReceivable, reconcileAccountsPayable, reconcileCustomerDeposits } from './subledgerReconciliation';
 import {
   officeNationalInvoices,
   officeNationalBills,
@@ -10,9 +10,11 @@ import {
   officeNationalPayments,
   ON_REAL_AR_CONTROL_BALANCE,
   ON_REAL_AP_CONTROL_BALANCE,
+  ON_REAL_CUSTOMER_DEPOSITS_BALANCE,
   ON_NONBILL_AP_ADJUSTMENTS,
   ON_AR_CONTROL_ACCOUNT_ID,
   ON_AP_CONTROL_ACCOUNT_ID,
+  ON_CUSTOMER_DEPOSITS_CONTROL_ACCOUNT_ID,
 } from './officeNationalSubledgerScenario';
 
 /**
@@ -23,15 +25,16 @@ import {
  * stubbed to their documented clean values (GL 1100 = R207,794.04,
  * GL 2000 = R590,511.21).
  *
- * Phase 21.2 makes both sides reconcile to ~R0:
+ * Both sides reconcile to ~R0 (Increment 4A split posting):
  *
- *   AR: GL-consistent subledger = Σ posted-invoice.total − Σ receipt.amount
- *       − Σ issued-CN.total = 668,036.17 − 457,231.23 − 3,010.90 = 207,794.04
- *       = GL 1100, exact. The aging subledger (R209,817.80 after part D)
- *       bridges to it by:  R1,750.00 unallocated "money on account" receipts
- *       + R273.76 un-absorbable credit-note over-allocations (CN-1002 R141.51
- *       + CN-1005 R132.25, both credited against already-fully-paid invoices)
- *       + R0.00 other.
+ *   AR: GL-consistent subledger = Σ posted-invoice.total
+ *       − Σ receipt-amount-APPLIED-to-invoices − Σ issued-CN.total
+ *       = 668,036.17 − (457,231.23 − 1,750.00) − 3,010.90 = 209,544.04
+ *       = GL 1100, exact. The aging subledger (R209,817.80) bridges to it
+ *       by just R273.76 un-absorbable credit-note over-allocations
+ *       (CN-1002 R141.51 + CN-1005 R132.25) + R0.00 other. The R1,750.00 of
+ *       unapplied receipts now sits in Customer Deposits (2600), reconciled
+ *       by reconcileCustomerDeposits().
  *
  *   AP: GL-consistent subledger = Σ posted-bill.total − Σ payment.amount
  *       + R363,400.00 non-bill AP (R368,000 vehicle-on-credit − R4,600
@@ -46,7 +49,12 @@ function stubLedger(balance: number): Pick<JournalEntryService, 'getAccountLedge
 }
 
 const accountMapper: AccountMapper = {
-  getAccountId: async (key: string) => (key === 'AR' ? ON_AR_CONTROL_ACCOUNT_ID : ON_AP_CONTROL_ACCOUNT_ID),
+  getAccountId: async (key: string) =>
+    key === 'AR'
+      ? ON_AR_CONTROL_ACCOUNT_ID
+      : key === 'CUSTOMER_DEPOSIT'
+        ? ON_CUSTOMER_DEPOSITS_CONTROL_ACCOUNT_ID
+        : ON_AP_CONTROL_ACCOUNT_ID,
 } as AccountMapper;
 
 const sum = (ns: number[]) => Math.round(ns.reduce((a, b) => a + b, 0) * 100) / 100;
@@ -87,14 +95,28 @@ describe('Office National subledger reconciliation — real live figures (Phase 
     );
 
     expect(result.controlAccountBalance).toBeCloseTo(ON_REAL_AR_CONTROL_BALANCE, 2);
-    expect(result.subledgerTotal).toBeCloseTo(207_794.04, 2);
+    expect(result.subledgerTotal).toBeCloseTo(209_544.04, 2);
     expect(result.agingSubledgerTotal).toBeCloseTo(209_817.8, 2);
     expect(result.variance).toBeCloseTo(0, 2);
     expect(result.isReconciled).toBe(true);
 
-    expect(result.bridge.unallocatedReceipts).toBeCloseTo(1_750.0, 2);
+    // Unapplied receipts no longer bridge AR — they sit in Customer Deposits.
+    expect(result.bridge.unallocatedReceipts).toBeCloseTo(1_750.0, 2); // informational only
     expect(result.bridge.creditNoteImpact).toBeCloseTo(273.76, 2);
     expect(result.bridge.other).toBeCloseTo(0, 2);
+  });
+
+  it('Customer Deposits (2600): the GL liability equals Σ unapplied receipts', async () => {
+    const result = await reconcileCustomerDeposits(
+      stubLedger(ON_REAL_CUSTOMER_DEPOSITS_BALANCE),
+      accountMapper,
+      officeNationalReceipts,
+    );
+
+    expect(result.controlAccountBalance).toBeCloseTo(1_750.0, 2);
+    expect(result.subledgerTotal).toBeCloseTo(1_750.0, 2);
+    expect(result.variance).toBeCloseTo(0, 2);
+    expect(result.isReconciled).toBe(true);
   });
 
   it('AP: reconciles to ~R0 once the non-bill AP adjustment is supplied', async () => {

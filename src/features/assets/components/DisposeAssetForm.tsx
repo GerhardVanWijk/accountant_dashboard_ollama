@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { SearchableSelect } from '@/components/app/combobox';
 import { Amount, FigureBlock } from '@/components/app/figure';
 import { formatCurrency } from '@/lib/app/format';
 
@@ -55,13 +55,16 @@ export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel, onDirty
       <FormBody>
       <Field>
         <FieldLabel htmlFor="assetId">Asset</FieldLabel>
-        <NativeSelect id="assetId" value={assetId} onChange={(e) => setAssetId(e.target.value)}>
-          {disposable.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.assetNumber} - {a.name}
-            </option>
-          ))}
-        </NativeSelect>
+        <SearchableSelect
+          id="assetId"
+          value={assetId || null}
+          onChange={(value) => setAssetId(value ?? '')}
+          options={disposable.map((a) => ({
+            value: a.id,
+            label: `${a.assetNumber} - ${a.name}`,
+            keywords: a.assetNumber,
+          }))}
+        />
       </Field>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -78,15 +81,18 @@ export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel, onDirty
 
       <Field>
         <FieldLabel htmlFor="proceedsAccountId">Proceeds Account</FieldLabel>
-        <NativeSelect id="proceedsAccountId" value={proceedsAccountId} onChange={(e) => setProceedsAccountId(e.target.value)}>
-          {accounts
+        <SearchableSelect
+          id="proceedsAccountId"
+          value={proceedsAccountId || null}
+          onChange={(value) => setProceedsAccountId(value ?? '')}
+          options={accounts
             .filter((a) => a.isActive)
-            .map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.code} - {account.name}
-              </option>
-            ))}
-        </NativeSelect>
+            .map((account) => ({
+              value: account.id,
+              label: `${account.code} - ${account.name}`,
+              keywords: account.code,
+            }))}
+        />
         <FieldDescription>Where the disposal proceeds land — Cash and Bank, or Accounts Receivable if on credit.</FieldDescription>
       </Field>
 

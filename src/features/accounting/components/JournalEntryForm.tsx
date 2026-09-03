@@ -4,7 +4,7 @@ import type { Account } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { SearchableSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { cn } from '@/lib/utils';
@@ -159,18 +159,17 @@ export function JournalEntryForm({ accounts, validateLines, onSubmit, onCancel, 
               {lines.map((line) => (
                 <tr key={line.key} className="border-b border-border last:border-0">
                   <td className="px-3 py-2 align-top">
-                    <NativeSelect
+                    <SearchableSelect
                       aria-label="Account"
-                      value={line.accountId}
-                      onChange={(e) => updateLine(line.key, { accountId: e.target.value })}
-                    >
-                      <option value="">Select account…</option>
-                      {activeAccounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.code} — {a.name}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                      value={line.accountId || null}
+                      onChange={(value) => updateLine(line.key, { accountId: value ?? '' })}
+                      placeholder="Select account…"
+                      options={activeAccounts.map((a) => ({
+                        value: a.id,
+                        label: `${a.code} — ${a.name}`,
+                        keywords: a.code,
+                      }))}
+                    />
                   </td>
                   <td className="px-3 py-2 align-top">
                     <Input

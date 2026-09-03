@@ -1,21 +1,20 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { StockAdjustment } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
+import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
 import { useStockAdjustments } from '../hooks/useStockAdjustments';
 import { useProducts } from '../hooks/useProducts';
 import { useWarehouses } from '../hooks/useWarehouses';
-import { useAccounts } from '@/features/accounting/hooks/useAccounts';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { ExportMenu } from '@/features/export/components/ExportMenu';
 import { PrintableReport } from '@/features/export/components/PrintableReport';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { StockAdjustmentsTable } from '../components/StockAdjustmentsTable';
-import { StockAdjustmentDetailSheet } from '../components/StockAdjustmentDetailSheet';
 import { StockAdjustmentDocumentFormModal } from '../components/StockAdjustmentDocumentFormModal';
 import type { CreateStockAdjustmentDTO, UpdateStockAdjustmentDTO } from '../services/stockAdjustmentService';
 
@@ -33,70 +32,33 @@ const ADJUSTMENT_EXPORT_COLUMNS: ExportColumn<StockAdjustment>[] = [
   { key: 'status', header: 'Status', accessor: (a) => a.status },
 ];
 
-type DialogState = { mode: 'create' } | { mode: 'edit'; adjustment: StockAdjustment } | null;
-
 /**
- * Stock Adjustment register — route `/inventory/adjustments` (Phase 5 §1).
- * Draft → pending_approval → posted lifecycle over `stockAdjustmentService`
- * (migration 0027 / Phase 3 engine), mirroring `AssetRegisterPage`'s
- * shape. `AccountingPreview` (via `StockAdjustmentDetailSheet`) is the
- * only place the resulting journal entry is shown — never recomputed here.
+ * Stock Adjustment register — route `/inventory/adjustments`, the list
+ * only. A row click navigates to the full-page record at
+ * `/inventory/adjustments/:adjustmentId` (StockAdjustmentDetailPage);
+ * legacy `?record=<id>` deep links are redirected there. The
+ * draft → pending_approval → posted lifecycle and the `AccountingPreview`
+ * live on the record page.
  */
 export function StockAdjustmentsPage() {
-  const {
-    adjustments,
-    loading,
-    error,
-    refetch,
-    createAdjustment,
-    updateAdjustment,
-    deleteAdjustment,
-    submitForApproval,
-    approve,
-    postAdjustment,
-    cancelAdjustment,
-    reverseAdjustment,
-    previewAccountingEffect,
-  } = useStockAdjustments();
+  const navigate = useNavigate();
+  useLegacyRecordRedirect('/inventory/adjustments');
+
+  const { adjustments, loading, error, refetch, createAdjustment, deleteAdjustment } = useStockAdjustments();
   const { products, loading: productsLoading } = useProducts();
   const { warehouses, loading: warehousesLoading } = useWarehouses();
-  const { accounts } = useAccounts();
   const canCreate = useCanAccess('inventory', 'create');
-  const canUpdate = useCanAccess('inventory', 'update');
   const canDelete = useCanAccess('inventory', 'delete');
   const canExport = useCanAccess('inventory', 'export');
-  const [dialog, setDialog] = useState<DialogState>(null);
+  const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [visibleRows, setVisibleRows] = useState<StockAdjustment[]>([]);
   const [activeFilters, setActiveFilters] = useState<{ label: string; value: string }[]>([]);
 
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedId = searchParams.get('record') ?? undefined;
-  const detailOpen = Boolean(selectedId);
-  function openRecord(id: string) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('record', id);
-      return next;
-    });
-  }
-  function closeRecord() {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('record');
-      return next;
-    });
-  }
-  const detailAdjustment = adjustments.find((a) => a.id === selectedId);
-
   const handleFormSubmit = async (data: CreateStockAdjustmentDTO | UpdateStockAdjustmentDTO) => {
-    if (dialog?.mode === 'edit') {
-      await updateAdjustment(dialog.adjustment.id, data as UpdateStockAdjustmentDTO);
-    } else {
-      const created = await createAdjustment(data as CreateStockAdjustmentDTO);
-      openRecord(created.id);
-    }
-    setDialog(null);
+    const created = await createAdjustment(data as CreateStockAdjustmentDTO);
+    setCreating(false);
+    navigate(`/inventory/adjustments/${created.id}`);
   };
 
   const handleDelete = async (adjustment: StockAdjustment) => {
@@ -132,7 +94,7 @@ export function StockAdjustmentsPage() {
           <>
             <ExportMenu dataset={exportDataset} allowed={canExport} />
             {canCreate && (
-              <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+              <Button size="sm" onClick={() => setCreating(true)}>
                 <Plus data-icon="inline-start" />
                 New adjustment
               </Button>
@@ -176,7 +138,7 @@ export function StockAdjustmentsPage() {
             adjustments={adjustments}
             products={products}
             warehouses={warehouses}
-            onSelect={(a) => openRecord(a.id)}
+            onSelect={(a) => navigate(`/inventory/adjustments/${a.id}`)}
             onDelete={canDelete ? (a) => void handleDelete(a) : undefined}
             onVisibleRowsChange={(rows, filters) => {
               setVisibleRows(rows);
@@ -186,34 +148,14 @@ export function StockAdjustmentsPage() {
         </SectionCard>
       )}
 
-      <StockAdjustmentDetailSheet
-        adjustment={detailAdjustment}
-        products={products}
-        warehouses={warehouses}
-        accounts={accounts}
-        open={detailOpen}
-        onOpenChange={(next) => {
-          if (!next) closeRecord();
-        }}
-        canManage={canUpdate}
-        onEdit={(a) => setDialog({ mode: 'edit', adjustment: a })}
-        onSubmitForApproval={(a) => submitForApproval(a.id).then(() => undefined)}
-        onApprove={(a) => approve(a.id).then(() => undefined)}
-        onPost={(a) => postAdjustment(a.id).then(() => undefined)}
-        onCancel={(a) => cancelAdjustment(a.id).then(() => undefined)}
-        onReverse={(a) => reverseAdjustment(a.id, 'Reversed from the stock adjustment register').then(() => undefined)}
-        loadPreview={previewAccountingEffect}
-      />
-
       <PrintableReport dataset={exportDataset} className="hidden print:block" />
 
-      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
+      {creating && (
         <StockAdjustmentDocumentFormModal
-          adjustment={dialog.mode === 'edit' ? dialog.adjustment : undefined}
           products={products}
           warehouses={warehouses}
           onSubmit={handleFormSubmit}
-          onClose={() => setDialog(null)}
+          onClose={() => setCreating(false)}
         />
       )}
     </div>

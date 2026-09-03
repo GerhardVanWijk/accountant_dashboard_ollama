@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import { selectEnumOptionWithin } from '../../../../tests/helpers/selectEnumOption';
 import { UsersPage } from './UsersPage';
 import { profileService, roleService, userRoleService, permissionService } from '@/features/auth/services';
 import { useAuthStore } from '@/stores/authStore';
@@ -84,7 +85,7 @@ describe('UsersPage', () => {
     (await screen.findByRole('button', { name: /assign role/i })).click();
 
     const dialog = await screen.findByRole('dialog', { name: /assign a role/i });
-    fireEvent.change(within(dialog).getByLabelText(/role/i), { target: { value: 'role_1' } });
+    selectEnumOptionWithin(dialog, /role/i, 'Bookkeeper');
     within(dialog).getByRole('button', { name: /^assign$/i }).click();
 
     await waitFor(() => expect(mockedAssign).toHaveBeenCalledWith('user_1', 'user_1', 'role_1', 'company_1'));

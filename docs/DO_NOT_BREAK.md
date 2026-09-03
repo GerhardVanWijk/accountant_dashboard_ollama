@@ -56,6 +56,15 @@ DO NOT:
   `docs/DESIGN_SYSTEM.md`)
 - Re-introduce a persistent left sidebar — navigation is the horizontal top
   bar defined in `docs/DESIGN_SYSTEM.md`
+- Use a native `<select>` / `<NativeSelect>` for a dropdown. Standard short
+  enums use `EnumSelect`; long / searchable lists (GL accounts, products,
+  entities) use `SearchableSelect` / a `*Combobox` — all from
+  `@/components/app/combobox`. Native `<select>` / `NativeSelect` may only
+  appear in `src/components/ui/shadcn/native-select.tsx`, the documented
+  `INTENTIONAL_NATIVE_SELECT` allow-list in
+  `src/components/app/combobox/noNativeSelect.global.test.ts` (currently
+  empty), and test files. The native option menu renders in un-themable OS
+  chrome (a light popup even in dark mode).
 
 ## Icons
 

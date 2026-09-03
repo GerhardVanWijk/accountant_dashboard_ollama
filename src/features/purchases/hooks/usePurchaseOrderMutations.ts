@@ -98,6 +98,23 @@ export function usePurchaseOrderMutations(options?: UsePurchaseOrderMutationsOpt
     }
   };
 
+  const duplicatePurchaseOrder = async (id: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const po = await purchaseOrderService.duplicatePurchaseOrder(id);
+      options?.onSuccess?.(po);
+      return po;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setError(error);
+      options?.onError?.(error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const convertToBill = async (id: string) => {
     try {
       setIsLoading(true);
@@ -122,5 +139,6 @@ export function usePurchaseOrderMutations(options?: UsePurchaseOrderMutationsOpt
     sendPurchaseOrder,
     recordReceipt,
     convertToBill,
+    duplicatePurchaseOrder,
   };
 }

@@ -41,6 +41,28 @@ describe('ProductCombobox', () => {
     expect(screen.getByRole('combobox', { name: 'Product' })).toHaveTextContent('PPR-020 · A4 Copy Paper');
   });
 
+  it('searches by product name, not only SKU', () => {
+    const products = [product(), product({ id: 'p2', sku: 'PPR-020', name: 'A4 Copy Paper', quantityOnHand: 400 })];
+    function Harness() {
+      const [v, setV] = useState<string | null>(null);
+      return <ProductCombobox products={products} value={v} onChange={setV} />;
+    }
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('combobox', { name: 'Product' }));
+    fireEvent.change(screen.getByPlaceholderText(/search sku/i), { target: { value: 'copy paper' } });
+    expect(screen.queryByText(/Black Toner Cartridge/)).not.toBeInTheDocument();
+    expect(screen.getByText(/A4 Copy Paper/)).toBeInTheDocument();
+  });
+
+  it('renders the dark popup inside a viewport-height-capped, internally-scrolling container (never the native option menu)', () => {
+    const { baseElement } = render(<ProductCombobox products={[product()]} value={null} onChange={() => {}} />);
+    fireEvent.click(screen.getByRole('combobox', { name: 'Product' }));
+    const popup = baseElement.querySelector('[data-slot="combobox-content"]') as HTMLElement | null;
+    expect(popup).not.toBeNull();
+    expect(popup!.className).toMatch(/max-h-\[min\(20rem,var\(--available-height\)\)\]/);
+    expect(baseElement.querySelector('.overflow-y-auto')).not.toBeNull();
+  });
+
   it('shows live stock in the row', () => {
     render(<ProductCombobox products={[product()]} value={null} onChange={() => {}} />);
     fireEvent.click(screen.getByRole('combobox', { name: 'Product' }));

@@ -11,13 +11,14 @@ import { FormShell, FormHeader, FormBody, FormFooter } from '@/components/app/fo
 import { ConfirmDialog } from '@/components/app/form';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { useAuthStore } from '@/stores/authStore';
 import type { Permission, Profile, ProfileRole, Role, UserRoleAssignment } from '@/types';
 import { profileService, roleService, userRoleService, permissionService } from '@/features/auth/services';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 const PROFILE_ROLES: ProfileRole[] = ['admin', 'accountant', 'manager', 'operator', 'viewer'];
+const PROFILE_ROLE_OPTIONS = PROFILE_ROLES.map((role) => ({ value: role, label: role }));
 
 function initialsFor(user: Profile): string {
   const initials = [user.firstName?.[0], user.lastName?.[0]].filter(Boolean).join('');
@@ -176,14 +177,16 @@ function AssignRoleDialog({ companyId, actorId, userId, roles, alreadyAssignedRo
           <FormBody>
             <Field>
               <FieldLabel htmlFor="assign-role-select">Role</FieldLabel>
-              <NativeSelect id="assign-role-select" value={roleId} onChange={(e) => setRoleId(e.target.value)}>
-                <option value="">Select a role…</option>
-                {assignable.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </NativeSelect>
+              <EnumSelect
+                id="assign-role-select"
+                value={roleId}
+                onValueChange={setRoleId}
+                placeholder="Select a role…"
+                options={[
+                  { value: '', label: 'Select a role…' },
+                  ...assignable.map((r) => ({ value: r.id, label: r.name })),
+                ]}
+              />
             </Field>
           </FormBody>
           <FormFooter>
@@ -254,19 +257,18 @@ function UsersTable({ companyId, actorId, users, roles, assignments, busyId, can
                 </td>
                 <td className="whitespace-nowrap px-4 py-2.5">
                   {canUpdate ? (
-                    <NativeSelect
-                      className="capitalize"
-                      value={user.role}
-                      disabled={busyId === user.id || user.id === actorId}
+                    <span
                       title={user.id === actorId ? "You can't change your own access level — ask another admin to do it, to avoid locking yourself out." : undefined}
-                      onChange={(e) => onChangeRole(user.id, e.target.value as ProfileRole)}
                     >
-                      {PROFILE_ROLES.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                      <EnumSelect
+                        className="capitalize"
+                        value={user.role}
+                        disabled={busyId === user.id || user.id === actorId}
+                        aria-label={`Role for ${user.email ?? user.id}`}
+                        onValueChange={(value) => onChangeRole(user.id, value as ProfileRole)}
+                        options={PROFILE_ROLE_OPTIONS}
+                      />
+                    </span>
                   ) : (
                     <span className="capitalize">{user.role}</span>
                   )}

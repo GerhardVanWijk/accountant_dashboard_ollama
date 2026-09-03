@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
-import { CustomerCombobox } from '@/components/app/combobox';
+import { CustomerCombobox, EnumSelect, SearchableSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateCreditNoteDTO } from '../services';
@@ -128,24 +127,24 @@ export function CreditNoteForm({ customers, invoices, defaultCreditNoteNumber, o
         </Field>
         <Field>
           <FieldLabel htmlFor="cn-invoice">Against invoice (optional)</FieldLabel>
-          <NativeSelect id="cn-invoice" value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)}>
-            <option value="">Standalone account credit</option>
-            {customerInvoices.map((inv) => (
-              <option key={inv.id} value={inv.id}>
-                {inv.invoiceNumber}
-              </option>
-            ))}
-          </NativeSelect>
+          <SearchableSelect
+            id="cn-invoice"
+            value={invoiceId || null}
+            onChange={(v) => setInvoiceId(v ?? '')}
+            placeholder="Standalone account credit"
+            searchPlaceholder="Search invoice number…"
+            clearable
+            options={customerInvoices.map((inv) => ({ value: inv.id, label: inv.invoiceNumber }))}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="cn-reason">Reason</FieldLabel>
-          <NativeSelect id="cn-reason" value={reason} onChange={(e) => setReason(e.target.value as CreditNoteReason)}>
-            {REASON_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </NativeSelect>
+          <EnumSelect
+            id="cn-reason"
+            value={reason}
+            onValueChange={(v) => setReason(v as CreditNoteReason)}
+            options={REASON_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="cn-issue-date">Issue date</FieldLabel>

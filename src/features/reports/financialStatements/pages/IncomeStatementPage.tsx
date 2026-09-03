@@ -5,7 +5,7 @@ import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { useFinancialStatementsData } from '../hooks/useFinancialStatementsData';
 import { calculateIncomeStatement } from '../services/calculateIncomeStatement';
 import { StatementRow, StatementSectionHeader } from '../components/StatementRow';
@@ -67,17 +67,12 @@ export function IncomeStatementPage() {
             <div className="flex flex-wrap items-end gap-2">
               <Field className="w-44">
                 <FieldLabel htmlFor="incomeStatementFinancialYear">Financial year</FieldLabel>
-                <NativeSelect
+                <EnumSelect
                   id="incomeStatementFinancialYear"
                   value={selectedFinancialYearId ?? ''}
-                  onChange={(e) => handleFinancialYearChange(e.target.value)}
-                >
-                  {sortedFinancialYears.map((year) => (
-                    <option key={year.id} value={year.id}>
-                      {year.name}
-                    </option>
-                  ))}
-                </NativeSelect>
+                  onValueChange={handleFinancialYearChange}
+                  options={sortedFinancialYears.map((year) => ({ value: year.id, label: year.name }))}
+                />
               </Field>
               <Field className="w-36">
                 <FieldLabel htmlFor="incomeStatementStartDate">Start date</FieldLabel>

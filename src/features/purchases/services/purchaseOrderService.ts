@@ -13,6 +13,9 @@ import {
 } from '@/features/inventory/services/documentInventoryPosting';
 import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
 import { NoopDocumentLineProjector } from '@/repositories/NoopDocumentLineProjector';
+import { newUuid } from '@/lib/uuid';
+import { auditLogService, type AuditLogService } from '@/services/auditLogService';
+import { documentNumberPrefix, nextDocumentNumber } from '../utils/nextDocumentNumber';
 
 export type CreatePurchaseOrderDTO = Omit<PurchaseOrder, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -37,6 +40,8 @@ export class PurchaseOrderService {
     private readonly warehouses: DocumentWarehouseResolver,
     /** Phase 9B (docs/ACCOUNTING_RELATIONSHIPS.md §17-18) — see InvoiceService's identical parameter for the full rationale. */
     private readonly lineProjector: IDocumentLineProjector = new NoopDocumentLineProjector(),
+    /** Phase 4B-2: records a "created" audit row for a duplicated purchase order. Defaults to the shared singleton. */
+    private readonly auditLog: AuditLogService = auditLogService,
   ) {}
 
   async getPurchaseOrders(): Promise<PurchaseOrder[]> {
@@ -79,6 +84,47 @@ export class PurchaseOrderService {
       );
     }
     return this.repository.delete(id);
+  }
+
+  /**
+   * Copies a purchase order into a brand-new DRAFT PO — new number,
+   * today's order date, fresh line-item ids, supplier + notes carried
+   * over. `billId` / `journalEntryId` / `receivedDate` / `expectedDate`
+   * are all dropped (the copy has received nothing and is linked to
+   * nothing). NO GL posting. Throws if the source does not exist. Writes a
+   * `created` audit row naming the source PO number.
+   */
+  async duplicatePurchaseOrder(id: string, duplicatedBy: ID = SYSTEM_USER_ID): Promise<PurchaseOrder> {
+    const source = await this.repository.getById(id);
+    if (!source) {
+      throw new Error(`Purchase order "${id}" not found`);
+    }
+    const existing = await this.repository.getAll();
+    const copy = await this.createPurchaseOrder({
+      poNumber: nextDocumentNumber(
+        existing.map((p) => p.poNumber),
+        documentNumberPrefix(source.poNumber, 'PO'),
+      ),
+      supplierId: source.supplierId,
+      orderDate: new Date().toISOString(),
+      lineItems: source.lineItems.map((line) => ({ ...line, id: newUuid() })),
+      subtotal: source.subtotal,
+      taxTotal: source.taxTotal,
+      total: source.total,
+      currency: source.currency,
+      status: 'draft',
+      notes: source.notes,
+    });
+    await this.auditLog.log({
+      userId: duplicatedBy,
+      action: 'created',
+      module: 'purchases',
+      recordType: 'PurchaseOrder',
+      recordId: copy.id,
+      reason: `Duplicated from ${source.poNumber}`,
+      newValue: { copiedFromNumber: source.poNumber },
+    });
+    return copy;
   }
 
   /**

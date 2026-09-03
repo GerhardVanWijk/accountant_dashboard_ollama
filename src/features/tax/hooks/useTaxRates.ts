@@ -45,6 +45,7 @@ export function useTaxRates() {
 export function useAllTaxRates() {
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +53,12 @@ export function useAllTaxRates() {
       .getTaxRates()
       .then((rates) => {
         if (!cancelled) setTaxRates(rates);
+      })
+      .catch((err: unknown) => {
+        // Never leave the caller with a silent empty list — an unresolved
+        // load must be distinguishable from "this record genuinely has no
+        // rate" (see getTaxRateLabel's `pending` handling).
+        if (!cancelled) setError(err instanceof Error ? err : new Error('Failed to load tax rates'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -61,5 +68,5 @@ export function useAllTaxRates() {
     };
   }, []);
 
-  return { taxRates, loading };
+  return { taxRates, loading, error };
 }

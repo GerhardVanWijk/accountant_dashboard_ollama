@@ -1,12 +1,16 @@
 import type { CustomerReceipt, ID } from '@/types';
 import type { ICustomerReceiptRepository } from '@/repositories/ICustomerReceiptRepository';
 import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
+import { newUuid } from '@/lib/uuid';
+import type { DepositAllocationExecutor } from './depositAllocationExecutor';
 
 export type CreateCustomerReceiptDTO = Omit<CustomerReceipt, 'id' | 'createdAt' | 'updatedAt' | 'journalEntryId'>;
 
 /**
  * Minimal surface of JournalEntryService this service depends on. Mirrors
  * src/features/banking/services/bankTransactionService.ts's JournalPoster.
+ * Used only by `recordReceipt` (the initial split posting); the later
+ * `allocateToInvoice` goes through the atomic `DepositAllocationExecutor`.
  */
 export interface JournalPoster {
   postJournalEntry(input: {
@@ -37,6 +41,15 @@ export interface InvoicePaymentRecorder {
  */
 const BALANCE_EPSILON = 0.01;
 
+/** Round to cents so a split journal entry always balances exactly. */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 /**
  * Business-logic layer for Customer Receipts (money received against
  * Accounts Receivable). Unlike Invoices/Credit Notes, a receipt has no
@@ -50,6 +63,12 @@ export class CustomerReceiptService {
     private readonly journalEntryService: JournalPoster,
     private readonly invoiceService: InvoicePaymentRecorder,
     private readonly accounts: AccountMapper,
+    /**
+     * The atomic, idempotent, concurrency-safe executor for applying a
+     * customer deposit to an invoice (`apply_customer_deposit` RPC,
+     * migration 0046). Same Real/Fake split as InvoiceService's engine.
+     */
+    private readonly depositAllocationExecutor: DepositAllocationExecutor,
   ) {}
 
   async getReceipts(): Promise<CustomerReceipt[]> {
@@ -63,14 +82,20 @@ export class CustomerReceiptService {
   /**
    * Records (and posts) a new customer receipt.
    *
-   * debit  Cash and Bank        for the receipt amount
-   * credit Accounts Receivable  for the receipt amount
+   * The receipt is one balanced journal entry, split by how the money is
+   * being applied (Increment 4A — customer deposits / contract liability):
    *
-   * Posts BEFORE creating the domain record — see
-   * docs/LEDGER_ARCHITECTURE.md and bankTransactionService.ts's
-   * postAllocationsToLedger — so a failed post never leaves an orphaned
-   * receipt row. Once the record exists, each `{invoiceId, amount}` in
-   * `allocations` is applied via InvoiceService.recordPayment().
+   *   DR Cash and Bank                    receipt.amount
+   *     CR Accounts Receivable            Σ allocations           (money applied to open invoices)
+   *     CR Customer Deposits (2600)       unallocatedAmount       (money not yet earned/applied)
+   *
+   * A fully-allocated receipt has no Customer Deposits line; a pure deposit
+   * (no allocations) has no Accounts Receivable line. Posts BEFORE creating
+   * the domain record — see docs/LEDGER_ARCHITECTURE.md — so a failed post
+   * never leaves an orphaned receipt row. Once the record exists, each
+   * `{invoiceId, amount}` in `allocations` is applied via
+   * InvoiceService.recordPayment() (the AR credit above already moved the
+   * money; recordPayment only updates the invoice subledger).
    */
   async recordReceipt(data: CreateCustomerReceiptDTO, postedByUserId?: ID): Promise<CustomerReceipt> {
     if (data.amount <= 0) {
@@ -86,6 +111,9 @@ export class CustomerReceiptService {
       if (a.amount <= 0) throw new Error(`Allocation line ${i + 1}: amount must be greater than zero.`);
     });
 
+    const appliedToAr = round2(allocatedTotal);
+    const toDeposits = Math.max(0, round2(data.amount - appliedToAr));
+
     const lines: NewJournalLineInput[] = [
       {
         accountId: await this.accounts.getAccountId('CASH_AND_BANK'),
@@ -93,13 +121,23 @@ export class CustomerReceiptService {
         debit: data.amount,
         credit: 0,
       },
-      {
-        accountId: await this.accounts.getAccountId('AR'),
-        description: `Receipt ${data.receiptNumber}`,
-        debit: 0,
-        credit: data.amount,
-      },
     ];
+    if (appliedToAr > 0) {
+      lines.push({
+        accountId: await this.accounts.getAccountId('AR'),
+        description: `Receipt ${data.receiptNumber} — applied to invoices`,
+        debit: 0,
+        credit: appliedToAr,
+      });
+    }
+    if (toDeposits > 0) {
+      lines.push({
+        accountId: await this.accounts.getAccountId('CUSTOMER_DEPOSIT'),
+        description: `Receipt ${data.receiptNumber} — customer deposit (unapplied)`,
+        debit: 0,
+        credit: toDeposits,
+      });
+    }
 
     const entry = await this.journalEntryService.postJournalEntry({
       date: data.date,
@@ -126,11 +164,39 @@ export class CustomerReceiptService {
   }
 
   /**
-   * Applies more of an already-recorded receipt's unallocated balance to
-   * an invoice — the "apply payment on account" follow-up once the
-   * customer/invoice is known.
+   * Applies more of an already-recorded receipt's unallocated balance
+   * (its Customer Deposits liability) to an invoice — the "apply the
+   * deposit" follow-up once the invoice exists.
+   *
+   * The whole operation is a SINGLE atomic transaction inside the
+   * `apply_customer_deposit` RPC (migration 0046): it records the
+   * idempotency key, LOCKS the receipt + invoice rows, re-validates the
+   * amount against the LOCKED rows, posts
+   *
+   *   DR Customer Deposits (2600)   amount        (NO bank movement)
+   *     CR Accounts Receivable       amount
+   *
+   * and updates both subledgers (invoice.amountPaid/status,
+   * receipt.allocations/unallocatedAmount) — all or nothing. Concurrent
+   * calls cannot double-post: the `deposit_allocation_log` UNIQUE
+   * (company_id, posting_key) de-duplicates identical submits, and the row
+   * locks serialise different-key calls against the same deposit so a stale
+   * client can never over-draw it.
+   *
+   * `allocationId` is the STABLE identity of this logical allocation — a
+   * UUID the UI generates once per "apply deposit" intent and re-uses on
+   * retry, so a lost-response retry de-duplicates and a genuinely new
+   * allocation gets a fresh id. Callers that don't supply one (a script,
+   * an isolated test) get a fresh id per call. Never derived from
+   * `allocations.length`. The pre-RPC checks here are a fast-fail
+   * courtesy; the RPC re-checks everything against locked rows.
    */
-  async allocateToInvoice(id: string, invoiceId: string, amount: number): Promise<CustomerReceipt> {
+  async allocateToInvoice(
+    id: string,
+    invoiceId: string,
+    amount: number,
+    allocationId: string = newUuid(),
+  ): Promise<CustomerReceipt> {
     const receipt = await this.requireReceipt(id);
     if (amount <= 0) {
       throw new Error('Allocation amount must be greater than zero.');
@@ -141,12 +207,16 @@ export class CustomerReceiptService {
       );
     }
 
-    await this.invoiceService.recordPayment(invoiceId, amount);
-
-    return this.repository.update(id, {
-      allocations: [...receipt.allocations, { invoiceId, amount }],
-      unallocatedAmount: Math.max(0, receipt.unallocatedAmount - amount),
+    await this.depositAllocationExecutor.apply({
+      allocationId,
+      receiptId: receipt.id,
+      invoiceId,
+      amount,
+      date: today(),
+      createdBy: 'system',
     });
+
+    return this.requireReceipt(id);
   }
 
   /** Get receipts for a specific customer. */

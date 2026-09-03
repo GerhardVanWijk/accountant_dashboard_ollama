@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, FileUp, Loader2 } from 'lucide-react';
 import type { BankAccount, BankStatement } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { FormShell, FormHeader, FormBody } from '@/components/app/form';
 import { Amount } from '@/components/app/figure';
 import { formatCurrency, formatDate } from '@/lib/app/format';
@@ -167,19 +167,20 @@ function SetupStep({
         <label htmlFor="import-bank-account" className="text-sm font-medium text-foreground">
           Bank account
         </label>
-        <NativeSelect
+        <EnumSelect
           id="import-bank-account"
           value={bankAccountId}
-          onChange={(e) => setBankAccountId(e.target.value)}
-        >
-          {bankAccounts.length === 0 && <option value="">No bank accounts</option>}
-          {bankAccounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-              {a.bankName ? ` (${a.bankName})` : ''}
-            </option>
-          ))}
-        </NativeSelect>
+          onValueChange={setBankAccountId}
+          placeholder={bankAccounts.length === 0 ? 'No bank accounts' : 'Select…'}
+          options={
+            bankAccounts.length === 0
+              ? [{ value: '', label: 'No bank accounts' }]
+              : bankAccounts.map((a) => ({
+                  value: a.id,
+                  label: `${a.name}${a.bankName ? ` (${a.bankName})` : ''}`,
+                }))
+          }
+        />
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border p-6 text-center">
@@ -200,18 +201,19 @@ function SetupStep({
         </label>
         <label className="mx-auto flex items-center gap-2 text-xs text-muted-foreground">
           Format override:
-          <NativeSelect
+          <EnumSelect
             aria-label="Statement format override"
             value={formatOverride}
-            onChange={(e) => setFormatOverride(e.target.value as StatementFileFormat | '')}
-          >
-            <option value="">Auto-detect from extension</option>
-            {(Object.keys(FORMAT_LABELS) as StatementFileFormat[]).map((f) => (
-              <option key={f} value={f}>
-                {FORMAT_LABELS[f]}
-              </option>
-            ))}
-          </NativeSelect>
+            onValueChange={(value) => setFormatOverride(value as StatementFileFormat | '')}
+            className="w-auto min-w-44"
+            options={[
+              { value: '', label: 'Auto-detect from extension' },
+              ...(Object.keys(FORMAT_LABELS) as StatementFileFormat[]).map((f) => ({
+                value: f,
+                label: FORMAT_LABELS[f],
+              })),
+            ]}
+          />
         </label>
       </div>
 

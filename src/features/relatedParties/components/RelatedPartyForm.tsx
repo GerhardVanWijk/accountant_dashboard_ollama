@@ -9,9 +9,11 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { RELATIONSHIP_TYPE_LABELS } from '../constants';
 import type { CreateRelatedPartyDTO, UpdateRelatedPartyDTO } from '../services';
+
+const RELATIONSHIP_TYPE_OPTIONS = Object.entries(RELATIONSHIP_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 
 const relatedPartySchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
@@ -77,13 +79,20 @@ export function RelatedPartyForm({ relatedParty, onSubmit, onCancel, onDirtyChan
 
       <Field>
         <FieldLabel htmlFor="relationshipType">Relationship Type</FieldLabel>
-        <NativeSelect id="relationshipType" {...register('relationshipType')}>
-          {Object.entries(RELATIONSHIP_TYPE_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </NativeSelect>
+        <Controller
+          control={control}
+          name="relationshipType"
+          render={({ field, fieldState }) => (
+            <EnumSelect
+              id="relationshipType"
+              name="relationshipType"
+              value={field.value ?? 'director'}
+              onValueChange={field.onChange}
+              invalid={Boolean(fieldState.error)}
+              options={RELATIONSHIP_TYPE_OPTIONS}
+            />
+          )}
+        />
       </Field>
 
       <Field>

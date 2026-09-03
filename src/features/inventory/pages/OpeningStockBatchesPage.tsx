@@ -1,24 +1,22 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
-import type { OpeningStockBatch } from '@/types';
+import type { OpeningStockBatch, Warehouse } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
+import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
 import { useOpeningStockBatches } from '../hooks/useOpeningStockBatches';
 import { useProducts } from '../hooks/useProducts';
 import { useWarehouses } from '../hooks/useWarehouses';
-import { useAccounts } from '@/features/accounting/hooks/useAccounts';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { ExportMenu } from '@/features/export/components/ExportMenu';
 import { PrintableReport } from '@/features/export/components/PrintableReport';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { OpeningStockBatchesTable } from '../components/OpeningStockBatchesTable';
-import { OpeningStockBatchDetailSheet } from '../components/OpeningStockBatchDetailSheet';
 import { OpeningStockBatchDocumentFormModal } from '../components/OpeningStockBatchDocumentFormModal';
 import type { CreateOpeningStockBatchDTO, UpdateOpeningStockBatchDTO } from '../services/openingStockBatchService';
-import type { Warehouse } from '@/types';
 
 function buildOpeningStockExportColumns(warehouses: Warehouse[]): ExportColumn<OpeningStockBatch>[] {
   const warehouseName = (id: string) => warehouses.find((w) => w.id === id)?.name ?? id;
@@ -37,65 +35,32 @@ function buildOpeningStockExportColumns(warehouses: Warehouse[]): ExportColumn<O
   ];
 }
 
-type DialogState = { mode: 'create' } | { mode: 'edit'; batch: OpeningStockBatch } | null;
-
 /**
- * Opening Stock register — route `/inventory/opening-stock` (Phase 5
- * §5). Draft → confirmed lifecycle over `openingStockBatchService`,
- * mirroring `StockAdjustmentsPage`'s shape.
+ * Opening Stock register — route `/inventory/opening-stock`, the list only.
+ * A row click navigates to the full-page record at
+ * `/inventory/opening-stock/:batchId` (OpeningStockBatchDetailPage); legacy
+ * `?record=<id>` deep links are redirected there. The explicit
+ * confirmation gesture lives on the record page.
  */
 export function OpeningStockBatchesPage() {
-  const {
-    batches,
-    loading,
-    error,
-    refetch,
-    createBatch,
-    updateBatch,
-    deleteBatch,
-    confirmBatch,
-    cancelBatch,
-    previewAccountingEffect,
-  } = useOpeningStockBatches();
+  const navigate = useNavigate();
+  useLegacyRecordRedirect('/inventory/opening-stock');
+
+  const { batches, loading, error, refetch, createBatch, deleteBatch } = useOpeningStockBatches();
   const { products, loading: productsLoading } = useProducts();
   const { warehouses, loading: warehousesLoading } = useWarehouses();
-  const { accounts } = useAccounts();
   const canCreate = useCanAccess('inventory', 'create');
-  const canUpdate = useCanAccess('inventory', 'update');
   const canDelete = useCanAccess('inventory', 'delete');
   const canExport = useCanAccess('inventory', 'export');
-  const [dialog, setDialog] = useState<DialogState>(null);
+  const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [visibleRows, setVisibleRows] = useState<OpeningStockBatch[]>([]);
   const [activeFilters, setActiveFilters] = useState<{ label: string; value: string }[]>([]);
 
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedId = searchParams.get('record') ?? undefined;
-  const detailOpen = Boolean(selectedId);
-  function openRecord(id: string) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('record', id);
-      return next;
-    });
-  }
-  function closeRecord() {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('record');
-      return next;
-    });
-  }
-  const detailBatch = batches.find((b) => b.id === selectedId);
-
   const handleFormSubmit = async (data: CreateOpeningStockBatchDTO | UpdateOpeningStockBatchDTO) => {
-    if (dialog?.mode === 'edit') {
-      await updateBatch(dialog.batch.id, data as UpdateOpeningStockBatchDTO);
-    } else {
-      const created = await createBatch(data as CreateOpeningStockBatchDTO);
-      openRecord(created.id);
-    }
-    setDialog(null);
+    const created = await createBatch(data as CreateOpeningStockBatchDTO);
+    setCreating(false);
+    navigate(`/inventory/opening-stock/${created.id}`);
   };
 
   const handleDelete = async (batch: OpeningStockBatch) => {
@@ -130,7 +95,7 @@ export function OpeningStockBatchesPage() {
           <>
             <ExportMenu dataset={exportDataset} allowed={canExport} />
             {canCreate && (
-              <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+              <Button size="sm" onClick={() => setCreating(true)}>
                 <Plus data-icon="inline-start" />
                 New batch
               </Button>
@@ -172,7 +137,7 @@ export function OpeningStockBatchesPage() {
           <OpeningStockBatchesTable
             batches={batches}
             warehouses={warehouses}
-            onSelect={(b) => openRecord(b.id)}
+            onSelect={(b) => navigate(`/inventory/opening-stock/${b.id}`)}
             onDelete={canDelete ? (b) => void handleDelete(b) : undefined}
             onVisibleRowsChange={(rows, filters) => {
               setVisibleRows(rows);
@@ -182,31 +147,14 @@ export function OpeningStockBatchesPage() {
         </SectionCard>
       )}
 
-      <OpeningStockBatchDetailSheet
-        batch={detailBatch}
-        products={products}
-        warehouses={warehouses}
-        accounts={accounts}
-        open={detailOpen}
-        onOpenChange={(next) => {
-          if (!next) closeRecord();
-        }}
-        canManage={canUpdate}
-        onEdit={(b) => setDialog({ mode: 'edit', batch: b })}
-        onConfirm={(b) => confirmBatch(b.id).then(() => undefined)}
-        onCancel={(b) => cancelBatch(b.id).then(() => undefined)}
-        loadPreview={previewAccountingEffect}
-      />
-
       <PrintableReport dataset={exportDataset} className="hidden print:block" />
 
-      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
+      {creating && (
         <OpeningStockBatchDocumentFormModal
-          batch={dialog.mode === 'edit' ? dialog.batch : undefined}
           products={products}
           warehouses={warehouses}
           onSubmit={handleFormSubmit}
-          onClose={() => setDialog(null)}
+          onClose={() => setCreating(false)}
         />
       )}
     </div>

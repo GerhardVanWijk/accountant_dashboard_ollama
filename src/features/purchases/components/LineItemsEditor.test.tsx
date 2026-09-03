@@ -178,7 +178,12 @@ describe('Purchases LineItemsEditor fixed-asset capitalization', () => {
 
     render(<LineItemsEditor lineItems={[line]} onChange={onChange} taxRates={[]} allowFixedAssetCapitalization />);
 
-    fireEvent.change(screen.getByDisplayValue('Other'), { target: { value: 'computer_equipment' } });
+    // Category is the Vertex EnumSelect (base-ui Select) — open the trigger and pick the row.
+    fireEvent.click(screen.getByRole('combobox', { name: 'Asset category' }));
+    const option = screen.getByRole('option', { name: 'Computer Equipment' });
+    fireEvent.pointerDown(option);
+    fireEvent.pointerUp(option);
+    fireEvent.click(option);
 
     const [updated] = onChange.mock.calls[0][0] as DocumentLineItem[];
     expect(updated.fixedAssetDetails?.category).toBe('computer_equipment');

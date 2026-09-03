@@ -1,85 +1,38 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
+import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
-import { usePurchaseOrders, usePurchaseOrderMutations, useBillMutations, useBills } from '../hooks';
+import { usePurchaseOrders, usePurchaseOrderMutations } from '../hooks';
 import { PurchaseOrderList } from '../components/PurchaseOrderList';
-import { PurchaseOrderDetailSheet } from '../components/PurchaseOrderDetailSheet';
 import { PurchaseOrderFormModal } from '../components/PurchaseOrderFormModal';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 import type { CreatePurchaseOrderDTO } from '../services';
 
 /**
- * Purchase Orders — route `/purchases/orders`. Re-skinned onto v0's
- * PageHeader/SectionCard/Dialog (M8), following BillsPage's shape.
- * "Convert to Bill" composes two already-built capabilities rather than
- * adding new business logic here: purchaseOrderService.convertToBill()
- * builds the Bill draft, then billService.createBill()/postBill()
- * persists it and posts the real GL entry — unchanged from before the
- * port.
+ * Purchase Orders — route `/purchases/orders`, the list only. A row click
+ * navigates to the full-page record at
+ * `/purchases/orders/:purchaseOrderId` (PurchaseOrderDetailPage); legacy
+ * `?record=<id>` deep links are redirected there. Send / receive / cancel /
+ * convert-to-bill all live on the record page.
  */
 export function PurchaseOrdersPage() {
+  const navigate = useNavigate();
+  useLegacyRecordRedirect('/purchases/orders');
+
   const { purchaseOrders, isLoading, error, refetch } = usePurchaseOrders();
   const { suppliers } = useSuppliers();
-  const { bills } = useBills();
   const poMutations = usePurchaseOrderMutations();
-  const billMutations = useBillMutations();
-  const navigate = useNavigate();
-
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedId = searchParams.get('record') ?? undefined;
-  const detailOpen = Boolean(selectedId);
-  function openRecord(id: string) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('record', id);
-      return next;
-    });
-  }
-  function closeRecord() {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('record');
-      return next;
-    });
-  }
 
   const [showCreate, setShowCreate] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
 
-  const detailPo = purchaseOrders.find((po) => po.id === selectedId);
   const suppliersMap = useMemo(() => Object.fromEntries(suppliers.map((s) => [s.id, s.name])), [suppliers]);
-
-  const isBusy = poMutations.isLoading || billMutations.isLoading;
   const openOrders = purchaseOrders.filter((po) => po.status !== 'received' && po.status !== 'cancelled');
   const totalValue = purchaseOrders.reduce((sum, po) => sum + po.total, 0);
-
-  async function runAction(action: () => Promise<unknown>) {
-    setActionError(null);
-    try {
-      await action();
-      await refetch();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Action failed.');
-    }
-  }
-
-  async function handleConvertToBill(poId: string) {
-    setActionError(null);
-    try {
-      const draft = await poMutations.convertToBill(poId);
-      const bill = await billMutations.createBill({ ...draft, status: 'draft' });
-      await billMutations.postBill(bill.id);
-      await poMutations.updatePurchaseOrder(poId, { billId: bill.id });
-      navigate('/purchases/bills');
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Could not convert purchase order to a bill.');
-    }
-  }
 
   async function handleCreate(data: CreatePurchaseOrderDTO) {
     await poMutations.createPurchaseOrder(data);
@@ -109,12 +62,6 @@ export function PurchaseOrdersPage() {
           </div>
         </SectionCard>
 
-        {actionError && (
-          <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {actionError}
-          </p>
-        )}
-
         {isLoading ? (
           <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
             <Loader2 className="size-5 animate-spin" aria-hidden="true" />
@@ -125,26 +72,9 @@ export function PurchaseOrdersPage() {
             {error.message}
           </div>
         ) : (
-          <PurchaseOrderList purchaseOrders={purchaseOrders} suppliersMap={suppliersMap} onSelect={openRecord} />
+          <PurchaseOrderList purchaseOrders={purchaseOrders} suppliersMap={suppliersMap} onSelect={(id) => navigate(`/purchases/orders/${id}`)} />
         )}
       </div>
-
-      <PurchaseOrderDetailSheet
-        purchaseOrder={detailPo}
-        isLoading={isLoading}
-        open={detailOpen}
-        onOpenChange={(next) => {
-          if (!next) closeRecord();
-        }}
-        supplierName={detailPo ? suppliersMap[detailPo.supplierId] ?? 'Unknown supplier' : ''}
-        suppliersMap={suppliersMap}
-        bills={bills}
-        onSend={(id) => void runAction(() => poMutations.sendPurchaseOrder(id))}
-        onRecordReceipt={(id) => void runAction(() => poMutations.recordReceipt(id))}
-        onCancel={(id) => void runAction(() => poMutations.updatePurchaseOrder(id, { status: 'cancelled' }))}
-        onConvertToBill={(id) => void handleConvertToBill(id)}
-        isBusy={isBusy}
-      />
 
       {showCreate && (
         <PurchaseOrderFormModal

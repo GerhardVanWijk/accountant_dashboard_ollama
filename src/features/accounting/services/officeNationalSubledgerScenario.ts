@@ -20,18 +20,31 @@ import type { Invoice, Bill, CreditNote, CustomerReceipt, Payment } from '@/type
  */
 
 /**
- * The DOCUMENTED clean GL 1100 balance: Σ posted-invoice.total − Σ receipt.amount
- * − Σ issued-CN.total = 668,036.17 − 457,231.23 − 3,010.90 = 207,794.04.
+ * The DOCUMENTED clean GL 1100 balance under the Increment 4A split posting:
+ * Σ posted-invoice.total − Σ receipt-amount-APPLIED-to-invoices − Σ issued-CN.total
+ * = 668,036.17 − (457,231.23 − 1,750.00) − 3,010.90 = 209,544.04.
  *
- * NB: the live GL 1100 currently reads 205,498.75 — R2,295.29 lower — because
- * JE-0171 (a `bank_transaction`-sourced re-posting of customer receipt REC-1001,
- * created 2026-08-28 10:53, AFTER the Phase 20 baseline) double-credits AR. That
- * is a duplicate GL posting the subledger reconciliation is SUPPOSED to flag;
- * it is out of scope for Phase 21.2 (flagged to the Queen). This fixture stubs
- * the control balance to the documented clean figure so the test proves the
- * reconciliation math, not the duplicate.
+ * The R1,750.00 of unapplied receipts (REC-1015 R1,000 + REC-1016 R750) no
+ * longer credits AR — it credits Customer Deposits (2600), reconciled by
+ * reconcileCustomerDeposits(). Pre-4A this figure was R207,794.04 (receipts
+ * netting AR in full).
+ *
+ * ⚠️ R1,750.00 IS THE 2026-08-28 FIXTURE SNAPSHOT, NOT THE CURRENT LIVE
+ * TOTAL. The live company gained a third unapplied receipt (REC-1217,
+ * R2,500, a pure deposit) from seed 0044 on 2026-09-02, so the LIVE
+ * unapplied-deposits total is R4,250.00. The historical reclassification
+ * (docs/db-changes/0045b_...) targets the live R4,250.00; this fixture is a
+ * frozen test input, not a business rule. Do not "fix" one to match the other.
+ *
+ * NB: the live GL 1100 additionally had a JE-0171 duplicate (a `bank_transaction`
+ * re-posting of REC-1001) the reconciliation is SUPPOSED to flag; this fixture
+ * stubs the control balance to the documented clean figure so the test proves
+ * the reconciliation math, not the duplicate.
  */
-export const ON_REAL_AR_CONTROL_BALANCE = 207_794.04;
+export const ON_REAL_AR_CONTROL_BALANCE = 209_544.04;
+/** Documented clean GL 2600 (Customer Deposits) balance = Σ receipt.unallocatedAmount for this fixture. */
+export const ON_REAL_CUSTOMER_DEPOSITS_BALANCE = 1_750.0;
+export const ON_CUSTOMER_DEPOSITS_CONTROL_ACCOUNT_ID = 'acc_2600_on'; // stub id, code 2600
 export const ON_REAL_AP_CONTROL_BALANCE = 590_511.21; // live GL 2000 balance (ties exactly)
 export const ON_AR_CONTROL_ACCOUNT_ID = 'ffccddca-0407-4dce-857e-0f9d9390c5dc'; // real accounts.id, code 1100
 export const ON_AP_CONTROL_ACCOUNT_ID = 'b62d9bcb-2ec7-4113-985e-82a8c6371026'; // real accounts.id, code 2000

@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
-import { SupplierCombobox } from '@/components/app/combobox';
+import { EnumSelect, SupplierCombobox } from '@/components/app/combobox';
 import { FigureBlock } from '@/components/app/figure';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
@@ -143,13 +142,12 @@ export function PaymentForm({ suppliers, outstandingBills, defaultPaymentNumber,
         </Field>
         <Field>
           <FieldLabel htmlFor="payment-method">Method</FieldLabel>
-          <NativeSelect id="payment-method" value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
-            {PAYMENT_METHODS.map((m) => (
-              <option key={m} value={m}>
-                {m.toUpperCase()}
-              </option>
-            ))}
-          </NativeSelect>
+          <EnumSelect
+            id="payment-method"
+            value={method}
+            onValueChange={(v) => setMethod(v as PaymentMethod)}
+            options={PAYMENT_METHODS.map((m) => ({ value: m, label: m.toUpperCase() }))}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="payment-reference">Reference (optional)</FieldLabel>

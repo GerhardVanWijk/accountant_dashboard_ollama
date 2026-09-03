@@ -1,14 +1,41 @@
 import { useEffect, useState } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect, type EnumOption } from '@/components/app/combobox';
 import { FormFooter, FormSection, FormTabs, type FormTab } from '@/components/app/form';
 import { customerFormSchema, type CustomerFormTab, type CustomerFormValues } from '../utils/customerFormSchema';
+
+const STATUS_OPTIONS: EnumOption[] = [
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+];
+
+const TAX_STATUS_OPTIONS: EnumOption[] = [
+  { value: 'taxable', label: 'Taxable' },
+  { value: 'exempt', label: 'Exempt' },
+  { value: 'zero-rated', label: 'Zero-rated' },
+];
+
+const CURRENCY_OPTIONS: EnumOption[] = [
+  { value: 'ZAR', label: 'ZAR — South African Rand' },
+  { value: 'USD', label: 'USD — US Dollar' },
+  { value: 'EUR', label: 'EUR — Euro' },
+  { value: 'GBP', label: 'GBP — British Pound' },
+  { value: 'BWP', label: 'BWP — Botswana Pula' },
+  { value: 'NAD', label: 'NAD — Namibian Dollar' },
+];
+
+const PAYMENT_TERMS_OPTIONS: EnumOption[] = [
+  { value: 'COD', label: 'COD' },
+  { value: 'Net14', label: 'Net 14' },
+  { value: 'Net30', label: 'Net 30' },
+  { value: 'Net60', label: 'Net 60' },
+];
 
 export interface CustomerFormProps {
   mode: 'create' | 'edit';
@@ -94,10 +121,20 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
           </Field>
           <Field>
             <FieldLabel htmlFor="customer-status">Status</FieldLabel>
-            <NativeSelect id="customer-status" {...register('status')}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </NativeSelect>
+            <Controller
+              control={control}
+              name="status"
+              render={({ field, fieldState }) => (
+                <EnumSelect
+                  id="customer-status"
+                  name="status"
+                  value={field.value ?? 'active'}
+                  onValueChange={field.onChange}
+                  invalid={Boolean(fieldState.error)}
+                  options={STATUS_OPTIONS}
+                />
+              )}
+            />
           </Field>
           <Field className="sm:col-span-2">
             <FieldLabel htmlFor="customer-notes">Notes</FieldLabel>
@@ -245,32 +282,55 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
           </Field>
           <Field>
             <FieldLabel htmlFor="customer-tax-status">Tax status</FieldLabel>
-            <NativeSelect id="customer-tax-status" {...register('taxStatus')}>
-              <option value="taxable">Taxable</option>
-              <option value="exempt">Exempt</option>
-              <option value="zero-rated">Zero-rated</option>
-            </NativeSelect>
+            <Controller
+              control={control}
+              name="taxStatus"
+              render={({ field, fieldState }) => (
+                <EnumSelect
+                  id="customer-tax-status"
+                  name="taxStatus"
+                  value={field.value ?? 'taxable'}
+                  onValueChange={field.onChange}
+                  invalid={Boolean(fieldState.error)}
+                  options={TAX_STATUS_OPTIONS}
+                />
+              )}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="customer-currency">Currency</FieldLabel>
-            <NativeSelect id="customer-currency" {...register('currency')}>
-              <option value="ZAR">ZAR — South African Rand</option>
-              <option value="USD">USD — US Dollar</option>
-              <option value="EUR">EUR — Euro</option>
-              <option value="GBP">GBP — British Pound</option>
-              <option value="BWP">BWP — Botswana Pula</option>
-              <option value="NAD">NAD — Namibian Dollar</option>
-            </NativeSelect>
+            <Controller
+              control={control}
+              name="currency"
+              render={({ field, fieldState }) => (
+                <EnumSelect
+                  id="customer-currency"
+                  name="currency"
+                  value={field.value ?? 'ZAR'}
+                  onValueChange={field.onChange}
+                  invalid={Boolean(fieldState.error)}
+                  options={CURRENCY_OPTIONS}
+                />
+              )}
+            />
             <FieldError errors={[errors.currency]} />
           </Field>
           <Field>
             <FieldLabel htmlFor="customer-payment-terms">Payment terms</FieldLabel>
-            <NativeSelect id="customer-payment-terms" {...register('paymentTerms')}>
-              <option value="COD">COD</option>
-              <option value="Net14">Net 14</option>
-              <option value="Net30">Net 30</option>
-              <option value="Net60">Net 60</option>
-            </NativeSelect>
+            <Controller
+              control={control}
+              name="paymentTerms"
+              render={({ field, fieldState }) => (
+                <EnumSelect
+                  id="customer-payment-terms"
+                  name="paymentTerms"
+                  value={field.value ?? 'COD'}
+                  onValueChange={field.onChange}
+                  invalid={Boolean(fieldState.error)}
+                  options={PAYMENT_TERMS_OPTIONS}
+                />
+              )}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="customer-credit-limit">Credit limit</FieldLabel>

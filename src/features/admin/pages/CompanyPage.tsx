@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Building2, CalendarDays, Loader2, Pencil, Receipt } from 'lucide-react';
+import type { Company } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { FormShell, FormHeader } from '@/components/app/form';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/shadcn/empty';
+import { useBankAccounts } from '@/features/banking/hooks/useBankAccounts';
 import { useCompany } from '../hooks/useCompany';
 import { companyService } from '../services';
 import { CompanyForm } from '../components/CompanyForm';
@@ -17,6 +19,17 @@ const MONTH_NAMES = [
 
 function financialYearEndLabel(month: number, day: number): string {
   return `${day} ${MONTH_NAMES[month - 1] ?? month}`;
+}
+
+/** Joins an optional document Address into non-empty display lines. */
+function documentAddressLines(address: Company['documentAddress']): string[] {
+  if (!address) return [];
+  const cityLine = `${address.city ?? ''}${address.state ? `, ${address.state}` : ''} ${
+    address.postalCode ?? ''
+  }`.trim();
+  return [address.line1, address.line2, cityLine, address.country].filter(
+    (part): part is string => Boolean(part && part.trim()),
+  );
 }
 
 /**
@@ -35,6 +48,7 @@ function financialYearEndLabel(month: number, day: number): string {
  */
 export function CompanyPage() {
   const { company, loading, error, refetch } = useCompany();
+  const { bankAccounts } = useBankAccounts();
   const [editing, setEditing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -87,12 +101,36 @@ export function CompanyPage() {
 
       <article className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
         <header className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-semibold text-balance">{company.name}</h2>
-            <p className="text-xs text-muted-foreground">Registration {company.registrationNumber ?? 'not recorded'}</p>
+          <div className="flex items-start gap-3">
+            {company.logo && (
+              <img
+                src={company.logo}
+                alt={`${company.name} logo`}
+                className="max-h-12 w-auto max-w-[140px] rounded border border-border bg-white object-contain p-1"
+              />
+            )}
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold text-balance">{company.name}</h2>
+              {company.tradingName && (
+                <p className="text-xs text-muted-foreground">Trading as {company.tradingName}</p>
+              )}
+              <p className="text-xs text-muted-foreground">Registration {company.registrationNumber ?? 'not recorded'}</p>
+            </div>
           </div>
           <StatusBadge status={company.isActive ? 'active' : 'inactive'} />
         </header>
+
+        {(company.documentAddress || company.phone || company.email || company.website) && (
+          <div className="flex flex-col gap-1 border-t border-border pt-4 text-xs text-muted-foreground">
+            <dt className="font-medium text-foreground">Document contact details</dt>
+            {documentAddressLines(company.documentAddress).map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+            {company.phone && <span>{company.phone}</span>}
+            {company.email && <span>{company.email}</span>}
+            {company.website && <span>{company.website}</span>}
+          </div>
+        )}
 
         <dl className="grid grid-cols-2 gap-3 border-t border-border pt-4 text-xs sm:grid-cols-4">
           <div className="flex flex-col gap-0.5">
@@ -143,6 +181,7 @@ export function CompanyPage() {
           <FormHeader title="Edit company" />
           <CompanyForm
             company={company}
+            bankAccounts={bankAccounts}
             submitError={saveError}
             onDirtyChange={setDirty}
             onCancel={() => {

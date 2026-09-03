@@ -1,14 +1,19 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Account } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { ACCOUNT_TYPES } from '../types/account.types';
+
+const NORMAL_BALANCE_OPTIONS = [
+  { value: 'debit', label: 'Debit' },
+  { value: 'credit', label: 'Credit' },
+];
 import {
   accountFormSchema,
   DEFAULT_NORMAL_BALANCE,
@@ -56,6 +61,7 @@ export function AccountForm({
     handleSubmit,
     watch,
     setValue,
+    control,
     formState: { errors, isDirty },
   } = useForm<AccountFormSchema>({
     resolver: zodResolver(accountFormSchema),
@@ -95,22 +101,25 @@ export function AccountForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="account-type">Master type</FieldLabel>
-          <NativeSelect
-            id="account-type"
-            {...register('type', {
-              onChange: (e) => {
-                const nextType = e.target.value as AccountFormSchema['type'];
-                setValue('normalBalance', DEFAULT_NORMAL_BALANCE[nextType]);
-                setValue('parentAccountId', '');
-              },
-            })}
-          >
-            {ACCOUNT_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="type"
+            render={({ field, fieldState }) => (
+              <EnumSelect
+                id="account-type"
+                name="type"
+                value={field.value ?? 'asset'}
+                onValueChange={(value) => {
+                  const nextType = value as AccountFormSchema['type'];
+                  field.onChange(nextType);
+                  setValue('normalBalance', DEFAULT_NORMAL_BALANCE[nextType]);
+                  setValue('parentAccountId', '');
+                }}
+                invalid={Boolean(fieldState.error)}
+                options={ACCOUNT_TYPES}
+              />
+            )}
+          />
           <FieldError errors={[errors.type]} />
         </Field>
         <Field>
@@ -119,22 +128,43 @@ export function AccountForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="account-normal-balance">Normal balance</FieldLabel>
-          <NativeSelect id="account-normal-balance" {...register('normalBalance')}>
-            <option value="debit">Debit</option>
-            <option value="credit">Credit</option>
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="normalBalance"
+            render={({ field, fieldState }) => (
+              <EnumSelect
+                id="account-normal-balance"
+                name="normalBalance"
+                value={field.value ?? 'debit'}
+                onValueChange={field.onChange}
+                invalid={Boolean(fieldState.error)}
+                options={NORMAL_BALANCE_OPTIONS}
+              />
+            )}
+          />
           <FieldError errors={[errors.normalBalance]} />
         </Field>
         <Field>
           <FieldLabel htmlFor="account-parent">Parent account (optional)</FieldLabel>
-          <NativeSelect id="account-parent" {...register('parentAccountId')}>
-            <option value="">No parent — top-level account</option>
-            {parentOptions.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.code} — {a.name}
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="parentAccountId"
+            render={({ field }) => (
+              <SearchableSelect
+                id="account-parent"
+                name="parentAccountId"
+                value={field.value || null}
+                onChange={(value) => field.onChange(value ?? '')}
+                clearable
+                placeholder="No parent — top-level account"
+                options={parentOptions.map((a) => ({
+                  value: a.id,
+                  label: `${a.code} — ${a.name}`,
+                  keywords: a.code,
+                }))}
+              />
+            )}
+          />
         </Field>
         <Field orientation="horizontal" className="sm:col-span-2">
           <input type="checkbox" id="account-active" className="size-4 rounded border-input" {...register('isActive')} />

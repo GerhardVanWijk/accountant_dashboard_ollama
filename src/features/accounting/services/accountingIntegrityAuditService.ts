@@ -5,7 +5,7 @@ import type { JournalEntryService } from './journalEntryService';
 import type { AccountMapper } from './accountMappingService';
 import type { IAccountRepository } from '../repositories/IAccountRepository';
 import type { IAccountingPeriodRepository } from '../repositories/IAccountingPeriodRepository';
-import { reconcileAccountsPayable, reconcileAccountsReceivable } from './subledgerReconciliation';
+import { reconcileAccountsPayable, reconcileAccountsReceivable, reconcileCustomerDeposits } from './subledgerReconciliation';
 import { findPeriodForDate } from '../utils/periodLookup';
 import { computeVatReport, reconcileVatControlAccounts } from '@/features/tax/services/vatReportService';
 import {
@@ -181,6 +181,27 @@ export class AccountingIntegrityAuditService {
         `Control R${ap.controlAccountBalance.toFixed(2)} vs GL-consistent subledger R${ap.subledgerTotal.toFixed(2)} — variance R${ap.variance.toFixed(2)}. ` +
         `Aging subledger R${ap.agingSubledgerTotal.toFixed(2)}; bridge: unallocated payments R${ap.bridge.unallocatedReceipts.toFixed(2)}, other R${ap.bridge.other.toFixed(2)}. ${apInner.detail}`,
     });
+
+    // Customer Deposits (2600) vs Σ receipt.unallocatedAmount — Increment 4A.
+    // Only run when there is unapplied customer money to reconcile.
+    if (input.customerReceipts.some((r) => r.unallocatedAmount > 0)) {
+      try {
+        const deposits = await reconcileCustomerDeposits(this.journalEntryService, this.accounts, input.customerReceipts);
+        const depInner = checkSubledgerReconciliation('Customer Deposits', 'customer_deposits_subledger', deposits);
+        results.push({
+          check: 'Customer Deposits control (2600) vs unapplied customer receipts',
+          status: fromBooksIntegrityStatus(depInner.status),
+          detail:
+            `Control R${deposits.controlAccountBalance.toFixed(2)} vs unapplied receipts R${deposits.subledgerTotal.toFixed(2)} — variance R${deposits.variance.toFixed(2)}. ${depInner.detail}`,
+        });
+      } catch {
+        results.push({
+          check: 'Customer Deposits control (2600) vs unapplied customer receipts',
+          status: 'WARNING',
+          detail: 'Unapplied customer receipts exist but no "2600 Customer Deposits" account is configured for this company — run migration 0045.',
+        });
+      }
+    }
 
     return results;
   }

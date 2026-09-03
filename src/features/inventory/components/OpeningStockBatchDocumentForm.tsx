@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateOpeningStockBatchDTO, UpdateOpeningStockBatchDTO } from '../services/openingStockBatchService';
 import { OpeningStockLinesEditor } from './OpeningStockLinesEditor';
@@ -91,14 +91,13 @@ export function OpeningStockBatchDocumentForm({ batch, products, warehouses, onS
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="osb-warehouse">Warehouse</FieldLabel>
-            <NativeSelect id="osb-warehouse" value={warehouseId} onChange={(e) => markDirty(setWarehouseId)(e.target.value)}>
-              <option value="">Select…</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </NativeSelect>
+            <EnumSelect
+              id="osb-warehouse"
+              value={warehouseId}
+              onValueChange={(v) => markDirty(setWarehouseId)(v)}
+              placeholder="Select…"
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="osb-date">Effective date</FieldLabel>

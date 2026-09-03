@@ -1499,3 +1499,43 @@ pre-existing gap, not introduced or fixed by this change — it's exactly why
 it today (no `getByReconciliation()`-shaped method exists), so it wasn't
 "justified by existing repository access patterns" per this task's own
 scoping rule; revisit if such a query is ever added.
+
+## Recent migrations (003x–004x series)
+
+### 0037–0046 — Phase 9B normalized document lines + Increment 4A customer deposits
+
+Authored on `phase-9b-relationship-design-and-code` across 2026-09-01…09-03. `0037`–`0042`
+(normalized `*_lines` tables + backfill) merged to `main` and applied live; `0043` (credit-note
+reason detail) applied; `0045`/`0046` (Customer Deposits `2600` account + `apply_customer_deposit`
+RPC) applied live per the Increment 4A memory. `0044` is a **seed** script under
+`docs/db-changes/`, not a schema migration. See `docs/CURRENT_TASKS.md` and the per-increment
+memory files for the exact applied/merged state — this guide's own migration log stops at the
+reconciliation-persistence entry above and was not extended for the 003x/004x series.
+
+### 0047 — `company_document_profile` (Phase 4B-2, APPLIED 2026-09-03)
+
+`supabase/migrations/20260903120200__0047_company_document_profile.sql`. Applied to the live
+project 2026-09-03 (Review 4B-3 close-out) after the Stage-1 read-only pre-flight. No dependency
+on 0045/0046. Idempotent (`add column if not exists`), so a later `supabase db push` is a no-op.
+
+**Post-apply verification (against the live DB):** all 8 columns present with the reviewed
+types/nullability; FK `companies_documents_bank_account_id_fkey → bank_accounts(id) ON DELETE SET
+NULL` confirmed; **all 3 company rows NULL on all 8 columns** (no profile data fabricated); Trial
+Balance BALANCED (Σdebit − Σcredit = 0.0000); journal-entry / journal-line / stock-movement counts
+unchanged (247 / 928 / 343); `get_advisors(security)` = 0 ERROR (only the pre-existing anon-sign-in
+WARN set, unchanged by this migration).
+
+**Report (as applied):**
+
+| Aspect | Detail |
+|---|---|
+| Columns added to `companies` | `trading_name text`, `logo text`, `document_address jsonb`, `phone text`, `email text`, `website text`, `document_terms text`, `documents_bank_account_id uuid` |
+| Defaults | none — every column `NULL` on every existing row |
+| Nullability | all nullable; no `NOT NULL`, no `CHECK` |
+| FK | `documents_bank_account_id → bank_accounts(id) ON DELETE SET NULL` (matches the existing `transfer_pair_id` / `journal_entry_id` reference-only FK shape; deleting a bank account nulls the pointer, never blocks the delete) |
+| Indexes | none added — the column is read only via `SupabaseCompanyRepository.getAll()` (one row today) and resolved against the already-loaded bank-account list in the client; no query filters on it |
+| Storage implications | **none.** `logo` is a base64 data-URL `text` column, NOT a Supabase Storage bucket. No bucket, no `storage.objects` policy, no CSP/object-host change. The Company Settings form enforces mime (png/jpeg/webp/svg) + a 512 KB pre-encode cap client-side. |
+| Existing-company behaviour | every column `NULL` ⇒ `SupabaseCompanyRepository` maps them to `undefined` ⇒ every business document renders exactly as before this phase (name wordmark, no address block, no default terms, no payment block) |
+| Office National backfill | **none.** No `trading_name` / `logo` / `document_address` / `phone` / `email` / `website` / `document_terms` / `documents_bank_account_id` value is written for the live `Office National Demo (Pty) Ltd` row (or any row). No profile data invented. |
+| Rollback | `alter table companies drop column if exists trading_name, drop column if exists logo, drop column if exists document_address, drop column if exists phone, drop column if exists email, drop column if exists website, drop column if exists document_terms, drop column if exists documents_bank_account_id;` — purely additive, so the drop is clean (no data migration to reverse) |
+| RLS | none added — the columns inherit the existing `companies` row-level policies unchanged |

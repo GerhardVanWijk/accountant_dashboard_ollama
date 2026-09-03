@@ -6,7 +6,7 @@ import { FigureBlock } from '@/components/app/figure';
 import { RecordLink } from '@/components/app/record-link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { useDeferredTax } from '../hooks/useDeferredTax';
 import { TemporaryDifferencesTable } from '../components/TemporaryDifferencesTable';
@@ -73,13 +73,12 @@ export function DeferredTaxPage() {
         description="Temporary differences, Deferred Tax Assets/Liabilities, and the period movement."
         actions={
           sortedFinancialYears.length > 0 ? (
-            <NativeSelect aria-label="Financial Year" value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
-              {sortedFinancialYears.map((year) => (
-                <option key={year.id} value={year.id}>
-                  {year.name}
-                </option>
-              ))}
-            </NativeSelect>
+            <EnumSelect
+              aria-label="Financial Year"
+              value={activeFinancialYearId ?? ''}
+              onValueChange={setSelectedFinancialYearId}
+              options={sortedFinancialYears.map((year) => ({ value: year.id, label: year.name }))}
+            />
           ) : undefined
         }
       />

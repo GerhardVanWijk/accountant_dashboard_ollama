@@ -25,6 +25,7 @@ import type { AccountService } from './accountService';
  */
 export type AccountMappingKey =
   | 'AR' // Accounts Receivable
+  | 'CUSTOMER_DEPOSIT' // 2600 — customer money received before it is earned / applied to an invoice (contract liability)
   | 'AP' // Accounts Payable
   | 'SALES_REVENUE'
   | 'VAT_OUTPUT' // VAT Output (Payable)
@@ -81,6 +82,7 @@ export type AccountMappingKey =
  */
 const ACCOUNT_CODE_BY_KEY: Record<AccountMappingKey, string> = {
   AR: '1100',
+  CUSTOMER_DEPOSIT: '2600',
   AP: '2000',
   SALES_REVENUE: '4000',
   VAT_OUTPUT: '2100',

@@ -8,11 +8,430 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` complete
 
 ---
 
-## WHERE WE STAND — 2026-09-01 (git reality check)
+## CURRENT PHASE — Browser QA / deployment candidate (2026-09-03)
 
-Everything in this file has shipped to `origin/main`. As of 2026-09-01 the
-`phase-9b-relationship-design-and-code` branch was fast-forward-merged to `main`
-(`4ac5277..2b07407`) and pushed → Cloudflare Pages auto-deploy triggered.
+**COMPLETED**
+- Increment 1 — record-page framework, Sales Order + Inventory Product full pages, tax-rate wiring fix, inventory-cluster native-`<select>` sweep.
+- Increment 2 — remaining 12 record types migrated to full pages, 15 detail sheets deleted, app-wide **transaction-form** dropdown sweep, tax-rate regression guard.
+- Increment 3 (**UNCOMMITTED**) — inventory movement ledger: human source-document numbers (no UUIDs) + `RelatedRecordPreview` over-the-page overlay + expandable Movement/Source/Accounting/Technical panel; sales-document workflow **audit** (quote/SO/invoice non-posting rules confirmed, partial-payment confirmed, **customer-deposit accounting gap** + partial-SO-invoicing + stock-commitment absence reported, not changed). See `# RECORD DETAIL — INCREMENT 3` below.
+- Increment 4A (**UNCOMMITTED — STOPPED at Review 4A-4, awaiting apply/commit approval**) — Customer Deposits / Prepayments / Contract Liability. New `2600 Customer Deposits` account + `CUSTOMER_DEPOSIT` mapping key; `recordReceipt()` split posting (AR = applied, 2600 = unapplied); `reconcileCustomerDeposits()` + AR-recon rework + cash-flow "Customer Deposits" line + `reverseJournalEntry()` subledger guard; UI: available-deposit on receipt/customer pages, "Apply deposit" on the invoice page. **Hardening pass (Reviews 4A-3 / 4A-4):** `allocateToInvoice()` runs entirely inside the atomic `apply_customer_deposit` RPC (migration `0046`) — one Postgres transaction; idempotency keyed on a **stable client-generated UUID `allocationId`** (`deposit_allocation_log` UNIQUE `(company_id, allocation_id)`, never on `allocations.length`); locks receipt→invoice (fixed order, deadlock-audited), re-validates against locked rows; DB CHECK constraints on `unallocated_amount` / `amount_paid` (+ `payments`/`bills` mirrors); `ReceiptAllocation` gains a stable `id`; `TS CustomerReceiptService` calls it via a `DepositAllocationExecutor` (Real/Fake split), UI modals generate the id once per open. `0045` ABORTs on a conflicting pre-existing 2600. `0045b` historical script uses `deposit_reclassification_log` (`UNIQUE (company_id, receipt_id)`) for deterministic idempotency. Migrations **`0045` + `0046` authored, NOT applied**; `0045b` (3 Office National receipts, **live R4,250** — the R1,750 in the ON fixture is a 2026-08-28 snapshot, not a business rule) **authored, NOT executed**. Gate: tsc ✅ · eslint `--max-warnings 0` ✅ · **2083 tests / 294 files** ✅ · `vite build` ✅. No DB writes, no migration applied, no corrections posted, no commit/push/deploy. Full detail: `docs/ACCOUNTING_RELATIONSHIPS.md` § "CUSTOMER DEPOSITS / PREPAYMENTS — INCREMENT 4A".
+
+Gate green on `phase-9b-relationship-design-and-code`: tsc ✅ · eslint `--max-warnings 0` ✅ · **2063 tests / 294 files** ✅ · `vite build` ✅. Increments 1–2 committed `3318e7b` + pushed; **increment 3 is uncommitted, awaiting review**.
+
+**Cloudflare Pages preview deployment** (auto-built from the branch push — production `main` / `https://vertex-accounting.pages.dev` untouched):
+- Branch preview: **https://phase-9b-relationship-design.vertex-accounting.pages.dev**
+- This commit: https://6fb60958.vertex-accounting.pages.dev
+
+**BLOCKING FINAL PRODUCTION DEPLOYMENT**
+- Human visual / browser QA of the deployment candidate (never run in this env — no Chrome DevTools / Playwright MCP).
+
+**KNOWN NON-BLOCKING ISSUES**
+- `MockStockLotRepository` / FIFO limitation — FIFO stock lots are in-memory only; not exercised (every seeded product is weighted-average). See `docs/KNOWN_ISSUES.md`.
+- ~~Deferred configuration / admin `NativeSelect` sweep (~34 non-transaction forms)~~ — **DONE 2026-09-03** (`### GLOBAL SELECT MIGRATION`); zero native `<select>` app-wide, guard `noNativeSelect.global.test.ts`.
+- Journal Entry detail still sheet-backed (`?record=`) — no full-page `JournalEntryDetailPage` yet.
+- GL Account / Fixed Asset / Lease intentionally retained as sheets this increment (borderline records, per brief §B).
+- Create / edit modal shell width still requires browser confirmation.
+
+---
+
+# ================================================================
+# POST-4A ROADMAP — Sales documents & fulfilment
+# ================================================================
+
+**Added:** 2026-09-03 (user roadmap). **Rule for every phase below:** design → author →
+**STOP at the phase's own review checkpoint** → gate green (tsc / eslint `--max-warnings 0` /
+full test suite / `vite build`) → wait for explicit approval before applying any migration,
+committing, pushing or deploying. No live DB writes during investigation (read-only Supabase
+MCP only). Accounting-immutability rules (posted invoices/bills/JEs/receipts/credit notes,
+audit logs, inventory postings) are never weakened.
+
+```
+4A  CUSTOMER DEPOSITS            ← done, stopped at Review 4A-4 (apply/commit pending)
+      ↓
+4B  PROFESSIONAL DOCUMENTS       ← next visible frontend increment
+      ↓
+5   SALES FULFILMENT             ← 5A stock commitment · 5B partial SO fulfilment · 5C delivery notes · 5D partial invoicing
+      ↓
+6   ADVANCED INVENTORY / SALES   ← only on top of a solid fulfilment model
+      ↓
+7   POLISH + PRODUCTION HARDENING
+```
+
+Legend: `[ ]` not started · `[~]` in progress · `[x]` complete · **CP-n** = review checkpoint.
+
+---
+
+## PHASE 4B — Professional Quote / Sales Order / Invoice documents
+
+**Type:** visible frontend increment. **No accounting/DB change** expected (a `duplicate`/`copy`
+service method + possibly a `salesperson`/`terms`/`bankingDetails` field on the document types is
+the likely ceiling — flag before adding). Builds on the record-page framework from Increments 1–3.
+
+**Context / gap:** Increment-3 audit found Quote & Sales Order (and the other `*DetailPage`
+records) have **no formal business-document print/export** — `window.print()` prints app chrome +
+on-screen HTML; the Phase-7 `ExportMenu` / `PrintableReport` is wired on list pages only; there is
+no branded A4 layout. See `docs/ACCOUNTING_RELATIONSHIPS.md` § "SALES DOCUMENT WORKFLOW AUDIT" Q8
+and `docs/KNOWN_ISSUES.md`.
+
+### Deliverable — ONE reusable document system
+
+```
+PrintableDocument
+   ├── Quote
+   ├── Sales Order
+   ├── Invoice
+   ├── Credit Note
+   └── Purchase Order
+```
+
+### Tasks
+- [x] **4B.0 Investigation** — done (Queen Bee handoff + this increment). See `docs/BUSINESS_DOCUMENTS.md`.
+- [x] **4B.1 `BusinessDocument` component** — `src/features/businessDocuments/` A4 template + `businessDocuments.css` (screen preview + `@media print` gated on `body.printing-business-document`).
+- [x] **4B.2 Per-document adapters + wrappers** — id-free `BusinessDocumentViewModel` + 5 pure adapters (quote/SO/invoice/credit-note/PO) + `useBusinessDocument` hook + `BusinessDocumentPreviewModal`; **Print / PDF** action on all 5 `*DetailPage`s. Email-ready standalone output: deferred.
+- [x] **4B.3 Duplicate / copy** — `quoteService.duplicateQuote` · `salesOrderService.duplicateSalesOrder` · `purchaseOrderService.duplicatePurchaseOrder` · `invoiceService.copyToNewDraftInvoice` (NOT credit note). New draft, new number, today, fresh line ids, guarded, tested. Not audit-logged (mirrors existing `create*` — see doc). Not run against live data.
+- [x] **4B.4 Tests** — +56 tests / +5 files (adapters ×17, `noInternalIds` scan ×10, `BusinessDocument` ×7, `BusinessDocumentPreviewModal` ×5, layout ×4, duplicate ×8 across the 4 service test files, "Print / PDF present" ×5 on the detail-page tests).
+- [x] **4B.5 Docs** — new `docs/BUSINESS_DOCUMENTS.md`; `KNOWN_ISSUES.md` "no formal print layout" closed + Company-document-profile gap logged; this section.
+
+**Historical task text (superseded by the above):**
+- [ ] **4B.0 Investigation** — inventory every existing print/export primitive (`src/features/export/`
+  `ExportMenu` / `PrintableReport` / `PrintableReport`'s `@media print`), the `useCompany()` shape
+  (logo? reg no? VAT no? banking details? address?), the `Customer`/`Supplier` address fields, the
+  document line-item shape, and the shared `record-page` components. Report what data exists vs.
+  what a professional document needs (e.g. is there a company-logo asset store? bank-account
+  details for "payment information"?).
+- [ ] **4B.1 `PrintableDocument` component** (`src/features/salesDocuments/` or `src/features/print/`) —
+  A4 layout, `@media print` + on-screen preview. Slots: company logo + details block; document
+  title + number; issue date; expiry (Quote) / due date (Invoice/Bill) / order date (SO/PO);
+  bill-to + ship-to (delivery) address; party (customer/supplier) details; line table
+  (SKU/description/qty/unit price/discount?/VAT rate/line total); subtotal / VAT / total; deposit
+  applied + balance due where relevant; notes; terms; **payment information** (bank details);
+  page numbers ("Page 1 of N"); footer (company reg/VAT).
+- [ ] **4B.2 Per-document wrappers** — Quote, Sales Order, Invoice, Credit Note, Purchase Order —
+  each a thin mapping from the domain object → `PrintableDocument` props. Wire a **Print** and a
+  **Save PDF** action (and **email-ready output** — a clean standalone HTML/text the user can copy
+  or that a future edge function can send; no email backend is built here) onto each `*DetailPage`
+  action bar.
+- [ ] **4B.3 Duplicate / copy** — a `duplicate()` service method for Quote / Sales Order / Purchase
+  Order (NOT Invoice/Credit Note — those are corrected by credit note, never copied). Copies lines
+  + party + terms into a **new draft**, new number, today's date. Guarded, tested, audit-logged.
+- [ ] **4B.4 Tests** — `PrintableDocument` renders every slot from a fixture; each wrapper maps
+  correctly; `duplicate()` produces an independent draft (no shared refs, new number, draft status);
+  print stylesheet asserted via the existing `hidden print:block` pattern.
+- [ ] **4B.5 Docs** — new `docs/PRINTABLE_DOCUMENTS.md`; update `KNOWN_ISSUES.md` (close the
+  "no formal print layout" entry) and `ROUTES.md` if any route is added.
+
+**CP-4B (review checkpoint):** component API + one worked example (Invoice) rendered; data-gap
+report (logo/bank details); list of any type/schema field added and why; full gate; confirm no
+accounting/DB change (or present the migration if one is truly required). **STOP.**
+
+---
+
+### PHASE 4B — DONE, uncommitted, branch `phase-9b-relationship-design-and-code` (2026-09-03)
+
+**No accounting / DB / migration / seed / posting / VAT / WAC / GL / reconciliation / flag change.**
+No `Company` type/table change (Company Settings gap **reported** with a proposed-but-unapplied
+`0047` sketch in `docs/BUSINESS_DOCUMENTS.md`, not implemented).
+
+| Area | Detail |
+|---|---|
+| New module | `src/features/businessDocuments/` — `types.ts` (id-free `BusinessDocumentViewModel` = the privacy boundary), `adapters/` (`shared.ts` + 5 pure adapters + `__fixtures__.ts`), `components/` (`BusinessDocument.tsx` A4 sheet, `BusinessDocumentPreviewModal.tsx`, `printBusinessDocument.ts`), `hooks/useBusinessDocument.ts`, `businessDocuments.css`, `index.ts`. |
+| Wiring | **Print / PDF** action + `<BusinessDocumentPreviewModal>` on `QuoteDetailPage` · `SalesOrderDetailPage` · `InvoiceDetailPage` · `CreditNoteDetailPage` · `PurchaseOrderDetailPage`. **Duplicate** action on all but Credit Note. `Icons.print` registry key added. |
+| Duplicate services | `quoteService.duplicateQuote` · `salesOrderService.duplicateSalesOrder` · `purchaseOrderService.duplicatePurchaseOrder` · `invoiceService.copyToNewDraftInvoice` + mutation-hook methods. Shared `documentNumberPrefix` added next to `nextDocumentNumber`. New draft only; NO GL post; NOT run against live data. |
+| Footer | Exact: `Generated with Vertex Accounting Solutions • {year} • All rights reserved.` — `{year} = new Date().getFullYear()`, never hardcoded. |
+| Print CSS | Gated on `body.printing-business-document`: hide `#root`, promote the portal-hosted sheet to static flow so it paginates; `@page { size:A4; margin:14mm }`; header repeats, rows/totals/footer `break-inside:avoid`; footer flows at end, no page numbers. White paper regardless of theme (documented literal-colour exception; no eslint-disable — repo has no colour rule). |
+| Gate | tsc ✅ · eslint `--max-warnings 0` ✅ · **2139 tests / 299 files** ✅ (was 2083 / 294 — **+56 / +5**) · `vite build` ✅ |
+| DB writes | **NONE.** Migrations: **NONE.** Commit / push / deploy / merge: **NO.** |
+
+**Outstanding:** human visual / browser QA of the printed output (A4 pagination, print dialog with
+headers/footers off, PDF export, dark-app → white-paper) — no Chrome DevTools / Playwright MCP in
+this env. Email-ready standalone output and `ExportMenu`-on-record-pages: deferred.
+
+---
+
+### PHASE 4B-2 — Company Document Profile + document hardening — DONE + COMMITTED + PUSHED, branch `phase-9b-relationship-design-and-code` (2026-09-03, Review 4B-3 close-out)
+
+**No accounting / journal / VAT / WAC / COGS / inventory / recon / allocation / posting / flag
+change. Migration `0047` APPLIED live (additive only). NO Supabase Storage bucket. Office National
+`0047` columns all left NULL. NOT merged to `main`, production NOT deployed.**
+
+| Area | Detail |
+|---|---|
+| Migration | **`0047_company_document_profile` — APPLIED to live 2026-09-03** (`supabase/migrations/20260903120200__0047_company_document_profile.sql`), after Stage-1 read-only pre-flight. Adds nullable `trading_name`, `logo` (base64 data URL — NOT Storage), `document_address` (jsonb `Address`), `phone`, `email`, `website`, `document_terms`, `documents_bank_account_id` (FK → `bank_accounts`, `on delete set null`) to `companies`. Additive, no defaults, no backfill. Post-apply: all 3 rows NULL on all 8 cols, TB balanced, 0 new advisors. Details: `docs/SUPABASE_MIGRATION_GUIDE.md` § 0047. |
+| Type + repo | `Company` gains those 8 optional fields; `SupabaseCompanyRepository` row type + `rowToCompany` + `companyToRow` (jsonb `document_address` ↔ `Address`; new keys written as SQL NULL on clear). `MockCompanyRepository` unchanged (spread). |
+| Company Settings | New "Document & branding" `FormSection` in `CompanyForm` + `companyFormSchema` (`companyToFormValues` / `formValuesToCompanyPatch`), incl. client-validated logo upload (png/jpeg/webp/svg, ≤ 512 KB → data URL, Replace / Remove) and a "Bank account shown on documents" selector with "None". `CompanyPage` passes `useBankAccounts()` and shows the logo / address / contact on the card. |
+| Global document integration | `adapters/shared.ts`: `issuerParty` emits `tradingAs` / `addressLines` / `email` / `phone` / `website`; `branding` emits `logoDataUrl = company.logo` + `issuerDisplayName = tradingName || name`. New `resolveDocumentTerms` (document-specific precedence) feeds `terms` on all 5 doc VMs. New `resolveDocumentsBankAccount` (id match + `active`). |
+| Banking | Phase 4B "exactly one active bank account" fallback **removed** from `useBusinessDocument` — replaced with `company.documentsBankAccountId` + `active` resolution; else the invoice payment block is omitted cleanly. |
+| Header | `DocumentHeader` revisited: `max-h-20 max-w-[280px] object-contain` logo, `break-words` long trading + legal names, legal name shown under a trading-name wordmark, multi-line address / contact. |
+| Duplicate/Copy audit | `QuoteService` / `SalesOrderService` / `PurchaseOrderService` / `InvoiceService` take an optional `auditLog: AuditLogService` ctor param (defaults to the shared singleton — no wiring change). Each duplicate method writes `action:'created'`, `module`, `recordType`, `reason: 'Duplicated from <source number>'`, `newValue.copiedFromNumber`. Actor defaults to `SYSTEM_USER_ID = 'system'`. |
+| Icons | Phase 4B's `Icons.print` registry key **reverted**; the direct `import { PrinterIcon } from 'lucide-react'` stays (established v0-era exception — `src/components/ui/Icon.tsx` doesn't exist, registry unused). |
+| Privacy | `noInternalIds.test.tsx` extended: invoice company carries a real-UUID `documentsBankAccountId` + resolved account ⇒ human bank details render, the FK UUID does not; logo renders as `<img src="data:…">`, base64 not dumped as text. All Phase 4B privacy assertions retained. |
+| Gate | tsc ✅ · eslint `--max-warnings 0` ✅ · **2169 tests / 300 files** ✅ (was 2139 / 299 — **+30 / +1**) · `vite build` ✅ |
+| DB writes | Migration `0047` applied (additive DDL only — zero rows written). Storage bucket: **NO.** |
+| Git | Two commits on `phase-9b-relationship-design-and-code`: `feat(company): add document branding profile` + `feat(sales,purchases): add professional A4 business documents`. Pushed to the branch. **`main` NOT merged. Production NOT deployed.** Cloudflare Pages branch preview auto-builds — see the preview URL in the Review 4B-3 report. |
+
+**Deferred, documented, NOT solved here:** per-line discount column; SalesOrder delivery-address /
+customer-PO-reference / expected-delivery. **Outstanding:** human visual / browser QA (no browser
+tooling in this env); a private Storage bucket for the logo remains a valid future alternative
+(its own review cycle).
+
+---
+
+### PHASE 4B — VISUAL HARDENING PASS — DONE, uncommitted, branch `phase-9b-relationship-design-and-code` (2026-09-03)
+
+**Visual / print only. NO domain / accounting / VAT / WAC / COGS / AR / deposit / journal / stock /
+reconciliation / fulfilment change. NO migration, NO DB write, NO commit / push / deploy / merge.**
+Fixes the GLOBAL `src/features/businessDocuments/` A4 template from the user's manual QA of the
+deployed Sales Order — once, so it flows through Quote / SO / Invoice / Credit Note / PO.
+
+| Area | Detail |
+|---|---|
+| Two-column parties | Issuer LEFT under a `From` heading (new `vm.issuerHeading`), recipient RIGHT — side-by-side on A4 **and** in print (`.business-document__parties-grid` re-pinned to `1fr 1fr` in `@media print`). Issuer identity block **removed from `DocumentHeader`** (header = logo/wordmark + title + number + dates only; `pb-4`). `shipTo` → full-width "Deliver to" below the grid. |
+| Account shown once | `metaField('Customer account' / 'Supplier account', …)` deleted from all 5 adapters; the value stays in the party block as `Account: …`. Quote + PO now have empty `meta`. |
+| Vertex footer redesign | `branding.footerText` (string) → `branding.vertexFooter { generatedLine, rightsLine }` (structured, plain strings). `Generated with Vertex Accounting Solutions` + `© {year} Vertex Accounting Solutions. All rights reserved.`, `{year} = now.getFullYear()` (injectable clock, never hardcoded). Print-safe monochrome outline "V" mark (NOT the `bg-brand` `<Wordmark>`). One shared `DocumentFooter`. |
+| Print title swap | `printBusinessDocument(documentNumber?)` swaps `document.title` to the doc number for the print, restores on `afterprint` (+2 s fallback). Modal passes `viewModel.documentNumber`. Kills "Accounting Suite" in the browser's top-centre print header. |
+| Print UX helper | "Turn off Headers and footers" tip moved into the modal toolbar (`.business-document-modal__toolbar`, print-hidden), never on the sheet. Reworded. |
+| Lower section | Invoice with payment info → two columns (notes+terms LEFT, payment RIGHT); else stacked. Terms `max-w-[38rem] text-[11px] leading-relaxed whitespace-pre-wrap`, never truncated. `.business-document__lower` `break-inside: avoid`. |
+| Line items / totals | Visual polish only — uppercase tracked header, 2px rules, stronger `text-base font-bold` TOTAL. Authoritative values unchanged. |
+| Investigation (reported, not acted on) | Browser print metadata: top-centre = `document.title` (controllable via swap); top-left date / bottom-left URL / bottom-right page number = pure browser chrome, no web API — user must untick "Headers and footers". PDF: `package.json` has zero PDF/canvas libs; **native browser print stays** (option A); no library installed. |
+| Wordmark discrepancy | In-app `src/components/app/wordmark.tsx` renders "Vertex Accounting" (no "Solutions"); this footer uses the user's "Vertex Accounting Solutions". Flagged in `docs/BUSINESS_DOCUMENTS.md`, not reconciled. |
+| Files | `types.ts`, `adapters/shared.ts`, 5 adapters, `components/BusinessDocument.tsx`, `components/printBusinessDocument.ts`, `components/BusinessDocumentPreviewModal.tsx`, `businessDocuments.css`, `index.ts` + 4 test files. Docs: `BUSINESS_DOCUMENTS.md`, `KNOWN_ISSUES.md`, `CURRENT_TASKS.md`. |
+| Gate | tsc ✅ · eslint `--max-warnings 0` ✅ · **2178 tests / 300 files** ✅ (was 2169 / 300 — **+9 / +0**) · `vite build` ✅ |
+| DB writes | **NONE.** Migrations: **NONE.** Commit / push / deploy / merge: **NO.** |
+
+**Outstanding:** human visual / browser QA of the printed A4 (two-column parties + two-column
+invoice lower section on paper, pagination, print dialog with "Headers and footers" on/off, PDF
+export, dark-app → white-paper) — no Chrome DevTools / Playwright MCP in this env.
+
+---
+
+## PHASE 5 — Sales fulfilment
+
+The core workflow. Target model:
+
+```
+QUOTE ──(accept)──▶ SALES ORDER ──┬── commit stock ──▶ RESERVED / COMMITTED
+                                  └── DELIVERY / FULFILMENT ──┬── full delivery
+                                                              └── partial delivery ──▶ partial / full INVOICE ──▶ PAYMENT
+                                                                                        (deposit · partial · full)
+```
+
+Invariants that must hold throughout Phase 5:
+- A Quote has **no** stock effect and **no** GL effect (unchanged).
+- A Sales Order **reserves** stock but posts **no** movement, **no** COGS, **no** revenue, **no** VAT.
+  *Commitment is a reservation, not a `stock_movement`.*
+- Revenue / COGS / VAT / the inventory movement happen **only** when an Invoice posts (unchanged
+  engine) — now driven by **delivered / invoiced quantities**, not "the whole SO at once".
+- Deposits (4A) slot in at the PAYMENT step unchanged.
+
+---
+
+### PHASE 5A — Stock commitment
+
+**Context / gap:** `StockBalance.quantityCommitted` exists in the type and `quantityAvailable()`
+subtracts it, but **nothing ever writes it** — `stockBalanceService` hardcodes `quantityCommitted: 0`
+and `stockService.getQuantityOnHand` has a literal `const quantityCommitted = 0; // TODO(Phase 2)`.
+So **Available === On hand** everywhere today. (`docs/KNOWN_ISSUES.md` § "No stock reservation".)
+
+### Model
+```
+On Hand
+− Committed        (Σ open Sales Order line quantities not yet delivered, per product+warehouse)
+= Available
+```
+Later (Phase 6, not 5A): also `On Order` (open POs), `In Transit` (transfers), `Backordered`.
+
+### Tasks
+- [ ] **5A.0 Investigation (read-only)** — trace `StockBalance`, `stockBalanceService`,
+  `stockService.getQuantityOnHand`, `quantityAvailable()`, every UI that shows "Available" / "On hand"
+  (`SalesLineItemsEditor` stock caption, inventory register, product detail), and every place a
+  reservation would need to be created/released/adjusted. Decide: **derived** (recompute committed
+  from open SO lines on read — simplest, always consistent) **vs. materialised** (a
+  `stock_reservations` table + triggers/service — needed only if read performance demands it).
+  Strong prior: **derive first**, matching how aging/margin are already derived.
+- [ ] **5A.1 Commitment source of truth** — a Sales Order line, while the SO is
+  `confirmed` and not fully delivered, commits `ordered − delivered` units of its product at its
+  warehouse. Draft/pending SOs commit nothing; cancelled/fully-delivered commit nothing.
+- [ ] **5A.2 `quantityCommitted` wired** — `stockBalanceService` / `stockService` compute real
+  committed quantity (per product + warehouse). `quantityAvailable() = onHand − committed`.
+- [ ] **5A.3 UI** — "On hand / Committed / Available" shown on the product detail, the inventory
+  register, and the Sales / (later) Delivery line editors. The SO line editor warns when a line
+  commits more than **available** (not just on-hand).
+- [ ] **5A.4 Over-commitment policy** — decide + document: allow over-commitment with a warning
+  (creates a backorder concept later) vs. block. Prior: **warn, don't block** (real businesses
+  take orders they can't yet fill).
+- [ ] **5A.5 Tests** — committed = Σ open confirmed-SO undelivered lines; released on cancel /
+  full delivery; available never used as if it were on-hand for a real movement; no
+  `stock_movement` is ever created by a commitment.
+- [ ] **5A.6 Docs** — `docs/INVENTORY_ARCHITECTURE.md` commitment section; close the KNOWN_ISSUES entry.
+
+**CP-5A:** model decision (derived vs materialised) with rationale; the exact commit/release rules;
+any migration (only if materialised); UI screenshots-by-description; full gate. **STOP.**
+
+---
+
+### PHASE 5B — Partial Sales Order fulfilment  *(two-dimensional state)*
+
+**Context / gap:** `SalesOrderService.convertToInvoice` copies **all** lines at full quantity,
+marks the order `fulfilled`, and blocks re-conversion. No per-line "delivered / invoiced" tracking,
+no `partially_*` status. (`docs/KNOWN_ISSUES.md` § "Partial Sales-Order invoicing".)
+
+### Required design decision (settle at CP-5B-0)
+**Fulfilment state and invoicing state are SEPARATE dimensions**, not one squeezed `status` field —
+*preferred, if the architecture allows*:
+
+```
+commercialStatus :  draft · pending · confirmed · cancelled
+fulfilmentStatus :  not_started · partially_delivered · delivered
+invoicingStatus  :  not_invoiced · partially_invoiced · invoiced
+```
+plus per-line counters:
+```
+SalesOrderLine:  productId · orderedQty · deliveredQty · invoicedQty   (→ remainingToDeliver, remainingToInvoice derived)
+```
+
+### Tasks
+- [ ] **5B.0 Investigation + design** — `SalesOrder` / `SalesOrderLine` shape, `convertToInvoice`,
+  `salesOrderService` statuses, every consumer of `salesOrder.status` (list filters, badges, the
+  "converted invoice" deep-link, dashboards). Produce the state-model proposal (separate dimensions
+  vs. combined) with a migration sketch and a compatibility plan for existing SOs.
+- [ ] **5B.1 Line-level counters** — `deliveredQty` / `invoicedQty` on each SO line (default 0);
+  `remainingToDeliver` / `remainingToInvoice` derived. Migration + backfill (existing `fulfilled`
+  SOs → `deliveredQty = invoicedQty = orderedQty`).
+- [ ] **5B.2 Status dimensions** — add `fulfilmentStatus` + `invoicingStatus` (or the agreed
+  shape); `commercialStatus` keeps the old values. Recompute on every delivery / invoice event.
+- [ ] **5B.3 `createInvoiceFromSalesOrder(soId, lines[])`** — replaces the all-or-nothing
+  `convertToInvoice`: caller picks quantities (≤ remainingToInvoice, and — once 5C lands — ≤
+  delivered). Bumps `invoicedQty`, recomputes `invoicingStatus`. The invoice still posts through
+  the **unchanged** engine.
+- [ ] **5B.4 UI** — SO detail shows the per-line Ordered / Delivered / Invoiced / Remaining grid;
+  "Create invoice" opens a quantity picker; status badges show both dimensions.
+- [ ] **5B.5 Tests** — SO 10 → invoice 4 → invoice 3 → 3 remaining; `invoicingStatus` transitions;
+  cannot invoice more than ordered (or, post-5C, more than delivered); existing single-shot
+  conversion still works; engine untouched (revenue/COGS/VAT identical per invoice).
+- [ ] **5B.6 Docs** — `docs/SALES_FULFILMENT.md` (new); update `ACCOUNTING_RELATIONSHIPS.md` SO section.
+
+**CP-5B-0 (design checkpoint, BEFORE code):** the state model (separate vs combined) + migration
+sketch + existing-data plan. **STOP for approval.**
+**CP-5B (implementation checkpoint):** migration authored not applied; full gate; backfill dry-run
+counts (read-only) for any live SO. **STOP.**
+
+---
+
+### PHASE 5C — Delivery Notes
+
+Only meaningful once 5B exists.
+
+```
+SO-1024 ─┬─ DN-1001  (2 printers)   → stock movement, delivery evidence
+         └─ DN-1002  (2 printers)   → stock movement, delivery evidence
+```
+
+### Open question for CP-5C-0
+**Does delivery move stock, and if so how does it interact with the invoice's inventory posting?**
+Options: (a) delivery posts the `stock_movement` + COGS/Inventory now, invoice posts only
+revenue/AR/VAT later (proper "goods issued on delivery" model — mirrors the purchase side's
+GRNI/3-way match); (b) delivery is evidence only, invoice still posts everything (simpler, keeps
+the engine call unchanged). **Prior: (a)** — it's the accounting-correct model and the codebase
+already has the GRNI precedent — but it's a real engine change and must be designed carefully.
+
+### Tasks
+- [ ] **5C.0 Investigation + design** — the purchase-side GRNI / 3-way-match code
+  (`purchaseOrderService.recordReceipt` + `billService.postBill`), `docs/LEDGER_ARCHITECTURE.md`,
+  the inventory engine's `costingMode`s. Decide (a) vs (b); if (a), design the sales-side clearing
+  account (e.g. "Goods Delivered Not Invoiced") + the two-step posting.
+- [ ] **5C.1 `DeliveryNote` entity** + `deliveryNoteService` — created from a Sales Order,
+  line quantities ≤ remainingToDeliver; a `DN-####` number; a printable document (reuse 4B's
+  `PrintableDocument`); bumps SO line `deliveredQty` + `fulfilmentStatus`.
+- [ ] **5C.2 Stock effect** — per the CP-5C-0 decision. If (a): migration for the clearing account
+  + engine wiring + the invoice-time clearing leg. If (b): the DN records `stock_movement`s with
+  `source_document_type = 'delivery_note'` and the invoice keeps posting inventory (guard against
+  double-issue).
+- [ ] **5C.3 Invoice-from-delivery** — `createInvoiceFromSalesOrder` (5B.3) can be constrained to
+  delivered-but-not-invoiced quantities; a "create invoice from these delivery notes" flow.
+- [ ] **5C.4 Tests** — DN 2 + DN 2 against SO 4 → `delivered`; invoice can't exceed delivered;
+  no double COGS / double stock issue; trial balance balanced; (a) clearing account nets to zero
+  once invoiced.
+- [ ] **5C.5 Docs** — `SALES_FULFILMENT.md` delivery section; `INVENTORY_ARCHITECTURE.md`;
+  `ACCOUNTING_RELATIONSHIPS.md`; new source-document type in the movement-evidence tables.
+
+**CP-5C-0 (design):** (a) vs (b) with full journal examples; clearing-account proposal; engine-change
+scope. **STOP for approval.**
+**CP-5C:** migrations authored not applied; full gate; live read-only impact scan. **STOP.**
+
+---
+
+### PHASE 5D — Partial invoicing  *(largely delivered by 5B.3 + 5C.3)*
+
+Explicitly called out by the Increment-3 audit. Example: SO 10 chairs → invoice 4 → invoice 3 →
+3 remaining. Covered by `createInvoiceFromSalesOrder(soId, lines[])` (5B.3), constrained to
+delivered quantities once 5C lands.
+
+### Tasks
+- [ ] **5D.1** — confirm 5B.3 + 5C.3 fully cover the partial-invoicing scenarios; add any missing
+  guard (can't invoice a cancelled SO line; rounding on split VAT across partial invoices;
+  the deposit-application flow from 4A works against a partial invoice).
+- [ ] **5D.2 Tests** — the chairs example end to end; VAT across partial invoices sums to the SO VAT;
+  4A deposit applied to invoice #2 of a partially-invoiced SO.
+- [ ] **5D.3 Docs** — `SALES_FULFILMENT.md` partial-invoicing worked example.
+
+**CP-5D:** the worked example green end to end; full gate. **STOP.**
+
+---
+
+## PHASE 6 — Advanced sales / inventory  *(only on top of a solid Phase 5)*
+
+Each is its own mini-increment with its own checkpoint. **Do not start any of these before
+Phase 5 is complete and merged.** Rough priority order:
+
+- [ ] **6A Backorders** — an SO line committing more than available becomes/flags a backorder;
+  auto-fulfil when stock arrives (PO receipt / adjustment). Needs 5A + 5C.
+- [ ] **6B `On Order` / `In Transit` stock views** — extend the 5A commitment model with open-PO
+  and transfer-in-transit quantities: `On Hand · Committed · Available · On Order · In Transit · Backordered`.
+- [ ] **6C Picking lists** — a warehouse pick document derived from confirmed SOs / delivery notes.
+- [ ] **6D Packing** — pack confirmation step between pick and delivery note.
+- [ ] **6E Customer price lists** — named price lists; product → list price.
+- [ ] **6F Customer-specific pricing** — per-customer overrides / discounts on top of the list.
+- [ ] **6G Salesperson attribution** — a `salespersonId` on Quote/SO/Invoice; commission reporting later.
+- [ ] **6H Approval workflows** — SO / credit-note / large-discount approval gates (needs the
+  real roles system — currently UI-gated only, see `docs/KNOWN_ISSUES.md` Phase T).
+- [ ] **6I Quote expiry reminders** — `expiry_date` already exists on Quote; a reminder surface / job.
+- [ ] **6J Pro-forma invoices** — a non-posting "pro-forma" document (reuse 4B); becomes a real
+  invoice on acceptance.
+- [ ] **6K Recurring orders** — a template + schedule that generates draft SOs.
+
+**CP-6x:** each item gets its own design → author → checkpoint → gate → approval cycle.
+
+---
+
+## PHASE 7 — Polish + production hardening
+
+- [ ] **7A** Human browser / visual QA of the whole deployment candidate (never run in this env —
+  no Chrome DevTools / Playwright MCP): Increments 1–4A UI, the 4B documents, the Phase-5 fulfilment
+  screens, `EnumSelect` / `SearchableSelect` popups, `AccountingPreview` full-width, modal shell widths.
+- [x] **7B** Deferred configuration / admin `NativeSelect` sweep (~34 non-transaction forms) —
+  **DONE 2026-09-03**, see `### GLOBAL SELECT MIGRATION`. Zero native `<select>` app-wide (guard:
+  `noNativeSelect.global.test.ts`). Browser QA of the new popups folds into 7A.
+- [ ] **7C** `JournalEntryDetailPage` (full page) — every record page still deep-links the JE via
+  `?record=` → the side-sheet.
+- [ ] **7D** GL Account / Fixed Asset / Lease → full pages (the 3 borderline records kept as sheets).
+- [ ] **7E** `SupabaseStockLotRepository` + `stock_lots` migration OR gate FIFO out of `ProductForm`
+  (the last `new Mock*Repository()` in production wiring — `docs/KNOWN_ISSUES.md`).
+- [ ] **7F** `record_customer_receipt` atomic RPC (the `recordReceipt` non-atomicity flagged in 4A;
+  same pattern as `apply_customer_deposit`) + a `paymentService` mirror.
+- [ ] **7G** Live-Postgres inventory-posting E2E (needs a throwaway Supabase project) — the engine
+  (`post_inventory_transaction`) has still never run against live data.
+- [ ] **7H** Accounting-invariant regression suite (GL 1200 ↔ valuation tie, subledger ties,
+  trial-balance-always-balanced) as a CI gate.
+- [ ] **7I** Deposit unallocation / refund UI (deferred from 4A) — `DR 2600 / CR 1100` reversal of an
+  allocation, and `DR 2600 / CR 1000` refund; both via a proper document-level flow, not the generic
+  JE reverse button.
+- [ ] **7J** Production deploy runbook + `main` merge of the whole 4A→7 line.
+
+**CP-7:** final gate; deploy checklist; sign-off.
+
+---
+
+## WHERE WE STAND — 2026-09-03 (git reality check)
 
 | Initiative | State | Commit(s) |
 |---|---|---|
@@ -20,20 +439,32 @@ Everything in this file has shipped to `origin/main`. As of 2026-09-01 the
 | Bank Statement Reconciliation + evidence model (P1 / P2) | **shipped to `main`** | `fa4aae1` `7481ef8` `3ccdafa` |
 | Vertex Form System + page-layout foundation (P3A–P3I) | **shipped to `main`** | `62f0905` |
 | Inventory Accounting Module — Phases 0–8 + 9A | **shipped to `main`** | `40f10fb` `4ac5277` |
-| Inventory Phase 9B — normalized document-line tables | **shipped to `main`; runtime flag `NORMALIZED_DOCUMENT_LINES_ENABLED` still OFF** | `38f6b78` `465c10f` |
-| Inventory UX Correction Pass (see `# INVENTORY UX CORRECTION PASS` below) | **shipped to `main`; deployed** | `6d203fc` `2b07407` |
+| Inventory Phase 9B — normalized document-line tables | **merged to `main`; flag `NORMALIZED_DOCUMENT_LINES_ENABLED` still OFF** | `38f6b78` `465c10f` |
+| Inventory UX Correction Pass | **shipped to `main`; deployed** | `6d203fc` `2b07407` |
+| Form/Transaction UX pass + **September 2026 demo data** (seed 0044, migration 0043) | **merged to `main` + deployed** (2026-09-02); seed applied live; `bank_accounts.current_balance` re-synced to GL 1000 R313,080.92 | `3f07c5a` merge `82900b5` |
+| **Record-detail → full-page migration** (increments 1 **+ 2**) + tax-rate fix + **app-wide transaction-form dropdown sweep** | **COMMITTED + PUSHED to `phase-9b-relationship-design-and-code`** (2026-09-03); **not merged to `main`** — awaiting human browser QA; gate green (tsc / eslint `--max-warnings 0` / **2052 tests / 293 files** / `vite build`); see `# RECORD DETAIL FULL-PAGE MIGRATION` below | branch push 2026-09-03 |
+
+Production URL: **https://vertex-accounting.pages.dev** (Cloudflare Pages, auto-deploy on push to `main`).
 
 ### Still genuinely open
 
 - **Visual / browser QA** — never run (no Chrome DevTools / Playwright MCP in this env):
-  Correction Pass §27, P3J, Inventory Phase 4–8 UI. Needs a human pass on the deploy.
-- **Live-Postgres inventory-posting E2E** — never run (needs a throwaway Supabase project);
-  `inventory_transaction_log` is still 0 rows, no engine write has touched live data.
-- **Reconciliation demo-data live seed** — Correction Pass §18 / §20 (needs a live DB write, awaiting go-ahead).
+  Correction Pass §27, P3J, Inventory Phase 4–8 UI, **all 12 new increment-2 full-page records** (sales
+  ×4, purchases ×3, inventory ×5), the `EnumSelect` / `SearchableSelect` popups in the sales/purchases
+  transaction forms, and `AccountingPreview` rendering full-width. Needs a human pass on the deploy.
+- **Live-Postgres inventory-posting E2E** — never run (needs a throwaway Supabase project). The
+  September seed created 29 `inventory_transaction_log` rows by **replaying** the posting contracts in
+  SQL — the engine itself (`post_inventory_transaction`) still has not run against live data, and the
+  GL 1200 ↔ valuation tie has no regression test.
 - **Phase 9B projection flag** — `NORMALIZED_DOCUMENT_LINES_ENABLED` is OFF. Flipping it is a
   *separate later review* that must first see forward dual-write parity tested against the live DB.
+- **Record-detail full-page migration — increment 2**: DONE (all 12 record types + transaction-form
+  dropdown sweep; see `# RECORD DETAIL FULL-PAGE MIGRATION` → increment 2 below). Remaining `NativeSelect`
+  consumers are **non-transaction** admin / tax-config / compliance / settings / reports / banking-import
+  forms (~34 files) — a deliberately deferred separate sweep, listed under DEFERRED there.
 - **Inventory Phases 10–14** — not started: Fixed-Asset nav cleanup · DB role-aware permissions/audit ·
-  Office National data · accounting-invariant regression tests · reconciliation/investigator UI.
+  (Office National data now largely satisfied by seed 0044) · accounting-invariant regression tests ·
+  reconciliation/investigator UI.
 
 ---
 
@@ -87,6 +518,290 @@ continuation reconciliation) was applied live via a guarded one-shot wrapper (th
 
 ---
 
+# RECORD DETAIL FULL-PAGE MIGRATION — 2026-09-03 (uncommitted, branch `phase-9b-relationship-design-and-code`)
+
+**Brief:** complex business records must open as **full-page detail views** (real routes
+`/module/records/:id`), not the cramped right-hand `RecordDetailSheet`. Simple record previews keep
+the sheet. Also close two live-QA issues: native-`<select>` cleanup + "Unknown tax rate".
+**Phased** — checkpoint after increment 1. **No accounting/DB change.** **No commit / no push.**
+
+### Increment 1 — DONE (tsc ✅ · eslint `--max-warnings 0` ✅ · **1980 tests / 275 files** ✅ · `vite build` ✅)
+
+| Item | State |
+|---|---|
+| **Tax-rate "Unknown tax rate" — root cause + fix** | `taxRateService` was wired to `MockTaxRateRepository` (fixture ids `tax_std_v2`…) while every product/document is Supabase-backed with a real UUID `tax_rate_id` — the id spaces never intersect. Verified read-only: data + RLS are fine. **Flipped `taxRateService` → `SupabaseTaxRateRepository`** (the old blocker — empty Supabase `tax_rates` — is gone; STD/ZERO/EXEMPT seeded 2026-08-28). `billService.test.ts` moved to a local `TaxRateService`+`MockTaxRateRepository` (both re-exported from the barrel). `useAllTaxRates` gained `.catch`/`error`. `getTaxRateLabel(id, rates, {pending})` returns `…` for an unresolved id while the list is empty/loading — never "Unknown". Also fixes forms writing bogus mock `tax_rate_id`s. **Zero DB writes.** |
+| **Shared framework** `src/components/app/record-page/` | `RecordPageShell` (breadcrumb + `← back` + full width + loading/error/not-found), `RecordPageHeader` + `RecordActionBar` (primary / secondary / inline-danger / **More ▾** overflow; record number `whitespace-nowrap`), `RecordSummaryGrid`/`RecordField`, `DocumentLineTable` (one shared line-items table, scroll-contained), `useLegacyRecordRedirect(basePath)` (`?record=<id>` → `/base/<id>`, replace). |
+| **Sales Order → full page** | `SalesOrderDetailPage` at `/sales/orders/:orderId`. `SalesOrdersPage` slimmed to list+create; row-click navigates; legacy redirect. `SalesOrderDetailSheet` + `SalesOrderDetail` **deleted**. |
+| **Inventory Product → full page** | `InventoryItemDetail` (8-tab content extracted from the old sheet; movement ledger shows **human doc numbers** INV-/BILL-… **linked**, party, unit cost, + **resulting-balance** column; raw ids under "Technical details"). `InventoryItemDetailPage` at `/inventory/products/:productId`, reached from Products list + Inventory register + global search. `InventoryItemDetailSheet`, `ProductDetailSheet`, `ProductDetail` **deleted**. |
+| **Native `<select>` sweep — inventory cluster** | New `EnumSelect` (`src/components/app/combobox/`, base-ui `Select`: dark popup, prefers-down, viewport-constrained, keyboard nav). Migrated: `StockAdjustmentDocumentForm` (warehouse, reason), `StockAdjustmentLinesEditor` (warehouse, direction), `StockTransferDocumentForm` (from/to), `StockTakeSetupForm` (warehouse, scope), `SupplierReturnLinesEditor` (warehouse, tax), `OpeningStockBatchDocumentForm` (warehouse), `OpeningStockLinesEditor` (warehouse), `CategoryForm` (default tax rate), `ProductForm` (type / uom / status / valuationMethod / tax rate). Guard: `noNativeSelect.test.ts`. |
+| Global search | product result → `/inventory/products/:id` (was `?record=`). Customer/supplier stay `?record=` (still sheet). |
+| Tests added | `record-page.test.tsx`, `global-search-records.test.ts`, `SalesOrderDetailPage.test.tsx`, `SalesOrdersPage.test.tsx`, `InventoryItemDetailPage.test.tsx`, `constants.test.ts` (`getTaxRateLabel`), `noNativeSelect.test.ts`. |
+
+### `RecordDetailSheet` consumer audit — KEEP vs MOVE
+
+**KEEP as side-sheet** (simple preview — few fields, no line table, no multi-tab investigation):
+Bank Account · Bank Transaction · Customer · Supplier · Employee.
+
+**MOVE to full page in increment 2** (line items / actions / accounting / tabs):
+Quote · Invoice · Credit Note · Customer Receipt · Purchase Order · Bill · Supplier Payment ·
+Stock Adjustment · Stock Transfer · Stock Take · Supplier Return · Opening Stock.
+
+**Borderline — decide during increment 2:** GL Account (`AccountDetailSheet`, has a ledger table),
+Fixed Asset (depreciation schedule), Lease (amortization schedule).
+
+### Increment 2 — DONE, uncommitted (tsc ✅ · eslint `--max-warnings 0` ✅ · **2052 tests / 293 files** ✅ · `vite build` ✅) — 2026-09-03
+
+**No accounting / DB / migration / seed / posting / WAC / GL / VAT / reconciliation / flag change.** UI + routing + read-presentation only.
+
+| Record | Route | Page component | Notes |
+|---|---|---|---|
+| Quote | `/sales/quotes/:quoteId` | `QuoteDetailPage` | line items via shared `documentLineColumns` (SKU + name + tax-rate + tax); related → converted sales order; no GL section (quotes never post). |
+| Invoice | `/sales/invoices/:invoiceId` | `InvoiceDetailPage` | **flagship** — overview, line items, payments/receipts table + outstanding, credit notes, **stock-movement evidence** (`sourceDocumentType='invoice'`), accounting/posting state + journal link, source sales order, posted-invoice immutability note. Edit = draft-only (unchanged). |
+| Credit Note | `/sales/credit-notes/:creditNoteId` | `CreditNoteDetailPage` | reason + `reasonDetails` (migration 0043, still wired), **original invoice FK link** (`credit_notes.invoice_id`), allocation ledger, inventory-restock movements, reversing journal, per-line `originalInvoiceLineId` note (Phase 9B). |
+| Customer Receipt | `/sales/receipts/:receiptId` | `CustomerReceiptDetailPage` | **Document / Original amount / Allocated / Remaining** allocation table + on-account summary; every allocated invoice clickable. Allocation logic unchanged. |
+| Purchase Order | `/purchases/orders/:purchaseOrderId` | `PurchaseOrderDetailPage` | supplier → PO → **goods-received movements** + GRNI journal → converted bill (document-level link only — **no bill↔PO line relationship**, Phase 9B boundary preserved). send / receive / convert-to-bill unchanged. |
+| Bill | `/purchases/bills/:billId` | `BillDetailPage` | source PO (FK), line items, payment status, payments table, inventory movements (own + source-PO's, with the "linked bill clears GRNI, doesn't re-record stock" note), journal. |
+| Supplier Payment | `/purchases/payments/:paymentId` | `SupplierPaymentDetailPage` | allocation table (same shape as Customer Receipt); no lifecycle actions (a `Payment` has no status transitions). |
+| Stock Adjustment | `/inventory/adjustments/:adjustmentId` | `StockAdjustmentDetailPage` | reuses `StockAdjustmentDetail` body (lines + live `AccountingPreview`); `RecordActionBar` maps draft → pending_approval → posted → reverse. |
+| Stock Transfer | `/inventory/transfers/:transferId` | `StockTransferDetailPage` | from→to header, dispatch/receive state, WAC lines, status-scoped dispatch/receive `AccountingPreview`, both journal entries. |
+| Stock Take | `/inventory/stock-takes/:stockTakeId` | `StockTakeDetailPage` | in-place count sheet (`StockTakeLinesView`) + `StockTakeCountSheetExport` in the action bar; net-variance `AccountingPreview` for ready_for_review/posted. |
+| Supplier Return | `/inventory/supplier-returns/:supplierReturnId` | `SupplierReturnDetailPage` | supplier + reason + cost lines + Purchase Price Variance preview (shown even at R0.00). |
+| Opening Stock | `/inventory/opening-stock/:batchId` | `OpeningStockBatchDetailPage` | keeps the **explicit "I confirm this opening balance is accurate" checkbox** gate before Confirm enables (`confirmBatch()` contract). |
+
+- **Shared additions:** `documentLineColumns()` in `record-page/` (one column set for every AR/AP
+  document line table — Item(SKU/name) · Description · Qty · Unit price · Tax rate · Tax · Line total);
+  `useAccountingEffectPreview(loader, id)` in `inventory/hooks/` (the identical `previewAccountingEffect`
+  `useEffect` lifted out of the 5 deleted inventory sheets).
+- **Deleted:** 15 `*DetailSheet.tsx` + `*Detail.tsx` files (`InvoiceDetail(+Sheet)`, `QuoteDetail(+Sheet)`,
+  `CreditNoteDetail(+Sheet)`, `CustomerReceiptDetail(+Sheet)`, `BillDetail(+Sheet)`,
+  `PurchaseOrderDetail(+Sheet)`, `PaymentDetail(+Sheet)`, and the 5 inventory `*DetailSheet`s).
+  `purchases/components/index.ts` barrel updated.
+- **List pages slimmed:** all 12 (+ `InvoicesPage`) now list-only + `useLegacyRecordRedirect(base)` +
+  `navigate(base/:id)` on row click. Create modals kept; edit/post/allocate/lifecycle moved to the
+  record page.
+- **Legacy `?record=` callers updated:** `InventoryItemDetail` `MOVEMENT_SOURCE` map (9 migrated types →
+  `/base/:id`), `VatTransactionsTable` (invoice/credit-note/bill), `AssetDetailSheet` (source bill),
+  `SalesOrderDetailPage` (converted-invoice link + convert-nav). `AuditTrailTable` / global search only
+  map non-migrated types (JournalEntry, customer, supplier) so no change needed. Any un-updated caller
+  still works via the per-list-page redirect.
+- **Transaction-form dropdown sweep (K/L done in the prior UX pass; J completed here):**
+  `SalesLineItemsEditor` (warehouse, tax rate → `EnumSelect`), `purchases/LineItemsEditor` (warehouse,
+  tax rate, asset category, depreciation method → `EnumSelect`), `CreditNoteForm` (invoice →
+  `SearchableSelect`, reason → `EnumSelect`), `AllocationForm` (invoice → `SearchableSelect`),
+  `CustomerReceiptForm` (method → `EnumSelect`), `PaymentForm` (method → `EnumSelect`). Product /
+  customer / supplier pickers were already the shared `ProductCombobox` / `CustomerCombobox` /
+  `SupplierCombobox` from commit `3f07c5a`. Guard: `noNativeSelectInTransactionForms.test.ts` +
+  `ProductCombobox.test.tsx` gains SKU-**and-name** search + viewport-cap assertions.
+- **Tax-rate regression protection:** `taxRateServiceWiring.test.ts` — source-level guard that the
+  production singleton is `new TaxRateService(new SupabaseTaxRateRepository(…))`, never `new Mock*`,
+  that `MockTaxRateRepository` is still re-exported for isolated tests, and an allow-list check that no
+  new unreviewed `new Mock*Repository()` wiring appears in the 8 core service/instance barrels.
+- **Tests added:** 12 `*DetailPage.test.tsx` (render / not-found / action-gating per status / line
+  rendering / no-sheet) + `QuotesPage`/`CreditNotesPage`/`CustomerReceiptsPage`/`PurchasesListPages`
+  (row-click canonical route + legacy `?record=` redirect); `InvoicesPage.test.tsx` rewritten off the
+  sheet; the 5 inventory list-page tests updated (sheet-post tests → navigate tests).
+- **Kept as side-sheet (unchanged):** Bank Account · Bank Transaction · Customer · Supplier · Employee ·
+  GL Account · Fixed Asset · Lease (the three borderline records deferred, per brief §B).
+- **`DocumentLineTable` `<table>` consolidation:** the AR/AP document pages use it via
+  `documentLineColumns`; the inventory pages still render their existing `*Detail` body's tables (lower
+  risk — those bodies are already reviewed and carry the `AccountingPreview` wiring). Full consolidation
+  of the inventory line tables is deferred.
+
+### Increment 2 — NEW ISSUE DISCOVERED (Mock-repository audit, brief §Q)
+
+**FIFO stock-lot repository is the one production `new Mock*Repository()` left in `src/`.**
+
+- **Severity:** LOW · **Area:** Inventory / Data
+- **Issue:** `src/features/inventory/repositories/instances.ts:30` —
+  `export const stockLotRepository = new MockStockLotRepository();`. There is no
+  `SupabaseStockLotRepository`. Every other repository in the codebase (accounting, sales, purchases,
+  banking, assets, employees, leases, tax ×5, compliance, the other 11 inventory repos, …) is
+  Supabase-wired.
+- **Evidence:** `grep -rn "= new Mock[A-Za-z]*Repository\s*(" src` (excl. tests / stories / mock-data) →
+  one hit. `MockTaxRateRepository` / `MockInvoiceRepository` still appear in `sales`/`tax` service
+  barrels but **only in comments / test re-exports** — Increment 1's tax-rate fix is intact.
+- **Impact:** FIFO stock lots are in-memory only — lost on reload, never persisted. **Not currently
+  exercised:** WAC (`weighted_average`) is the active valuation method for every seeded product; FIFO
+  lot tracking (`stockService.recordStockMovement` → lot allocation) only runs if a product is set to
+  `valuationMethod: 'fifo'`. Same *class* of latent bug as the Increment-1 tax-rate discovery (a
+  production service silently on a Mock).
+- **Recommendation:** if FIFO is on the roadmap, build `SupabaseStockLotRepository` + a `stock_lots`
+  migration before any product is allowed `valuationMethod: 'fifo'` in the UI; otherwise gate the FIFO
+  option out of `ProductForm` until it exists.
+- **Status:** OPEN — reported, **not fixed** (outside this increment's scope; brief §Q says report, don't
+  auto-fix). Guarded against regression (no *new* Mock wiring) by `taxRateServiceWiring.test.ts`.
+
+### Increment 2 — DEFERRED
+
+- **Non-transaction `NativeSelect` sweep (~34 files):** ✅ **DONE — see `### GLOBAL SELECT MIGRATION`
+  below** (2026-09-03). Every non-transaction `NativeSelect` / raw `<select>` in the list that follows
+  has been migrated to `EnumSelect` / `SearchableSelect`; the app now has **zero** native `<select>`
+  outside `native-select.tsx` + test files, enforced by `noNativeSelect.global.test.ts`.
+- **GL Account / Fixed Asset / Lease → full page:** the three borderline records (ledger table /
+  depreciation schedule / amortization schedule) — kept as sheets this increment per brief §B.
+- **Full inventory line-table consolidation onto `DocumentLineTable`** (see note above).
+- **Related-record "activity links"** on the new pages resolve to the target list route today, not a
+  deep-linked highlighted row, for anything other than the migrated records (journals still open the
+  sheet via `?record=`).
+
+### Increment 2 — SUGGESTED IMPROVEMENTS
+
+**High value**
+- *Deep-link the journal-entry link.* Every new record page links "View journal entry" to
+  `/accounting/journals?record=<id>` which still opens the sheet. A full-page `JournalEntryDetailPage`
+  would complete the accounting-trace story end to end.
+- *`SupabaseStockLotRepository`* — see the NEW ISSUE above; closing it removes the last latent
+  Mock-in-production surface.
+
+**Medium value**
+- *Shared `AllocationTable` component* — Customer Receipt and Supplier Payment now render an identical
+  Document / Original / Allocated / Remaining table; Bill and Invoice render near-identical
+  payment/receipt tables. One component would DRY four call sites.
+- ~~*`EnumSelect` interaction test helper*~~ — **DONE** (`tests/helpers/selectEnumOption.ts`:
+  `selectEnumOption`, `selectEnumOptionWithin`, `selectSearchableOption`), added in the GLOBAL SELECT
+  MIGRATION.
+
+**Nice to have**
+- *Breadcrumb "up to module" links* — the first breadcrumb crumb (e.g. "Sales") is inert; wiring it to
+  the module landing page is a one-line change once those pages settle.
+- *Record-page print stylesheet* — the new pages have real URLs now; a `@media print` pass would make
+  an invoice/PO page a serviceable hand-out.
+
+---
+
+# GLOBAL SELECT MIGRATION — native `<select>` → Vertex `EnumSelect` / `SearchableSelect` — 2026-09-03 (COMMITTED + PUSHED, branch `phase-9b-relationship-design-and-code`; `main` NOT merged, production NOT deployed)
+
+**Trigger:** human browser QA found the OS-native dropdown menu (light popup in dark mode) on
+Companies → Edit → Legal entity type. The fix is global — every remaining native select, not one field.
+
+**Pure UI. No business / accounting / VAT / journal / deposit / inventory / domain-enum / schema /
+migration change. No DB write. No commit / push / deploy.**
+
+**Canonical components (already existed — nothing new built):**
+- `EnumSelect` (`@/components/app/combobox`) — short fixed enums. Wraps the base-ui `Select`: themed
+  dark popup, `Portal` + `z-50` + `isolate`, viewport-anchored (`w-[var(--anchor-width)]`,
+  `max-h-[var(--available-height)]` + internal scroll), prefers-down, full keyboard model. **One change:**
+  now passes `items={options}` to the base-ui root so `<Select.Value>` renders the selected label when
+  closed (was showing the raw value in jsdom → broke `IncomeTaxPage.test`; correct behaviour anyway).
+- `SearchableSelect` (`@/components/app/combobox`) — long / searchable lists (GL accounts, asset /
+  entity pickers). Same dark popup + a filter box.
+
+**Audit — native `<select>` / `<NativeSelect>` count:** ~45 feature-file usages across 34 files
+**before → 0 after** (outside `src/components/ui/shadcn/native-select.tsx` + test files). Category C
+(`<select multiple>`) was empty; **category D (kept-native-for-a-reason) is empty** — everything
+migrated cleanly, including the import-wizard column-mapping grids.
+
+**Converted surfaces (by feature):**
+- **admin:** `CompanyForm` (legal entity type ← the QA-flagged field, accounting basis, VAT filing
+  frequency, VAT accounting basis, documents bank account), `UsersPage` (assign-role + per-row role),
+  `SuperUserDashboardPage` (per-row role).
+- **auth / settings:** `OnboardingPage` (legal entity type — `defaultValues` now seeds
+  `legalEntityType: 'private_company'` to preserve the old always-had-a-value native behaviour),
+  `SettingsPage` (theme).
+- **customers / suppliers:** `CustomerForm` (status, tax status, currency, payment terms),
+  `SupplierForm` (category, status, payment terms, payment method).
+- **employees:** `EmployeeForm` (status, employment type, pay frequency), `PostPayrollRunForm`
+  (net-pay account → `SearchableSelect`).
+- **assets:** `AssetForm` (category, depreciation method), `DisposeAssetForm` (asset picker + proceeds
+  account → `SearchableSelect`), `PostAcquisitionForm` (funding source → `SearchableSelect`).
+- **relatedParties:** `RelatedPartyForm` (relationship type), `RelatedPartyTransactionForm` (related
+  party picker).
+- **inventory:** `WarehouseForm` (status), `reports/DateRangeControl` (preset).
+- **accounting:** `AccountForm` (master type, normal balance → `EnumSelect`; parent account →
+  `SearchableSelect`), `JournalEntryForm` (per-line account → `SearchableSelect`).
+- **banking:** `BankAccountForm` (account type, bank name, status → `EnumSelect`; linked GL account →
+  `SearchableSelect`), `TransactionForm` (3 bank-account selects), `AllocationRows` (GL account →
+  `SearchableSelect`, VAT rate → `EnumSelect`), `ReconciliationWorkspace` (the raw `<select>` state
+  filter), `StatementImportWizard` (bank account, format override).
+- **tax:** `TaxRateForm` (VAT treatment, applies-to), `IncomeTaxPage` / `ProvisionalTaxPage` /
+  `DeferredTaxPage` (financial-year picker), `incomeTax/SbcEligibilityForm` (yes/no),
+  `incomeTax/AdjustmentsTable` (category, direction).
+- **compliance:** `CalculateScoreForm` (financial year), `ReportingFrameworkOverrideForm` (framework).
+- **financialInstruments:** `EclProvisionPage` (financial year).
+- **reports:** `cashFlow/CashFlowStatementPage`, `financialStatements/IncomeStatementPage`
+  (financial-year picker).
+- **import:** `ImportWizard` (target-field pickers, column-mapping grid, duplicate strategy).
+
+**Retained native selects:** NONE. `src/components/ui/shadcn/native-select.tsx` still exists (the
+component) but has zero callers; `src/styles/globals.css`'s `select option { … }` stopgap is left in
+place (harmless, and documents the reason the migration was needed).
+
+**RHF files** wrapped each field in `<Controller>` (precedent `ProductForm.tsx`); **useState files**
+went `value` / `onValueChange` direct. Option **values** (enum keys), labels, order, `id` (for
+`<FieldLabel htmlFor>`), `name`, disabled / invalid / `<FieldError>` render, and the controlled value
+on edit-existing-record are all preserved per field. The `AccountForm` master-type side effects
+(re-default `normalBalance`, clear `parentAccountId`) are kept inside `onValueChange`.
+
+**Guard:** `src/components/app/combobox/noNativeSelect.global.test.ts` — one test that walks all of
+`src/`, strips comments, and collects every file where `NativeSelect` / `/<select[\s/>]/` appears
+outside `native-select.tsx`, the (empty) `INTENTIONAL_NATIVE_SELECT` allow-list, and test files;
+asserts the list is empty (a failure names every offender). The two earlier per-form guards
+(`noNativeSelect.test.ts`, `noNativeSelectInTransactionForms.test.ts`) keep running with their
+explicit `MIGRATED_FORMS` lists.
+
+**Tests:** `tests/helpers/selectEnumOption.ts` (new shared helper). New `AccountForm.test.tsx` (6:
+EnumSelect + SearchableSelect render / selected-value / type-side-effect / id round-trip / type-scoped
+parent list). New `CompanyForm` "Legal entity type" block (4). Updated `CompanyForm`, `UsersPage`,
+`SettingsPage`, `StatementImportWizard`, `IncomeTaxPage` tests for the base-ui interaction model.
+**2178 → 2189 tests, 300 → 302 files**, all green.
+
+**Gate:** `npm run type-check` ✅ · `npm run lint` (`--max-warnings 0`) ✅ · `npm run test` ✅
+2189 / 302 · `npm run build` ✅.
+
+**Remaining visual / browser-only risks (fold into human QA 7A):** the `EnumSelect` /
+`SearchableSelect` popup on a real device — dark styling, downward opening near the viewport bottom,
+long-list internal scroll, `SearchableSelect` filter typing, long product / customer / supplier
+names wrapping vs truncating, layering above a `Dialog` / `Sheet` / drawer, ~400px mobile width
+(popup never wider than the viewport), keyboard nav (Tab / Enter / arrows / Esc), and specifically
+Companies → Edit → **Legal entity type**. No Chrome DevTools / Playwright MCP in this env — jsdom
+tests cover the wiring, not the rendered popup.
+
+---
+
+# RECORD DETAIL — INCREMENT 3: inventory transaction investigation + sales workflow audit — 2026-09-03 (UNCOMMITTED, branch `phase-9b-relationship-design-and-code`)
+
+**Inspect / code / UI only. No accounting, DB, migration, seed, GL, WAC or flag change.** Gate green
+(tsc ✅ · eslint `--max-warnings 0` ✅ · **2063 tests / 294 files** ✅ · `vite build` ✅). **Not committed.**
+
+### Code shipped
+
+| Area | Change |
+|---|---|
+| **Source-document resolution** (`src/components/app/record-page/sourceDocument.ts`) | `resolveSourceDocument({type,id,reference}, resolveNumber)` → `{ label, number, path, previewType }`. `isOpaqueReference()` rejects the September seed's machine `"<type>:<uuid>"` reference **and** bare UUIDs — the ledger now shows **INV-1072 / BILL-2031 / CN-… / TRF-… / ADJ-… / ST-… / OPEN-… / SRET-…**, resolved from the structured `source_document_id`, never a UUID. Raw ids stay under "Technical details". Unit-tested (`sourceDocument.test.ts`, 10 cases). |
+| **`RelatedRecordPreview`** (`src/components/app/record-page/RelatedRecordPreview.tsx`) | Large/wide document overlay (`5xl` desktop, near-full-screen mobile — shared `DialogContent`, scrolls internally) that renders an **existing** `*DetailPage` over the current page. Registry lazy-loads the 11 previewable pages (invoice, bill, PO, credit note, sales order, quote, supplier return, transfer, adjustment, stock take, opening stock). Closing returns to the exact page + scroll (the page never unmounts). No second renderer. Side-effect: the 11 pages code-split → main bundle 3,362 kB → 2,462 kB. |
+| **`RecordPageProps` + `RecordPageShell embedded`** | Every `*DetailPage` now accepts `{ recordId?, embedded? }` (falls back to `useParams`); `embedded` hides the breadcrumb + back-link chrome so the page renders cleanly inside the overlay. 11 pages updated (2 lines each). |
+| **Movement ledger — expandable evidence panel** (`InventoryItemDetail.tsx`) | Each row expands to **Movement** (type · date · qty · warehouse · direction for transfers · historical unit cost · movement value · resulting balance), **Source** (document type · human number → opens preview · party · notes), **Accounting** (journal entry link + **JE number**, Inventory GL 1200, contra account [5000 COGS / 2050 GRNI→AP / 5060 PPV / 5050 Adjustments / 1210 In Transit / 3950 OBE by movement type], plain-English relationship, engine **posting key**, reversal evidence), and **Technical details** (movement/source/line UUIDs). Source cell click opens `RelatedRecordPreview` — a real `href` is kept so middle-click still deep-links. |
+| **`InventoryItemDetailPage`** | Loads the doc collections (credit notes, quotes, sales orders, POs, adjustments, transfers, stock takes, supplier returns, opening-stock batches) + journal entries; builds `numberById` / `journalEntryIdBySource` / `journalNumberById` maps; passes `ledgerHelpers` (`resolveSource` / `resolveAccounting` / `onOpenPreview`) to `InventoryItemDetail`; renders the preview overlay. |
+
+### Audit findings (read-only — see `docs/ACCOUNTING_RELATIONSHIPS.md` § "SALES DOCUMENT WORKFLOW AUDIT — 2026-09-03")
+
+| # | Question | Result |
+|---|---|---|
+| Quote accounting rule | **Confirmed correct** — commercial offer only; no GL / AR / VAT / stock / COGS / reservation. Statuses `draft·sent·accepted·declined·expired` (no `converted` value — it's derived). |
+| Sales Order accounting rule | **Confirmed correct** — no revenue / AR / VAT / issue / COGS. `convertToInvoice` → draft invoice + `fulfilled`, double-convert-guarded. |
+| **Stock commitment** | **NOT IMPLEMENTED.** `quantityCommitted` is hardcoded `0` (`stockBalanceService`, `stockService` TODO). **Available === On hand.** A Sales Order contributes nothing to "Committed". Not invented (brief §5). |
+| Invoice accounting rule | **Confirmed correct, engine untouched** — `DR AR / CR Sales / CR VAT Output` + `DR COGS / CR Inventory` via the one atomic engine. |
+| **Partial payment** | **SUPPORTED & correct** — receipt posts `DR Cash / CR AR` full amount; `recordPayment` tracks `amountPaid` + status, no extra journal; AR nets to zero. Invoice page shows Total / Paid / Outstanding + allocation history. |
+| **Customer deposit / pre-invoice receipt** | **⚠️ ACCOUNTING GAP (reported, NOT changed).** An unallocated receipt is credited **directly to Accounts Receivable** (negative customer AR), not to a customer-deposit liability — there is no such account key. End state after invoicing is correct; the interim balance sheet understates AR and omits a current liability. Fix needs a new CoA account + mapping key + posting branch = explicit accounting decision + DB change. |
+| **Partial SO invoicing** | **NOT SUPPORTED** — `convertToInvoice` copies all lines at full qty, marks `fulfilled`, blocks re-conversion. No "remaining to invoice" tracking, no `partially_invoiced` status. |
+| Duplicate / copy | **NOT SUPPORTED** — no `duplicate`/`clone` on any sales/purchase service. |
+| Print / export on record pages | **PARTIAL** — Phase-7 `ExportMenu` / `PrintableReport` exist and list pages use them; **the new `*DetailPage`s wire none of it** and there is **no formal business-document print layout**. |
+| Edit actions | **Correct** — draft-only Edit; service layer throws on post-`draft` accounting changes; no guard weakened. |
+
+### Increment 3 — DEFERRED / NOT DONE (need approval — see §20 report)
+
+- Customer deposit / prepayment liability posting (accounting decision + new CoA account + DB).
+- Partial Sales-Order invoicing (`SalesOrder` line-level "invoiced qty" tracking + `partially_invoiced`).
+- Real stock reservation / commitment model (write `quantityCommitted` from open Sales Orders).
+- Formal `PrintableDocument` layout + `@media print` for Quote / SO / Invoice / Credit Note / PO, and
+  wiring `ExportMenu` (CSV / Excel / Print) onto the record pages.
+- Duplicate / copy actions for Quote / Sales Order / Purchase Order.
+- `JournalEntryDetailPage` (the movement Accounting panel + every record page still links the journal
+  entry via `?record=` → the side-sheet).
+- Deep-linking related-record clicks *inside* a preview to a nested preview (they navigate today).
+
+---
+
 ## A. Global UI fixes
 
 - [x] **1. Global dropdown / select dark-theme fix** — audit every select implementation
@@ -109,6 +824,13 @@ continuation reconciliation) was applied live via a guarded one-shot wrapper (th
     matches `Input`, `data-slot`). **All 42 forms** migrated off the copy-pasted
     `selectClassName` string — `grep "<select"` / `grep "selectClassName"` across `src` now
     returns nothing. Full suite **1045/1045**, type-check/lint/build clean.
+  - **Superseded 2026-09-03 (live QA):** the CSS `select option { … }` rule is not honoured
+    consistently by the browser — the open option menu still shows in native (light) chrome
+    on the deploy. Fix is to **replace `NativeSelect`, not style `<option>`**. New shared
+    `EnumSelect` (base-ui `Select`, dark popup) added; inventory transaction forms migrated
+    (see `# RECORD DETAIL FULL-PAGE MIGRATION` → increment 1). ~40 `NativeSelect` consumers
+    across admin / tax / compliance / settings / reports / banking still to migrate
+    (increment 2).
 - [x] **2. Sidebar Vertex-green vertical edge** — subtle 1px-ish green right edge using the
   existing brand token, low/medium opacity, not neon, visible while scrolling, no clash
   with scrollbar. If the sidebar scrolls: dark track, subtle green-accented thumb, narrow

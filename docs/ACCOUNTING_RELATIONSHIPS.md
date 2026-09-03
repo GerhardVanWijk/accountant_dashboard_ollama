@@ -593,3 +593,246 @@ National Demo)
 **NOT STARTED**
 
 **NO COMMITS. NO PUSHES.**
+
+---
+
+# SALES DOCUMENT WORKFLOW AUDIT — 2026-09-03 (record-page increment 3)
+
+Read-only audit of the Quote → Sales Order → Invoice → Receipt chain, done alongside the
+Inventory-transaction-page UX work. **No accounting behaviour was changed.** Findings:
+
+## Q1. Quote — commercial offer only, never posts
+`src/features/sales/services/quoteService.ts`. **Confirmed correct.** A Quote:
+- posts **no** journal entry, creates **no** AR, **no** VAT-output liability, **no** stock
+  movement, **no** COGS, **no** stock reservation.
+- statuses (`src/types/quote.ts` `QuoteStatus`): `draft · sent · accepted · declined · expired`.
+  There is **no** `converted` status value — "converted" is *derived* (a `SalesOrder` exists
+  with `quoteId === quote.id`). Transitions: `draft→sent` (`markAsSent`), `sent→accepted`
+  (`markAsAccepted`), `sent→declined` (`markAsDeclined`), `*→expired` (`markAsExpired`).
+  `convertToSalesOrder` requires `status === 'accepted'` and leaves the quote `accepted`.
+- delete is `draft`-only.
+
+## Q2. Sales Order — confirmed commercial order, NOT the accounting sale
+`src/features/sales/services/salesOrderService.ts`. **Confirmed correct — with one gap.** A Sales Order:
+- recognises **no** revenue, creates **no** AR, posts **no** VAT, issues **no** inventory,
+  posts **no** COGS.
+- statuses (`src/types/salesOrder.ts` `SalesOrderStatus`): `pending · confirmed · fulfilled ·
+  cancelled`. `convertToInvoice` creates a **draft** invoice (`invoice.salesOrderId` set) and
+  marks the order `fulfilled`; it is guarded against double-conversion by both the status check
+  **and** the `invoice.salesOrderId` back-reference.
+- **STOCK COMMITMENT: NOT IMPLEMENTED.** `StockBalance.quantityCommitted` exists in the type
+  (`src/types/stockBalance.ts`) and the `quantityAvailable()` helper subtracts it, but **nothing
+  ever writes it** — `stockBalanceService` hardcodes `quantityCommitted: 0` and
+  `stockService.getQuantityOnHand` has a literal `const quantityCommitted = 0; // TODO(Phase 2):
+  sum reservations from open Sales Orders`. So **Available === On hand** everywhere today. A
+  Sales Order does **not** contribute to a "Committed" figure. This increment did **not** invent
+  one (per brief §5 — "if no real commitment model exists: STOP and report"). See recommendation R3.
+
+## Q3. Invoice — the accounting event
+`src/services/invoiceService.ts` `postInvoice()`. **Confirmed correct, engine untouched.** One
+atomic `inventoryPostingEngine` call posts a single balanced entry:
+`DR Accounts Receivable · CR Sales Revenue (per resolved account) · CR VAT Output (if > 0) ·
+DR COGS (per product, engine-computed from WAC) · CR Inventory (per product)`. Posting flips
+`draft→sent` and stamps `journalEntryId`. Post-`draft`, `updateInvoice` refuses any change to an
+accounting-relevant field (only `dueDate` / `notes` remain editable) — enforced in the service,
+not just the UI. Delete is `draft`-only; a posted invoice is corrected with a credit note.
+
+## Q4. Partial payment — SUPPORTED and correct
+Invoice R10,000 → Receipt R3,000 → Outstanding R7,000 → Receipt R7,000 → Outstanding R0.
+- `customerReceiptService.recordReceipt()` posts `DR Cash and Bank / CR Accounts Receivable`
+  for the **full receipt amount**, then calls `invoiceService.recordPayment(invoiceId, amount)`
+  per allocation. `recordPayment` updates `amountPaid` + recalculates status
+  (`partially_paid` / `paid`) and posts **no** journal (the cash↔AR move already happened at
+  receipt time). Net GL after invoice + receipts: AR nets to zero. ✔
+- `InvoiceDetailPage` shows **Total / Paid / Outstanding** in the line-items totals block plus a
+  **Payments & receipts** table (each receipt clickable, with allocated amount). ✔
+- Partial payments are correctly **not** attachable to Quotes or Sales Orders (no `amountPaid`
+  field, no receipt allocation target).
+
+## Q5. Customer deposit / payment before invoice — ⚠️ ACCOUNTING GAP (reported, NOT changed)
+**This is the important finding.** `customerReceiptService.recordReceipt()` **always** posts:
+
+```
+DR  1000 Cash and Bank        <receipt amount>
+CR  1100 Accounts Receivable  <receipt amount>
+```
+
+regardless of how much is allocated. An unallocated receipt (`allocations: []`,
+`unallocatedAmount === receipt.amount`) is still **credited directly to Accounts Receivable**.
+
+- **Customer subledger effect:** the customer's AR balance goes **negative** (a credit balance
+  in a receivable account). There is **no** customer-deposit / "income received in advance" /
+  contract-liability account — `AccountMappingKey` (`accountMappingService.ts`) has no
+  `CUSTOMER_DEPOSIT` / `CONTRACT_LIABILITY` key, and none of codes 2xxx is mapped for it.
+- **Later allocation** (`allocateToInvoice` → `recordPayment`) posts **no** journal — it just
+  moves `unallocatedAmount` into `allocations[]` and bumps the invoice's `amountPaid`. Once the
+  invoice posts (`DR AR …`), AR nets to the correct outstanding figure. So the **end state is
+  right**, but during the window between deposit and invoice the balance sheet shows an
+  understated AR and a missing current liability.
+- **Is it intentional?** No evidence either way in the ledger docs. The only "deposit" the docs
+  mention is a **bank-reconciliation** training scenario (a deposit in transit), unrelated to
+  customer prepayments. Treating it as a **gap**, not a design decision.
+- **Correct treatment (IFRS 15 / SA GAAP):** a payment received before the performance
+  obligation is a **contract liability** — `DR Cash / CR Customer Deposits (Income Received in
+  Advance, ~2300)`; on invoicing, `DR Customer Deposits / CR Accounts Receivable` to apply it.
+- **Not fixed here** — it needs a new account-mapping key + a chart-of-accounts row + a branch
+  in `recordReceipt` (post CR to the deposit liability for the unallocated portion) + an
+  `allocateToInvoice` journal (`DR deposit / CR AR`). That is an explicit accounting design
+  decision + a DB change (new account), out of this inspect-only increment's scope. See
+  recommendation R1.
+- `CustomerReceiptDetailPage` already surfaces the unallocated ("On account") amount, so the
+  UI is not hiding it — but it currently labels it as AR-reducing, which is what the posting does.
+
+## Q6. Partial Sales-Order invoicing — NOT SUPPORTED
+`SalesOrderService.convertToInvoice` copies **all** lines at full quantity, then marks the order
+`fulfilled` and blocks any second conversion (status check + `invoice.salesOrderId` back-ref).
+There is no "quantity invoiced so far" / "remaining to invoice" tracking on `SalesOrder` or its
+lines, and no `partially_invoiced` status. (Contrast the purchase side, which *does* have
+`PurchaseOrderStatus = '… | partially_received | …'`.) Not built here (brief §11). See
+recommendation R2 — this is a genuinely useful feature for real accounting software.
+
+## Q7. Duplicate / copy — NOT SUPPORTED
+No `duplicate` / `clone` method on `quoteService`, `salesOrderService`, `purchaseOrderService`,
+or any sales/purchase service (`grep -rniE "duplicate|clone" src/features/*/services` → nothing).
+Not built here (brief §15 — "do not implement until service behaviour is safely defined"). See
+recommendation R4.
+
+## Q8. Print / export on the migrated full-page records — PARTIAL
+The Phase-7 shared export framework is `src/features/export/` — `ExportMenu` (CSV / Excel /
+`window.print()`) + `PrintableReport` (a generic dataset→table renderer, `hidden print:block`).
+- **List pages** wire `ExportMenu` widely.
+- **The new `*DetailPage` record pages wire NONE of it** — no `ExportMenu`, no `PrintableReport`,
+  no per-record print stylesheet. `window.print()` on a record page today prints the app chrome +
+  the record as raw on-screen HTML.
+- There is **no formal business-document print layout** (branded header, company reg/VAT,
+  bill-to, totals block, terms) for Quote / Sales Order / Invoice / Credit Note / PO. Brief §13
+  / §18 ask for one; it is a real sub-feature (a `PrintableDocument` component + `@media print`
+  pass), not wired here. See recommendation R5.
+
+## Q9. Edit actions on the full-page records — CORRECT, immutability respected
+Draft Invoice / draft Bill / draft PO expose **Edit**; once posted/sent the service layer
+(`invoiceService.updateInvoice`, `billService`, …) throws on any accounting-relevant change and
+the pages only render the Edit button in `draft`. No service guard was weakened.
+
+---
+
+# CUSTOMER DEPOSITS / PREPAYMENTS — INCREMENT 4A (2026-09-03, code-complete, UNCOMMITTED)
+
+**Migrations `0045` + `0046` authored, NOT applied. No live DB writes. No historical corrections
+posted. No commit / push / deploy.** Hardening pass done (Review 4A-3): the deposit-allocation path
+is now a single atomic, idempotent, concurrency-safe RPC.
+
+## The gap that was fixed
+`customerReceiptService.recordReceipt()` credited **Accounts Receivable (1100)** for the *full*
+receipt amount regardless of allocation. Money a customer paid before an invoice existed drove the
+GL AR control account negative and put no current liability on the balance sheet.
+
+## New account
+**`2600 Customer Deposits`** — current liability, credit-normal. "Amounts received from customers
+before they are earned or applied to an invoice (contract liability, IFRS 15)." Resolved through the
+new `CUSTOMER_DEPOSIT` `AccountMappingKey` → code `2600` → real account id (never a literal in a
+service). Seeded per company by migration `0045`; new companies get it from `src/mock-data/accounts.ts`.
+`0045` **ABORTS** if any company already has a code-2600 account that is not an active credit-normal
+liability (it never mutates a user-created account); a conforming existing 2600 (any name) is left
+untouched. The `apply_customer_deposit` RPC additionally refuses to post unless the resolved 2600 is
+an active `liability` / `credit` account.
+
+## Lifecycle & journals
+
+```
+Customer Receipt (recordReceipt)
+  DR 1000 Cash and Bank            receipt.amount           (one cash posting)
+    CR 1100 Accounts Receivable    Σ allocations             (portion applied to open invoices)
+    CR 2600 Customer Deposits      unallocatedAmount         (portion not yet earned/applied)
+        │
+        │  later, when an invoice exists  ─ allocateToInvoice()
+        ▼
+  DR 2600 Customer Deposits        amount                    (NO bank movement)
+    CR 1100 Accounts Receivable    amount
+  + invoiceService.recordPayment(invoiceId, amount)          (invoice subledger only)
+```
+
+A fully-allocated receipt has no `2600` line; a pure deposit has no `1100` line.
+
+**`allocateToInvoice` is fully atomic (migration 0046, hardening pass).** The whole operation —
+record idempotency row → **lock the receipt then the invoice** row `FOR UPDATE` (fixed order) →
+re-validate the amount against the *locked* rows → post `DR 2600 / CR 1100` (via
+`allocate_journal_number` + `create_journal_entry_with_lines`) → update `invoices.amount_paid`/status →
+append the `ReceiptAllocation` (with its stable `id` + `journalEntryId`) + decrement
+`unallocated_amount` → audit — runs inside the single `apply_customer_deposit` Postgres function
+(one implicit transaction), mirroring `post_inventory_transaction`.
+
+**Stable allocation identity (Review 4A-4).** Every logical allocation gets a UUID `allocationId`
+generated by the UI *before* the RPC runs (`src/lib/uuid.ts`; one per modal-open, re-used on retry).
+`deposit_allocation_log` has `UNIQUE (company_id, allocation_id)`. The RPC's first step is
+`INSERT … ON CONFLICT (company_id, allocation_id) DO NOTHING RETURNING id`; a `null` id ⇒ return the
+first result as `{ idempotent: true }` and do nothing else. So: a retry / concurrent double-submit
+of the **same** intent is de-duplicated to one posting; two genuinely different intents (two
+`allocationId`s) serialise on the row locks and each re-validates against the *decremented* balance,
+so a stale client can never over-draw a deposit or overpay an invoice. Identity is **never** derived
+from `allocations.length` or any other mutable state.
+
+The TS `CustomerReceiptService` calls this through a `DepositAllocationExecutor` interface
+(`RealDepositAllocationExecutor` → the RPC; `FakeDepositAllocationExecutor` mirrors it — key on
+`allocationId`, re-validate against mock state — for tests), same Real/Fake split as the inventory
+engine.
+
+**Lock order:** `apply_customer_deposit` is the only function in the schema that locks
+`customer_receipts` and `invoices` together (`post_inventory_transaction` locks only `products`).
+Order is **receipt → invoice**, always; any future code locking both must follow it.
+
+DB CHECK constraints (migration 0046) back the money invariants regardless of the code path:
+`0 ≤ customer_receipts.unallocated_amount ≤ amount`, `0 ≤ invoices.amount_paid ≤ total` (and the
+`payments`/`bills` mirrors). Verified 2026-09-03: 0 existing rows violate any of them.
+
+`recordReceipt` (the initial split posting) is NOT wrapped in an RPC this pass — its
+non-atomicity (post JE → create receipt row → loop recordPayment) is unchanged from the pre-4A
+baseline and is shared with `paymentService.createPayment`; a follow-up `record_customer_receipt`
+RPC is recommended but out of this pass's scope.
+
+## Reconciliation
+
+| Control account | Subledger | Function |
+|---|---|---|
+| AR (1100) | `Σ posted-invoice.total − Σ receipt-amount-APPLIED-to-invoices − Σ posted-CN.total` | `reconcileAccountsReceivable()` — now nets only the *applied* portion of receipts; `bridge.unallocatedReceipts` is informational only, no longer part of `other` |
+| Customer Deposits (2600) | `Σ receipt.unallocatedAmount` | `reconcileCustomerDeposits()` (new) — wired into Books Integrity, the accounting-integrity audit, and the Trial Balance page's reconciliation cards |
+
+## Cash flow (indirect)
+New operating working-capital line **"Increase / (Decrease) in Customer Deposits"** (credit-normal,
+same sign treatment as Accounts Payable). A deposit receipt is a source of cash; a later
+`DR 2600 / CR 1100` allocation nets to zero against the AR movement. Without this line the
+statement's own reconciliation check would flag a variance.
+
+## Reversal safety
+`journalEntryService.reverseJournalEntry()` refuses to reverse an entry whose `source` is one of
+`invoice / bill / credit_note / customer_receipt / customer_receipt_allocation / payment` unless the
+caller passes `{ allowSubledgerSourced: true }` — the generic "Reverse entry" button on the Journals
+page can no longer silently desync a subledger. Audit (Review 4A-3): nothing in the codebase
+programmatically reverses a guarded source (only the generic UI button + tests, which use
+`manual` / `bank_transaction`), so no legitimate workflow breaks. Owner-level correction paths:
+`invoice` → **credit note** (proper). `bill` → **supplier return** (inventory) or a **manual
+compensating journal**. `credit_note` (issued), `customer_receipt`, `payment`,
+`customer_receipt_allocation` → **manual compensating journal** (`source: 'manual'`, unguarded,
+always available) — none had a safe one-click reversal before either. `billService`'s doc comments
+were corrected (they used to point at "reverse the journal entry"). No document type becomes
+impossible to correct. Unallocation / refund UI is deferred to a later increment.
+
+## Not touched
+Inventory, VAT, revenue, COGS, stock reservation, delivery notes, Sales Order fulfilment. The
+inventory posting engine is untouched. Supplier-side prepayments (`paymentService`) are out of scope.
+
+## Historical data
+3 live unapplied receipts (all Office National Demo, **R4,250.00** total: REC-1015 R1,000,
+REC-1016 R750, REC-1217 R2,500). Fresh read-only revalidation 2026-09-03: all 3 receipts exist,
+carry exactly those unapplied balances, their original JEs (JE-1073/1074/4163) are posted and each
+plainly credits AR for the full amount, all in **open** periods, **0** prior `reclassification`
+entries. (The R1,750 in `officeNationalSubledgerScenario.ts` is a 2026-08-28 code snapshot —
+REC-1015 + REC-1016 only; REC-1217 came later from seed 0044. The **live** figure is R4,250.)
+`docs/db-changes/0045b_customer_deposit_historical_reclassification.sql` holds the 3 reviewed
+`DR 1100 / CR 2600` correction entries as one all-or-nothing transaction — per-receipt prerequisite
+assertions, **deterministic idempotency via `deposit_reclassification_log` (`UNIQUE (company_id,
+receipt_id)`)** with memo-matching only as a secondary check, journal numbers via
+`allocate_journal_number()` (no hard-coded JE numbers), post-write reconciliation assertions
+(`GL 2600 == 4250.00`, whole-company TB balanced, exactly 3 log rows + 3 JEs) — **authored, not
+executed**. Seed data (`generateSeedPostings.ts`, `customerReceipts.ts`) already reflects the split:
+the one on-account seed receipt now posts `DR 1000 / CR 2600` and reconciles.

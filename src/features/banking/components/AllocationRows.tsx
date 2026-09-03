@@ -2,7 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { Account, TaxRate } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import type { AllocationInput } from '../services';
 import { computeAllocationTax } from '../utils/taxCalculations';
@@ -74,18 +74,17 @@ export function AllocationRows({ allocations, onChange, glAccounts, taxRates, gr
             const taxAmount = computeAllocationTax(row.netAmount || 0, taxRate);
             return (
               <div key={index} className="grid grid-cols-[1.4fr_1.2fr_110px_1fr_100px_32px] gap-2 border-b border-border/50 px-3 py-2 tabular-nums">
-                <NativeSelect
+                <SearchableSelect
                   aria-label={`Allocation ${index + 1} GL account`}
-                  value={row.glAccountId}
-                  onChange={(e) => updateRow(index, { glAccountId: e.target.value })}
-                >
-                  <option value="">Select account…</option>
-                  {glAccounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.code} — {a.name}
-                    </option>
-                  ))}
-                </NativeSelect>
+                  value={row.glAccountId || null}
+                  onChange={(value) => updateRow(index, { glAccountId: value ?? '' })}
+                  placeholder="Select account…"
+                  options={glAccounts.map((a) => ({
+                    value: a.id,
+                    label: `${a.code} — ${a.name}`,
+                    keywords: a.code,
+                  }))}
+                />
                 <Input
                   aria-label={`Allocation ${index + 1} description`}
                   placeholder="Line description"
@@ -100,18 +99,16 @@ export function AllocationRows({ allocations, onChange, glAccounts, taxRates, gr
                   value={row.netAmount || ''}
                   onChange={(e) => updateRow(index, { netAmount: parseFloat(e.target.value) || 0 })}
                 />
-                <NativeSelect
+                <EnumSelect
                   aria-label={`Allocation ${index + 1} VAT rate`}
                   value={row.taxRateId ?? ''}
-                  onChange={(e) => updateRow(index, { taxRateId: e.target.value || undefined })}
-                >
-                  <option value="">No VAT</option>
-                  {taxRates.map((rate) => (
-                    <option key={rate.id} value={rate.id}>
-                      {rate.name}
-                    </option>
-                  ))}
-                </NativeSelect>
+                  onValueChange={(value) => updateRow(index, { taxRateId: value || undefined })}
+                  placeholder="No VAT"
+                  options={[
+                    { value: '', label: 'No VAT' },
+                    ...taxRates.map((rate) => ({ value: rate.id, label: rate.name })),
+                  ]}
+                />
                 <span className="text-right text-sm text-muted-foreground">
                   <Amount value={taxAmount} plain />
                 </span>

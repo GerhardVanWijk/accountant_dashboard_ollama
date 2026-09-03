@@ -29,6 +29,7 @@ function buildAccounts(): Account[] {
     base('acc_1100', '1100', 'Accounts Receivable', 'asset', 'debit'),
     base('acc_1200', '1200', 'Inventory', 'asset', 'debit'),
     base('acc_2000', '2000', 'Accounts Payable', 'liability', 'credit'),
+    base('acc_2600', '2600', 'Customer Deposits', 'liability', 'credit'),
     base('acc_2100', '2100', 'VAT Output', 'liability', 'credit'),
     base('acc_2110', '2110', 'VAT Input', 'asset', 'debit'),
     base('acc_3000', '3000', 'Share Capital', 'equity', 'credit'),
@@ -40,6 +41,7 @@ function buildAccounts(): Account[] {
 function buildAccountMapper(accounts: Account[]): AccountMapper {
   const codeByKey: Partial<Record<AccountMappingKey, string>> = {
     AR: '1100',
+    CUSTOMER_DEPOSIT: '2600',
     AP: '2000',
     VAT_OUTPUT: '2100',
     VAT_INPUT: '2110',
@@ -397,8 +399,9 @@ describe('AccountingIntegrityAuditService — trial balance', () => {
 describe('AccountingIntegrityAuditService — AR / AP control vs subledger', () => {
   it('WARNs when the AR control account balance does not match the GL-consistent customer subledger', async () => {
     const { service, input } = buildHappyPathFixtures();
-    // A customer receipt with no matching GL credit — the GL still shows the
-    // full R1,150 AR, but the GL-consistent subledger nets the receipt.
+    // A customer receipt ALLOCATED to an invoice but with no matching GL
+    // credit — the GL still shows the full R1,150 AR, but the GL-consistent
+    // subledger nets the applied portion of the receipt.
     const orphanReceipt: CustomerReceipt = {
       id: 'rec_orphan',
       receiptNumber: 'REC-9999',
@@ -406,8 +409,8 @@ describe('AccountingIntegrityAuditService — AR / AP control vs subledger', () 
       date: '2026-08-20',
       method: 'eft',
       amount: 300,
-      allocations: [],
-      unallocatedAmount: 300,
+      allocations: [{ invoiceId: 'inv_1', amount: 300 }],
+      unallocatedAmount: 0,
       currency: 'ZAR',
       journalEntryId: 'je_rec_orphan',
       createdAt: '2026-08-20T00:00:00.000Z',

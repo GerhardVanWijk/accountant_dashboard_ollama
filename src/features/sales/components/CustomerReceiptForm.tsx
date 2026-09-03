@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
-import { CustomerCombobox, SearchableSelect } from '@/components/app/combobox';
+import { CustomerCombobox, EnumSelect, SearchableSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { FormBody, FormFooter, FormSection } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
@@ -198,13 +197,12 @@ export function CustomerReceiptForm({
             </Field>
             <Field>
               <FieldLabel htmlFor="receipt-method">Payment method</FieldLabel>
-              <NativeSelect id="receipt-method" value={method} onChange={(e) => setMethod(e.target.value as ReceiptMethod)}>
-                {METHOD_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </NativeSelect>
+              <EnumSelect
+                id="receipt-method"
+                value={method}
+                onValueChange={(v) => setMethod(v as ReceiptMethod)}
+                options={METHOD_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+              />
             </Field>
             <Field className="sm:col-span-2">
               <FieldLabel htmlFor="receipt-reference">Reference (optional)</FieldLabel>
@@ -217,7 +215,7 @@ export function CustomerReceiptForm({
               Amount received
             </FieldLabel>
             <p className="mb-2 text-xs text-muted-foreground">
-              The full payment from the customer. Allocate it below; anything left over is recorded on account.
+              The full payment from the customer. Allocate it below; anything left over is held as a customer deposit.
             </p>
             <Input
               id="receipt-amount"
@@ -228,6 +226,10 @@ export function CustomerReceiptForm({
               value={amount || ''}
               onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
             />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Anything you don't allocate below is held as a <span className="font-medium text-foreground">customer deposit</span> (a
+              liability), not applied to Accounts Receivable — apply it to an invoice later.
+            </p>
           </div>
         </FormSection>
 
@@ -255,7 +257,7 @@ export function CustomerReceiptForm({
 
           {allocations.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
-              No allocations — the full amount will be recorded on account.
+              No allocations — the full amount will be held as a customer deposit.
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -336,9 +338,9 @@ export function CustomerReceiptForm({
               <p className="mt-1 text-xs text-muted-foreground">Sum of the rows above</p>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">Left on account</div>
+              <div className="text-xs text-muted-foreground">Customer deposit (unapplied)</div>
               <Amount value={unallocatedAmount} className="text-base font-semibold" />
-              <p className="mt-1 text-xs text-muted-foreground">Receipt total − allocated</p>
+              <p className="mt-1 text-xs text-muted-foreground">Held as a liability · Receipt total − allocated</p>
             </div>
           </div>
           {overAllocated && (

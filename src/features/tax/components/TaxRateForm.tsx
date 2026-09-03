@@ -3,10 +3,17 @@ import type { TaxAppliesTo, VatTreatment } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateTaxRateDTO } from '../services';
 import { treatmentLabels, VAT_TREATMENTS } from '../utils/treatmentLabels';
+
+const VAT_TREATMENT_OPTIONS = VAT_TREATMENTS.map((t) => ({ value: t, label: treatmentLabels[t] }));
+const APPLIES_TO_OPTIONS = [
+  { value: 'both', label: 'Sales & Purchases' },
+  { value: 'sales', label: 'Sales Only' },
+  { value: 'purchases', label: 'Purchases Only' },
+];
 
 export interface TaxRateFormProps {
   onSubmit: (data: CreateTaxRateDTO) => Promise<void>;
@@ -71,13 +78,12 @@ export function TaxRateForm({ onSubmit, onCancel, isLoading = false, onDirtyChan
         </Field>
         <Field>
           <FieldLabel htmlFor="rate-treatment">VAT Treatment</FieldLabel>
-          <NativeSelect id="rate-treatment" value={treatment} onChange={(e) => setTreatment(e.target.value as VatTreatment)}>
-            {VAT_TREATMENTS.map((t) => (
-              <option key={t} value={t}>
-                {treatmentLabels[t]}
-              </option>
-            ))}
-          </NativeSelect>
+          <EnumSelect
+            id="rate-treatment"
+            value={treatment}
+            onValueChange={(value) => setTreatment(value as VatTreatment)}
+            options={VAT_TREATMENT_OPTIONS}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="rate-percent">Rate (%)</FieldLabel>
@@ -85,11 +91,12 @@ export function TaxRateForm({ onSubmit, onCancel, isLoading = false, onDirtyChan
         </Field>
         <Field>
           <FieldLabel htmlFor="rate-applies-to">Applies To</FieldLabel>
-          <NativeSelect id="rate-applies-to" value={appliesTo} onChange={(e) => setAppliesTo(e.target.value as TaxAppliesTo)}>
-            <option value="both">Sales &amp; Purchases</option>
-            <option value="sales">Sales Only</option>
-            <option value="purchases">Purchases Only</option>
-          </NativeSelect>
+          <EnumSelect
+            id="rate-applies-to"
+            value={appliesTo}
+            onValueChange={(value) => setAppliesTo(value as TaxAppliesTo)}
+            options={APPLIES_TO_OPTIONS}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="rate-effective-from">Effective From</FieldLabel>

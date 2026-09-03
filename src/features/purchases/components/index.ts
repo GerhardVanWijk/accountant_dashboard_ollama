@@ -1,8 +1,6 @@
 export { BillList } from './BillList';
-export { BillDetail } from './BillDetail';
 export { BillForm } from './BillForm';
 export { PurchaseOrderList } from './PurchaseOrderList';
-export { PurchaseOrderDetail } from './PurchaseOrderDetail';
 export { PurchaseOrderForm } from './PurchaseOrderForm';
 export { LineItemsEditor } from './LineItemsEditor';
 export { PaymentList } from './PaymentList';

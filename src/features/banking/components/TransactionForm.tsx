@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { FormFooter } from '@/components/app/form';
 import type { AllocationInput, CreateDirectTransactionInput, CreateTransferInput } from '../services';
 import { AllocationRows } from './AllocationRows';
@@ -120,13 +120,12 @@ export function TransactionForm({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="txn-account">Bank account</FieldLabel>
-              <NativeSelect id="txn-account" value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
-                {bankAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </NativeSelect>
+              <EnumSelect
+                id="txn-account"
+                value={bankAccountId}
+                onValueChange={setBankAccountId}
+                options={bankAccounts.map((a) => ({ value: a.id, label: a.name }))}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="txn-date">Date</FieldLabel>
@@ -165,23 +164,21 @@ export function TransactionForm({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="txn-from">From account (source — credited)</FieldLabel>
-              <NativeSelect id="txn-from" value={fromAccountId} onChange={(e) => setFromAccountId(e.target.value)}>
-                {bankAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </NativeSelect>
+              <EnumSelect
+                id="txn-from"
+                value={fromAccountId}
+                onValueChange={setFromAccountId}
+                options={bankAccounts.map((a) => ({ value: a.id, label: a.name }))}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="txn-to">To account (destination — debited)</FieldLabel>
-              <NativeSelect id="txn-to" value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
-                {bankAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </NativeSelect>
+              <EnumSelect
+                id="txn-to"
+                value={toAccountId}
+                onValueChange={setToAccountId}
+                options={bankAccounts.map((a) => ({ value: a.id, label: a.name }))}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="txn-transfer-date">Date</FieldLabel>

@@ -4,6 +4,7 @@ import { QuoteService } from './quoteService';
 import { SalesOrderService } from './salesOrderService';
 import { CreditNoteService } from './creditNoteService';
 import { CustomerReceiptService } from './customerReceiptService';
+import { RealDepositAllocationExecutor } from './depositAllocationExecutor';
 import { SupabaseQuoteRepository } from '@/repositories/SupabaseQuoteRepository';
 import { SupabaseSalesOrderRepository } from '@/repositories/SupabaseSalesOrderRepository';
 import { SupabaseCreditNoteRepository } from '@/repositories/SupabaseCreditNoteRepository';
@@ -106,4 +107,7 @@ export const customerReceiptService = new CustomerReceiptService(
   journalEntryService,
   invoiceService,
   accountMappingService,
+  // Increment 4A: applying a deposit to an invoice runs entirely inside the
+  // atomic `apply_customer_deposit` RPC (migration 0046).
+  new RealDepositAllocationExecutor(supabase),
 );

@@ -18,6 +18,12 @@ import {
 } from '@/features/inventory/services/documentInventoryPosting';
 import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
 import { NoopDocumentLineProjector } from '@/repositories/NoopDocumentLineProjector';
+import { newUuid } from '@/lib/uuid';
+import { auditLogService, type AuditLogService } from '@/services/auditLogService';
+import {
+  documentNumberPrefix,
+  nextDocumentNumber,
+} from '@/features/purchases/utils/nextDocumentNumber';
 
 export type CreateInvoiceDTO = Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -91,6 +97,8 @@ export class InvoiceService {
      * (src/services/index.ts) passes the real, flag-gated projector.
      */
     private readonly lineProjector: IDocumentLineProjector = new NoopDocumentLineProjector(),
+    /** Phase 4B-2: records a "created" audit row for an invoice copied via `copyToNewDraftInvoice`. Defaults to the shared singleton. */
+    private readonly auditLog: AuditLogService = auditLogService,
   ) {}
 
   async getInvoices(): Promise<Invoice[]> {
@@ -158,6 +166,53 @@ export class InvoiceService {
       );
     }
     return this.repository.delete(id);
+  }
+
+  /**
+   * Copies an invoice into a brand-new DRAFT invoice — new number,
+   * today's issue date, the same terms span for the due date, fresh
+   * line-item ids, party + notes carried over. `journalEntryId`,
+   * `amountPaid` and `salesOrderId` are dropped (the copy has never
+   * posted, been paid, or come from an order). NO GL posting happens —
+   * the copy stays a draft until it is separately posted. Throws if the
+   * source invoice does not exist. Writes a `created` audit row naming the
+   * source invoice number.
+   */
+  async copyToNewDraftInvoice(id: string, copiedBy: ID = SYSTEM_USER_ID): Promise<Invoice> {
+    const source = await this.requireInvoice(id);
+    const existing = await this.repository.getAll();
+    const now = new Date();
+    const termsMs = Math.max(
+      new Date(source.dueDate).getTime() - new Date(source.issueDate).getTime(),
+      0,
+    );
+    const copy = await this.createInvoice({
+      invoiceNumber: nextDocumentNumber(
+        existing.map((inv) => inv.invoiceNumber),
+        documentNumberPrefix(source.invoiceNumber, 'INV'),
+      ),
+      customerId: source.customerId,
+      issueDate: now.toISOString(),
+      dueDate: new Date(now.getTime() + termsMs).toISOString(),
+      lineItems: source.lineItems.map((line) => ({ ...line, id: newUuid() })),
+      subtotal: source.subtotal,
+      taxTotal: source.taxTotal,
+      total: source.total,
+      amountPaid: 0,
+      currency: source.currency,
+      status: 'draft',
+      notes: source.notes,
+    });
+    await this.auditLog.log({
+      userId: copiedBy,
+      action: 'created',
+      module: 'sales',
+      recordType: 'Invoice',
+      recordId: copy.id,
+      reason: `Copied from ${source.invoiceNumber}`,
+      newValue: { copiedFromNumber: source.invoiceNumber },
+    });
+    return copy;
   }
 
   private async requireInvoice(id: string): Promise<Invoice> {

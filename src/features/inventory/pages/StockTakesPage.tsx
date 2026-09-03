@@ -1,82 +1,42 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { StockTake } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
+import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { useStockTakes } from '../hooks/useStockTakes';
-import { useProducts } from '../hooks/useProducts';
 import { useWarehouses } from '../hooks/useWarehouses';
 import { useProductCategories } from '../hooks/useProductCategories';
-import { useAccounts } from '@/features/accounting/hooks/useAccounts';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { StockTakesTable } from '../components/StockTakesTable';
-import { StockTakeDetailSheet } from '../components/StockTakeDetailSheet';
 import { StockTakeSetupFormModal } from '../components/StockTakeSetupFormModal';
 import type { CreateStockTakeDTO, UpdateStockTakeDTO } from '../services/stockTakeService';
 
-type DialogState = { mode: 'create' } | { mode: 'edit'; stockTake: StockTake } | null;
-
 /**
- * Stock Take register — route `/inventory/stock-takes` (Phase 5 §3).
- * Draft → counting → ready_for_review → posted lifecycle over
- * `stockTakeService`, mirroring `StockAdjustmentsPage`'s shape.
+ * Stock Take register — route `/inventory/stock-takes`, the list only. A
+ * row click navigates to the full-page record at
+ * `/inventory/stock-takes/:stockTakeId` (StockTakeDetailPage); legacy
+ * `?record=<id>` deep links are redirected there. Freeze / count / review /
+ * post live on the record page.
  */
 export function StockTakesPage() {
-  const {
-    stockTakes,
-    loading,
-    error,
-    refetch,
-    createStockTake,
-    updateStockTake,
-    deleteStockTake,
-    freeze,
-    enterCounts,
-    markReadyForReview,
-    postStockTake,
-    cancelStockTake,
-    previewPostEffect,
-  } = useStockTakes();
-  const { products, loading: productsLoading } = useProducts();
+  const navigate = useNavigate();
+  useLegacyRecordRedirect('/inventory/stock-takes');
+
+  const { stockTakes, loading, error, refetch, createStockTake, deleteStockTake } = useStockTakes();
   const { warehouses, loading: warehousesLoading } = useWarehouses();
   const { categories } = useProductCategories();
-  const { accounts } = useAccounts();
   const canCreate = useCanAccess('inventory', 'create');
-  const canUpdate = useCanAccess('inventory', 'update');
   const canDelete = useCanAccess('inventory', 'delete');
-  const canExport = useCanAccess('inventory', 'export');
-  const [dialog, setDialog] = useState<DialogState>(null);
+  const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedId = searchParams.get('record') ?? undefined;
-  const detailOpen = Boolean(selectedId);
-  function openRecord(id: string) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('record', id);
-      return next;
-    });
-  }
-  function closeRecord() {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('record');
-      return next;
-    });
-  }
-  const detailStockTake = stockTakes.find((s) => s.id === selectedId);
-
   const handleFormSubmit = async (data: CreateStockTakeDTO | UpdateStockTakeDTO) => {
-    if (dialog?.mode === 'edit') {
-      await updateStockTake(dialog.stockTake.id, data as UpdateStockTakeDTO);
-    } else {
-      const created = await createStockTake(data as CreateStockTakeDTO);
-      openRecord(created.id);
-    }
-    setDialog(null);
+    const created = await createStockTake(data as CreateStockTakeDTO);
+    setCreating(false);
+    navigate(`/inventory/stock-takes/${created.id}`);
   };
 
   const handleDelete = async (stockTake: StockTake) => {
@@ -89,7 +49,7 @@ export function StockTakesPage() {
     }
   };
 
-  const busy = loading || productsLoading || warehousesLoading;
+  const busy = loading || warehousesLoading;
   const activeCount = stockTakes.filter((s) => s.status === 'counting' || s.status === 'ready_for_review').length;
   const draftCount = stockTakes.filter((s) => s.status === 'draft').length;
 
@@ -100,7 +60,7 @@ export function StockTakesPage() {
         description="Physical counts — freeze a scope, count against it, and post the net variance to the general ledger."
         actions={
           canCreate ? (
-            <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+            <Button size="sm" onClick={() => setCreating(true)}>
               <Plus data-icon="inline-start" />
               New stock take
             </Button>
@@ -141,39 +101,18 @@ export function StockTakesPage() {
           <StockTakesTable
             stockTakes={stockTakes}
             warehouses={warehouses}
-            onSelect={(s) => openRecord(s.id)}
+            onSelect={(s) => navigate(`/inventory/stock-takes/${s.id}`)}
             onDelete={canDelete ? (s) => void handleDelete(s) : undefined}
           />
         </SectionCard>
       )}
 
-      <StockTakeDetailSheet
-        stockTake={detailStockTake}
-        products={products}
-        warehouses={warehouses}
-        accounts={accounts}
-        open={detailOpen}
-        onOpenChange={(next) => {
-          if (!next) closeRecord();
-        }}
-        canManage={canUpdate}
-        canExport={canExport}
-        onEdit={(s) => setDialog({ mode: 'edit', stockTake: s })}
-        onFreeze={(s) => freeze(s.id).then(() => undefined)}
-        onSaveCounts={(s, counts) => enterCounts(s.id, counts).then(() => undefined)}
-        onMarkReadyForReview={(s) => markReadyForReview(s.id).then(() => undefined)}
-        onPost={(s) => postStockTake(s.id).then(() => undefined)}
-        onCancel={(s) => cancelStockTake(s.id).then(() => undefined)}
-        loadPreview={previewPostEffect}
-      />
-
-      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
+      {creating && (
         <StockTakeSetupFormModal
-          stockTake={dialog.mode === 'edit' ? dialog.stockTake : undefined}
           warehouses={warehouses}
           categories={categories}
           onSubmit={handleFormSubmit}
-          onClose={() => setDialog(null)}
+          onClose={() => setCreating(false)}
         />
       )}
     </div>

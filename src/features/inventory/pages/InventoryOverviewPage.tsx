@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ChevronDownIcon,
   FileBarChart2Icon,
@@ -8,7 +8,6 @@ import {
   PackagePlusIcon,
   UploadIcon,
 } from 'lucide-react';
-import type { Product } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
@@ -24,10 +23,6 @@ import {
 import { formatCurrency } from '@/lib/app/format';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
-import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
-import { useInvoices } from '@/features/sales/hooks/useInvoices';
-import { useCustomerList } from '@/features/sales/hooks/useCustomerMap';
-import { useBills } from '@/features/purchases/hooks/useBills';
 import { ImportWizard } from '@/features/import/components/ImportWizard';
 import { productImportAdapter, openingStockImportAdapter, stockTakeCountImportAdapter } from '@/features/import/adapters';
 import { ExportMenu } from '@/features/export/components/ExportMenu';
@@ -40,7 +35,6 @@ import { useStockMovements } from '../hooks/useStockMovements';
 import { useStockBalances } from '../hooks/useStockBalances';
 import { useProductCategories } from '../hooks/useProductCategories';
 import { InventoryTable } from '../components/InventoryTable';
-import { InventoryItemDetailSheet } from '../components/InventoryItemDetailSheet';
 import { ProductFormModal } from '../components/ProductFormModal';
 import { calculateInventoryTotals } from '../utils/calculateInventoryTotals';
 import { STOCK_STATE_LABEL, type InventoryRow } from '../utils/buildInventoryRows';
@@ -87,11 +81,7 @@ const INVENTORY_EXPORT_COLUMNS: ExportColumn<InventoryRow>[] = [
   { key: 'status', header: 'Status', accessor: (r) => (r.product.trackInventory ? STOCK_STATE_LABEL[r.stockState] : r.product.status) },
 ];
 
-type Dialog =
-  | { kind: 'new-item' }
-  | { kind: 'edit-item'; product: Product }
-  | { kind: 'import' }
-  | null;
+type Dialog = { kind: 'new-item' } | { kind: 'import' } | null;
 
 const RECENT_WINDOW_DAYS = 30;
 
@@ -117,17 +107,14 @@ const RECENT_WINDOW_DAYS = 30;
  * Inventory adapters — Products, Opening Stock and Stock Take Counts.
  */
 export function InventoryOverviewPage() {
-  const { products, loading, error, refetch, createProduct, updateProduct } = useProducts();
+  const { products, loading, error, refetch, createProduct } = useProducts();
   const { lowStock, outOfStock } = useStockAlerts();
   const { warehouses } = useWarehouses();
   const { movements } = useStockMovements();
   const { balances } = useStockBalances();
   const { categories } = useProductCategories();
   const { suppliers } = useSuppliers();
-  const { taxRates } = useAllTaxRates();
-  const { invoices } = useInvoices();
-  const { bills } = useBills();
-  const { customers } = useCustomerList();
+  const navigate = useNavigate();
 
   const canCreate = useCanAccess('inventory', 'create');
   const canUpdate = useCanAccess('inventory', 'update');
@@ -135,7 +122,6 @@ export function InventoryOverviewPage() {
   const canExport = useCanAccess('inventory', 'export');
 
   const [dialog, setDialog] = useState<Dialog>(null);
-  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [visibleRows, setVisibleRows] = useState<InventoryRow[]>([]);
   const [activeFilters, setActiveFilters] = useState<{ label: string; value: string }[]>([]);
 
@@ -146,11 +132,9 @@ export function InventoryOverviewPage() {
     return movements.filter((m) => new Date(m.movementDate ?? m.createdAt).getTime() >= cutoff).length;
   }, [movements]);
 
-  const selectedProduct = products.find((p) => p.id === selectedId);
 
   async function handleItemSubmit(data: CreateProductDTO | UpdateProductDTO) {
-    if (dialog?.kind === 'edit-item') await updateProduct(dialog.product.id, data as UpdateProductDTO);
-    else await createProduct(data as CreateProductDTO);
+    await createProduct(data as CreateProductDTO);
     setDialog(null);
     await refetch();
   }
@@ -312,7 +296,7 @@ export function InventoryOverviewPage() {
             categories={categories}
             suppliers={suppliers}
             warehouses={warehouses}
-            onSelect={(p) => setSelectedId(p.id)}
+            onSelect={(p) => navigate(`/inventory/products/${p.id}`)}
             onVisibleRowsChange={(rows, filters) => {
               setVisibleRows(rows);
               setActiveFilters(filters);
@@ -321,38 +305,8 @@ export function InventoryOverviewPage() {
         </SectionCard>
       )}
 
-      <InventoryItemDetailSheet
-        product={selectedProduct}
-        movements={movements}
-        balances={balances}
-        warehouses={warehouses}
-        categories={categories}
-        suppliers={suppliers}
-        taxRates={taxRates}
-        invoices={invoices}
-        bills={bills}
-        customers={customers}
-        open={Boolean(selectedId)}
-        onOpenChange={(next) => {
-          if (!next) setSelectedId(undefined);
-        }}
-        onEdit={
-          selectedProduct && canUpdate
-            ? () => {
-                const p = selectedProduct;
-                setSelectedId(undefined);
-                setDialog({ kind: 'edit-item', product: p });
-              }
-            : undefined
-        }
-      />
-
-      {(dialog?.kind === 'new-item' || dialog?.kind === 'edit-item') && (
-        <ProductFormModal
-          product={dialog.kind === 'edit-item' ? dialog.product : undefined}
-          onSubmit={handleItemSubmit}
-          onClose={() => setDialog(null)}
-        />
+      {dialog?.kind === 'new-item' && (
+        <ProductFormModal onSubmit={handleItemSubmit} onClose={() => setDialog(null)} />
       )}
 
       <PrintableReport dataset={exportDataset} className="hidden print:block" />

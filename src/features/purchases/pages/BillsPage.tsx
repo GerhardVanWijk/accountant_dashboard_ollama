@@ -1,94 +1,47 @@
-﻿import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
+import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { useBills } from '../hooks/useBills';
 import { useBillMutations } from '../hooks/useBillMutations';
-import { usePayments, usePaymentMutations, usePurchaseOrders } from '../hooks';
 import { BillList } from '../components/BillList';
-import { BillDetailSheet } from '../components/BillDetailSheet';
 import { BillFormModal } from '../components/BillFormModal';
-import { PaymentFormModal } from '../components/PaymentFormModal';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 
 /**
- * Supplier bills — route `/purchases/bills` (nav label "Expenses" per v0's
- * own naming — v0's "Expenses" page is "supplier costs captured against
- * the ledger," which is exactly what a Bill already is in this codebase;
- * see the M8 report on why no separate Expense entity was invented).
- * Real useBills()/BillService data, v0 page shell, list/detail views, the
- * standalone-Bill create form, and Record Payment (which opens the same
- * real PaymentForm/paymentService the Supplier Payments page uses) — all
- * in-page-state, matching every other module's convention.
+ * Supplier bills — route `/purchases/bills` (nav label "Expenses"), the
+ * list only. A row click navigates to the full-page record at
+ * `/purchases/bills/:billId` (BillDetailPage); legacy `?record=<id>` deep
+ * links are redirected there. Post and Record Payment live on the record
+ * page.
  */
 export function BillsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedId = searchParams.get('record') ?? undefined;
-  const detailOpen = Boolean(selectedId);
-  function openRecord(id: string) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('record', id);
-      return next;
-    });
-  }
-  function closeRecord() {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('record');
-      return next;
-    });
-  }
+  const navigate = useNavigate();
+  useLegacyRecordRedirect('/purchases/bills');
 
   const [showCreate, setShowCreate] = useState(false);
-  const [showRecordPayment, setShowRecordPayment] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const { bills, isLoading, error, refetch } = useBills();
   const { suppliers } = useSuppliers();
   const billMutations = useBillMutations();
-  const { payments, refetch: refetchPayments } = usePayments();
-  const { createPayment } = usePaymentMutations();
-  const { purchaseOrders } = usePurchaseOrders();
-
-  const detailBill = bills.find((b) => b.id === selectedId);
 
   const suppliersMap = useMemo(() => Object.fromEntries(suppliers.map((s) => [s.id, s.name])), [suppliers]);
-  const outstandingBills = useMemo(() => bills.filter((bill) => bill.status !== 'void' && bill.total > bill.amountPaid), [bills]);
 
   const totalOutstanding = bills.reduce((sum, b) => sum + (b.status === 'void' ? 0 : b.total - b.amountPaid), 0);
   const overdueBills = bills.filter((b) => b.status === 'overdue');
   const draftBills = bills.filter((b) => b.status === 'draft');
-
-  async function runAction(action: () => Promise<unknown>, successMessage?: string) {
-    setActionError(null);
-    try {
-      await action();
-      await refetch();
-      if (successMessage) setNotice(successMessage);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Action failed.');
-    }
-  }
 
   async function handleCreate(data: Parameters<typeof billMutations.createBill>[0]) {
     await billMutations.createBill(data);
     await refetch();
     setShowCreate(false);
     setNotice('Bill created as a draft.');
-  }
-
-  /** PaymentForm's own onSubmit handler already wraps this in try/catch and shows the error inline in the modal. */
-  async function handleRecordPayment(data: Parameters<typeof createPayment>[0]) {
-    await createPayment(data);
-    await Promise.all([refetchPayments(), refetch()]);
-    setShowRecordPayment(false);
-    setNotice('Payment recorded and posted to the ledger.');
   }
 
   return (
@@ -115,11 +68,6 @@ export function BillsPage() {
         </SectionCard>
 
         {notice && <p className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">{notice}</p>}
-        {actionError && (
-          <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {actionError}
-          </p>
-        )}
 
         {isLoading ? (
           <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
@@ -136,26 +84,11 @@ export function BillsPage() {
             suppliersMap={suppliersMap}
             onSelect={(id) => {
               setNotice(null);
-              openRecord(id);
+              navigate(`/purchases/bills/${id}`);
             }}
           />
         )}
       </div>
-
-      <BillDetailSheet
-        bill={detailBill}
-        isLoading={isLoading}
-        open={detailOpen}
-        onOpenChange={(next) => {
-          if (!next) closeRecord();
-        }}
-        supplierName={detailBill ? suppliersMap[detailBill.supplierId] ?? 'Unknown supplier' : ''}
-        suppliersMap={suppliersMap}
-        purchaseOrders={purchaseOrders}
-        payments={payments}
-        onPost={(id) => void runAction(() => billMutations.postBill(id), 'Bill posted to the ledger.')}
-        onRecordPayment={() => setShowRecordPayment(true)}
-      />
 
       {showCreate && (
         <BillFormModal
@@ -163,18 +96,6 @@ export function BillsPage() {
           defaultBillNumber={nextDocumentNumber(bills.map((b) => b.billNumber), 'BILL')}
           onSubmit={handleCreate}
           onClose={() => setShowCreate(false)}
-        />
-      )}
-
-      {showRecordPayment && detailBill && (
-        <PaymentFormModal
-          title={`Record payment — ${detailBill.billNumber}`}
-          suppliers={suppliers}
-          outstandingBills={outstandingBills}
-          defaultPaymentNumber={nextDocumentNumber(payments.map((p) => p.paymentNumber), 'PAY')}
-          presetBillId={detailBill.id}
-          onSubmit={handleRecordPayment}
-          onClose={() => setShowRecordPayment(false)}
         />
       )}
     </>

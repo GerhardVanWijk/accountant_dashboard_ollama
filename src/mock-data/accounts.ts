@@ -368,6 +368,19 @@ export const seedAccounts: Account[] = [
   // as a tax-reconciliation ADJUSTMENT LINE (wear-and-tear vs accounting
   // depreciation), but does not recognize a deferred tax balance in the GL.
   {
+    id: 'acc_2600',
+    code: '2600',
+    name: 'Customer Deposits',
+    type: 'liability',
+    subType: 'current_liability',
+    normalBalance: 'credit',
+    isActive: true,
+    description:
+      'Amounts received from customers before they are earned or applied to an invoice (contract liability, IFRS 15). Cleared to Accounts Receivable when an invoice is issued and the deposit applied, or refunded.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
     id: 'acc_2300',
     code: '2300',
     name: 'Income Tax Payable',

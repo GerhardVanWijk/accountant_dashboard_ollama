@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateStockTransferDTO, UpdateStockTransferDTO } from '../services/stockTransferService';
 import { StockTransferLinesEditor } from './StockTransferLinesEditor';
@@ -106,25 +106,23 @@ export function StockTransferDocumentForm({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="st-from">From warehouse</FieldLabel>
-            <NativeSelect id="st-from" value={fromWarehouseId} onChange={(e) => markDirty(setFromWarehouseId)(e.target.value)}>
-              <option value="">Select…</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </NativeSelect>
+            <EnumSelect
+              id="st-from"
+              value={fromWarehouseId}
+              onValueChange={(v) => markDirty(setFromWarehouseId)(v)}
+              placeholder="Select…"
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="st-to">To warehouse</FieldLabel>
-            <NativeSelect id="st-to" value={toWarehouseId} onChange={(e) => markDirty(setToWarehouseId)(e.target.value)}>
-              <option value="">Select…</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </NativeSelect>
+            <EnumSelect
+              id="st-to"
+              value={toWarehouseId}
+              onValueChange={(v) => markDirty(setToWarehouseId)(v)}
+              placeholder="Select…"
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
           </Field>
         </div>
 

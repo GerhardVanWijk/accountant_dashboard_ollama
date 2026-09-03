@@ -7,7 +7,7 @@ import { RecordLink } from '@/components/app/record-link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { useEcl } from '../hooks/useEcl';
 import { EclBucketTable } from '../components/EclBucketTable';
@@ -64,13 +64,12 @@ export function EclProvisionPage() {
           sortedFinancialYears.length > 0 ? (
             <Field className="w-44">
               <FieldLabel htmlFor="eclFinancialYearSelect">Financial year</FieldLabel>
-              <NativeSelect id="eclFinancialYearSelect" value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
-                {sortedFinancialYears.map((year) => (
-                  <option key={year.id} value={year.id}>
-                    {year.name}
-                  </option>
-                ))}
-              </NativeSelect>
+              <EnumSelect
+                id="eclFinancialYearSelect"
+                value={activeFinancialYearId ?? ''}
+                onValueChange={setSelectedFinancialYearId}
+                options={sortedFinancialYears.map((year) => ({ value: year.id, label: year.name }))}
+              />
             </Field>
           ) : undefined
         }

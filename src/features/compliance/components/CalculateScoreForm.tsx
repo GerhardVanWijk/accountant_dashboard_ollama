@@ -5,7 +5,7 @@ import { FormBody, FormFooter } from '@/components/app/form';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import type { CalculateScoreFormInput } from '../hooks/usePublicInterestScore';
 
 export interface CalculateScoreFormProps {
@@ -55,14 +55,20 @@ export function CalculateScoreForm({ financialYears, onSubmit, onCancel, onDirty
       <FormBody>
       <Field>
         <FieldLabel htmlFor="pisFinancialYear">Financial Year</FieldLabel>
-        <NativeSelect id="pisFinancialYear" value={financialYearId} onChange={(e) => setFinancialYearId(e.target.value)}>
-          {financialYears.length === 0 && <option value="">No financial years configured</option>}
-          {financialYears.map((fy) => (
-            <option key={fy.id} value={fy.id}>
-              {fy.name} ({fy.startDate.slice(0, 10)} – {fy.endDate.slice(0, 10)})
-            </option>
-          ))}
-        </NativeSelect>
+        <EnumSelect
+          id="pisFinancialYear"
+          value={financialYearId}
+          onValueChange={setFinancialYearId}
+          placeholder={financialYears.length === 0 ? 'No financial years configured' : 'Select…'}
+          options={
+            financialYears.length === 0
+              ? [{ value: '', label: 'No financial years configured' }]
+              : financialYears.map((fy) => ({
+                  value: fy.id,
+                  label: `${fy.name} (${fy.startDate.slice(0, 10)} – ${fy.endDate.slice(0, 10)})`,
+                }))
+          }
+        />
         <FieldDescription>Turnover and third-party liabilities are computed from real posted GL data for this year.</FieldDescription>
       </Field>
       <Field>

@@ -5,7 +5,7 @@ import { Amount, FigureBlock } from '@/components/app/figure';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { useCashFlowStatement } from '../hooks/useCashFlowStatement';
 import { CashFlowSectionTable } from '../components/CashFlowSectionTable';
@@ -37,13 +37,12 @@ export function CashFlowStatementPage() {
           sortedFinancialYears.length > 0 ? (
             <Field className="w-44">
               <FieldLabel htmlFor="cashFlowFinancialYear">Financial year</FieldLabel>
-              <NativeSelect id="cashFlowFinancialYear" value={activeFinancialYearId ?? ''} onChange={(e) => setSelectedFinancialYearId(e.target.value)}>
-                {sortedFinancialYears.map((year) => (
-                  <option key={year.id} value={year.id}>
-                    {year.name}
-                  </option>
-                ))}
-              </NativeSelect>
+              <EnumSelect
+                id="cashFlowFinancialYear"
+                value={activeFinancialYearId ?? ''}
+                onValueChange={setSelectedFinancialYearId}
+                options={sortedFinancialYears.map((year) => ({ value: year.id, label: year.name }))}
+              />
             </Field>
           ) : undefined
         }

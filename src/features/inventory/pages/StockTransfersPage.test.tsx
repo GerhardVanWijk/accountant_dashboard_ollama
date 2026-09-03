@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import type { Account, Product, StockTransfer, Warehouse } from '@/types';
 import { StockTransfersPage } from './StockTransfersPage';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
@@ -9,10 +9,18 @@ import { productService } from '../services/productService';
 import { warehouseService } from '../services/warehouseService';
 import { accountService } from '@/features/accounting/services';
 
-function renderPage() {
+function Loc() {
+  const loc = useLocation();
+  return <div data-testid="loc">{loc.pathname + loc.search}</div>;
+}
+
+function renderPage(entry = '/inventory/transfers') {
   return render(
-    <MemoryRouter initialEntries={['/inventory/transfers']}>
-      <StockTransfersPage />
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route path="/inventory/transfers" element={<><StockTransfersPage /><Loc /></>} />
+        <Route path="/inventory/transfers/:transferId" element={<Loc />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -50,7 +58,6 @@ vi.mock('@/features/accounting/services', () => ({
 const mockedGetTransfers = stockTransferService.getTransfers as unknown as ReturnType<typeof vi.fn>;
 const mockedCreateTransfer = stockTransferService.createTransfer as unknown as ReturnType<typeof vi.fn>;
 const mockedDeleteTransfer = stockTransferService.deleteTransfer as unknown as ReturnType<typeof vi.fn>;
-const mockedDispatch = stockTransferService.dispatch as unknown as ReturnType<typeof vi.fn>;
 const mockedGetProducts = productService.getProducts as unknown as ReturnType<typeof vi.fn>;
 const mockedGetWarehouses = warehouseService.getWarehouses as unknown as ReturnType<typeof vi.fn>;
 const mockedGetAccounts = accountService.getAccounts as unknown as ReturnType<typeof vi.fn>;
@@ -180,17 +187,20 @@ describe('StockTransfersPage', () => {
     await waitFor(() => expect(mockedDeleteTransfer).toHaveBeenCalledWith('trf_1'));
   });
 
-  it('dispatches a draft transfer from the detail sheet', async () => {
+  it('navigates to the full-page record on row click — no detail sheet', async () => {
     mockedGetTransfers.mockResolvedValue([makeTransfer()]);
-    mockedDispatch.mockResolvedValue(makeTransfer({ status: 'in_transit', dispatchedJournalEntryId: 'je_1' }));
     renderPage();
     await screen.findByText('TRF-0001');
 
     fireEvent.click(screen.getByText('TRF-0001'));
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: /^dispatch$/i }));
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/inventory/transfers/trf_1'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 
-    await waitFor(() => expect(mockedDispatch).toHaveBeenCalledWith('trf_1'));
+  it('redirects a legacy ?record=<id> deep link to the canonical record route', async () => {
+    mockedGetTransfers.mockResolvedValue([makeTransfer()]);
+    renderPage('/inventory/transfers?record=trf_1');
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/inventory/transfers/trf_1'));
   });
 
   it('hides create/manage actions for a user without inventory write permission', async () => {
@@ -201,9 +211,5 @@ describe('StockTransfersPage', () => {
 
     expect(screen.queryByRole('button', { name: /new transfer/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('TRF-0001'));
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).queryByRole('button', { name: /^dispatch$/i })).not.toBeInTheDocument();
   });
 });

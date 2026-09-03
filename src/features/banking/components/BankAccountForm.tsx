@@ -1,13 +1,20 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Account, BankAccount } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { BANK_ACCOUNT_TYPE_LABELS, SA_BANKS } from '../constants';
+
+const BANK_ACCOUNT_TYPE_OPTIONS = Object.entries(BANK_ACCOUNT_TYPE_LABELS).map(([value, label]) => ({ value, label }));
+const SA_BANK_OPTIONS = SA_BANKS.map((bank) => ({ value: bank, label: bank }));
+const BANK_ACCOUNT_STATUS_OPTIONS = [
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+];
 import { bankAccountFormSchema, toDefaultValues, type BankAccountFormSchema } from '../utils/bankAccountFormSchema';
 
 export interface BankAccountFormProps {
@@ -44,6 +51,7 @@ export function BankAccountForm({
     register,
     handleSubmit,
     watch,
+    control,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<BankAccountFormSchema>({
     resolver: zodResolver(bankAccountFormSchema),
@@ -74,25 +82,39 @@ export function BankAccountForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="bank-account-type">Account type</FieldLabel>
-          <NativeSelect id="bank-account-type" {...register('accountType')}>
-            {Object.entries(BANK_ACCOUNT_TYPE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="accountType"
+            render={({ field, fieldState }) => (
+              <EnumSelect
+                id="bank-account-type"
+                name="accountType"
+                value={field.value ?? BANK_ACCOUNT_TYPE_OPTIONS[0]?.value ?? ''}
+                onValueChange={field.onChange}
+                invalid={Boolean(fieldState.error)}
+                options={BANK_ACCOUNT_TYPE_OPTIONS}
+              />
+            )}
+          />
           <FieldError errors={[errors.accountType]} />
         </Field>
 
         <Field>
           <FieldLabel htmlFor="bank-account-bank">Bank name</FieldLabel>
-          <NativeSelect id="bank-account-bank" {...register('bankName')}>
-            {SA_BANKS.map((bank) => (
-              <option key={bank} value={bank}>
-                {bank}
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="bankName"
+            render={({ field, fieldState }) => (
+              <EnumSelect
+                id="bank-account-bank"
+                name="bankName"
+                value={field.value ?? SA_BANK_OPTIONS[0]?.value ?? ''}
+                onValueChange={field.onChange}
+                invalid={Boolean(fieldState.error)}
+                options={SA_BANK_OPTIONS}
+              />
+            )}
+          />
           <FieldError errors={[errors.bankName]} />
         </Field>
         {bankName === 'Other' && (
@@ -131,22 +153,43 @@ export function BankAccountForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="bank-account-status">Status</FieldLabel>
-          <NativeSelect id="bank-account-status" {...register('status')}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="status"
+            render={({ field, fieldState }) => (
+              <EnumSelect
+                id="bank-account-status"
+                name="status"
+                value={field.value ?? 'active'}
+                onValueChange={field.onChange}
+                invalid={Boolean(fieldState.error)}
+                options={BANK_ACCOUNT_STATUS_OPTIONS}
+              />
+            )}
+          />
         </Field>
 
         <Field className="sm:col-span-2">
           <FieldLabel htmlFor="bank-account-gl">Linked GL account (Chart of Accounts)</FieldLabel>
-          <NativeSelect id="bank-account-gl" {...register('glAccountId')}>
-            <option value="">Select a GL account…</option>
-            {glAccounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.code} — {a.name}
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="glAccountId"
+            render={({ field, fieldState }) => (
+              <SearchableSelect
+                id="bank-account-gl"
+                name="glAccountId"
+                value={field.value || null}
+                onChange={(value) => field.onChange(value ?? '')}
+                invalid={Boolean(fieldState.error)}
+                placeholder="Select a GL account…"
+                options={glAccounts.map((a) => ({
+                  value: a.id,
+                  label: `${a.code} — ${a.name}`,
+                  keywords: a.code,
+                }))}
+              />
+            )}
+          />
           <FieldError errors={[errors.glAccountId]} />
         </Field>
       </div>

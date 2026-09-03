@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import type { Account, Product, StockAdjustment, Warehouse } from '@/types';
 import { StockAdjustmentsPage } from './StockAdjustmentsPage';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
@@ -9,10 +9,18 @@ import { productService } from '../services/productService';
 import { warehouseService } from '../services/warehouseService';
 import { accountService } from '@/features/accounting/services';
 
-function renderPage() {
+function Loc() {
+  const loc = useLocation();
+  return <div data-testid="loc">{loc.pathname + loc.search}</div>;
+}
+
+function renderPage(entry = '/inventory/adjustments') {
   return render(
-    <MemoryRouter initialEntries={['/inventory/adjustments']}>
-      <StockAdjustmentsPage />
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route path="/inventory/adjustments" element={<><StockAdjustmentsPage /><Loc /></>} />
+        <Route path="/inventory/adjustments/:adjustmentId" element={<Loc />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -50,7 +58,6 @@ vi.mock('@/features/accounting/services', () => ({
 const mockedGetAdjustments = stockAdjustmentService.getAdjustments as unknown as ReturnType<typeof vi.fn>;
 const mockedCreateAdjustment = stockAdjustmentService.createAdjustment as unknown as ReturnType<typeof vi.fn>;
 const mockedDeleteAdjustment = stockAdjustmentService.deleteAdjustment as unknown as ReturnType<typeof vi.fn>;
-const mockedPostAdjustment = stockAdjustmentService.postAdjustment as unknown as ReturnType<typeof vi.fn>;
 const mockedGetProducts = productService.getProducts as unknown as ReturnType<typeof vi.fn>;
 const mockedGetWarehouses = warehouseService.getWarehouses as unknown as ReturnType<typeof vi.fn>;
 const mockedGetAccounts = accountService.getAccounts as unknown as ReturnType<typeof vi.fn>;
@@ -180,17 +187,20 @@ describe('StockAdjustmentsPage', () => {
     await waitFor(() => expect(mockedDeleteAdjustment).toHaveBeenCalledWith('adj_1'));
   });
 
-  it('posts a draft adjustment from the detail sheet', async () => {
+  it('navigates to the full-page record on row click — no detail sheet', async () => {
     mockedGetAdjustments.mockResolvedValue([makeAdjustment()]);
-    mockedPostAdjustment.mockResolvedValue(makeAdjustment({ status: 'posted', journalEntryId: 'je_1' }));
     renderPage();
     await screen.findByText('ADJ-0001');
 
     fireEvent.click(screen.getByText('ADJ-0001'));
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: /^post$/i }));
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/inventory/adjustments/adj_1'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 
-    await waitFor(() => expect(mockedPostAdjustment).toHaveBeenCalledWith('adj_1'));
+  it('redirects a legacy ?record=<id> deep link to the canonical record route', async () => {
+    mockedGetAdjustments.mockResolvedValue([makeAdjustment()]);
+    renderPage('/inventory/adjustments?record=adj_1');
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/inventory/adjustments/adj_1'));
   });
 
   it('hides create/manage actions for a user without inventory write permission', async () => {
@@ -201,9 +211,5 @@ describe('StockAdjustmentsPage', () => {
 
     expect(screen.queryByRole('button', { name: /new adjustment/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('ADJ-0001'));
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).queryByRole('button', { name: /^post$/i })).not.toBeInTheDocument();
   });
 });

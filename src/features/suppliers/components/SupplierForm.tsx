@@ -1,15 +1,39 @@
 import { useEffect, useState } from 'react';
-import { useForm, type FieldErrors } from 'react-hook-form';
+import { Controller, useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Supplier } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect, type EnumOption } from '@/components/app/combobox';
 import { FormFooter, FormSection, FormTabs, type FormTab } from '@/components/app/form';
 import { SUPPLIER_CATEGORIES } from '../types/supplier.types';
 import { supplierFormSchema, type SupplierFormSchema } from '../utils/supplierFormSchema';
+
+const CATEGORY_OPTIONS: EnumOption[] = [
+  { value: '', label: 'Unassigned' },
+  ...SUPPLIER_CATEGORIES.map((category) => ({ value: category, label: category })),
+];
+
+const STATUS_OPTIONS: EnumOption[] = [
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+];
+
+const PAYMENT_TERMS_OPTIONS: EnumOption[] = [
+  { value: '', label: 'Unassigned' },
+  { value: 'Net14', label: 'Net 14' },
+  { value: 'Net30', label: 'Net 30' },
+  { value: 'EOM', label: 'EOM' },
+];
+
+const PAYMENT_METHOD_OPTIONS: EnumOption[] = [
+  { value: '', label: 'Unassigned' },
+  { value: 'EFT', label: 'EFT' },
+  { value: 'Direct Debit', label: 'Direct Debit' },
+  { value: 'Credit Card', label: 'Credit Card' },
+];
 
 type TabKey = 'general' | 'contacts' | 'addresses' | 'financial';
 
@@ -94,6 +118,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<SupplierFormSchema>({
     resolver: zodResolver(supplierFormSchema),
@@ -121,14 +146,20 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
           </Field>
           <Field>
             <FieldLabel htmlFor="supplier-category">Category</FieldLabel>
-            <NativeSelect id="supplier-category" {...register('category', { setValueAs: (v) => (v === '' ? undefined : v) })}>
-              <option value="">Unassigned</option>
-              {SUPPLIER_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </NativeSelect>
+            <Controller
+              control={control}
+              name="category"
+              render={({ field, fieldState }) => (
+                <EnumSelect
+                  id="supplier-category"
+                  name="category"
+                  value={field.value ?? ''}
+                  onValueChange={(v) => field.onChange(v === '' ? undefined : v)}
+                  invalid={Boolean(fieldState.error)}
+                  options={CATEGORY_OPTIONS}
+                />
+              )}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="supplier-currency">Currency</FieldLabel>
@@ -137,10 +168,20 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
           </Field>
           <Field>
             <FieldLabel htmlFor="supplier-status">Status</FieldLabel>
-            <NativeSelect id="supplier-status" {...register('status')}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </NativeSelect>
+            <Controller
+              control={control}
+              name="status"
+              render={({ field, fieldState }) => (
+                <EnumSelect
+                  id="supplier-status"
+                  name="status"
+                  value={field.value ?? 'active'}
+                  onValueChange={field.onChange}
+                  invalid={Boolean(fieldState.error)}
+                  options={STATUS_OPTIONS}
+                />
+              )}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="supplier-balance">Opening balance</FieldLabel>
@@ -267,21 +308,37 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
             </Field>
             <Field>
               <FieldLabel htmlFor="supplier-payment-terms">Payment terms</FieldLabel>
-              <NativeSelect id="supplier-payment-terms" {...register('paymentTerms', { setValueAs: (v) => (v === '' ? undefined : v) })}>
-                <option value="">Unassigned</option>
-                <option value="Net14">Net 14</option>
-                <option value="Net30">Net 30</option>
-                <option value="EOM">EOM</option>
-              </NativeSelect>
+              <Controller
+                control={control}
+                name="paymentTerms"
+                render={({ field, fieldState }) => (
+                  <EnumSelect
+                    id="supplier-payment-terms"
+                    name="paymentTerms"
+                    value={field.value ?? ''}
+                    onValueChange={(v) => field.onChange(v === '' ? undefined : v)}
+                    invalid={Boolean(fieldState.error)}
+                    options={PAYMENT_TERMS_OPTIONS}
+                  />
+                )}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="supplier-payment-method">Payment method</FieldLabel>
-              <NativeSelect id="supplier-payment-method" {...register('paymentMethod', { setValueAs: (v) => (v === '' ? undefined : v) })}>
-                <option value="">Unassigned</option>
-                <option value="EFT">EFT</option>
-                <option value="Direct Debit">Direct Debit</option>
-                <option value="Credit Card">Credit Card</option>
-              </NativeSelect>
+              <Controller
+                control={control}
+                name="paymentMethod"
+                render={({ field, fieldState }) => (
+                  <EnumSelect
+                    id="supplier-payment-method"
+                    name="paymentMethod"
+                    value={field.value ?? ''}
+                    onValueChange={(v) => field.onChange(v === '' ? undefined : v)}
+                    invalid={Boolean(fieldState.error)}
+                    options={PAYMENT_METHOD_OPTIONS}
+                  />
+                )}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="supplier-settlement-discount">Settlement discount (%)</FieldLabel>

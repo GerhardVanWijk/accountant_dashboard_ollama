@@ -15,7 +15,7 @@ import { seedCreditNotes } from '@/mock-data/creditNotes';
 import { seedCustomerReceipts } from '@/mock-data/customerReceipts';
 import { seedPayments } from '@/mock-data/payments';
 import type { AccountingPeriod, Invoice, Bill, CreditNote, CustomerReceipt, Payment } from '@/types';
-import { reconcileAccountsReceivable, reconcileAccountsPayable } from './subledgerReconciliation';
+import { reconcileAccountsReceivable, reconcileAccountsPayable, reconcileCustomerDeposits } from './subledgerReconciliation';
 
 function makeOpenPeriod(): AccountingPeriod {
   return {
@@ -137,6 +137,84 @@ describe('reconcileAccountsReceivable', () => {
   });
 });
 
+describe('reconcileCustomerDeposits', () => {
+  function receipt(overrides: Partial<CustomerReceipt> = {}): CustomerReceipt {
+    return {
+      id: 'rec_d',
+      receiptNumber: 'REC-D-0001',
+      customerId: 'cust_test',
+      date: '2026-08-10T00:00:00.000Z',
+      method: 'eft',
+      amount: 0,
+      allocations: [],
+      unallocatedAmount: 0,
+      currency: 'ZAR',
+      createdAt: '2026-08-10T00:00:00.000Z',
+      updatedAt: '2026-08-10T00:00:00.000Z',
+      ...overrides,
+    };
+  }
+
+  it('reconciles when the 2600 control balance equals Σ unallocatedAmount', async () => {
+    const journalEntryService = setupJournalEntryService();
+    await journalEntryService.postJournalEntry({
+      date: '2026-08-10',
+      source: 'customer_receipt',
+      lines: [
+        { accountId: 'acc_1000', debit: 1000, credit: 0 },
+        { accountId: 'acc_2600', debit: 0, credit: 1000 },
+      ],
+    });
+
+    const result = await reconcileCustomerDeposits(journalEntryService, setupAccountMapper(), [
+      receipt({ amount: 1000, unallocatedAmount: 1000 }),
+    ]);
+
+    expect(result.controlAccountBalance).toBeCloseTo(1000, 2);
+    expect(result.subledgerTotal).toBeCloseTo(1000, 2);
+    expect(result.variance).toBeCloseTo(0, 2);
+    expect(result.isReconciled).toBe(true);
+  });
+
+  it('flags a variance when a deposit was received but never credited to 2600', async () => {
+    const journalEntryService = setupJournalEntryService(); // nothing posted to 2600
+    const result = await reconcileCustomerDeposits(journalEntryService, setupAccountMapper(), [
+      receipt({ amount: 500, unallocatedAmount: 500 }),
+    ]);
+    expect(result.controlAccountBalance).toBe(0);
+    expect(result.subledgerTotal).toBeCloseTo(500, 2);
+    expect(result.variance).toBeCloseTo(-500, 2);
+    expect(result.isReconciled).toBe(false);
+  });
+
+  it('a later deposit allocation (DR 2600 / CR AR) keeps 2600 tied to the reduced unallocated balance', async () => {
+    const journalEntryService = setupJournalEntryService();
+    await journalEntryService.postJournalEntry({
+      date: '2026-08-10',
+      source: 'customer_receipt',
+      lines: [
+        { accountId: 'acc_1000', debit: 1000, credit: 0 },
+        { accountId: 'acc_2600', debit: 0, credit: 1000 },
+      ],
+    });
+    await journalEntryService.postJournalEntry({
+      date: '2026-08-15',
+      source: 'customer_receipt_allocation',
+      lines: [
+        { accountId: 'acc_2600', debit: 400, credit: 0 },
+        { accountId: 'acc_1100', debit: 0, credit: 400 },
+      ],
+    });
+
+    const result = await reconcileCustomerDeposits(journalEntryService, setupAccountMapper(), [
+      receipt({ amount: 1000, unallocatedAmount: 600, allocations: [{ invoiceId: 'inv_x', amount: 400 }] }),
+    ]);
+    expect(result.controlAccountBalance).toBeCloseTo(600, 2);
+    expect(result.subledgerTotal).toBeCloseTo(600, 2);
+    expect(result.isReconciled).toBe(true);
+  });
+});
+
 describe('reconcileAccountsPayable', () => {
   it('reports a zero variance when the AP control account exactly matches the outstanding bill total', async () => {
     const journalEntryService = setupJournalEntryService();
@@ -214,16 +292,14 @@ describe('reconcileAccountsPayable', () => {
  * seed Invoices/Bills/CreditNotes/Receipts/Payments, and checks each side
  * against its GL control account.
  *
- * AP ties to the cent. AR carries one fully-explained R2,000 gap: the
- * Bushveld mock seed's generateSeedPostings deliberately does NOT post
- * money-on-account receipts (unallocatedAmount > 0) to the GL — see its
- * header comment. The GL-consistent AR subledger nets every receipt in full
- * (matching a real recordReceipt()), so it sits R2,000 below the GL control
- * for exactly the one such receipt (rcpt_00000003). The aging subledger, by
- * contrast, still ties to the GL for this simple seed.
+ * Increment 4A: AP ties to the cent, and AR now also ties to ~R0 — the one
+ * money-on-account seed receipt (rcpt_00000003, R2,000) is posted with its
+ * unapplied portion credited to Customer Deposits (2600), not AR, so it no
+ * longer creates an AR variance. reconcileCustomerDeposits() confirms the
+ * 2600 balance equals Σ unallocatedAmount (R2,000).
  */
 describe('subledger reconciliation against real seed data', () => {
-  it('AP ties to the GL; AR carries only the documented money-on-account gap', async () => {
+  it('AP and AR both tie to the GL; the on-account receipt sits in Customer Deposits', async () => {
     const journalRepository = new MockJournalEntryRepository(seedJournalEntries);
     const accountRepository = new MockAccountRepository(seedAccounts);
     const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
@@ -239,11 +315,16 @@ describe('subledger reconciliation against real seed data', () => {
       seedCustomerReceipts as CustomerReceipt[],
     );
     const ap = await reconcileAccountsPayable(journalEntryService, accountMapper, seedBills as Bill[], seedPayments as Payment[]);
+    const deposits = await reconcileCustomerDeposits(journalEntryService, accountMapper, seedCustomerReceipts as CustomerReceipt[]);
 
     expect(ap.isReconciled).toBe(true);
 
-    expect(ar.bridge.unallocatedReceipts).toBeCloseTo(2000, 2);
-    expect(ar.variance).toBeCloseTo(2000, 2);
-    expect(ar.agingSubledgerTotal).toBeCloseTo(ar.controlAccountBalance, 2);
+    expect(ar.variance).toBeCloseTo(0, 2);
+    expect(ar.isReconciled).toBe(true);
+    expect(ar.bridge.unallocatedReceipts).toBeCloseTo(2000, 2); // informational only
+
+    expect(deposits.controlAccountBalance).toBeCloseTo(2000, 2);
+    expect(deposits.subledgerTotal).toBeCloseTo(2000, 2);
+    expect(deposits.isReconciled).toBe(true);
   });
 });

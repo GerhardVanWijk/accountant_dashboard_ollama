@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/shadcn/table';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import type { TaxAdjustment, TaxAdjustmentCategory, TaxAdjustmentDirection } from '@/types';
 
@@ -25,6 +25,11 @@ const CATEGORY_LABELS: Record<TaxAdjustmentCategory, string> = {
 };
 
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS) as [TaxAdjustmentCategory, string][];
+const CATEGORY_ENUM_OPTIONS = CATEGORY_OPTIONS.map(([value, label]) => ({ value, label }));
+const DIRECTION_OPTIONS = [
+  { value: 'add', label: '+ Add' },
+  { value: 'subtract', label: '- Subtract' },
+];
 
 let localIdSeq = 0;
 function newLocalId(): string {
@@ -107,13 +112,12 @@ export function AdjustmentsTable({ adjustments, editable, onSave }: AdjustmentsT
               <TableRow key={row.id}>
                 <TableCell>
                   {editable ? (
-                    <NativeSelect aria-label="Adjustment category" value={row.category} onChange={(e) => updateRow(row.id, { category: e.target.value as TaxAdjustmentCategory })}>
-                      {CATEGORY_OPTIONS.map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                    <EnumSelect
+                      aria-label="Adjustment category"
+                      value={row.category}
+                      onValueChange={(value) => updateRow(row.id, { category: value as TaxAdjustmentCategory })}
+                      options={CATEGORY_ENUM_OPTIONS}
+                    />
                   ) : (
                     CATEGORY_LABELS[row.category]
                   )}
@@ -142,10 +146,12 @@ export function AdjustmentsTable({ adjustments, editable, onSave }: AdjustmentsT
                 </TableCell>
                 <TableCell>
                   {editable ? (
-                    <NativeSelect aria-label="Adjustment direction" value={row.direction} onChange={(e) => updateRow(row.id, { direction: e.target.value as TaxAdjustmentDirection })}>
-                      <option value="add">+ Add</option>
-                      <option value="subtract">- Subtract</option>
-                    </NativeSelect>
+                    <EnumSelect
+                      aria-label="Adjustment direction"
+                      value={row.direction}
+                      onValueChange={(value) => updateRow(row.id, { direction: value as TaxAdjustmentDirection })}
+                      options={DIRECTION_OPTIONS}
+                    />
                   ) : (
                     <span className="text-xs text-muted-foreground">{row.direction === 'add' ? '+' : '-'}</span>
                   )}

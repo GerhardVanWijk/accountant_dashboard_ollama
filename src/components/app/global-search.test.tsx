@@ -16,7 +16,7 @@ vi.mock('./global-search-records', () => ({
 }));
 
 const RECORDS: GlobalSearchRecord[] = [
-  { type: 'product', id: 'p1', code: 'PRN-008', name: '2-Colour Printing Calculator', href: '/inventory/products?record=p1', keywords: 'PRN-008 2-Colour Printing Calculator product item' },
+  { type: 'product', id: 'p1', code: 'PRN-008', name: '2-Colour Printing Calculator', href: '/inventory/products/p1', keywords: 'PRN-008 2-Colour Printing Calculator product item' },
   { type: 'customer', id: 'c1', code: 'CUS-1042', name: 'ABC Office Supplies', href: '/sales/customers?record=c1', keywords: 'CUS-1042 ABC Office Supplies customer' },
   { type: 'supplier', id: 's1', code: 'SUP-3', name: 'Paper Mills Ltd', href: '/purchases/vendors?record=s1', keywords: 'SUP-3 Paper Mills Ltd supplier vendor' },
 ];
@@ -96,7 +96,7 @@ describe('GlobalSearch', () => {
     fireEvent.change(screen.getByPlaceholderText(/search pages, products/i), { target: { value: 'PRN-008' } });
     const hit = await screen.findByText('PRN-008');
     fireEvent.click(hit);
-    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/inventory/products?record=p1'));
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/inventory/products/p1'));
   });
 
   it('finds a customer by name and navigates to its record', async () => {

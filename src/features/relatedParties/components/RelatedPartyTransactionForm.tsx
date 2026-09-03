@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { RelatedParty, RelatedPartyTransaction } from '@/types/relatedParty';
 import { Button } from '@/components/ui/shadcn/button';
@@ -8,7 +8,7 @@ import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import type { CreateRelatedPartyTransactionDTO, UpdateRelatedPartyTransactionDTO } from '../services';
 
 function isValidNumber(value: string): boolean {
@@ -55,6 +55,7 @@ export function RelatedPartyTransactionForm({ transaction, relatedParties, onSub
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<RelatedPartyTransactionFormValues>({
     resolver: zodResolver(transactionSchema),
@@ -79,14 +80,25 @@ export function RelatedPartyTransactionForm({ transaction, relatedParties, onSub
       <FormBody>
       <Field>
         <FieldLabel htmlFor="relatedPartyId">Related Party</FieldLabel>
-        <NativeSelect id="relatedPartyId" {...register('relatedPartyId')}>
-          {relatedParties.length === 0 && <option value="">No related parties yet</option>}
-          {relatedParties.map((party) => (
-            <option key={party.id} value={party.id}>
-              {party.name}
-            </option>
-          ))}
-        </NativeSelect>
+        <Controller
+          control={control}
+          name="relatedPartyId"
+          render={({ field, fieldState }) => (
+            <EnumSelect
+              id="relatedPartyId"
+              name="relatedPartyId"
+              value={field.value ?? ''}
+              onValueChange={field.onChange}
+              invalid={Boolean(fieldState.error)}
+              placeholder={relatedParties.length === 0 ? 'No related parties yet' : 'Select…'}
+              options={
+                relatedParties.length === 0
+                  ? [{ value: '', label: 'No related parties yet' }]
+                  : relatedParties.map((party) => ({ value: party.id, label: party.name }))
+              }
+            />
+          )}
+        />
         <FieldError errors={[errors.relatedPartyId]} />
       </Field>
 

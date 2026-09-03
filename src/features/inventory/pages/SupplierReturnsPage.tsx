@@ -1,26 +1,24 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
-import type { SupplierReturn } from '@/types';
+import type { Supplier, SupplierReturn } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
+import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
 import { useSupplierReturns } from '../hooks/useSupplierReturns';
 import { useProducts } from '../hooks/useProducts';
 import { useWarehouses } from '../hooks/useWarehouses';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
-import { useAccounts } from '@/features/accounting/hooks/useAccounts';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { ExportMenu } from '@/features/export/components/ExportMenu';
 import { PrintableReport } from '@/features/export/components/PrintableReport';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { SupplierReturnsTable } from '../components/SupplierReturnsTable';
-import { SupplierReturnDetailSheet } from '../components/SupplierReturnDetailSheet';
 import { SupplierReturnDocumentFormModal } from '../components/SupplierReturnDocumentFormModal';
 import type { CreateSupplierReturnDTO, UpdateSupplierReturnDTO } from '../services/supplierReturnService';
-import type { Supplier } from '@/types';
 
 function buildSupplierReturnExportColumns(suppliers: Supplier[]): ExportColumn<SupplierReturn>[] {
   const supplierName = (id: string) => suppliers.find((s) => s.id === id)?.name ?? id;
@@ -40,67 +38,34 @@ function buildSupplierReturnExportColumns(suppliers: Supplier[]): ExportColumn<S
   ];
 }
 
-type DialogState = { mode: 'create' } | { mode: 'edit'; supplierReturn: SupplierReturn } | null;
-
 /**
- * Supplier Return register — route `/inventory/supplier-returns` (Phase 5
- * §4). Draft → posted lifecycle over `supplierReturnService`, mirroring
- * `StockAdjustmentsPage`'s shape.
+ * Supplier Return register — route `/inventory/supplier-returns`, the list
+ * only. A row click navigates to the full-page record at
+ * `/inventory/supplier-returns/:supplierReturnId` (SupplierReturnDetailPage);
+ * legacy `?record=<id>` deep links are redirected there. Post lives on the
+ * record page.
  */
 export function SupplierReturnsPage() {
-  const {
-    supplierReturns,
-    loading,
-    error,
-    refetch,
-    createSupplierReturn,
-    updateSupplierReturn,
-    deleteSupplierReturn,
-    postSupplierReturn,
-    cancelSupplierReturn,
-    previewPostEffect,
-  } = useSupplierReturns();
+  const navigate = useNavigate();
+  useLegacyRecordRedirect('/inventory/supplier-returns');
+
+  const { supplierReturns, loading, error, refetch, createSupplierReturn, deleteSupplierReturn } = useSupplierReturns();
   const { products, loading: productsLoading } = useProducts();
   const { warehouses, loading: warehousesLoading } = useWarehouses();
   const { suppliers, loading: suppliersLoading } = useSuppliers();
   const { taxRates } = useTaxRates();
-  const { accounts } = useAccounts();
   const canCreate = useCanAccess('inventory', 'create');
-  const canUpdate = useCanAccess('inventory', 'update');
   const canDelete = useCanAccess('inventory', 'delete');
   const canExport = useCanAccess('inventory', 'export');
-  const [dialog, setDialog] = useState<DialogState>(null);
+  const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [visibleRows, setVisibleRows] = useState<SupplierReturn[]>([]);
   const [activeFilters, setActiveFilters] = useState<{ label: string; value: string }[]>([]);
 
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedId = searchParams.get('record') ?? undefined;
-  const detailOpen = Boolean(selectedId);
-  function openRecord(id: string) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('record', id);
-      return next;
-    });
-  }
-  function closeRecord() {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('record');
-      return next;
-    });
-  }
-  const detailReturn = supplierReturns.find((r) => r.id === selectedId);
-
   const handleFormSubmit = async (data: CreateSupplierReturnDTO | UpdateSupplierReturnDTO) => {
-    if (dialog?.mode === 'edit') {
-      await updateSupplierReturn(dialog.supplierReturn.id, data as UpdateSupplierReturnDTO);
-    } else {
-      const created = await createSupplierReturn(data as CreateSupplierReturnDTO);
-      openRecord(created.id);
-    }
-    setDialog(null);
+    const created = await createSupplierReturn(data as CreateSupplierReturnDTO);
+    setCreating(false);
+    navigate(`/inventory/supplier-returns/${created.id}`);
   };
 
   const handleDelete = async (supplierReturn: SupplierReturn) => {
@@ -136,7 +101,7 @@ export function SupplierReturnsPage() {
           <>
             <ExportMenu dataset={exportDataset} allowed={canExport} />
             {canCreate && (
-              <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+              <Button size="sm" onClick={() => setCreating(true)}>
                 <Plus data-icon="inline-start" />
                 New return
               </Button>
@@ -179,7 +144,7 @@ export function SupplierReturnsPage() {
           <SupplierReturnsTable
             supplierReturns={supplierReturns}
             suppliers={suppliers}
-            onSelect={(r) => openRecord(r.id)}
+            onSelect={(r) => navigate(`/inventory/supplier-returns/${r.id}`)}
             onDelete={canDelete ? (r) => void handleDelete(r) : undefined}
             onVisibleRowsChange={(rows, filters) => {
               setVisibleRows(rows);
@@ -189,34 +154,16 @@ export function SupplierReturnsPage() {
         </SectionCard>
       )}
 
-      <SupplierReturnDetailSheet
-        supplierReturn={detailReturn}
-        products={products}
-        warehouses={warehouses}
-        suppliers={suppliers}
-        accounts={accounts}
-        open={detailOpen}
-        onOpenChange={(next) => {
-          if (!next) closeRecord();
-        }}
-        canManage={canUpdate}
-        onEdit={(r) => setDialog({ mode: 'edit', supplierReturn: r })}
-        onPost={(r) => postSupplierReturn(r.id).then(() => undefined)}
-        onCancel={(r) => cancelSupplierReturn(r.id).then(() => undefined)}
-        loadPreview={previewPostEffect}
-      />
-
       <PrintableReport dataset={exportDataset} className="hidden print:block" />
 
-      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
+      {creating && (
         <SupplierReturnDocumentFormModal
-          supplierReturn={dialog.mode === 'edit' ? dialog.supplierReturn : undefined}
           products={products}
           warehouses={warehouses}
           suppliers={suppliers}
           taxRates={taxRates}
           onSubmit={handleFormSubmit}
-          onClose={() => setDialog(null)}
+          onClose={() => setCreating(false)}
         />
       )}
     </div>

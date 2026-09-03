@@ -2,8 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { NewStockAdjustmentLine, Product, Warehouse } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
-import { ProductCombobox } from '@/components/app/combobox';
+import { EnumSelect, ProductCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 
 export interface StockAdjustmentLinesEditorProps {
@@ -111,28 +110,24 @@ export function StockAdjustmentLinesEditor({
                   aria-label="Product"
                 />
               </div>
-              <NativeSelect
+              <EnumSelect
                 value={line.warehouseId}
                 disabled={disabled}
-                onChange={(e) => updateLine(index, { warehouseId: e.target.value })}
+                onValueChange={(v) => updateLine(index, { warehouseId: v })}
                 aria-label="Warehouse"
-              >
-                <option value="">Select…</option>
-                {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
-              </NativeSelect>
-              <NativeSelect
+                placeholder="Select…"
+                options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+              />
+              <EnumSelect
                 value={isIncrease ? 'increase' : 'decrease'}
                 disabled={disabled}
-                onChange={(e) => updateLine(index, { quantityDelta: (e.target.value === 'increase' ? 1 : -1) * quantity })}
+                onValueChange={(v) => updateLine(index, { quantityDelta: (v === 'increase' ? 1 : -1) * quantity })}
                 aria-label="Direction"
-              >
-                <option value="decrease">Decrease</option>
-                <option value="increase">Increase</option>
-              </NativeSelect>
+                options={[
+                  { value: 'decrease', label: 'Decrease' },
+                  { value: 'increase', label: 'Increase' },
+                ]}
+              />
               <Input
                 type="number"
                 min="0"

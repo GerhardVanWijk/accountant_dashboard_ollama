@@ -130,7 +130,7 @@ export class BillService {
     if (bill.status !== 'draft') {
       throw new Error(
         `Cannot edit bill "${id}": a posted bill is immutable (current status: ${bill.status}). ` +
-          `Raise a supplier return or reverse the journal entry to correct it.`,
+          `Raise a supplier return, or post a compensating manual journal entry, to correct it.`,
       );
     }
     const updated = await this.repository.update(id, patch);
@@ -381,7 +381,10 @@ export class BillService {
    * bill would leave its journal entry and stock movements live while the
    * document reads "void" — a subledger ↔ GL inconsistency. There is no
    * product requirement for voiding a posted bill; correct one via a supplier
-   * return (which atomically reverses stock + GL) or a journal reversal.
+   * return (which atomically reverses stock + GL) or a compensating manual
+   * journal entry. (The generic JournalEntryService.reverseJournalEntry() now
+   * refuses `bill`-sourced entries — reversing one from the GL alone would
+   * leave bill.amountPaid / status out of step with the ledger.)
    */
   async voidBill(id: string): Promise<Bill> {
     const bill = await this.repository.getById(id);
@@ -391,7 +394,7 @@ export class BillService {
     if (bill.status !== 'draft') {
       throw new Error(
         `Cannot void bill "${id}": only a draft bill can be voided (current status: ${bill.status}). ` +
-          `Raise a supplier return or reverse the journal entry to unwind a posted bill.`,
+          `Raise a supplier return, or post a compensating manual journal entry, to unwind a posted bill.`,
       );
     }
     return this.repository.update(id, { status: 'void' });

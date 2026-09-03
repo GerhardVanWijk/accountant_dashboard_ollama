@@ -103,7 +103,7 @@ beforeEach(() => {
 describe('StatementImportWizard', () => {
   it('step 1–2: pre-selects the target account and offers a format override', () => {
     renderWizard();
-    expect(screen.getByLabelText(/bank account/i)).toHaveValue('ba1');
+    expect(screen.getByLabelText(/bank account/i)).toHaveTextContent('FNB Cheque');
     expect(screen.getByLabelText(/statement format override/i)).toBeInTheDocument();
     expect(screen.getByText(/reconciling it against your books is the next step/i)).toBeInTheDocument();
   });

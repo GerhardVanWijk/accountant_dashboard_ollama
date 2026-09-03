@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import type { Product } from '@/types';
 import { InventoryOverviewPage } from './InventoryOverviewPage';
 
@@ -35,9 +35,17 @@ vi.mock('../hooks/useProductCategories', () => ({ useProductCategories: () => ({
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/inventory']}>
-      <InventoryOverviewPage />
+      <Routes>
+        <Route path="/inventory" element={<InventoryOverviewPage />} />
+        <Route path="/inventory/products/:productId" element={<LocationProbe />} />
+      </Routes>
     </MemoryRouter>,
   );
+}
+
+function LocationProbe() {
+  const loc = useLocation();
+  return <div data-testid="location">{loc.pathname}</div>;
 }
 
 describe('InventoryOverviewPage', () => {
@@ -97,12 +105,12 @@ describe('InventoryOverviewPage', () => {
     expect(screen.getByText(/loading inventory/i)).toBeInTheDocument();
   });
 
-  it('opens the tabbed item detail sheet on row click', async () => {
+  it('navigates to the full-page item record on row click (not a sheet)', async () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Open Oak desk' }));
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Accounting' })).toBeInTheDocument();
+      expect(screen.getByTestId('location')).toHaveTextContent('/inventory/products/a');
     });
-    expect(screen.getByRole('tab', { name: 'Transactions' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Accounting' })).not.toBeInTheDocument();
   });
 });

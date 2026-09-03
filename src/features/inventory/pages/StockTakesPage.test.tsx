@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import type { Account, Product, StockTake, Warehouse } from '@/types';
 import { StockTakesPage } from './StockTakesPage';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
@@ -9,10 +9,18 @@ import { productService } from '../services/productService';
 import { warehouseService } from '../services/warehouseService';
 import { accountService } from '@/features/accounting/services';
 
-function renderPage() {
+function Loc() {
+  const loc = useLocation();
+  return <div data-testid="loc">{loc.pathname + loc.search}</div>;
+}
+
+function renderPage(entry = '/inventory/stock-takes') {
   return render(
-    <MemoryRouter initialEntries={['/inventory/stock-takes']}>
-      <StockTakesPage />
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route path="/inventory/stock-takes" element={<><StockTakesPage /><Loc /></>} />
+        <Route path="/inventory/stock-takes/:stockTakeId" element={<Loc />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -54,7 +62,6 @@ vi.mock('@/features/accounting/services', () => ({
 const mockedGetStockTakes = stockTakeService.getStockTakes as unknown as ReturnType<typeof vi.fn>;
 const mockedCreateStockTake = stockTakeService.createStockTake as unknown as ReturnType<typeof vi.fn>;
 const mockedDeleteStockTake = stockTakeService.deleteStockTake as unknown as ReturnType<typeof vi.fn>;
-const mockedFreeze = stockTakeService.freeze as unknown as ReturnType<typeof vi.fn>;
 const mockedGetProducts = productService.getProducts as unknown as ReturnType<typeof vi.fn>;
 const mockedGetWarehouses = warehouseService.getWarehouses as unknown as ReturnType<typeof vi.fn>;
 const mockedGetAccounts = accountService.getAccounts as unknown as ReturnType<typeof vi.fn>;
@@ -179,17 +186,20 @@ describe('StockTakesPage', () => {
     await waitFor(() => expect(mockedDeleteStockTake).toHaveBeenCalledWith('stk_1'));
   });
 
-  it('freezes a draft stock take from the detail sheet', async () => {
+  it('navigates to the full-page record on row click — no detail sheet', async () => {
     mockedGetStockTakes.mockResolvedValue([makeStockTake()]);
-    mockedFreeze.mockResolvedValue(makeStockTake({ status: 'counting', frozenAt: '2026-08-02T00:00:00.000Z' }));
     renderPage();
     await screen.findByText('STK-0001');
 
     fireEvent.click(screen.getByText('STK-0001'));
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: /freeze count sheet/i }));
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/inventory/stock-takes/stk_1'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 
-    await waitFor(() => expect(mockedFreeze).toHaveBeenCalledWith('stk_1'));
+  it('redirects a legacy ?record=<id> deep link to the canonical record route', async () => {
+    mockedGetStockTakes.mockResolvedValue([makeStockTake()]);
+    renderPage('/inventory/stock-takes?record=stk_1');
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/inventory/stock-takes/stk_1'));
   });
 
   it('hides create/manage actions for a user without inventory write permission', async () => {
@@ -200,9 +210,5 @@ describe('StockTakesPage', () => {
 
     expect(screen.queryByRole('button', { name: /new stock take/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('STK-0001'));
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).queryByRole('button', { name: /freeze count sheet/i })).not.toBeInTheDocument();
   });
 });

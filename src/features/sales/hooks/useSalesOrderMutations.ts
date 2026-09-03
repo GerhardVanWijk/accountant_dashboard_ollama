@@ -47,6 +47,9 @@ export function useSalesOrderMutations(options?: UseSalesOrderMutationsOptions) 
   const convertToInvoice = (id: string) =>
     run(() => salesOrderService.convertToInvoice(id), () => undefined);
 
+  const duplicateSalesOrder = (id: string) =>
+    run(() => salesOrderService.duplicateSalesOrder(id), (o) => options?.onSuccess?.(o));
+
   return {
     isLoading,
     error,
@@ -56,5 +59,6 @@ export function useSalesOrderMutations(options?: UseSalesOrderMutationsOptions) 
     confirmOrder,
     cancelOrder,
     convertToInvoice,
+    duplicateSalesOrder,
   };
 }

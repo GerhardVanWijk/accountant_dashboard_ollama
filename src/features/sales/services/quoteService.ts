@@ -1,6 +1,15 @@
-import type { Quote, SalesOrder } from '@/types';
+import type { ID, Quote, SalesOrder } from '@/types';
 import type { IQuoteRepository } from '@/repositories/IQuoteRepository';
 import type { ISalesOrderRepository } from '@/repositories/ISalesOrderRepository';
+import { newUuid } from '@/lib/uuid';
+import { auditLogService, type AuditLogService } from '@/services/auditLogService';
+import {
+  documentNumberPrefix,
+  nextDocumentNumber,
+} from '@/features/purchases/utils/nextDocumentNumber';
+
+/** No real authenticated actor for a system-initiated copy — same pattern as stockAdjustmentService. */
+const SYSTEM_USER_ID: ID = 'system';
 
 export type CreateQuoteDTO = Omit<Quote, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -13,6 +22,8 @@ export class QuoteService {
   constructor(
     private readonly repository: IQuoteRepository,
     private readonly salesOrderRepository: ISalesOrderRepository,
+    /** Phase 4B-2: records a "created" audit row for a duplicated quote. Defaults to the shared singleton. */
+    private readonly auditLog: AuditLogService = auditLogService,
   ) {}
 
   async getQuotes(): Promise<Quote[]> {
@@ -116,6 +127,54 @@ export class QuoteService {
       createdAt: '',
       updatedAt: '',
     });
+  }
+
+  /**
+   * Copies a quote into a brand-new DRAFT quote — new number, today's
+   * issue date, the same valid-for span, fresh line-item ids, the party
+   * and notes carried over. Nothing else (status, timestamps) is copied.
+   * NO GL posting is involved (quotes never post). Throws if the source
+   * quote does not exist. Writes a `created` audit row naming the source
+   * quote number.
+   */
+  async duplicateQuote(id: string, duplicatedBy: ID = SYSTEM_USER_ID): Promise<Quote> {
+    const source = await this.requireQuote(id);
+    const existing = await this.repository.getAll();
+    const prefix = documentNumberPrefix(source.quoteNumber, 'QUO');
+    const now = new Date();
+    const spanMs = Math.max(
+      new Date(source.expiryDate).getTime() - new Date(source.issueDate).getTime(),
+      0,
+    );
+    const copy = await this.repository.create({
+      id: '',
+      quoteNumber: nextDocumentNumber(
+        existing.map((q) => q.quoteNumber),
+        prefix,
+      ),
+      customerId: source.customerId,
+      issueDate: now.toISOString(),
+      expiryDate: new Date(now.getTime() + spanMs).toISOString(),
+      lineItems: source.lineItems.map((line) => ({ ...line, id: newUuid() })),
+      subtotal: source.subtotal,
+      taxTotal: source.taxTotal,
+      total: source.total,
+      currency: source.currency,
+      status: 'draft',
+      notes: source.notes,
+      createdAt: '',
+      updatedAt: '',
+    });
+    await this.auditLog.log({
+      userId: duplicatedBy,
+      action: 'created',
+      module: 'sales',
+      recordType: 'Quote',
+      recordId: copy.id,
+      reason: `Duplicated from ${source.quoteNumber}`,
+      newValue: { copiedFromNumber: source.quoteNumber },
+    });
+    return copy;
   }
 
   /** Get quotes for a specific customer. */

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
@@ -7,7 +7,7 @@ import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { supabase } from '@/config/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import type { SALegalEntityType } from '@/types';
@@ -65,10 +65,11 @@ export function OnboardingPage() {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { financialYearEndMonth: 12, financialYearEndDay: 31 },
+    defaultValues: { legalEntityType: 'private_company', financialYearEndMonth: 12, financialYearEndDay: 31 },
   });
 
   const onSubmit = async (values: FormValues) => {
@@ -108,13 +109,20 @@ export function OnboardingPage() {
 
           <Field>
             <FieldLabel htmlFor="legalEntityType">Legal entity type</FieldLabel>
-            <NativeSelect id="legalEntityType" {...register('legalEntityType')}>
-              {legalEntityOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </NativeSelect>
+            <Controller
+              control={control}
+              name="legalEntityType"
+              render={({ field, fieldState }) => (
+                <EnumSelect
+                  id="legalEntityType"
+                  name="legalEntityType"
+                  value={field.value ?? 'private_company'}
+                  onValueChange={field.onChange}
+                  invalid={Boolean(fieldState.error)}
+                  options={legalEntityOptions}
+                />
+              )}
+            />
           </Field>
 
           <div className="grid grid-cols-2 gap-4">

@@ -2,8 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { AssetCategory, DepreciationMethod, DocumentLineItem, FixedAssetLineDetails, Product, TaxRate, Warehouse } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
-import { ProductCombobox } from '@/components/app/combobox';
+import { EnumSelect, ProductCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS } from '@/features/assets/constants';
 
@@ -239,19 +238,16 @@ export function LineItemsEditor({
                 </label>
               )}
               {showWarehouseColumn && (
-                <NativeSelect
+                <EnumSelect
                   value={item.warehouseId ?? ''}
                   disabled={disabled || !item.productId}
-                  onChange={(e) => updateLine(index, { warehouseId: e.target.value || undefined })}
+                  onValueChange={(v) => updateLine(index, { warehouseId: v || undefined })}
                   aria-label="Warehouse"
-                >
-                  <option value="">Default warehouse</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </NativeSelect>
+                  options={[
+                    { value: '', label: 'Default warehouse' },
+                    ...warehouses.map((w) => ({ value: w.id, label: w.name })),
+                  ]}
+                />
               )}
               <Input
                 className="col-span-2 sm:col-span-1"
@@ -281,19 +277,16 @@ export function LineItemsEditor({
                 onChange={(e) => updateLine(index, { unitPrice: parseFloat(e.target.value) || 0 })}
                 aria-label="Unit price"
               />
-              <NativeSelect
+              <EnumSelect
                 value={item.taxRateId ?? ''}
                 disabled={disabled}
-                onChange={(e) => updateLine(index, { taxRateId: e.target.value || undefined })}
+                onValueChange={(v) => updateLine(index, { taxRateId: v || undefined })}
                 aria-label="Tax rate"
-              >
-                <option value="">No tax</option>
-                {taxRates.map((rate) => (
-                  <option key={rate.id} value={rate.id}>
-                    {rate.name}
-                  </option>
-                ))}
-              </NativeSelect>
+                options={[
+                  { value: '', label: 'No tax' },
+                  ...taxRates.map((rate) => ({ value: rate.id, label: rate.name })),
+                ]}
+              />
               <span className="figure text-right text-sm tabular-nums text-muted-foreground sm:pt-2">
                 <Amount value={item.taxAmount} plain />
               </span>
@@ -316,17 +309,13 @@ export function LineItemsEditor({
               <div className="grid grid-cols-1 gap-3 border-t border-dashed border-border bg-muted/20 p-3 sm:grid-cols-3 md:grid-cols-5">
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                   Category
-                  <NativeSelect
+                  <EnumSelect
+                    aria-label="Asset category"
                     value={item.fixedAssetDetails.category}
                     disabled={disabled}
-                    onChange={(e) => selectAssetCategory(index, e.target.value as AssetCategory)}
-                  >
-                    {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </NativeSelect>
+                    onValueChange={(v) => selectAssetCategory(index, v as AssetCategory)}
+                    options={Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }))}
+                  />
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                   Useful Life (Years)
@@ -341,19 +330,13 @@ export function LineItemsEditor({
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                   Depreciation Method
-                  <NativeSelect
+                  <EnumSelect
+                    aria-label="Depreciation method"
                     value={item.fixedAssetDetails.depreciationMethod}
                     disabled={disabled}
-                    onChange={(e) =>
-                      updateFixedAssetDetails(index, { depreciationMethod: e.target.value as DepreciationMethod })
-                    }
-                  >
-                    {Object.entries(DEPRECIATION_METHOD_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </NativeSelect>
+                    onValueChange={(v) => updateFixedAssetDetails(index, { depreciationMethod: v as DepreciationMethod })}
+                    options={Object.entries(DEPRECIATION_METHOD_LABELS).map(([value, label]) => ({ value, label }))}
+                  />
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                   Residual Value

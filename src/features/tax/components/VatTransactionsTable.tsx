@@ -43,7 +43,7 @@ export function VatTransactionsTable({ transactions }: { transactions: VatTransa
       sortValue: (t) => t.documentNumber,
       cell: (t) => (
         <div className="flex flex-col gap-0.5">
-          <RecordLink onClick={() => navigate(`${DOCUMENT_TYPE_ROUTE[t.documentType]}?record=${t.id}`)} className="text-sm font-medium">
+          <RecordLink onClick={() => navigate(`${DOCUMENT_TYPE_ROUTE[t.documentType]}/${t.id}`)} className="text-sm font-medium">
             {t.documentNumber}
           </RecordLink>
           <span className="text-xs text-muted-foreground">{DOCUMENT_TYPE_LABELS[t.documentType]}</span>
