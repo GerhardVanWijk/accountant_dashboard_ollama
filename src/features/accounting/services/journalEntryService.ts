@@ -65,6 +65,26 @@ export interface LedgerRow {
 const BALANCE_EPSILON = 0.005;
 
 /**
+ * Journal-entry sources owned by an AR/AP subledger. Reversing one of these
+ * straight from the general ledger (e.g. the generic "Reverse entry" button)
+ * moves the GL but leaves the originating document's own subledger state
+ * (invoice.amountPaid, a receipt's allocations / unallocatedAmount, a
+ * credit note's allocation) untouched — a silent GL-vs-subledger split.
+ * reverseJournalEntry() refuses these unless the caller explicitly opts in
+ * via { allowSubledgerSourced: true } (a dedicated document-level flow that
+ * unwinds the subledger too). Inventory sources are absent on purpose — the
+ * inventory engine reverses through its own idempotent RPC, never here.
+ */
+const SUBLEDGER_OWNED_SOURCES = new Set([
+  'invoice',
+  'bill',
+  'credit_note',
+  'customer_receipt',
+  'customer_receipt_allocation',
+  'payment',
+]);
+
+/**
  * A single JournalLine's debit/credit pair collapsed to one signed number —
  * the "debits and credits as vectors" model (magnitude + direction) rather
  * than two columns to juggle: positive = net debit direction, negative =
@@ -238,13 +258,24 @@ export class JournalEntryService {
    * below — a reversal cannot backdate around a closed period any more
    * than a normal post can).
    */
-  async reverseJournalEntry(entryId: ID, userId: ID = SYSTEM_USER_ID, memo?: string): Promise<JournalEntry> {
+  async reverseJournalEntry(
+    entryId: ID,
+    userId: ID = SYSTEM_USER_ID,
+    memo?: string,
+    options?: { allowSubledgerSourced?: boolean },
+  ): Promise<JournalEntry> {
     const original = await this.journalRepository.getById(entryId);
     if (!original) {
       throw new Error(`Cannot reverse: journal entry "${entryId}" not found.`);
     }
     if (original.status !== 'posted') {
       throw new Error(`Cannot reverse entry "${entryId}": only posted entries can be reversed.`);
+    }
+    if (!options?.allowSubledgerSourced && SUBLEDGER_OWNED_SOURCES.has(original.source)) {
+      throw new Error(
+        `Journal entry "${entryId}" was posted by the "${original.source}" subledger — reverse it from that document ` +
+          `(issue a credit note, void the receipt/payment) so the subledger stays consistent with the ledger, not from the general ledger directly.`,
+      );
     }
     if (await this.isReversed(entryId)) {
       throw new Error(`Journal entry "${entryId}" has already been reversed.`);

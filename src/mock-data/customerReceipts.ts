@@ -7,18 +7,16 @@ function nowISO(): string {
 
 /**
  * Seed data for the Customer Receipts list. Recording a receipt posts a
- * balanced journal entry (debit Cash/Bank, credit Accounts Receivable) at
- * creation time — see
- * `src/features/sales/services/customerReceiptService.ts` and
- * docs/LEDGER_ARCHITECTURE.md. Every FULLY-ALLOCATED row here (
- * `unallocatedAmount === 0`) gets a matching `journalEntryId` pointing at
- * the JournalEntry `generateSeedPostings.ts` produces for it
- * (`src/mock-data/journalEntries.ts`), same pattern as `seedInvoices` —
- * so the AR control account actually reconciles against real seed
- * invoices' `amountPaid`, not just their original posting (fixed
- * 2026-08-22, see docs/KNOWN_ISSUES.md). A receipt left on-account
- * (unallocated) deliberately keeps no `journalEntryId` — see
- * `generateSeedPostings.ts`'s doc comment for why.
+ * balanced journal entry at creation time — Increment 4A split: DR Cash and
+ * Bank for the full amount, CR Accounts Receivable for the portion applied
+ * to invoices, CR Customer Deposits (acc_2600) for the unapplied portion —
+ * see `src/features/sales/services/customerReceiptService.ts` and
+ * docs/LEDGER_ARCHITECTURE.md. EVERY row here gets a matching
+ * `journalEntryId` pointing at the JournalEntry `generateSeedPostings.ts`
+ * produces for it (`src/mock-data/journalEntries.ts`), same pattern as
+ * `seedInvoices` — including on-account (unallocated) receipts, whose
+ * unapplied balance now sits in a real liability account and reconciles
+ * via `reconcileCustomerDeposits()`.
  */
 const rawSeedCustomerReceipts: CustomerReceipt[] = [
   {
@@ -116,6 +114,7 @@ const rawSeedCustomerReceipts: CustomerReceipt[] = [
   },
 ];
 
-export const seedCustomerReceipts: CustomerReceipt[] = rawSeedCustomerReceipts.map((receipt) =>
-  receipt.unallocatedAmount > 0 ? receipt : { ...receipt, journalEntryId: seedJournalEntryId(receipt.id) },
-);
+export const seedCustomerReceipts: CustomerReceipt[] = rawSeedCustomerReceipts.map((receipt) => ({
+  ...receipt,
+  journalEntryId: seedJournalEntryId(receipt.id),
+}));

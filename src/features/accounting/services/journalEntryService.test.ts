@@ -296,6 +296,33 @@ describe('JournalEntryService', () => {
       const { service } = setup();
       await expect(service.reverseJournalEntry('nope')).rejects.toThrow(/not found/i);
     });
+
+    it('refuses to reverse a subledger-sourced entry from the general ledger by default', async () => {
+      const { service } = setup();
+      const original = await service.postJournalEntry({
+        date: '2026-02-01T00:00:00.000Z',
+        source: 'customer_receipt',
+        lines: [
+          { accountId: 'acc_1000', debit: 500, credit: 0 },
+          { accountId: 'acc_1100', debit: 0, credit: 500 },
+        ],
+      });
+      await expect(service.reverseJournalEntry(original.id)).rejects.toThrow(/subledger/i);
+    });
+
+    it('allows reversing a subledger-sourced entry when the caller explicitly opts in', async () => {
+      const { service } = setup();
+      const original = await service.postJournalEntry({
+        date: '2026-02-01T00:00:00.000Z',
+        source: 'customer_receipt_allocation',
+        lines: [
+          { accountId: 'acc_2600', debit: 300, credit: 0 },
+          { accountId: 'acc_1100', debit: 0, credit: 300 },
+        ],
+      });
+      const reversal = await service.reverseJournalEntry(original.id, 'system', undefined, { allowSubledgerSourced: true });
+      expect(reversal.reversalOfEntryId).toBe(original.id);
+    });
   });
 
   describe('computeTrialBalance', () => {

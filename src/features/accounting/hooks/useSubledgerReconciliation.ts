@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { journalEntryService, accountMappingService } from '../services';
-import { reconcileAccountsReceivable, reconcileAccountsPayable, type SubledgerReconciliation } from '../services/subledgerReconciliation';
+import { reconcileAccountsReceivable, reconcileAccountsPayable, reconcileCustomerDeposits, type SubledgerReconciliation } from '../services/subledgerReconciliation';
 import { invoiceService } from '@/services';
 import { creditNoteService, customerReceiptService } from '@/features/sales/services';
 import { billService, paymentService } from '@/features/purchases/services';
@@ -8,6 +8,8 @@ import { billService, paymentService } from '@/features/purchases/services';
 export interface UseSubledgerReconciliationResult {
   ar: SubledgerReconciliation | null;
   ap: SubledgerReconciliation | null;
+  /** Customer Deposits (2600) control vs Σ unapplied customer receipts — null when there is nothing on account. */
+  deposits: SubledgerReconciliation | null;
   loading: boolean;
   error: Error | null;
   refetch: () => void;
@@ -23,6 +25,7 @@ export interface UseSubledgerReconciliationResult {
 export function useSubledgerReconciliation(): UseSubledgerReconciliationResult {
   const [ar, setAr] = useState<SubledgerReconciliation | null>(null);
   const [ap, setAp] = useState<SubledgerReconciliation | null>(null);
+  const [deposits, setDeposits] = useState<SubledgerReconciliation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -43,12 +46,16 @@ export function useSubledgerReconciliation(): UseSubledgerReconciliationResult {
         Promise.all([
           reconcileAccountsReceivable(journalEntryService, accountMappingService, invoices, creditNotes, receipts),
           reconcileAccountsPayable(journalEntryService, accountMappingService, bills, payments),
+          receipts.some((r) => r.unallocatedAmount > 0)
+            ? reconcileCustomerDeposits(journalEntryService, accountMappingService, receipts).catch(() => null)
+            : Promise.resolve(null),
         ]),
       )
-      .then(([arResult, apResult]) => {
+      .then(([arResult, apResult, depositsResult]) => {
         if (cancelled) return;
         setAr(arResult);
         setAp(apResult);
+        setDeposits(depositsResult);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err : new Error('Failed to reconcile subledgers'));
@@ -64,5 +71,5 @@ export function useSubledgerReconciliation(): UseSubledgerReconciliationResult {
 
   const refetch = useCallback(() => setReloadToken((t) => t + 1), []);
 
-  return { ar, ap, loading, error, refetch };
+  return { ar, ap, deposits, loading, error, refetch };
 }

@@ -23,7 +23,7 @@ import { SubledgerReconciliationCard } from '../components/SubledgerReconciliati
 export function TrialBalancePage() {
   const { accounts } = useAccounts();
   const { trialBalance, loading, error, refetch } = useTrialBalance();
-  const { ar, ap, loading: reconciliationLoading } = useSubledgerReconciliation();
+  const { ar, ap, deposits, loading: reconciliationLoading } = useSubledgerReconciliation();
 
   const accountsById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
 
@@ -161,9 +161,10 @@ export function TrialBalancePage() {
           </div>
         )}
         {!reconciliationLoading && ar && ap && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             <SubledgerReconciliationCard label="Accounts receivable" reconciliation={ar} />
             <SubledgerReconciliationCard label="Accounts payable" reconciliation={ap} />
+            {deposits && <SubledgerReconciliationCard label="Customer deposits" reconciliation={deposits} />}
           </div>
         )}
       </div>

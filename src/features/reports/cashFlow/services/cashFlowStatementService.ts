@@ -13,8 +13,9 @@ import { assetDisposalService } from '@/features/assets/services';
  * forecasting, a direct-method presentation. Indirect only.
  *
  * SCOPE NOTE on working capital: only Accounts Receivable (acc_1100),
- * Inventory (acc_1200) and Accounts Payable (acc_2000) are tracked as
- * working-capital movements in Operating activities, per the dispatch spec.
+ * Inventory (acc_1200), Accounts Payable (acc_2000) and Customer Deposits
+ * (acc_2600, added Increment 4A) are tracked as working-capital movements
+ * in Operating activities, per the dispatch spec.
  * Any OTHER current asset/liability account that moves cash indirectly
  * (VAT Payable, PAYE/UIF/SDL Payable, Provisional Tax Payable, loan
  * accounts, etc.) is NOT tracked here — if a real trial balance posts cash
@@ -37,6 +38,8 @@ const ACCOUNTS_RECEIVABLE_ACCOUNT_CODE = '1100';
 const INVENTORY_ACCOUNT_CODE = '1200';
 const FIXED_ASSETS_ACCOUNT_CODE = '1500';
 const ACCOUNTS_PAYABLE_ACCOUNT_CODE = '2000';
+/** Customer money received before it is earned/applied — a contract liability (Increment 4A). Credit-normal; an increase is a source of cash. */
+const CUSTOMER_DEPOSITS_ACCOUNT_CODE = '2600';
 const OWNERS_EQUITY_ACCOUNT_CODE = '3000';
 const GAIN_ON_DISPOSAL_ACCOUNT_CODE = '4200';
 const DEPRECIATION_EXPENSE_ACCOUNT_CODE = '5200';
@@ -72,6 +75,7 @@ function resolveAccountIdsByCode(accounts: Account[]) {
     inventory: byCode.get(INVENTORY_ACCOUNT_CODE),
     fixedAssets: byCode.get(FIXED_ASSETS_ACCOUNT_CODE),
     accountsPayable: byCode.get(ACCOUNTS_PAYABLE_ACCOUNT_CODE),
+    customerDeposits: byCode.get(CUSTOMER_DEPOSITS_ACCOUNT_CODE),
     ownersEquity: byCode.get(OWNERS_EQUITY_ACCOUNT_CODE),
     gainOnDisposal: byCode.get(GAIN_ON_DISPOSAL_ACCOUNT_CODE),
     depreciationExpense: byCode.get(DEPRECIATION_EXPENSE_ACCOUNT_CODE),
@@ -198,6 +202,11 @@ export function computeCashFlowStatement(
   const inventoryChange = netDebitMovement(periodEntries, ids.inventory);
   // Accounts Payable is credit-normal: a positive increase in the payable is a net CREDIT movement.
   const apChange = -netDebitMovement(periodEntries, ids.accountsPayable);
+  // Customer Deposits (2600) is credit-normal, same treatment as AP: an
+  // increase in the deposit liability (a customer pays us in advance) is a
+  // source of cash; applying a deposit to an invoice (DR 2600 / CR 1100)
+  // nets to zero here against the matching AR movement.
+  const customerDepositsChange = -netDebitMovement(periodEntries, ids.customerDeposits);
 
   const operatingItems: CashFlowLineItem[] = [
     { label: 'Net Profit', amount: netProfit },
@@ -207,6 +216,7 @@ export function computeCashFlowStatement(
     { label: 'Increase / (Decrease) in Accounts Receivable', amount: -arChange },
     { label: 'Increase / (Decrease) in Inventory', amount: -inventoryChange },
     { label: 'Increase / (Decrease) in Accounts Payable', amount: apChange },
+    { label: 'Increase / (Decrease) in Customer Deposits', amount: customerDepositsChange },
   ];
   const operatingTotal = operatingItems.reduce((sum, item) => sum + item.amount, 0);
 

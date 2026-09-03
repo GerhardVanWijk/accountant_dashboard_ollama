@@ -14,6 +14,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` complete
 - Increment 1 — record-page framework, Sales Order + Inventory Product full pages, tax-rate wiring fix, inventory-cluster native-`<select>` sweep.
 - Increment 2 — remaining 12 record types migrated to full pages, 15 detail sheets deleted, app-wide **transaction-form** dropdown sweep, tax-rate regression guard.
 - Increment 3 (**UNCOMMITTED**) — inventory movement ledger: human source-document numbers (no UUIDs) + `RelatedRecordPreview` over-the-page overlay + expandable Movement/Source/Accounting/Technical panel; sales-document workflow **audit** (quote/SO/invoice non-posting rules confirmed, partial-payment confirmed, **customer-deposit accounting gap** + partial-SO-invoicing + stock-commitment absence reported, not changed). See `# RECORD DETAIL — INCREMENT 3` below.
+- Increment 4A (**UNCOMMITTED — STOPPED at Review 4A-4, awaiting apply/commit approval**) — Customer Deposits / Prepayments / Contract Liability. New `2600 Customer Deposits` account + `CUSTOMER_DEPOSIT` mapping key; `recordReceipt()` split posting (AR = applied, 2600 = unapplied); `reconcileCustomerDeposits()` + AR-recon rework + cash-flow "Customer Deposits" line + `reverseJournalEntry()` subledger guard; UI: available-deposit on receipt/customer pages, "Apply deposit" on the invoice page. **Hardening pass (Reviews 4A-3 / 4A-4):** `allocateToInvoice()` runs entirely inside the atomic `apply_customer_deposit` RPC (migration `0046`) — one Postgres transaction; idempotency keyed on a **stable client-generated UUID `allocationId`** (`deposit_allocation_log` UNIQUE `(company_id, allocation_id)`, never on `allocations.length`); locks receipt→invoice (fixed order, deadlock-audited), re-validates against locked rows; DB CHECK constraints on `unallocated_amount` / `amount_paid` (+ `payments`/`bills` mirrors); `ReceiptAllocation` gains a stable `id`; `TS CustomerReceiptService` calls it via a `DepositAllocationExecutor` (Real/Fake split), UI modals generate the id once per open. `0045` ABORTs on a conflicting pre-existing 2600. `0045b` historical script uses `deposit_reclassification_log` (`UNIQUE (company_id, receipt_id)`) for deterministic idempotency. Migrations **`0045` + `0046` authored, NOT applied**; `0045b` (3 Office National receipts, **live R4,250** — the R1,750 in the ON fixture is a 2026-08-28 snapshot, not a business rule) **authored, NOT executed**. Gate: tsc ✅ · eslint `--max-warnings 0` ✅ · **2083 tests / 294 files** ✅ · `vite build` ✅. No DB writes, no migration applied, no corrections posted, no commit/push/deploy. Full detail: `docs/ACCOUNTING_RELATIONSHIPS.md` § "CUSTOMER DEPOSITS / PREPAYMENTS — INCREMENT 4A".
 
 Gate green on `phase-9b-relationship-design-and-code`: tsc ✅ · eslint `--max-warnings 0` ✅ · **2063 tests / 294 files** ✅ · `vite build` ✅. Increments 1–2 committed `3318e7b` + pushed; **increment 3 is uncommitted, awaiting review**.
 
@@ -30,6 +31,315 @@ Gate green on `phase-9b-relationship-design-and-code`: tsc ✅ · eslint `--max-
 - Journal Entry detail still sheet-backed (`?record=`) — no full-page `JournalEntryDetailPage` yet.
 - GL Account / Fixed Asset / Lease intentionally retained as sheets this increment (borderline records, per brief §B).
 - Create / edit modal shell width still requires browser confirmation.
+
+---
+
+# ================================================================
+# POST-4A ROADMAP — Sales documents & fulfilment
+# ================================================================
+
+**Added:** 2026-09-03 (user roadmap). **Rule for every phase below:** design → author →
+**STOP at the phase's own review checkpoint** → gate green (tsc / eslint `--max-warnings 0` /
+full test suite / `vite build`) → wait for explicit approval before applying any migration,
+committing, pushing or deploying. No live DB writes during investigation (read-only Supabase
+MCP only). Accounting-immutability rules (posted invoices/bills/JEs/receipts/credit notes,
+audit logs, inventory postings) are never weakened.
+
+```
+4A  CUSTOMER DEPOSITS            ← done, stopped at Review 4A-4 (apply/commit pending)
+      ↓
+4B  PROFESSIONAL DOCUMENTS       ← next visible frontend increment
+      ↓
+5   SALES FULFILMENT             ← 5A stock commitment · 5B partial SO fulfilment · 5C delivery notes · 5D partial invoicing
+      ↓
+6   ADVANCED INVENTORY / SALES   ← only on top of a solid fulfilment model
+      ↓
+7   POLISH + PRODUCTION HARDENING
+```
+
+Legend: `[ ]` not started · `[~]` in progress · `[x]` complete · **CP-n** = review checkpoint.
+
+---
+
+## PHASE 4B — Professional Quote / Sales Order / Invoice documents
+
+**Type:** visible frontend increment. **No accounting/DB change** expected (a `duplicate`/`copy`
+service method + possibly a `salesperson`/`terms`/`bankingDetails` field on the document types is
+the likely ceiling — flag before adding). Builds on the record-page framework from Increments 1–3.
+
+**Context / gap:** Increment-3 audit found Quote & Sales Order (and the other `*DetailPage`
+records) have **no formal business-document print/export** — `window.print()` prints app chrome +
+on-screen HTML; the Phase-7 `ExportMenu` / `PrintableReport` is wired on list pages only; there is
+no branded A4 layout. See `docs/ACCOUNTING_RELATIONSHIPS.md` § "SALES DOCUMENT WORKFLOW AUDIT" Q8
+and `docs/KNOWN_ISSUES.md`.
+
+### Deliverable — ONE reusable document system
+
+```
+PrintableDocument
+   ├── Quote
+   ├── Sales Order
+   ├── Invoice
+   ├── Credit Note
+   └── Purchase Order
+```
+
+### Tasks
+- [ ] **4B.0 Investigation** — inventory every existing print/export primitive (`src/features/export/`
+  `ExportMenu` / `PrintableReport` / `PrintableReport`'s `@media print`), the `useCompany()` shape
+  (logo? reg no? VAT no? banking details? address?), the `Customer`/`Supplier` address fields, the
+  document line-item shape, and the shared `record-page` components. Report what data exists vs.
+  what a professional document needs (e.g. is there a company-logo asset store? bank-account
+  details for "payment information"?).
+- [ ] **4B.1 `PrintableDocument` component** (`src/features/salesDocuments/` or `src/features/print/`) —
+  A4 layout, `@media print` + on-screen preview. Slots: company logo + details block; document
+  title + number; issue date; expiry (Quote) / due date (Invoice/Bill) / order date (SO/PO);
+  bill-to + ship-to (delivery) address; party (customer/supplier) details; line table
+  (SKU/description/qty/unit price/discount?/VAT rate/line total); subtotal / VAT / total; deposit
+  applied + balance due where relevant; notes; terms; **payment information** (bank details);
+  page numbers ("Page 1 of N"); footer (company reg/VAT).
+- [ ] **4B.2 Per-document wrappers** — Quote, Sales Order, Invoice, Credit Note, Purchase Order —
+  each a thin mapping from the domain object → `PrintableDocument` props. Wire a **Print** and a
+  **Save PDF** action (and **email-ready output** — a clean standalone HTML/text the user can copy
+  or that a future edge function can send; no email backend is built here) onto each `*DetailPage`
+  action bar.
+- [ ] **4B.3 Duplicate / copy** — a `duplicate()` service method for Quote / Sales Order / Purchase
+  Order (NOT Invoice/Credit Note — those are corrected by credit note, never copied). Copies lines
+  + party + terms into a **new draft**, new number, today's date. Guarded, tested, audit-logged.
+- [ ] **4B.4 Tests** — `PrintableDocument` renders every slot from a fixture; each wrapper maps
+  correctly; `duplicate()` produces an independent draft (no shared refs, new number, draft status);
+  print stylesheet asserted via the existing `hidden print:block` pattern.
+- [ ] **4B.5 Docs** — new `docs/PRINTABLE_DOCUMENTS.md`; update `KNOWN_ISSUES.md` (close the
+  "no formal print layout" entry) and `ROUTES.md` if any route is added.
+
+**CP-4B (review checkpoint):** component API + one worked example (Invoice) rendered; data-gap
+report (logo/bank details); list of any type/schema field added and why; full gate; confirm no
+accounting/DB change (or present the migration if one is truly required). **STOP.**
+
+---
+
+## PHASE 5 — Sales fulfilment
+
+The core workflow. Target model:
+
+```
+QUOTE ──(accept)──▶ SALES ORDER ──┬── commit stock ──▶ RESERVED / COMMITTED
+                                  └── DELIVERY / FULFILMENT ──┬── full delivery
+                                                              └── partial delivery ──▶ partial / full INVOICE ──▶ PAYMENT
+                                                                                        (deposit · partial · full)
+```
+
+Invariants that must hold throughout Phase 5:
+- A Quote has **no** stock effect and **no** GL effect (unchanged).
+- A Sales Order **reserves** stock but posts **no** movement, **no** COGS, **no** revenue, **no** VAT.
+  *Commitment is a reservation, not a `stock_movement`.*
+- Revenue / COGS / VAT / the inventory movement happen **only** when an Invoice posts (unchanged
+  engine) — now driven by **delivered / invoiced quantities**, not "the whole SO at once".
+- Deposits (4A) slot in at the PAYMENT step unchanged.
+
+---
+
+### PHASE 5A — Stock commitment
+
+**Context / gap:** `StockBalance.quantityCommitted` exists in the type and `quantityAvailable()`
+subtracts it, but **nothing ever writes it** — `stockBalanceService` hardcodes `quantityCommitted: 0`
+and `stockService.getQuantityOnHand` has a literal `const quantityCommitted = 0; // TODO(Phase 2)`.
+So **Available === On hand** everywhere today. (`docs/KNOWN_ISSUES.md` § "No stock reservation".)
+
+### Model
+```
+On Hand
+− Committed        (Σ open Sales Order line quantities not yet delivered, per product+warehouse)
+= Available
+```
+Later (Phase 6, not 5A): also `On Order` (open POs), `In Transit` (transfers), `Backordered`.
+
+### Tasks
+- [ ] **5A.0 Investigation (read-only)** — trace `StockBalance`, `stockBalanceService`,
+  `stockService.getQuantityOnHand`, `quantityAvailable()`, every UI that shows "Available" / "On hand"
+  (`SalesLineItemsEditor` stock caption, inventory register, product detail), and every place a
+  reservation would need to be created/released/adjusted. Decide: **derived** (recompute committed
+  from open SO lines on read — simplest, always consistent) **vs. materialised** (a
+  `stock_reservations` table + triggers/service — needed only if read performance demands it).
+  Strong prior: **derive first**, matching how aging/margin are already derived.
+- [ ] **5A.1 Commitment source of truth** — a Sales Order line, while the SO is
+  `confirmed` and not fully delivered, commits `ordered − delivered` units of its product at its
+  warehouse. Draft/pending SOs commit nothing; cancelled/fully-delivered commit nothing.
+- [ ] **5A.2 `quantityCommitted` wired** — `stockBalanceService` / `stockService` compute real
+  committed quantity (per product + warehouse). `quantityAvailable() = onHand − committed`.
+- [ ] **5A.3 UI** — "On hand / Committed / Available" shown on the product detail, the inventory
+  register, and the Sales / (later) Delivery line editors. The SO line editor warns when a line
+  commits more than **available** (not just on-hand).
+- [ ] **5A.4 Over-commitment policy** — decide + document: allow over-commitment with a warning
+  (creates a backorder concept later) vs. block. Prior: **warn, don't block** (real businesses
+  take orders they can't yet fill).
+- [ ] **5A.5 Tests** — committed = Σ open confirmed-SO undelivered lines; released on cancel /
+  full delivery; available never used as if it were on-hand for a real movement; no
+  `stock_movement` is ever created by a commitment.
+- [ ] **5A.6 Docs** — `docs/INVENTORY_ARCHITECTURE.md` commitment section; close the KNOWN_ISSUES entry.
+
+**CP-5A:** model decision (derived vs materialised) with rationale; the exact commit/release rules;
+any migration (only if materialised); UI screenshots-by-description; full gate. **STOP.**
+
+---
+
+### PHASE 5B — Partial Sales Order fulfilment  *(two-dimensional state)*
+
+**Context / gap:** `SalesOrderService.convertToInvoice` copies **all** lines at full quantity,
+marks the order `fulfilled`, and blocks re-conversion. No per-line "delivered / invoiced" tracking,
+no `partially_*` status. (`docs/KNOWN_ISSUES.md` § "Partial Sales-Order invoicing".)
+
+### Required design decision (settle at CP-5B-0)
+**Fulfilment state and invoicing state are SEPARATE dimensions**, not one squeezed `status` field —
+*preferred, if the architecture allows*:
+
+```
+commercialStatus :  draft · pending · confirmed · cancelled
+fulfilmentStatus :  not_started · partially_delivered · delivered
+invoicingStatus  :  not_invoiced · partially_invoiced · invoiced
+```
+plus per-line counters:
+```
+SalesOrderLine:  productId · orderedQty · deliveredQty · invoicedQty   (→ remainingToDeliver, remainingToInvoice derived)
+```
+
+### Tasks
+- [ ] **5B.0 Investigation + design** — `SalesOrder` / `SalesOrderLine` shape, `convertToInvoice`,
+  `salesOrderService` statuses, every consumer of `salesOrder.status` (list filters, badges, the
+  "converted invoice" deep-link, dashboards). Produce the state-model proposal (separate dimensions
+  vs. combined) with a migration sketch and a compatibility plan for existing SOs.
+- [ ] **5B.1 Line-level counters** — `deliveredQty` / `invoicedQty` on each SO line (default 0);
+  `remainingToDeliver` / `remainingToInvoice` derived. Migration + backfill (existing `fulfilled`
+  SOs → `deliveredQty = invoicedQty = orderedQty`).
+- [ ] **5B.2 Status dimensions** — add `fulfilmentStatus` + `invoicingStatus` (or the agreed
+  shape); `commercialStatus` keeps the old values. Recompute on every delivery / invoice event.
+- [ ] **5B.3 `createInvoiceFromSalesOrder(soId, lines[])`** — replaces the all-or-nothing
+  `convertToInvoice`: caller picks quantities (≤ remainingToInvoice, and — once 5C lands — ≤
+  delivered). Bumps `invoicedQty`, recomputes `invoicingStatus`. The invoice still posts through
+  the **unchanged** engine.
+- [ ] **5B.4 UI** — SO detail shows the per-line Ordered / Delivered / Invoiced / Remaining grid;
+  "Create invoice" opens a quantity picker; status badges show both dimensions.
+- [ ] **5B.5 Tests** — SO 10 → invoice 4 → invoice 3 → 3 remaining; `invoicingStatus` transitions;
+  cannot invoice more than ordered (or, post-5C, more than delivered); existing single-shot
+  conversion still works; engine untouched (revenue/COGS/VAT identical per invoice).
+- [ ] **5B.6 Docs** — `docs/SALES_FULFILMENT.md` (new); update `ACCOUNTING_RELATIONSHIPS.md` SO section.
+
+**CP-5B-0 (design checkpoint, BEFORE code):** the state model (separate vs combined) + migration
+sketch + existing-data plan. **STOP for approval.**
+**CP-5B (implementation checkpoint):** migration authored not applied; full gate; backfill dry-run
+counts (read-only) for any live SO. **STOP.**
+
+---
+
+### PHASE 5C — Delivery Notes
+
+Only meaningful once 5B exists.
+
+```
+SO-1024 ─┬─ DN-1001  (2 printers)   → stock movement, delivery evidence
+         └─ DN-1002  (2 printers)   → stock movement, delivery evidence
+```
+
+### Open question for CP-5C-0
+**Does delivery move stock, and if so how does it interact with the invoice's inventory posting?**
+Options: (a) delivery posts the `stock_movement` + COGS/Inventory now, invoice posts only
+revenue/AR/VAT later (proper "goods issued on delivery" model — mirrors the purchase side's
+GRNI/3-way match); (b) delivery is evidence only, invoice still posts everything (simpler, keeps
+the engine call unchanged). **Prior: (a)** — it's the accounting-correct model and the codebase
+already has the GRNI precedent — but it's a real engine change and must be designed carefully.
+
+### Tasks
+- [ ] **5C.0 Investigation + design** — the purchase-side GRNI / 3-way-match code
+  (`purchaseOrderService.recordReceipt` + `billService.postBill`), `docs/LEDGER_ARCHITECTURE.md`,
+  the inventory engine's `costingMode`s. Decide (a) vs (b); if (a), design the sales-side clearing
+  account (e.g. "Goods Delivered Not Invoiced") + the two-step posting.
+- [ ] **5C.1 `DeliveryNote` entity** + `deliveryNoteService` — created from a Sales Order,
+  line quantities ≤ remainingToDeliver; a `DN-####` number; a printable document (reuse 4B's
+  `PrintableDocument`); bumps SO line `deliveredQty` + `fulfilmentStatus`.
+- [ ] **5C.2 Stock effect** — per the CP-5C-0 decision. If (a): migration for the clearing account
+  + engine wiring + the invoice-time clearing leg. If (b): the DN records `stock_movement`s with
+  `source_document_type = 'delivery_note'` and the invoice keeps posting inventory (guard against
+  double-issue).
+- [ ] **5C.3 Invoice-from-delivery** — `createInvoiceFromSalesOrder` (5B.3) can be constrained to
+  delivered-but-not-invoiced quantities; a "create invoice from these delivery notes" flow.
+- [ ] **5C.4 Tests** — DN 2 + DN 2 against SO 4 → `delivered`; invoice can't exceed delivered;
+  no double COGS / double stock issue; trial balance balanced; (a) clearing account nets to zero
+  once invoiced.
+- [ ] **5C.5 Docs** — `SALES_FULFILMENT.md` delivery section; `INVENTORY_ARCHITECTURE.md`;
+  `ACCOUNTING_RELATIONSHIPS.md`; new source-document type in the movement-evidence tables.
+
+**CP-5C-0 (design):** (a) vs (b) with full journal examples; clearing-account proposal; engine-change
+scope. **STOP for approval.**
+**CP-5C:** migrations authored not applied; full gate; live read-only impact scan. **STOP.**
+
+---
+
+### PHASE 5D — Partial invoicing  *(largely delivered by 5B.3 + 5C.3)*
+
+Explicitly called out by the Increment-3 audit. Example: SO 10 chairs → invoice 4 → invoice 3 →
+3 remaining. Covered by `createInvoiceFromSalesOrder(soId, lines[])` (5B.3), constrained to
+delivered quantities once 5C lands.
+
+### Tasks
+- [ ] **5D.1** — confirm 5B.3 + 5C.3 fully cover the partial-invoicing scenarios; add any missing
+  guard (can't invoice a cancelled SO line; rounding on split VAT across partial invoices;
+  the deposit-application flow from 4A works against a partial invoice).
+- [ ] **5D.2 Tests** — the chairs example end to end; VAT across partial invoices sums to the SO VAT;
+  4A deposit applied to invoice #2 of a partially-invoiced SO.
+- [ ] **5D.3 Docs** — `SALES_FULFILMENT.md` partial-invoicing worked example.
+
+**CP-5D:** the worked example green end to end; full gate. **STOP.**
+
+---
+
+## PHASE 6 — Advanced sales / inventory  *(only on top of a solid Phase 5)*
+
+Each is its own mini-increment with its own checkpoint. **Do not start any of these before
+Phase 5 is complete and merged.** Rough priority order:
+
+- [ ] **6A Backorders** — an SO line committing more than available becomes/flags a backorder;
+  auto-fulfil when stock arrives (PO receipt / adjustment). Needs 5A + 5C.
+- [ ] **6B `On Order` / `In Transit` stock views** — extend the 5A commitment model with open-PO
+  and transfer-in-transit quantities: `On Hand · Committed · Available · On Order · In Transit · Backordered`.
+- [ ] **6C Picking lists** — a warehouse pick document derived from confirmed SOs / delivery notes.
+- [ ] **6D Packing** — pack confirmation step between pick and delivery note.
+- [ ] **6E Customer price lists** — named price lists; product → list price.
+- [ ] **6F Customer-specific pricing** — per-customer overrides / discounts on top of the list.
+- [ ] **6G Salesperson attribution** — a `salespersonId` on Quote/SO/Invoice; commission reporting later.
+- [ ] **6H Approval workflows** — SO / credit-note / large-discount approval gates (needs the
+  real roles system — currently UI-gated only, see `docs/KNOWN_ISSUES.md` Phase T).
+- [ ] **6I Quote expiry reminders** — `expiry_date` already exists on Quote; a reminder surface / job.
+- [ ] **6J Pro-forma invoices** — a non-posting "pro-forma" document (reuse 4B); becomes a real
+  invoice on acceptance.
+- [ ] **6K Recurring orders** — a template + schedule that generates draft SOs.
+
+**CP-6x:** each item gets its own design → author → checkpoint → gate → approval cycle.
+
+---
+
+## PHASE 7 — Polish + production hardening
+
+- [ ] **7A** Human browser / visual QA of the whole deployment candidate (never run in this env —
+  no Chrome DevTools / Playwright MCP): Increments 1–4A UI, the 4B documents, the Phase-5 fulfilment
+  screens, `EnumSelect` / `SearchableSelect` popups, `AccountingPreview` full-width, modal shell widths.
+- [ ] **7B** Deferred configuration / admin `NativeSelect` sweep (~34 non-transaction forms).
+- [ ] **7C** `JournalEntryDetailPage` (full page) — every record page still deep-links the JE via
+  `?record=` → the side-sheet.
+- [ ] **7D** GL Account / Fixed Asset / Lease → full pages (the 3 borderline records kept as sheets).
+- [ ] **7E** `SupabaseStockLotRepository` + `stock_lots` migration OR gate FIFO out of `ProductForm`
+  (the last `new Mock*Repository()` in production wiring — `docs/KNOWN_ISSUES.md`).
+- [ ] **7F** `record_customer_receipt` atomic RPC (the `recordReceipt` non-atomicity flagged in 4A;
+  same pattern as `apply_customer_deposit`) + a `paymentService` mirror.
+- [ ] **7G** Live-Postgres inventory-posting E2E (needs a throwaway Supabase project) — the engine
+  (`post_inventory_transaction`) has still never run against live data.
+- [ ] **7H** Accounting-invariant regression suite (GL 1200 ↔ valuation tie, subledger ties,
+  trial-balance-always-balanced) as a CI gate.
+- [ ] **7I** Deposit unallocation / refund UI (deferred from 4A) — `DR 2600 / CR 1100` reversal of an
+  allocation, and `DR 2600 / CR 1000` refund; both via a proper document-level flow, not the generic
+  JE reverse button.
+- [ ] **7J** Production deploy runbook + `main` merge of the whole 4A→7 line.
+
+**CP-7:** final gate; deploy checklist; sign-off.
 
 ---
 

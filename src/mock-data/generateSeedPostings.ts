@@ -16,19 +16,17 @@ import { seedJournalEntryId } from './seedJournalEntryId';
  * are plain synchronous data, not a place to run async service logic —
  * so keep these in sync if that posting logic ever changes.
  *
- * A receipt/payment with `unallocatedAmount > 0` (money received/paid "on
- * account", not yet applied to a specific invoice/bill) is deliberately
- * NOT backfilled here: a real recordReceipt()/createPayment() call always
- * credits/debits the control account for the FULL amount regardless of
- * allocation, but `reconcileAccountsReceivable()`/`reconcileAccountsPayable()`
- * only sums OPEN INVOICE/BILL balances, not unapplied cash sitting against
- * a customer/supplier with no invoice to net against — so posting an
- * on-account entry would introduce a genuine (if narrow) reconciliation
- * variance of its own, a real modeling gap distinct from "seed data was
- * never posted" and not attempted here. See docs/KNOWN_ISSUES.md.
+ * Increment 4A: a customer receipt is now split — the portion applied to
+ * invoices credits Accounts Receivable, the unapplied portion credits
+ * Customer Deposits (acc_2600), a contract liability. Every seed receipt is
+ * therefore posted (including on-account ones), and `reconcileCustomerDeposits()`
+ * ties the deposit balance to Σ unallocatedAmount. Supplier payments are
+ * NOT split (Increment 4A is customer-side only) — an on-account seed
+ * payment is still excluded below.
  */
 
 const AR_ACCOUNT_ID = 'acc_1100';
+const CUSTOMER_DEPOSITS_ACCOUNT_ID = 'acc_2600';
 const SALES_REVENUE_ACCOUNT_ID = 'acc_4000';
 const VAT_OUTPUT_ACCOUNT_ID = 'acc_2100';
 const EXPENSE_ACCOUNT_ID = 'acc_5100';
@@ -132,8 +130,26 @@ function generateCreditNoteEntry(creditNote: CreditNote, entryNumber: string): J
   };
 }
 
-/** Mirrors CustomerReceiptService.recordReceipt()'s posting exactly: DR Cash and Bank / CR Accounts Receivable, for the full receipt amount. */
+/**
+ * Mirrors CustomerReceiptService.recordReceipt()'s posting exactly
+ * (Increment 4A split): DR Cash and Bank for the full amount; CR Accounts
+ * Receivable for the portion applied to invoices; CR Customer Deposits
+ * (acc_2600) for the unapplied portion.
+ */
 function generateCustomerReceiptEntry(receipt: CustomerReceipt, entryNumber: string): JournalEntry {
+  const applied = Math.round((receipt.amount - receipt.unallocatedAmount) * 100) / 100;
+  const toDeposits = Math.max(0, Math.round((receipt.amount - applied) * 100) / 100);
+
+  const lines: JournalLine[] = [
+    { id: `${entryNumber}_1`, accountId: CASH_AND_BANK_ACCOUNT_ID, description: `Receipt ${receipt.receiptNumber}`, debit: receipt.amount, credit: 0 },
+  ];
+  if (applied > 0) {
+    lines.push({ id: `${entryNumber}_2`, accountId: AR_ACCOUNT_ID, description: `Receipt ${receipt.receiptNumber} — applied to invoices`, debit: 0, credit: applied });
+  }
+  if (toDeposits > 0) {
+    lines.push({ id: `${entryNumber}_3`, accountId: CUSTOMER_DEPOSITS_ACCOUNT_ID, description: `Receipt ${receipt.receiptNumber} — customer deposit (unapplied)`, debit: 0, credit: toDeposits });
+  }
+
   return {
     id: seedJournalEntryId(receipt.id),
     entryNumber,
@@ -143,10 +159,7 @@ function generateCustomerReceiptEntry(receipt: CustomerReceipt, entryNumber: str
     status: 'posted',
     postedAt: receipt.date,
     currency: 'ZAR',
-    lines: [
-      { id: `${entryNumber}_1`, accountId: CASH_AND_BANK_ACCOUNT_ID, description: `Receipt ${receipt.receiptNumber}`, debit: receipt.amount, credit: 0 },
-      { id: `${entryNumber}_2`, accountId: AR_ACCOUNT_ID, description: `Receipt ${receipt.receiptNumber}`, debit: 0, credit: receipt.amount },
-    ],
+    lines,
     createdAt: receipt.date,
     updatedAt: receipt.date,
   };
@@ -174,9 +187,10 @@ function generatePaymentEntry(payment: Payment, entryNumber: string): JournalEnt
 
 /**
  * Generates one JournalEntry per non-draft/non-void seed Invoice/Bill/
- * CreditNote, plus one per fully-allocated seed CustomerReceipt/Payment
- * (see this file's doc comment for why on-account ones are excluded),
- * numbered sequentially starting after `startingNumber`.
+ * CreditNote, one per seed CustomerReceipt (split AR / Customer Deposits —
+ * Increment 4A, including on-account ones), and one per fully-allocated
+ * seed Payment (supplier on-account payments are still excluded — see this
+ * file's doc comment), numbered sequentially starting after `startingNumber`.
  */
 export function generateSeedPostings(
   invoices: Invoice[],
@@ -200,7 +214,7 @@ export function generateSeedPostings(
   for (const creditNote of creditNotes.filter(isPostedCreditNote)) {
     entries.push(generateCreditNoteEntry(creditNote, nextEntryNumber()));
   }
-  for (const receipt of customerReceipts.filter((r) => r.unallocatedAmount <= 0)) {
+  for (const receipt of customerReceipts) {
     entries.push(generateCustomerReceiptEntry(receipt, nextEntryNumber()));
   }
   for (const payment of payments.filter((p) => p.unallocatedAmount <= 0)) {

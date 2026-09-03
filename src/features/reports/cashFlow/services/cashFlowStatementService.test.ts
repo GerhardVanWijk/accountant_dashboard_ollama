@@ -148,6 +148,32 @@ describe('computeCashFlowStatement', () => {
     expect(statement.reconciles).toBe(true);
   });
 
+  it('classifies a customer deposit receipt as an operating source of cash and reconciles (Increment 4A)', () => {
+    const entries: JournalEntry[] = [
+      // Pure deposit: DR Cash / CR Customer Deposits (2600)
+      entry('2026-04-01', [{ accountId: 'acc_1000', debit: 5000 }, { accountId: 'acc_2600', credit: 5000 }]),
+    ];
+    const statement = computeCashFlowStatement(entries, seedAccounts, [], PERIOD);
+    const byLabel = Object.fromEntries(statement.operating.items.map((i) => [i.label, i.amount]));
+    expect(byLabel['Increase / (Decrease) in Customer Deposits']).toBeCloseTo(5000, 2);
+    expect(statement.actualCashMovement).toBeCloseTo(5000, 2);
+    expect(statement.reconciles).toBe(true);
+  });
+
+  it('a later deposit allocation (DR 2600 / CR AR) has no net cash effect and still reconciles', () => {
+    const entries: JournalEntry[] = [
+      entry('2026-04-01', [{ accountId: 'acc_1000', debit: 5000 }, { accountId: 'acc_2600', credit: 5000 }]),
+      entry('2026-05-01', [{ accountId: 'acc_2600', debit: 2000 }, { accountId: 'acc_1100', credit: 2000 }]),
+    ];
+    const statement = computeCashFlowStatement(entries, seedAccounts, [], PERIOD);
+    const byLabel = Object.fromEntries(statement.operating.items.map((i) => [i.label, i.amount]));
+    // AR fell 2000 (source of cash) and the deposit liability fell 2000 (use of cash) — they offset.
+    expect(byLabel['Increase / (Decrease) in Accounts Receivable']).toBeCloseTo(2000, 2);
+    expect(byLabel['Increase / (Decrease) in Customer Deposits']).toBeCloseTo(3000, 2);
+    expect(statement.actualCashMovement).toBeCloseTo(5000, 2);
+    expect(statement.reconciles).toBe(true);
+  });
+
   it('excludes entries dated before or after the period', () => {
     const entries: JournalEntry[] = [
       entry('2025-12-15', [{ accountId: 'acc_1000', debit: 10000 }, { accountId: 'acc_3000', credit: 10000 }]),

@@ -34,6 +34,7 @@ import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { InvoiceFormModal } from '@/features/sales/components/InvoiceFormModal';
 import { CustomerReceiptFormModal } from '@/features/sales/components/CustomerReceiptFormModal';
+import { ApplyDepositFormModal } from '@/features/sales/components/ApplyDepositForm';
 import { invoiceService } from '@/services';
 
 /**
@@ -60,7 +61,7 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
   const { customers: customerList } = useCustomerList();
   const { creditNotes } = useCreditNotes();
   const { receipts, refetch: refetchReceipts } = useCustomerReceipts();
-  const { recordReceipt } = useCustomerReceiptMutations();
+  const { recordReceipt, allocateToInvoice } = useCustomerReceiptMutations();
   const { salesOrders } = useSalesOrders();
   const { company } = useCompany();
   const { products } = useProducts();
@@ -77,6 +78,7 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
   const [recordingPayment, setRecordingPayment] = useState(false);
+  const [applyingDeposit, setApplyingDeposit] = useState(false);
 
   const customerName = invoice ? customerMap.get(invoice.customerId) || 'Unknown customer' : '';
   const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -166,6 +168,12 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
   const state = loading ? 'loading' : error ? 'error' : invoice ? 'ready' : 'not-found';
   const overdue = invoice ? invoiceService.isOverdue(invoice) : false;
   const canRecordPayment = invoice != null && invoice.status !== 'paid' && invoice.status !== 'draft' && invoice.status !== 'void' && outstanding > 0.01;
+  const customerDepositReceipts = useMemo(
+    () => (invoice ? receipts.filter((r) => r.customerId === invoice.customerId && r.unallocatedAmount > 0.01) : []),
+    [invoice, receipts],
+  );
+  const availableDeposit = customerDepositReceipts.reduce((sum, r) => sum + r.unallocatedAmount, 0);
+  const canApplyDeposit = canRecordPayment && availableDeposit > 0.01;
 
   return (
     <RecordPageShell
@@ -201,7 +209,9 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
                 secondary={
                   invoice.status === 'draft' && canUpdate
                     ? [{ label: 'Edit', icon: PencilIcon, onClick: () => setEditing(true) }]
-                    : []
+                    : canApplyDeposit
+                      ? [{ label: `Apply deposit (${formatCurrency(availableDeposit)})`, onClick: () => setApplyingDeposit(true) }]
+                      : []
                 }
                 danger={
                   invoice.status === 'draft' && canDelete
@@ -422,6 +432,21 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
                 void refetch();
               }}
               onClose={() => setRecordingPayment(false)}
+            />
+          )}
+
+          {applyingDeposit && (
+            <ApplyDepositFormModal
+              title={`Apply deposit — ${invoice.invoiceNumber}`}
+              receipts={customerDepositReceipts}
+              invoiceOutstanding={outstanding}
+              onSubmit={async (receiptId, amount, allocationId) => {
+                await allocateToInvoice(receiptId, invoice.id, amount, allocationId);
+                await refetchReceipts();
+                setApplyingDeposit(false);
+                void refetch();
+              }}
+              onClose={() => setApplyingDeposit(false)}
             />
           )}
         </>

@@ -17,6 +17,7 @@ import { calculateAgingForCustomer } from '../utils/calculateAging';
 import { calculateFinancialSummary } from '../utils/customerFinancials';
 import { invoicesToOpenItems } from '../mock-data/openItems';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
+import { useCustomerReceipts } from '@/features/sales/hooks/useCustomerReceipts';
 import { CustomerStatusBadge, CreditHoldBadge } from '../components/CustomerStatusBadge';
 import { CustomerInvoiceHistoryTable } from '../components/CustomerInvoiceHistoryTable';
 
@@ -58,16 +59,21 @@ export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetai
   const navigate = useNavigate();
 
   const { invoices } = useInvoices();
+  const { receipts } = useCustomerReceipts();
   const customerInvoices = useMemo(
     () => (customer ? invoices.filter((inv) => inv.customerId === customer.id) : []),
     [customer, invoices],
+  );
+  const customerReceipts = useMemo(
+    () => (customer ? receipts.filter((r) => r.customerId === customer.id) : []),
+    [customer, receipts],
   );
   const openItems = useMemo(() => invoicesToOpenItems(customerInvoices), [customerInvoices]);
   const outstandingByInvoiceId = useMemo(() => new Map(openItems.map((item) => [item.id, item.amountOutstanding])), [openItems]);
   const aging = useMemo(() => calculateAgingForCustomer(customerId, new Date(), openItems), [customerId, openItems]);
   const summary = useMemo(
-    () => (customer ? calculateFinancialSummary(customer, new Date(), openItems) : null),
-    [customer, openItems],
+    () => (customer ? calculateFinancialSummary(customer, new Date(), openItems, customerReceipts) : null),
+    [customer, openItems, customerReceipts],
   );
 
   async function handleToggleActive(): Promise<void> {
@@ -151,7 +157,7 @@ export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetai
       </div>
 
       {summary && (
-        <section aria-label="Customer financial summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section aria-label="Customer financial summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <SectionCard bodyClassName="p-5">
             <FigureBlock label="Total outstanding" value={formatCurrency(summary.totalOutstanding, customer.currency)} />
           </SectionCard>
@@ -160,6 +166,22 @@ export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetai
               label="Overdue balance"
               value={formatCurrency(summary.overdueBalance, customer.currency)}
               tone={summary.overdueBalance > 0 ? 'negative' : 'default'}
+            />
+          </SectionCard>
+          <SectionCard bodyClassName="p-5">
+            <FigureBlock
+              label="Available deposit"
+              value={formatCurrency(summary.availableDeposit, customer.currency)}
+              hint={
+                summary.availableDeposit > 0
+                  ? `Net position: ${
+                      summary.netPosition >= 0
+                        ? `owes ${formatCurrency(summary.netPosition, customer.currency)}`
+                        : `${formatCurrency(-summary.netPosition, customer.currency)} in their favour`
+                    }`
+                  : 'Money received but not yet applied to an invoice'
+              }
+              tone={summary.availableDeposit > 0 ? 'positive' : 'default'}
             />
           </SectionCard>
           <SectionCard bodyClassName="p-5">

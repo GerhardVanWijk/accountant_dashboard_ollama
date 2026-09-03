@@ -7,6 +7,12 @@ each section.
 
 ## Open
 
+> **Roadmap note (2026-09-03):** several open items below are now scheduled — see the
+> **POST-4A ROADMAP** in `docs/CURRENT_TASKS.md`:
+> "no formal print layout" → **Phase 4B**; "no stock reservation / commitment" → **Phase 5A**;
+> "partial Sales-Order invoicing" → **Phase 5B/5D**; `MockStockLotRepository`/FIFO → **Phase 7E**;
+> `recordReceipt` non-atomicity → **Phase 7F**; deposit unallocation/refund UI → **Phase 7I**.
+
 ### Deployment candidate (branch `phase-9b-relationship-design-and-code`, 2026-09-03) — known non-blocking items
 The record-detail full-page migration (increments 1 + 2) is committed + pushed to the branch and
 awaiting human browser QA before any merge to `main`. Carried forward, **not fixed**, none blocking:
@@ -21,6 +27,39 @@ awaiting human browser QA before any merge to `main`. Carried forward, **not fix
 - **GL Account / Fixed Asset / Lease retained as side-sheets** this increment — the three borderline records
   (ledger / depreciation schedule / amortization schedule), deferred per brief §B.
 - **Create / edit modal shell width** still needs browser confirmation — not changed in this increment.
+
+### [RESOLVED in Increment 4A — code-complete, uncommitted, migration 0045 not yet applied] Pre-invoice customer receipts are credited straight to Accounts Receivable (no customer-deposit liability)
+**Fix (2026-09-03, Increment 4A):** new `2600 Customer Deposits` liability account + `CUSTOMER_DEPOSIT`
+mapping key. `recordReceipt()` now posts a split entry — `DR 1000` for the total, `CR 1100` for the
+portion applied to invoices, `CR 2600` for the unapplied portion. `allocateToInvoice()` posts
+`DR 2600 / CR 1100` (no bank movement, deterministic idempotency token) when a deposit is later
+applied. New `reconcileCustomerDeposits()` (2600 control vs Σ `unallocatedAmount`), wired into Books
+Integrity / the integrity audit / the Trial Balance cards. `reconcileAccountsReceivable()` now nets
+only the applied portion of receipts. Cash flow gained a "Customer Deposits" operating line.
+`reverseJournalEntry()` now guards subledger-sourced entries. UI: "Available customer deposit" on the
+receipt page, "Available deposit" card on the customer page, "Apply deposit" on the invoice page.
+Migration `0045` **authored, not applied**; the 3 legacy Office National unapplied receipts (R4,250)
+have reviewed correction entries authored in `docs/db-changes/0045b_...` but **not posted**. Full
+detail: `docs/ACCOUNTING_RELATIONSHIPS.md` § "CUSTOMER DEPOSITS / PREPAYMENTS — INCREMENT 4A".
+
+Original report (record-page increment-3 sales-workflow audit, 2026-09-03):
+`customerReceiptService.recordReceipt()` (`src/features/sales/services/customerReceiptService.ts`)
+**always** posts `DR 1000 Cash and Bank / CR 1100 Accounts Receivable` for the full receipt amount,
+regardless of how much is allocated to invoices. An unallocated receipt (a customer paying a deposit
+before any invoice exists) therefore drives the customer's AR subledger **negative** — a credit
+balance sitting in a receivable account — instead of raising a customer-deposit / "income received in
+advance" contract liability. There is no such account: `AccountMappingKey`
+(`accountMappingService.ts`) has no `CUSTOMER_DEPOSIT` / `CONTRACT_LIABILITY` key and no 2xxx code is
+mapped for it. Later allocation (`allocateToInvoice` → `invoiceService.recordPayment`) posts **no**
+journal, so once the invoice posts (`DR AR …`) the AR balance nets to the correct outstanding figure —
+**the end state is right**, but between deposit and invoice the balance sheet understates AR and omits
+a current liability (IFRS 15 / SA GAAP would show a contract liability). No evidence this is a
+deliberate design choice (the only "deposit" in the ledger docs is an unrelated bank-reconciliation
+scenario). **Reported, not fixed** — the correct treatment needs a new chart-of-accounts row + mapping
+key + a branch in `recordReceipt` (CR the deposit liability for the unallocated portion) + an
+`allocateToInvoice` journal (`DR deposit / CR AR`): an explicit accounting decision plus a DB change,
+out of an inspect-only increment's scope. Full detail: `docs/ACCOUNTING_RELATIONSHIPS.md` § "SALES
+DOCUMENT WORKFLOW AUDIT — 2026-09-03" Q5.
 
 ### No stock reservation / commitment model — "Available" always equals "On hand"
 Confirmed 2026-09-03 (record-page increment-3 audit). `StockBalance.quantityCommitted` exists in the

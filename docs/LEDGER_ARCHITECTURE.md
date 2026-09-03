@@ -53,6 +53,31 @@ mistake and the fix, never just the fix silently edited away. It also means ever
 `JournalEntryService` method is safe to call from concurrent UI without worrying about
 lost updates, because there's nothing to update.
 
+**Increment 4A:** `reverseJournalEntry()` also refuses to reverse an entry whose `source`
+is owned by an AR/AP subledger (`invoice` / `bill` / `credit_note` / `customer_receipt` /
+`customer_receipt_allocation` / `payment`) unless the caller passes
+`{ allowSubledgerSourced: true }`. Reversing one of these straight from the general ledger
+moves the GL but leaves `invoice.amountPaid` / a receipt's `allocations` / a credit note's
+allocation untouched — a silent GL-vs-subledger split. Correction paths: `invoice` → a credit
+note; `bill` → a supplier return or a compensating manual journal; issued credit notes,
+customer receipts, payments and deposit allocations → a compensating manual journal
+(`source: 'manual'`, unguarded). Nothing in the app programmatically reverses a guarded source
+today — only the generic Journals-page button, which is exactly what this closes.
+
+**Increment 4A — atomic deposit allocation:** applying a customer deposit to an invoice
+(`DR 2600 / CR 1100` + both subledger updates) runs inside ONE Postgres function,
+`apply_customer_deposit` (migration 0046), exactly like `post_inventory_transaction`.
+Idempotency is keyed on a **UUID `allocationId` generated client-side before the RPC runs** —
+`deposit_allocation_log` has `UNIQUE (company_id, allocation_id)`; the RPC's first step is
+`INSERT … ON CONFLICT DO NOTHING RETURNING id`, and a null id returns the first result. Never
+keyed on mutable state (an allocation count). The function then locks the **receipt then the
+invoice** (fixed order — the only place both are locked together), re-validates the amount
+against the *locked* rows, and does every write in the one implicit transaction. A retry or
+concurrent double-submit of the same intent collapses to one posting; two genuinely different
+intents serialise and each re-validates, so a stale client cannot over-draw a deposit or overpay
+an invoice. CHECK constraints (`0 ≤ unallocated_amount ≤ amount`, `0 ≤ amount_paid ≤ total`)
+enforce the money bounds at the storage layer regardless of caller.
+
 `Account` rows are the deliberate exception — they're editable, because renaming or
 deactivating an account doesn't rewrite history, it just changes how future postings and
 the chart itself display. `AccountService.deleteAccount()` still guards against removing

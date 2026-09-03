@@ -32,8 +32,8 @@ export function useCustomerReceiptMutations(options?: UseCustomerReceiptMutation
   const recordReceipt = (data: CreateCustomerReceiptDTO) =>
     run(() => customerReceiptService.recordReceipt(data), (r) => options?.onSuccess?.(r));
 
-  const allocateToInvoice = (id: string, invoiceId: string, amount: number) =>
-    run(() => customerReceiptService.allocateToInvoice(id, invoiceId, amount), (r) => options?.onSuccess?.(r));
+  const allocateToInvoice = (id: string, invoiceId: string, amount: number, allocationId?: string) =>
+    run(() => customerReceiptService.allocateToInvoice(id, invoiceId, amount, allocationId), (r) => options?.onSuccess?.(r));
 
   return {
     isLoading,

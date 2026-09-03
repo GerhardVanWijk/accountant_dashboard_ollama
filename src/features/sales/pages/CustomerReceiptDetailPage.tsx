@@ -107,7 +107,7 @@ export function CustomerReceiptDetailPage() {
             actions={
               <RecordActionBar
                 busy={isBusy}
-                primary={canAllocate ? { label: 'Allocate to invoice', onClick: () => setAllocating(true) } : undefined}
+                primary={canAllocate ? { label: 'Apply deposit to invoice', onClick: () => setAllocating(true) } : undefined}
               />
             }
           />
@@ -131,14 +131,24 @@ export function CustomerReceiptDetailPage() {
           <RecordPageSection title="Summary">
             <RecordSummaryGrid>
               <RecordField label="Amount received" value={formatCurrency(receipt.amount)} />
-              <RecordField label="Allocated" value={formatCurrency(allocated)} />
-              <RecordField label="On account / unallocated" value={formatCurrency(receipt.unallocatedAmount)} />
+              <RecordField label="Applied to invoices" value={formatCurrency(allocated)} />
+              <RecordField
+                label="Available customer deposit"
+                value={
+                  <>
+                    {formatCurrency(receipt.unallocatedAmount)}
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Held in the Customer Deposits liability account until applied to an invoice
+                    </span>
+                  </>
+                }
+              />
             </RecordSummaryGrid>
           </RecordPageSection>
 
           <RecordPageSection title="Allocations">
             {receipt.allocations.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No allocations yet — this receipt is entirely on account.</p>
+              <p className="text-sm text-muted-foreground">No allocations yet — this receipt is entirely a customer deposit.</p>
             ) : (
               <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="w-full min-w-[560px] border-collapse text-sm">
@@ -189,10 +199,10 @@ export function CustomerReceiptDetailPage() {
               title={`Allocate ${receipt.receiptNumber}`}
               openInvoices={openInvoiceOptions}
               maxAmount={receipt.unallocatedAmount}
-              onSubmit={async (invoiceId, amount) => {
+              onSubmit={async (invoiceId, amount, allocationId) => {
                 setActionError(null);
                 try {
-                  await allocateToInvoice(receipt.id, invoiceId, amount);
+                  await allocateToInvoice(receipt.id, invoiceId, amount, allocationId);
                   await refetchInvoices();
                   setAllocating(false);
                 } catch (err) {

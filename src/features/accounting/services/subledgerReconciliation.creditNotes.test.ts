@@ -11,8 +11,10 @@ import { reconcileAccountsReceivable } from './subledgerReconciliation';
  *
  * Each scenario builds the invoices/credit-notes/receipts, stubs the GL AR
  * control-account balance to the value those documents imply (Σ posted
- * invoice total − Σ receipt amount − Σ posted credit-note total — every
- * posting that would actually hit account 1100), and asserts:
+ * invoice total − Σ receipt amount APPLIED to invoices − Σ posted
+ * credit-note total — every posting that would actually hit account 1100;
+ * Increment 4A: the unapplied portion of a receipt credits Customer
+ * Deposits, not AR), and asserts:
  *   - variance ≈ 0 (GL-consistent subledger ties to the control by construction)
  *   - the bridge decomposition (unallocatedReceipts / creditNoteImpact / other)
  *     is exactly right, with `other` ≈ 0 for every consistent dataset.
@@ -89,11 +91,11 @@ function receipt(overrides: Partial<CustomerReceipt> = {}): CustomerReceipt {
   };
 }
 
-/** Every posting that would hit AR (1100) for the given documents. */
+/** Every posting that would hit AR (1100) for the given documents (Increment 4A: receipts credit AR only for the portion applied to invoices). */
 function impliedGl(invoices: Invoice[], creditNotes: CreditNote[], receipts: CustomerReceipt[]): number {
   const inv = invoices.filter((i) => i.status !== 'draft' && i.status !== 'void').reduce((s, i) => s + i.total, 0);
   const cn = creditNotes.filter((c) => c.status === 'issued' || c.status === 'allocated').reduce((s, c) => s + c.total, 0);
-  const rec = receipts.reduce((s, r) => s + r.amount, 0);
+  const rec = receipts.reduce((s, r) => s + (r.amount - r.unallocatedAmount), 0);
   return inv - rec - cn;
 }
 
@@ -170,14 +172,15 @@ describe('reconcileAccountsReceivable — credit notes + receipts (8 scenarios)'
     expect(r.bridge).toEqual({ unallocatedReceipts: 0, creditNoteImpact: 0, other: 0 });
   });
 
-  it('7. unallocated receipt (money on account)', async () => {
+  it('7. unallocated receipt (money on account) — sits in Customer Deposits, not AR', async () => {
     const invoices = [invoice()];
     const receipts = [receipt({ amount: 800, unallocatedAmount: 800, allocations: [] })];
     const r = await run(invoices, [], receipts);
-    expect(r.subledgerTotal).toBeCloseTo(350, 2);
+    // The R800 no longer touches AR — the invoice's full R1,150 is still outstanding in the GL.
+    expect(r.subledgerTotal).toBeCloseTo(1150, 2);
     expect(r.agingSubledgerTotal).toBeCloseTo(1150, 2);
     expect(r.variance).toBeCloseTo(0, 2);
-    expect(r.bridge.unallocatedReceipts).toBeCloseTo(800, 2);
+    expect(r.bridge.unallocatedReceipts).toBeCloseTo(800, 2); // informational — equals the Customer Deposits balance
     expect(r.bridge.creditNoteImpact).toBeCloseTo(0, 2);
     expect(r.bridge.other).toBeCloseTo(0, 2);
   });

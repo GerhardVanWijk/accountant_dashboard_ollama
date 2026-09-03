@@ -2,7 +2,7 @@ import type { BankAccount } from '@/types';
 import type { BankTransactionWithAllocations } from '@/features/banking/types';
 import type { JournalEntryService } from '@/features/accounting/services';
 import type { AccountMapper } from '@/features/accounting/services';
-import { reconcileAccountsPayable, reconcileAccountsReceivable } from '@/features/accounting/services/subledgerReconciliation';
+import { reconcileAccountsPayable, reconcileAccountsReceivable, reconcileCustomerDeposits } from '@/features/accounting/services/subledgerReconciliation';
 import type { Bill, CreditNote, CustomerReceipt, Invoice, Payment } from '@/types';
 import {
   checkBankSubledgerIntegrity,
@@ -60,6 +60,19 @@ export async function runBooksIntegrityCheck(
   if (input.invoices.length > 0) {
     const ar = await reconcileAccountsReceivable(journalEntryService, accounts, input.invoices, input.creditNotes, input.customerReceipts);
     results.push(checkSubledgerReconciliation('Accounts Receivable', 'ar_subledger', ar));
+  }
+  if (input.customerReceipts.some((r) => r.unallocatedAmount > 0)) {
+    try {
+      const deposits = await reconcileCustomerDeposits(journalEntryService, accounts, input.customerReceipts);
+      results.push(checkSubledgerReconciliation('Customer Deposits', 'customer_deposits_subledger', deposits));
+    } catch {
+      results.push({
+        key: 'customer_deposits_subledger',
+        label: 'Customer Deposits',
+        status: 'warning',
+        detail: 'No "2600 Customer Deposits" account is configured — run migration 0045.',
+      });
+    }
   }
   if (input.bills.length > 0) {
     const ap = await reconcileAccountsPayable(journalEntryService, accounts, input.bills, input.supplierPayments);

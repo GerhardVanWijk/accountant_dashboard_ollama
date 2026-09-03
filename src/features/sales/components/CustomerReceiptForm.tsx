@@ -215,7 +215,7 @@ export function CustomerReceiptForm({
               Amount received
             </FieldLabel>
             <p className="mb-2 text-xs text-muted-foreground">
-              The full payment from the customer. Allocate it below; anything left over is recorded on account.
+              The full payment from the customer. Allocate it below; anything left over is held as a customer deposit.
             </p>
             <Input
               id="receipt-amount"
@@ -226,6 +226,10 @@ export function CustomerReceiptForm({
               value={amount || ''}
               onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
             />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Anything you don't allocate below is held as a <span className="font-medium text-foreground">customer deposit</span> (a
+              liability), not applied to Accounts Receivable — apply it to an invoice later.
+            </p>
           </div>
         </FormSection>
 
@@ -253,7 +257,7 @@ export function CustomerReceiptForm({
 
           {allocations.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
-              No allocations — the full amount will be recorded on account.
+              No allocations — the full amount will be held as a customer deposit.
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -334,9 +338,9 @@ export function CustomerReceiptForm({
               <p className="mt-1 text-xs text-muted-foreground">Sum of the rows above</p>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">Left on account</div>
+              <div className="text-xs text-muted-foreground">Customer deposit (unapplied)</div>
               <Amount value={unallocatedAmount} className="text-base font-semibold" />
-              <p className="mt-1 text-xs text-muted-foreground">Receipt total − allocated</p>
+              <p className="mt-1 text-xs text-muted-foreground">Held as a liability · Receipt total − allocated</p>
             </div>
           </div>
           {overAllocated && (

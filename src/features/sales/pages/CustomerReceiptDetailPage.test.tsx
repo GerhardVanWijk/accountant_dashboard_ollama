@@ -53,16 +53,16 @@ describe('CustomerReceiptDetailPage', () => {
     expect(container.querySelector('[data-slot="sheet-content"]')).toBeNull();
   });
 
-  it('links each allocated invoice and offers "Allocate to invoice" while on account', () => {
+  it('links each allocated invoice and offers "Apply deposit to invoice" while unapplied', () => {
     renderAt();
     expect(screen.getAllByRole('link', { name: 'INV-1001' }).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByRole('button', { name: 'Allocate to invoice' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apply deposit to invoice' })).toBeInTheDocument();
   });
 
   it('a fully allocated receipt offers no allocate action', () => {
     vi.mocked(useCustomerReceipts).mockReturnValue({ receipts: [receipt({ unallocatedAmount: 0 })], isLoading: false, error: null, refetch: vi.fn() } as never);
     renderAt();
-    expect(screen.queryByRole('button', { name: 'Allocate to invoice' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Apply deposit to invoice' })).not.toBeInTheDocument();
   });
 
   it('deep-links: an unknown id shows the not-found state', () => {
