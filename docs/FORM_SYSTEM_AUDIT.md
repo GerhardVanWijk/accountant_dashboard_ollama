@@ -3,6 +3,23 @@
 Investigation for `docs/CURRENT_TASKS.md` → `BANK_STATEMENT_RECONCILIATION_AND_FORM_SYSTEM` PART 0.5 / 0.6.
 Read-only. No code written.
 
+> **Two headline conclusions below are superseded (2026-09-03, live browser QA) — see
+> `docs/CURRENT_TASKS.md` → `# RECORD DETAIL FULL-PAGE MIGRATION`:**
+> - *"Dark selects: 100% done"* — the `globals.css` `select option { … }` rule is **not**
+>   honoured by the browser on the deploy; native option menus still render light. Fix is
+>   `EnumSelect` (small enums) / `SearchableSelect` + `*Combobox` (entity lists) — base-ui
+>   dark popups, not CSS. **DONE:** every inventory + sales + purchases **transaction**
+>   form (line editors, allocation, method, reason, invoice picker). **DEFERRED:** ~34
+>   non-transaction `NativeSelect` forms (admin / tax-config / compliance / settings /
+>   reports / banking-import) — global `select option {}` CSS is the partial mitigation.
+> - *"Detail side: 100% unified via `RecordDetailSheet` — leave it"* — reversed. Complex
+>   records (line items / actions / accounting / tabs) move to **full-page routes**
+>   (`/module/records/:id`). **DONE:** all 13 (Sales Order, Inventory Item, Quote, Invoice,
+>   Credit Note, Customer Receipt, PO, Bill, Supplier Payment, Stock Adjustment / Transfer /
+>   Take, Supplier Return, Opening Stock) — 15 `*DetailSheet`/`*Detail` files deleted.
+>   **KEPT as sheet:** Bank Account/Transaction, Customer, Supplier, Employee, GL Account,
+>   Fixed Asset, Lease.
+
 ## Headline numbers
 - **~45 form surfaces** total.
 - **14** use the shared `form-surface.ts` size classes; **~27** page-inline `<DialogContent className="max-w-*">` use none of it; **7** `AlertDialog` confirmations hand-write everything.

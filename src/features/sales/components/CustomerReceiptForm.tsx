@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
-import { CustomerCombobox, SearchableSelect } from '@/components/app/combobox';
+import { CustomerCombobox, EnumSelect, SearchableSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { FormBody, FormFooter, FormSection } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
@@ -198,13 +197,12 @@ export function CustomerReceiptForm({
             </Field>
             <Field>
               <FieldLabel htmlFor="receipt-method">Payment method</FieldLabel>
-              <NativeSelect id="receipt-method" value={method} onChange={(e) => setMethod(e.target.value as ReceiptMethod)}>
-                {METHOD_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </NativeSelect>
+              <EnumSelect
+                id="receipt-method"
+                value={method}
+                onValueChange={(v) => setMethod(v as ReceiptMethod)}
+                options={METHOD_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+              />
             </Field>
             <Field className="sm:col-span-2">
               <FieldLabel htmlFor="receipt-reference">Reference (optional)</FieldLabel>

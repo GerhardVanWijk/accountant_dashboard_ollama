@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateStockAdjustmentDTO, UpdateStockAdjustmentDTO } from '../services/stockAdjustmentService';
 import { StockAdjustmentLinesEditor } from './StockAdjustmentLinesEditor';
@@ -113,14 +113,13 @@ export function StockAdjustmentDocumentForm({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Field>
             <FieldLabel htmlFor="sa-warehouse">Warehouse</FieldLabel>
-            <NativeSelect id="sa-warehouse" value={warehouseId} onChange={(e) => markDirty(setWarehouseId)(e.target.value)}>
-              <option value="">Select…</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </NativeSelect>
+            <EnumSelect
+              id="sa-warehouse"
+              value={warehouseId}
+              onValueChange={(v) => markDirty(setWarehouseId)(v)}
+              placeholder="Select…"
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="sa-date">Adjustment date</FieldLabel>
@@ -128,13 +127,12 @@ export function StockAdjustmentDocumentForm({
           </Field>
           <Field>
             <FieldLabel htmlFor="sa-reason">Reason</FieldLabel>
-            <NativeSelect id="sa-reason" value={reason} onChange={(e) => markDirty(setReason)(e.target.value as StockAdjustmentReason)}>
-              {Object.entries(REASON_LABEL).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </NativeSelect>
+            <EnumSelect
+              id="sa-reason"
+              value={reason}
+              onValueChange={(v) => markDirty(setReason)(v as StockAdjustmentReason)}
+              options={Object.entries(REASON_LABEL).map(([value, label]) => ({ value, label }))}
+            />
           </Field>
         </div>
 

@@ -1,21 +1,20 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { StockTransfer, Warehouse } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
+import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
 import { useStockTransfers } from '../hooks/useStockTransfers';
 import { useProducts } from '../hooks/useProducts';
 import { useWarehouses } from '../hooks/useWarehouses';
-import { useAccounts } from '@/features/accounting/hooks/useAccounts';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { ExportMenu } from '@/features/export/components/ExportMenu';
 import { PrintableReport } from '@/features/export/components/PrintableReport';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { StockTransfersTable } from '../components/StockTransfersTable';
-import { StockTransferDetailSheet } from '../components/StockTransferDetailSheet';
 import { StockTransferDocumentFormModal } from '../components/StockTransferDocumentFormModal';
 import type { CreateStockTransferDTO, UpdateStockTransferDTO } from '../services/stockTransferService';
 
@@ -37,69 +36,32 @@ function buildTransferExportColumns(warehouses: Warehouse[]): ExportColumn<Stock
   ];
 }
 
-type DialogState = { mode: 'create' } | { mode: 'edit'; transfer: StockTransfer } | null;
-
 /**
- * Stock Transfer register — route `/inventory/transfers` (Phase 5 §2).
- * Draft → in_transit → completed (or draft → completed immediate)
- * lifecycle over `stockTransferService`, mirroring
- * `StockAdjustmentsPage`'s shape.
+ * Stock Transfer register — route `/inventory/transfers`, the list only. A
+ * row click navigates to the full-page record at
+ * `/inventory/transfers/:transferId` (StockTransferDetailPage); legacy
+ * `?record=<id>` deep links are redirected there. Dispatch / receive /
+ * complete live on the record page.
  */
 export function StockTransfersPage() {
-  const {
-    transfers,
-    loading,
-    error,
-    refetch,
-    createTransfer,
-    updateTransfer,
-    deleteTransfer,
-    dispatch,
-    receive,
-    completeImmediate,
-    cancelTransfer,
-    previewDispatchEffect,
-    previewReceiveEffect,
-  } = useStockTransfers();
+  const navigate = useNavigate();
+  useLegacyRecordRedirect('/inventory/transfers');
+
+  const { transfers, loading, error, refetch, createTransfer, deleteTransfer } = useStockTransfers();
   const { products, loading: productsLoading } = useProducts();
   const { warehouses, loading: warehousesLoading } = useWarehouses();
-  const { accounts } = useAccounts();
   const canCreate = useCanAccess('inventory', 'create');
-  const canUpdate = useCanAccess('inventory', 'update');
   const canDelete = useCanAccess('inventory', 'delete');
   const canExport = useCanAccess('inventory', 'export');
-  const [dialog, setDialog] = useState<DialogState>(null);
+  const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [visibleRows, setVisibleRows] = useState<StockTransfer[]>([]);
   const [activeFilters, setActiveFilters] = useState<{ label: string; value: string }[]>([]);
 
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedId = searchParams.get('record') ?? undefined;
-  const detailOpen = Boolean(selectedId);
-  function openRecord(id: string) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('record', id);
-      return next;
-    });
-  }
-  function closeRecord() {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('record');
-      return next;
-    });
-  }
-  const detailTransfer = transfers.find((t) => t.id === selectedId);
-
   const handleFormSubmit = async (data: CreateStockTransferDTO | UpdateStockTransferDTO) => {
-    if (dialog?.mode === 'edit') {
-      await updateTransfer(dialog.transfer.id, data as UpdateStockTransferDTO);
-    } else {
-      const created = await createTransfer(data as CreateStockTransferDTO);
-      openRecord(created.id);
-    }
-    setDialog(null);
+    const created = await createTransfer(data as CreateStockTransferDTO);
+    setCreating(false);
+    navigate(`/inventory/transfers/${created.id}`);
   };
 
   const handleDelete = async (transfer: StockTransfer) => {
@@ -135,7 +97,7 @@ export function StockTransfersPage() {
           <>
             <ExportMenu dataset={exportDataset} allowed={canExport} />
             {canCreate && (
-              <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+              <Button size="sm" onClick={() => setCreating(true)}>
                 <Plus data-icon="inline-start" />
                 New transfer
               </Button>
@@ -179,7 +141,7 @@ export function StockTransfersPage() {
             transfers={transfers}
             products={products}
             warehouses={warehouses}
-            onSelect={(t) => openRecord(t.id)}
+            onSelect={(t) => navigate(`/inventory/transfers/${t.id}`)}
             onDelete={canDelete ? (t) => void handleDelete(t) : undefined}
             onVisibleRowsChange={(rows, filters) => {
               setVisibleRows(rows);
@@ -189,34 +151,14 @@ export function StockTransfersPage() {
         </SectionCard>
       )}
 
-      <StockTransferDetailSheet
-        transfer={detailTransfer}
-        products={products}
-        warehouses={warehouses}
-        accounts={accounts}
-        open={detailOpen}
-        onOpenChange={(next) => {
-          if (!next) closeRecord();
-        }}
-        canManage={canUpdate}
-        onEdit={(t) => setDialog({ mode: 'edit', transfer: t })}
-        onDispatch={(t) => dispatch(t.id).then(() => undefined)}
-        onReceive={(t) => receive(t.id).then(() => undefined)}
-        onCompleteImmediate={(t) => completeImmediate(t.id).then(() => undefined)}
-        onCancel={(t) => cancelTransfer(t.id).then(() => undefined)}
-        loadDispatchPreview={previewDispatchEffect}
-        loadReceivePreview={previewReceiveEffect}
-      />
-
       <PrintableReport dataset={exportDataset} className="hidden print:block" />
 
-      {(dialog?.mode === 'create' || dialog?.mode === 'edit') && (
+      {creating && (
         <StockTransferDocumentFormModal
-          transfer={dialog.mode === 'edit' ? dialog.transfer : undefined}
           products={products}
           warehouses={warehouses}
           onSubmit={handleFormSubmit}
-          onClose={() => setDialog(null)}
+          onClose={() => setCreating(false)}
         />
       )}
     </div>

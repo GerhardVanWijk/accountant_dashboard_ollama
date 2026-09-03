@@ -7,6 +7,36 @@ each section.
 
 ## Open
 
+### Deployment candidate (branch `phase-9b-relationship-design-and-code`, 2026-09-03) — known non-blocking items
+The record-detail full-page migration (increments 1 + 2) is committed + pushed to the branch and
+awaiting human browser QA before any merge to `main`. Carried forward, **not fixed**, none blocking:
+- **`MockStockLotRepository` / FIFO** — see the entry immediately below.
+- **Deferred configuration / admin `NativeSelect` sweep** (~34 non-transaction forms: admin, tax-config,
+  compliance, settings, reports date/scope, banking import, `AccountForm`/`JournalEntryForm`/`EmployeeForm`
+  /`AssetForm`/`WarehouseForm`/`CustomerForm`/`SupplierForm`/`TaxRateForm` etc.). Lower-traffic; the global
+  `@layer base` `select option { … }` CSS still applies as partial mitigation. The **transaction / document**
+  forms (line editors, allocation, payment method) are done.
+- **Journal Entry detail is still sheet-backed** — every new record page's "View journal entry" link opens
+  `/accounting/journals?record=<id>` (the side-sheet). A full-page `JournalEntryDetailPage` is a later increment.
+- **GL Account / Fixed Asset / Lease retained as side-sheets** this increment — the three borderline records
+  (ledger / depreciation schedule / amortization schedule), deferred per brief §B.
+- **Create / edit modal shell width** still needs browser confirmation — not changed in this increment.
+
+### FIFO stock-lot repository is still `MockStockLotRepository` in production wiring
+Found 2026-09-03 during the Increment-2 Mock-repository audit (record-detail full-page migration).
+`src/features/inventory/repositories/instances.ts:30` — `export const stockLotRepository = new
+MockStockLotRepository();`. There is no `SupabaseStockLotRepository`; every other repository in the
+codebase is Supabase-wired. Same *class* of latent bug as the tax-rate discovery below (a production
+service silently on a Mock), but **not currently exercised**: weighted-average is the active valuation
+method for every seeded product, and FIFO lot allocation only runs when a product is set to
+`valuationMethod: 'fifo'`. Impact if it were: FIFO lots would be in-memory only, lost on reload.
+Recommendation: build `SupabaseStockLotRepository` + a `stock_lots` migration before the UI allows
+`valuationMethod: 'fifo'` on any product, or gate the FIFO option out of `ProductForm` until it exists.
+Reported, **not fixed** (outside the increment's UI-only scope). `grep -rn "= new Mock[A-Za-z]*Repository
+\s*(" src` (excl. tests/stories/mock-data) confirms this is the only occurrence; the
+`MockTaxRateRepository`/`MockInvoiceRepository` strings in the sales/tax barrels are comments and test
+re-exports only. Guarded against a *new* Mock wiring by `taxRateServiceWiring.test.ts`.
+
 ### Pre-existing, unrelated to Phase T: `MockSupplierRepository.test.ts`'s accounts-payable delete guard fails, even in isolation
 Found while verifying Phase T (2026-08-23) — `npm test` reported this failing before and
 after every Phase T change, and it fails standalone (`npx vitest run
@@ -106,13 +136,40 @@ mirroring the same open gap `PayrollRunService.postPayrollRun()` and
 `ProvisionalTaxPeriod` inherits the same "no revision once a slot is paid" shape).
 
 ### Two GitHub identities in play
-`gh auth status` shows two authenticated accounts (`GerhardVanWijk` active,
-`Gerhard29046` inactive); the local git commit email for this repo is
-`gerhard.ark.of.war@gmail.com` (repo-local override, set 2026-08-20, not the global
-git config). This is intentional per explicit user instruction, not a misconfiguration
-— noted here only so a future session doesn't "fix" it back to the global default.
+`gh auth status` shows two authenticated accounts, `GerhardVanWijk` and `Gerhard29046`.
+**Pushing to `GerhardVanWijk/accountant_dashboard_ollama` (this repo's `origin`) requires
+`GerhardVanWijk` to be the active `gh` account** — `Gerhard29046` gets a 403. `gh` is the
+git credential helper for github.com, so `git push` uses whichever account is active.
+Switch with `gh auth switch --hostname github.com --user GerhardVanWijk`. On 2026-09-02
+the active account was found to be `Gerhard29046` (push failed); switched to
+`GerhardVanWijk` for the push/merge and left it there. The local git commit email for
+this repo is `gerhard.ark.of.war@gmail.com` (repo-local override, set 2026-08-20, not the
+global git config) — intentional, don't "fix" it back to the global default.
 
 ## Resolved
+
+### Every product showed "Unknown tax rate" (and tax dropdowns offered dead ids) in the deployed app
+Found 2026-09-03 during live browser QA. `taxRateService`
+(`src/features/tax/services/index.ts`) was still wired to `MockTaxRateRepository`, so
+the app-wide singleton served the hand-typed `src/mock-data/taxRates.ts` fixtures (ids
+`tax_std_v1`, `tax_std_v2`, `tax_zero`, …). Every real product / invoice / bill is
+Supabase-backed and carries a real UUID `tax_rate_id` (`04ea4780-…`). Those two id
+spaces never intersect → `getTaxRateLabel()` fell through to "Unknown tax rate" for
+every product, and every "pick a rate" dropdown (`useTaxRates`) offered ids that don't
+exist in Supabase (so saving a product/document through the UI wrote a bogus
+`tax_rate_id`). Not a data bug (verified read-only: all 50 products reference the valid
+active STD rate; RLS policy `tax_rates_all_own_company` resolves fine for `admin@demo.com`),
+not the September seed, not the row mapper — purely repository wiring. The historical
+reason it stayed Mock-wired ("the Supabase `tax_rates` table is correctly empty, and
+`billService.test.ts` fixtures reference `tax_std_v2`") no longer holds: the Office
+National demo seeded the real STD/ZERO/EXEMPT rows on 2026-08-28. Fixed: flipped
+`taxRateService` → `SupabaseTaxRateRepository`; moved `billService.test.ts` onto a
+locally-constructed `new TaxRateService(new MockTaxRateRepository(), …)` (both now
+re-exported from the tax service barrel), matching every other Supabase-wired service
+test; `useAllTaxRates` gained a `.catch` + `error` (it was silently swallowing a failed
+fetch into `[]`); `getTaxRateLabel(id, rates, { pending })` now returns `…` for an
+as-yet-unresolved id while the list is empty/loading, so a valid id is never mislabelled
+"Unknown". Zero DB writes. Full suite green.
 
 ### `calculateAgingForCustomer` silently summed every customer together when given an unfiltered multi-customer source
 `src/features/customers/utils/calculateAging.ts`'s `calculateAgingForCustomer(customerId,

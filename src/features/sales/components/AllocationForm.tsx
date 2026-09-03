@@ -3,7 +3,7 @@ import type { Invoice } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { SearchableSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
@@ -82,21 +82,22 @@ export function AllocationForm({ openInvoices, maxAmount, onSubmit, onCancel, on
 
       <Field>
         <FieldLabel htmlFor="allocation-invoice">Invoice</FieldLabel>
-        <NativeSelect
+        <SearchableSelect
           id="allocation-invoice"
-          value={invoiceId}
-          onChange={(e) => {
-            setInvoiceId(e.target.value);
-            const opt = openInvoices.find((o) => o.invoice.id === e.target.value);
+          value={invoiceId || null}
+          onChange={(v) => {
+            setInvoiceId(v ?? '');
+            const opt = openInvoices.find((o) => o.invoice.id === v);
             if (opt) setAmount(Math.min(maxAmount, opt.outstanding));
           }}
-        >
-          {openInvoices.map((opt) => (
-            <option key={opt.invoice.id} value={opt.invoice.id}>
-              {opt.invoice.invoiceNumber} — outstanding {formatCurrency(opt.outstanding)}
-            </option>
-          ))}
-        </NativeSelect>
+          placeholder="Select an invoice…"
+          searchPlaceholder="Search invoice number…"
+          options={openInvoices.map((opt) => ({
+            value: opt.invoice.id,
+            label: opt.invoice.invoiceNumber,
+            meta: `outstanding ${formatCurrency(opt.outstanding)}`,
+          }))}
+        />
       </Field>
 
       <Field>

@@ -32,27 +32,41 @@ import { CompanyPage } from '@/features/admin/pages/CompanyPage';
 import { CustomersPage } from '@/features/sales/pages/CustomersPage';
 import { QuotesPage } from '@/features/sales/pages/QuotesPage';
 import { SalesOrdersPage } from '@/features/sales/pages/SalesOrdersPage';
+import { SalesOrderDetailPage } from '@/features/sales/pages/SalesOrderDetailPage';
 import { InvoicesPage } from '@/features/sales/pages/InvoicesPage';
+import { InvoiceDetailPage } from '@/features/sales/pages/InvoiceDetailPage';
+import { QuoteDetailPage } from '@/features/sales/pages/QuoteDetailPage';
 import { CreditNotesPage } from '@/features/sales/pages/CreditNotesPage';
+import { CreditNoteDetailPage } from '@/features/sales/pages/CreditNoteDetailPage';
 import { CustomerReceiptsPage } from '@/features/sales/pages/CustomerReceiptsPage';
+import { CustomerReceiptDetailPage } from '@/features/sales/pages/CustomerReceiptDetailPage';
 import { VendorsPage } from '@/features/purchases/pages/VendorsPage';
 import { PurchaseOrdersPage } from '@/features/purchases/pages/PurchaseOrdersPage';
+import { PurchaseOrderDetailPage } from '@/features/purchases/pages/PurchaseOrderDetailPage';
 import { BillsPage } from '@/features/purchases/pages/BillsPage';
+import { BillDetailPage } from '@/features/purchases/pages/BillDetailPage';
 import { PaymentsPage } from '@/features/purchases/pages/PaymentsPage';
+import { SupplierPaymentDetailPage } from '@/features/purchases/pages/SupplierPaymentDetailPage';
 import { VendorAgingPage } from '@/features/purchases/pages/VendorAgingPage';
 import { BankAccountsPage } from '@/features/banking/pages/BankAccountsPage';
 import { BankTransactionsPage } from '@/features/banking/pages/BankTransactionsPage';
 import { BankReconciliationPage } from '@/features/banking/pages/BankReconciliationPage';
 import { InventoryOverviewPage } from '@/features/inventory/pages/InventoryOverviewPage';
 import { ProductsPage } from '@/features/inventory/pages/ProductsPage';
+import { InventoryItemDetailPage } from '@/features/inventory/pages/InventoryItemDetailPage';
 import { WarehousesPage } from '@/features/inventory/pages/WarehousesPage';
 import { CategoriesPage } from '@/features/inventory/pages/CategoriesPage';
 import { StockMovementsPage } from '@/features/inventory/pages/StockMovementsPage';
 import { StockAdjustmentsPage } from '@/features/inventory/pages/StockAdjustmentsPage';
+import { StockAdjustmentDetailPage } from '@/features/inventory/pages/StockAdjustmentDetailPage';
 import { StockTransfersPage } from '@/features/inventory/pages/StockTransfersPage';
+import { StockTransferDetailPage } from '@/features/inventory/pages/StockTransferDetailPage';
 import { StockTakesPage } from '@/features/inventory/pages/StockTakesPage';
+import { StockTakeDetailPage } from '@/features/inventory/pages/StockTakeDetailPage';
 import { SupplierReturnsPage } from '@/features/inventory/pages/SupplierReturnsPage';
+import { SupplierReturnDetailPage } from '@/features/inventory/pages/SupplierReturnDetailPage';
 import { OpeningStockBatchesPage } from '@/features/inventory/pages/OpeningStockBatchesPage';
+import { OpeningStockBatchDetailPage } from '@/features/inventory/pages/OpeningStockBatchDetailPage';
 import { InventoryOperationsPage } from '@/features/inventory/pages/InventoryOperationsPage';
 import { InventoryReportsHubPage } from '@/features/inventory/pages/reports/InventoryReportsHubPage';
 import { StockOnHandReportPage } from '@/features/inventory/pages/reports/StockOnHandReportPage';
@@ -178,28 +192,42 @@ export const routes: RouteObject[] = [
           { path: 'financial-periods', element: <FinancialPeriodsPage /> },
           { path: 'sales/customers', element: <PermissionRoute feature="customer_management" action="read"><CustomersPage /></PermissionRoute> },
           { path: 'sales/quotes', element: <QuotesPage /> },
+          { path: 'sales/quotes/:quoteId', element: <QuoteDetailPage /> },
           { path: 'sales/orders', element: <SalesOrdersPage /> },
+          { path: 'sales/orders/:orderId', element: <SalesOrderDetailPage /> },
           { path: 'sales/invoices', element: <PermissionRoute feature="invoicing" action="read"><InvoicesPage /></PermissionRoute> },
+          { path: 'sales/invoices/:invoiceId', element: <PermissionRoute feature="invoicing" action="read"><InvoiceDetailPage /></PermissionRoute> },
           { path: 'sales/credit-notes', element: <CreditNotesPage /> },
+          { path: 'sales/credit-notes/:creditNoteId', element: <CreditNoteDetailPage /> },
           { path: 'sales/receipts', element: <CustomerReceiptsPage /> },
+          { path: 'sales/receipts/:receiptId', element: <CustomerReceiptDetailPage /> },
           { path: 'purchases/vendors', element: <PermissionRoute feature="supplier_management" action="read"><VendorsPage /></PermissionRoute> },
           { path: 'purchases/orders', element: <PurchaseOrdersPage /> },
+          { path: 'purchases/orders/:purchaseOrderId', element: <PurchaseOrderDetailPage /> },
           { path: 'purchases/bills', element: <BillsPage /> },
+          { path: 'purchases/bills/:billId', element: <BillDetailPage /> },
           { path: 'purchases/payments', element: <PaymentsPage /> },
+          { path: 'purchases/payments/:paymentId', element: <SupplierPaymentDetailPage /> },
           { path: 'purchases/aging', element: <VendorAgingPage /> },
           { path: 'banking/accounts', element: <BankAccountsPage /> },
           { path: 'banking/transactions', element: <BankTransactionsPage /> },
           { path: 'banking/reconciliation', element: <BankReconciliationPage /> },
           { path: 'inventory', element: <PermissionRoute feature="inventory" action="read"><InventoryOverviewPage /></PermissionRoute> },
           { path: 'inventory/products', element: <PermissionRoute feature="inventory" action="read"><ProductsPage /></PermissionRoute> },
+          { path: 'inventory/products/:productId', element: <PermissionRoute feature="inventory" action="read"><InventoryItemDetailPage /></PermissionRoute> },
           { path: 'inventory/categories', element: <PermissionRoute feature="inventory" action="read"><CategoriesPage /></PermissionRoute> },
           { path: 'inventory/warehouses', element: <PermissionRoute feature="inventory" action="read"><WarehousesPage /></PermissionRoute> },
           { path: 'inventory/movements', element: <PermissionRoute feature="inventory" action="read"><StockMovementsPage /></PermissionRoute> },
           { path: 'inventory/adjustments', element: <PermissionRoute feature="inventory" action="read"><StockAdjustmentsPage /></PermissionRoute> },
+          { path: 'inventory/adjustments/:adjustmentId', element: <PermissionRoute feature="inventory" action="read"><StockAdjustmentDetailPage /></PermissionRoute> },
           { path: 'inventory/transfers', element: <PermissionRoute feature="inventory" action="read"><StockTransfersPage /></PermissionRoute> },
+          { path: 'inventory/transfers/:transferId', element: <PermissionRoute feature="inventory" action="read"><StockTransferDetailPage /></PermissionRoute> },
           { path: 'inventory/stock-takes', element: <PermissionRoute feature="inventory" action="read"><StockTakesPage /></PermissionRoute> },
+          { path: 'inventory/stock-takes/:stockTakeId', element: <PermissionRoute feature="inventory" action="read"><StockTakeDetailPage /></PermissionRoute> },
           { path: 'inventory/supplier-returns', element: <PermissionRoute feature="inventory" action="read"><SupplierReturnsPage /></PermissionRoute> },
+          { path: 'inventory/supplier-returns/:supplierReturnId', element: <PermissionRoute feature="inventory" action="read"><SupplierReturnDetailPage /></PermissionRoute> },
           { path: 'inventory/opening-stock', element: <PermissionRoute feature="inventory" action="read"><OpeningStockBatchesPage /></PermissionRoute> },
+          { path: 'inventory/opening-stock/:batchId', element: <PermissionRoute feature="inventory" action="read"><OpeningStockBatchDetailPage /></PermissionRoute> },
           { path: 'inventory/operations', element: <PermissionRoute feature="inventory" action="read"><InventoryOperationsPage /></PermissionRoute> },
           { path: 'inventory/reports', element: <PermissionRoute feature="inventory" action="read"><InventoryReportsHubPage /></PermissionRoute> },
           { path: 'inventory/reports/stock-on-hand', element: <PermissionRoute feature="inventory" action="read"><StockOnHandReportPage /></PermissionRoute> },

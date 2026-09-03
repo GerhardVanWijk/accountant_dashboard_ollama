@@ -8,8 +8,7 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
-import { SearchableSelect } from '@/components/app/combobox';
+import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter, FormSection } from '@/components/app/form';
 import type {
   CreateProductCategoryDTO,
@@ -56,7 +55,7 @@ const blankToUndefined = (v: string | undefined) => (v && v.length > 0 ? v : und
 type AccountFieldName = 'revenueAccountId' | 'cogsAccountId' | 'inventoryAccountId' | 'adjustmentAccountId';
 
 /**
- * GL-account picker — a `SearchableSelect` rather than a native `<select>`
+ * GL-account picker — a `SearchableSelect` rather than a plain dropdown
  * because the filtered lists run long (31 expense accounts for COGS /
  * adjustments). Clearing the value falls back to the standard account.
  * Declared at module scope so it is not remounted on every parent render.
@@ -170,14 +169,19 @@ export function CategoryForm({ category, accounts, taxRates, onSubmit, onCancel,
             </Field>
             <Field>
               <FieldLabel htmlFor="cat-tax">Default tax rate</FieldLabel>
-              <NativeSelect id="cat-tax" {...register('defaultTaxRateId')}>
-                <option value="">No default</option>
-                {taxRates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </NativeSelect>
+              <Controller
+                control={control}
+                name="defaultTaxRateId"
+                render={({ field }) => (
+                  <EnumSelect
+                    id="cat-tax"
+                    value={field.value ?? ''}
+                    onValueChange={field.onChange}
+                    placeholder="No default"
+                    options={[{ value: '', label: 'No default' }, ...taxRates.map((t) => ({ value: t.id, label: t.name }))]}
+                  />
+                )}
+              />
             </Field>
           </div>
         </FormSection>

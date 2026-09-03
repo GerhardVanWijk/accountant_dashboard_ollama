@@ -11,7 +11,7 @@ import { MockAccountingPeriodRepository } from '@/features/accounting/repositori
 import { AuditLogService } from '@/services/auditLogService';
 import { MockAuditLogRepository } from '@/repositories/mock/MockAuditLogRepository';
 import { seedAccounts } from '@/mock-data/accounts';
-import { taxRateService } from '@/features/tax/services';
+import { TaxRateService, MockTaxRateRepository } from '@/features/tax/services';
 import { InventoryPostingEngine } from '@/features/inventory/services/inventoryPostingEngine';
 import {
   FakeInventoryStore,
@@ -147,6 +147,10 @@ function makeHarness(options: {
 
   const repository = new MockBillRepository();
   const capitalizer = makeFixedAssetCapitalizerStub();
+  // Local TaxRateService over the hand-typed mock rates — the app-wide
+  // `taxRateService` singleton is Supabase-wired and would throw the
+  // global test guard. Fixtures below reference these ids (`tax_std_v2`…).
+  const taxRateService = new TaxRateService(new MockTaxRateRepository(), auditLog);
   const service = new BillService(
     repository,
     engine,

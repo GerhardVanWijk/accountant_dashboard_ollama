@@ -138,7 +138,7 @@ reporting** (a documented deviation from migration 0006).
 | **Services** (`src/features/inventory/services/`) | `productService` (catalog CRUD; DTOs `Omit` `quantityOnHand`), `warehouseService`, `stockService` ("the ONLY place quantities change" — appends a movement then re-sums the whole ledger into `products.quantity_on_hand`), `stockLotService` (FIFO lot-walking, shared preview/consume algo, throws rather than guess), `inventoryPostingAdapter` (`InventoryPoster` — the GL bridge Sales/Purchases call). |
 | **Hooks** | `useProducts`, `useWarehouses`, `useStockMovements`, `useStockAlerts`. |
 | **Pages** | `/inventory/products` (`ProductsPage`), `/inventory/warehouses` (`WarehousesPage`). |
-| **Components** | `ProductsTable`, `WarehousesTable`, `StockByWarehouseTable`, `LowStockAlertWidget`, `ProductDetail` + `ProductDetailSheet` (flat sheet, **no tabs**, opened via `?record=<id>`), `ProductForm`/`ProductFormModal`, `WarehouseForm`/`Modal`, `StockTransferForm`/`Modal`, `StockAdjustmentForm`/`Modal`. All create/edit flows are on the Vertex Form System (`FormShell`/`FormBody`/`FormFooter`). **Nothing uses `FormTabs`.** |
+| **Components** | `ProductsTable`, `WarehousesTable`, `StockByWarehouseTable`, `LowStockAlertWidget`, **`InventoryItemDetail` + `InventoryItemDetailPage`** (full-page route `/inventory/products/:productId`, 8 tabs — Overview / Stock / Purchasing / Sales / Transactions / Accounting / Documents / Activity; replaced `ProductDetail`/`ProductDetailSheet`/`InventoryItemDetailSheet` on 2026-09-03), `ProductForm`/`ProductFormModal`, `WarehouseForm`/`Modal`, `StockTransferForm`/`Modal`, `StockAdjustmentForm`/`Modal`. All create/edit flows are on the Vertex Form System (`FormShell`/`FormBody`/`FormFooter`). Short enum pickers use `EnumSelect` (base-ui dark popup), not native `<select>`. |
 | **Account mapping** | `category_account_mappings` (5 rows) + `CategoryAccountMappingService`. |
 | **Icons** (`src/config/icons.ts`) | registry keys already exist: `inventory:Boxes`, `products:Package`, `warehouses:Warehouse`. Nav imports Lucide directly (established exception). |
 
@@ -549,12 +549,15 @@ be treated as authority to erase posted evidence.
   'read' }` to `permissionRouteMap.ts`.
 - New pages: `/inventory` (`InventoryOverviewPage` — summary cards + main table: SKU / Product /
   Category / Supplier / On Hand / Available / Committed / Reorder / Avg Cost / Value / Margin /
-  Status), `/inventory/items/:id` (tabbed item detail — **route**, not just a sheet: Overview / Stock
-  / Purchasing / Sales / Transactions / Accounting / Documents / Audit), `/inventory/adjustments`,
+  Status), **`/inventory/products/:productId`** (tabbed item detail — **full-page route**, shipped
+  2026-09-03 as `InventoryItemDetailPage` + `InventoryItemDetail`: Overview / Stock / Purchasing /
+  Sales / Transactions / Accounting / Documents / Activity), `/inventory/adjustments`,
   `/inventory/transfers`, `/inventory/stock-takes`, `/inventory/import`, `/inventory/reports`.
-- All on the Vertex Form System + `DataTable` + `RecordDetailSheet` + `FigureBlock`/`Amount` +
-  `SectionCard`. Green active state and light/dark theming are automatic once routes exist. Item
-  detail tabs use the shared `Tabs` (`variant="line"`) inside a detail page.
+- All on the Vertex Form System + `DataTable` + `FigureBlock`/`Amount` + `SectionCard`. The item
+  detail is a **full page** (`src/components/app/record-page/` — `RecordPageShell` / `RecordPageHeader`
+  / `RecordActionBar` / `DocumentLineTable`), not a `RecordDetailSheet`. Green active state and
+  light/dark theming are automatic once routes exist. Item detail tabs use the shared `Tabs`
+  (`variant="line"`).
 
 ### 13.6 Permissions / audit / reconciliation / tests
 

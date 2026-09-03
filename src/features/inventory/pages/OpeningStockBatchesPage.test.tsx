@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import type { Account, OpeningStockBatch, Product, Warehouse } from '@/types';
 import { OpeningStockBatchesPage } from './OpeningStockBatchesPage';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
@@ -9,10 +9,18 @@ import { productService } from '../services/productService';
 import { warehouseService } from '../services/warehouseService';
 import { accountService } from '@/features/accounting/services';
 
-function renderPage() {
+function Loc() {
+  const loc = useLocation();
+  return <div data-testid="loc">{loc.pathname + loc.search}</div>;
+}
+
+function renderPage(entry = '/inventory/opening-stock') {
   return render(
-    <MemoryRouter initialEntries={['/inventory/opening-stock']}>
-      <OpeningStockBatchesPage />
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route path="/inventory/opening-stock" element={<><OpeningStockBatchesPage /><Loc /></>} />
+        <Route path="/inventory/opening-stock/:batchId" element={<Loc />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -47,7 +55,6 @@ vi.mock('@/features/accounting/services', () => ({
 const mockedGetBatches = openingStockBatchService.getOpeningStockBatches as unknown as ReturnType<typeof vi.fn>;
 const mockedCreateBatch = openingStockBatchService.createOpeningStockBatch as unknown as ReturnType<typeof vi.fn>;
 const mockedDeleteBatch = openingStockBatchService.deleteOpeningStockBatch as unknown as ReturnType<typeof vi.fn>;
-const mockedConfirmBatch = openingStockBatchService.confirmBatch as unknown as ReturnType<typeof vi.fn>;
 const mockedGetProducts = productService.getProducts as unknown as ReturnType<typeof vi.fn>;
 const mockedGetWarehouses = warehouseService.getWarehouses as unknown as ReturnType<typeof vi.fn>;
 const mockedGetAccounts = accountService.getAccounts as unknown as ReturnType<typeof vi.fn>;
@@ -174,22 +181,20 @@ describe('OpeningStockBatchesPage', () => {
     await waitFor(() => expect(mockedDeleteBatch).toHaveBeenCalledWith('osb_1'));
   });
 
-  it('requires the explicit confirmation checkbox before Confirm is enabled', async () => {
+  it('navigates to the full-page record on row click — no detail sheet', async () => {
     mockedGetBatches.mockResolvedValue([makeBatch()]);
-    mockedConfirmBatch.mockResolvedValue(makeBatch({ status: 'confirmed', journalEntryId: 'je_1' }));
     renderPage();
     await screen.findByText('OSB-0001');
 
     fireEvent.click(screen.getByText('OSB-0001'));
-    const dialog = await screen.findByRole('dialog');
-    const confirmButton = within(dialog).getByRole('button', { name: /^confirm$/i });
-    expect(confirmButton).toBeDisabled();
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/inventory/opening-stock/osb_1'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(within(dialog).getByRole('checkbox'));
-    expect(confirmButton).toBeEnabled();
-    fireEvent.click(confirmButton);
-
-    await waitFor(() => expect(mockedConfirmBatch).toHaveBeenCalledWith('osb_1', { confirmed: true }));
+  it('redirects a legacy ?record=<id> deep link to the canonical record route', async () => {
+    mockedGetBatches.mockResolvedValue([makeBatch()]);
+    renderPage('/inventory/opening-stock?record=osb_1');
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/inventory/opening-stock/osb_1'));
   });
 
   it('hides create/manage actions for a user without inventory write permission', async () => {
@@ -200,9 +205,5 @@ describe('OpeningStockBatchesPage', () => {
 
     expect(screen.queryByRole('button', { name: /new batch/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('OSB-0001'));
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).queryByRole('button', { name: /^confirm$/i })).not.toBeInTheDocument();
   });
 });

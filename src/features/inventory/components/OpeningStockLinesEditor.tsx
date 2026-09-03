@@ -2,8 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { NewOpeningStockLine, Product, Warehouse } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
-import { ProductCombobox } from '@/components/app/combobox';
+import { EnumSelect, ProductCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 
 export interface OpeningStockLinesEditorProps {
@@ -81,19 +80,14 @@ export function OpeningStockLinesEditor({ lines, onChange, products, warehouses,
                 aria-label="Product"
               />
             </div>
-            <NativeSelect
+            <EnumSelect
               value={line.warehouseId}
               disabled={disabled}
-              onChange={(e) => updateLine(index, { warehouseId: e.target.value })}
+              onValueChange={(v) => updateLine(index, { warehouseId: v })}
               aria-label="Warehouse"
-            >
-              <option value="">Select…</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </NativeSelect>
+              placeholder="Select…"
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
             <Input
               type="number"
               min="0"

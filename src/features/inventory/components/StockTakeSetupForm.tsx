@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
-import { SearchableSelect } from '@/components/app/combobox';
+import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateStockTakeDTO, UpdateStockTakeDTO } from '../services/stockTakeService';
 
@@ -96,14 +95,13 @@ export function StockTakeSetupForm({ stockTake, warehouses, categories, onSubmit
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="stk-warehouse">Warehouse</FieldLabel>
-            <NativeSelect id="stk-warehouse" value={warehouseId} onChange={(e) => markDirty(setWarehouseId)(e.target.value)}>
-              <option value="">Select…</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </NativeSelect>
+            <EnumSelect
+              id="stk-warehouse"
+              value={warehouseId}
+              onValueChange={(v) => markDirty(setWarehouseId)(v)}
+              placeholder="Select…"
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="stk-date">Count date</FieldLabel>
@@ -113,11 +111,16 @@ export function StockTakeSetupForm({ stockTake, warehouses, categories, onSubmit
 
         <Field>
           <FieldLabel htmlFor="stk-scope">Scope</FieldLabel>
-          <NativeSelect id="stk-scope" value={scope} onChange={(e) => markDirty(setScope)(e.target.value as StockTakeScope)}>
-            <option value="all">All products</option>
-            <option value="category">One category</option>
-            <option value="items">Hand-picked products</option>
-          </NativeSelect>
+          <EnumSelect
+            id="stk-scope"
+            value={scope}
+            onValueChange={(v) => markDirty(setScope)(v as StockTakeScope)}
+            options={[
+              { value: 'all', label: 'All products' },
+              { value: 'category', label: 'One category' },
+              { value: 'items', label: 'Hand-picked products' },
+            ]}
+          />
           <FieldDescription>What this count sheet covers — freezing derives the expected quantity and cost for every product in scope.</FieldDescription>
         </Field>
 

@@ -3,3 +3,5 @@ export type { SearchableSelectOption, SearchableSelectProps } from './Searchable
 export { ProductCombobox } from './ProductCombobox';
 export type { ProductComboboxProps } from './ProductCombobox';
 export { CustomerCombobox, SupplierCombobox } from './EntityCombobox';
+export { EnumSelect } from './EnumSelect';
+export type { EnumOption, EnumSelectProps } from './EnumSelect';

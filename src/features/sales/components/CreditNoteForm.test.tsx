@@ -40,17 +40,26 @@ function fillOneLine() {
   fireEvent.change(screen.getByLabelText('Quantity'), { target: { value: '1' } });
 }
 
+/** The Reason field is the Vertex EnumSelect (base-ui Select), not a native <select>. */
+function selectReason(label: string) {
+  fireEvent.click(screen.getByLabelText('Reason'));
+  const option = screen.getByRole('option', { name: label });
+  fireEvent.pointerDown(option);
+  fireEvent.pointerUp(option);
+  fireEvent.click(option);
+}
+
 describe('CreditNoteForm — "Other" reason', () => {
   it('only shows the "Specify reason" field when reason is Other', () => {
     renderForm();
     expect(screen.queryByLabelText('Specify reason')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'other' } });
+    selectReason('Other');
     expect(screen.getByLabelText('Specify reason')).toBeInTheDocument();
   });
 
   it('blocks submit until the Other detail is filled in', async () => {
     const onSubmit = renderForm();
-    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'other' } });
+    selectReason('Other');
     fillOneLine();
     fireEvent.click(screen.getByRole('button', { name: /create credit note/i }));
     expect(await screen.findByText(/specify the reason/i)).toBeInTheDocument();
@@ -59,7 +68,7 @@ describe('CreditNoteForm — "Other" reason', () => {
 
   it('persists the Other detail to its own reasonDetails field, not notes', async () => {
     const onSubmit = renderForm();
-    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'other' } });
+    selectReason('Other');
     fireEvent.change(screen.getByLabelText('Specify reason'), { target: { value: 'Goodwill gesture after delivery delay' } });
     fillOneLine();
     fireEvent.click(screen.getByRole('button', { name: /create credit note/i }));

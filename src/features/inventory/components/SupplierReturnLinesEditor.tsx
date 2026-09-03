@@ -2,8 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { NewSupplierReturnLine, Product, TaxRate, Warehouse } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
-import { ProductCombobox } from '@/components/app/combobox';
+import { EnumSelect, ProductCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 
 export interface SupplierReturnLinesEditorProps {
@@ -100,19 +99,14 @@ export function SupplierReturnLinesEditor({ lines, onChange, products, warehouse
                 aria-label="Product"
               />
             </div>
-            <NativeSelect
+            <EnumSelect
               value={line.warehouseId ?? ''}
               disabled={disabled}
-              onChange={(e) => updateLine(index, { warehouseId: e.target.value || undefined })}
+              onValueChange={(v) => updateLine(index, { warehouseId: v || undefined })}
               aria-label="Warehouse"
-            >
-              <option value="">Select…</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </NativeSelect>
+              placeholder="Select…"
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
             <Input
               type="number"
               min="0"
@@ -133,19 +127,14 @@ export function SupplierReturnLinesEditor({ lines, onChange, products, warehouse
               onChange={(e) => updateLine(index, { unitPrice: parseFloat(e.target.value) || 0 })}
               aria-label="Unit price"
             />
-            <NativeSelect
+            <EnumSelect
               value={line.taxRateId ?? ''}
               disabled={disabled}
-              onChange={(e) => updateLine(index, { taxRateId: e.target.value || undefined })}
+              onValueChange={(v) => updateLine(index, { taxRateId: v || undefined })}
               aria-label="Tax rate"
-            >
-              <option value="">No tax</option>
-              {taxRates.map((rate) => (
-                <option key={rate.id} value={rate.id}>
-                  {rate.name}
-                </option>
-              ))}
-            </NativeSelect>
+              placeholder="No tax"
+              options={[{ value: '', label: 'No tax' }, ...taxRates.map((rate) => ({ value: rate.id, label: rate.name }))]}
+            />
             <span className="figure self-center text-right text-sm tabular-nums text-muted-foreground">
               <Amount value={line.taxAmount} plain />
             </span>

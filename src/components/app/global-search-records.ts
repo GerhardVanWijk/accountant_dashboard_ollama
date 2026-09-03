@@ -58,7 +58,7 @@ export function useGlobalSearchRecords(enabled: boolean): State {
             id: p.id,
             code: p.sku,
             name: p.name,
-            href: `/inventory/products?record=${p.id}`,
+            href: `/inventory/products/${p.id}`,
             keywords: `${p.sku} ${p.name} product item`,
           })),
           ...customers.map((c) => ({

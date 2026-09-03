@@ -52,7 +52,8 @@ const flagLabels: Record<StockFlag, string> = {
  * which the real Product type does not.
  */
 export function ProductsTable({ products, onEdit, onDelete, onSelect }: ProductsTableProps) {
-  const { taxRates } = useAllTaxRates();
+  const { taxRates, loading: taxRatesLoading, error: taxRatesError } = useAllTaxRates();
+  const taxRatesPending = taxRatesLoading || Boolean(taxRatesError);
   const categories = [...new Set(products.map((p) => p.category).filter((c): c is string => Boolean(c)))].sort();
 
   const columns: DataTableColumn<Product>[] = [
@@ -107,8 +108,8 @@ export function ProductsTable({ products, onEdit, onDelete, onSelect }: Products
       key: 'taxRate',
       header: 'Tax rate',
       hideBelowMd: true,
-      sortValue: (p) => getTaxRateLabel(p.taxRateId, taxRates),
-      cell: (p) => <span className="text-xs text-muted-foreground">{getTaxRateLabel(p.taxRateId, taxRates)}</span>,
+      sortValue: (p) => getTaxRateLabel(p.taxRateId, taxRates, { pending: taxRatesPending }),
+      cell: (p) => <span className="text-xs text-muted-foreground">{getTaxRateLabel(p.taxRateId, taxRates, { pending: taxRatesPending })}</span>,
     },
     {
       key: 'quantity',

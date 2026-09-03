@@ -8,7 +8,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { UOM_OPTIONS, INVENTORY_CURRENCY } from '../constants';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
@@ -140,10 +140,21 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Field>
           <FieldLabel htmlFor="type">Type</FieldLabel>
-          <NativeSelect id="type" {...register('type')}>
-            <option value="good">Physical Good</option>
-            <option value="service">Service</option>
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="type"
+            render={({ field }) => (
+              <EnumSelect
+                id="type"
+                value={field.value ?? 'good'}
+                onValueChange={field.onChange}
+                options={[
+                  { value: 'good', label: 'Physical Good' },
+                  { value: 'service', label: 'Service' },
+                ]}
+              />
+            )}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="category">Category</FieldLabel>
@@ -151,13 +162,18 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
         </Field>
         <Field>
           <FieldLabel htmlFor="uom">Unit of Measure</FieldLabel>
-          <NativeSelect id="uom" {...register('uom')}>
-            {UOM_OPTIONS.map((uom) => (
-              <option key={uom} value={uom}>
-                {uom}
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="uom"
+            render={({ field }) => (
+              <EnumSelect
+                id="uom"
+                value={field.value ?? UOM_OPTIONS[0]}
+                onValueChange={field.onChange}
+                options={UOM_OPTIONS.map((uom) => ({ value: uom, label: uom }))}
+              />
+            )}
+          />
         </Field>
       </div>
 
@@ -174,14 +190,19 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
         </Field>
         <Field>
           <FieldLabel htmlFor="taxRateId">Tax Rate</FieldLabel>
-          <NativeSelect id="taxRateId" {...register('taxRateId')}>
-            <option value="">No tax rate</option>
-            {taxRates.map((rate) => (
-              <option key={rate.id} value={rate.id}>
-                {rate.name}
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="taxRateId"
+            render={({ field }) => (
+              <EnumSelect
+                id="taxRateId"
+                value={field.value ?? ''}
+                onValueChange={field.onChange}
+                placeholder="No tax rate"
+                options={[{ value: '', label: 'No tax rate' }, ...taxRates.map((rate) => ({ value: rate.id, label: rate.name }))]}
+              />
+            )}
+          />
         </Field>
       </div>
 
@@ -192,10 +213,21 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
         </Field>
         <Field>
           <FieldLabel htmlFor="status">Status</FieldLabel>
-          <NativeSelect id="status" {...register('status')}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="status"
+            render={({ field }) => (
+              <EnumSelect
+                id="status"
+                value={field.value ?? 'active'}
+                onValueChange={field.onChange}
+                options={[
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' },
+                ]}
+              />
+            )}
+          />
         </Field>
       </div>
 
@@ -222,10 +254,21 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
       {type !== 'service' && trackInventoryWatched && (
         <Field>
           <FieldLabel htmlFor="valuationMethod">Valuation Method</FieldLabel>
-          <NativeSelect id="valuationMethod" {...register('valuationMethod')}>
-            <option value="weighted_average">Weighted Average Cost</option>
-            <option value="fifo">FIFO (First In, First Out)</option>
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="valuationMethod"
+            render={({ field }) => (
+              <EnumSelect
+                id="valuationMethod"
+                value={field.value ?? 'weighted_average'}
+                onValueChange={field.onChange}
+                options={[
+                  { value: 'weighted_average', label: 'Weighted Average Cost' },
+                  { value: 'fifo', label: 'FIFO (First In, First Out)' },
+                ]}
+              />
+            )}
+          />
           <FieldDescription>
             FIFO costs each sale from the oldest stock received first, instead of a blended average. Switching an
             existing product to FIFO only affects stock received from now on — it has no cost history to draw on

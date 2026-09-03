@@ -9,20 +9,34 @@
 | `/accounting/trial-balance` | `accounting` | Trial Balance | Accounting |
 | `/sales/customers` | `sales` | Customer Directory | Sales |
 | `/sales/quotes` | `sales` | Quotes | Sales |
+| `/sales/quotes/:quoteId` | `sales` | Quote detail (full page — replaces `?record=`) | — (record page) |
 | `/sales/orders` | `sales` | Sales Orders | Sales |
+| `/sales/orders/:orderId` | `sales` | Sales Order detail (full page — replaces `?record=`) | — (record page) |
 | `/sales/invoices` | `sales` | Sales Invoices | Sales |
+| `/sales/invoices/:invoiceId` | `sales` | Invoice detail (full page — replaces `?record=`) | — (record page) |
 | `/sales/credit-notes` | `sales` | Credit Notes | Sales |
+| `/sales/credit-notes/:creditNoteId` | `sales` | Credit Note detail (full page — replaces `?record=`) | — (record page) |
 | `/sales/receipts` | `sales` | Customer Receipts | Sales |
+| `/sales/receipts/:receiptId` | `sales` | Customer Receipt detail (full page — replaces `?record=`) | — (record page) |
 | `/purchases/vendors` | `purchases` | Vendor Directory | Purchases |
 | `/purchases/orders` | `purchases` | Purchase Orders | Purchases |
+| `/purchases/orders/:purchaseOrderId` | `purchases` | Purchase Order detail (full page — replaces `?record=`) | — (record page) |
 | `/purchases/bills` | `purchases` | Supplier Bills | Purchases |
+| `/purchases/bills/:billId` | `purchases` | Bill detail (full page — replaces `?record=`) | — (record page) |
 | `/purchases/payments` | `purchases` | Payment Register | Purchases |
+| `/purchases/payments/:paymentId` | `purchases` | Supplier Payment detail (full page — replaces `?record=`) | — (record page) |
 | `/purchases/aging` | `purchases` | Vendor Aging | Purchases |
 | `/banking/accounts` | `banking` | Bank Accounts | Banking |
 | `/banking/transactions` | `banking` | Bank Transactions | Banking |
 | `/banking/reconciliation` | `banking` | Bank Reconciliation | Banking |
 | `/inventory` | `inventory` | Inventory (module overview) | Inventory / Organisation |
 | `/inventory/products` | `inventory` | Products & Services | Inventory |
+| `/inventory/products/:productId` | `inventory` | Inventory Item detail (full page, 8 tabs — replaces `?record=`) | — (record page) |
+| `/inventory/adjustments/:adjustmentId` | `inventory` | Stock Adjustment detail (full page — replaces `?record=`) | — (record page) |
+| `/inventory/transfers/:transferId` | `inventory` | Stock Transfer detail (full page — replaces `?record=`) | — (record page) |
+| `/inventory/stock-takes/:stockTakeId` | `inventory` | Stock Take detail (full page — replaces `?record=`) | — (record page) |
+| `/inventory/supplier-returns/:supplierReturnId` | `inventory` | Supplier Return detail (full page — replaces `?record=`) | — (record page) |
+| `/inventory/opening-stock/:batchId` | `inventory` | Opening Stock batch detail (full page — replaces `?record=`) | — (record page) |
 | `/inventory/warehouses`| `inventory` | Multi-Warehouse Stock | Inventory |
 | `/assets/register` | `assets` | Asset Register | Fixed Assets |
 | `/assets/depreciation` | `assets` | Depreciation | Fixed Assets |

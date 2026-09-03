@@ -32,7 +32,7 @@ export function AssetDetailSheet({ asset, depreciationHistory, disposal, open, o
     if (!asset) return [];
     const items: RelatedRecordItem[] = [];
     if (asset.sourceBillId) {
-      items.push({ label: 'Source bill', value: <RecordLink onClick={() => navigate(`/purchases/bills?record=${asset.sourceBillId}`)}>View bill</RecordLink> });
+      items.push({ label: 'Source bill', value: <RecordLink onClick={() => navigate(`/purchases/bills/${asset.sourceBillId}`)}>View bill</RecordLink> });
     }
     if (asset.journalEntryId) {
       items.push({ label: 'Capitalization journal', value: <RecordLink onClick={() => navigate(`/accounting/journals?record=${asset.journalEntryId}`)}>View journal entry</RecordLink> });

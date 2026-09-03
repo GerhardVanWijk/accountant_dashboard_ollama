@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import type { Account, Product, Supplier, SupplierReturn, Warehouse } from '@/types';
 import { SupplierReturnsPage } from './SupplierReturnsPage';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
@@ -10,10 +10,18 @@ import { warehouseService } from '../services/warehouseService';
 import { supplierService } from '@/features/suppliers/services/supplierService';
 import { accountService } from '@/features/accounting/services';
 
-function renderPage() {
+function Loc() {
+  const loc = useLocation();
+  return <div data-testid="loc">{loc.pathname + loc.search}</div>;
+}
+
+function renderPage(entry = '/inventory/supplier-returns') {
   return render(
-    <MemoryRouter initialEntries={['/inventory/supplier-returns']}>
-      <SupplierReturnsPage />
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route path="/inventory/supplier-returns" element={<><SupplierReturnsPage /><Loc /></>} />
+        <Route path="/inventory/supplier-returns/:supplierReturnId" element={<Loc />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -56,7 +64,6 @@ vi.mock('@/features/accounting/services', () => ({
 const mockedGetSupplierReturns = supplierReturnService.getSupplierReturns as unknown as ReturnType<typeof vi.fn>;
 const mockedCreateSupplierReturn = supplierReturnService.createSupplierReturn as unknown as ReturnType<typeof vi.fn>;
 const mockedDeleteSupplierReturn = supplierReturnService.deleteSupplierReturn as unknown as ReturnType<typeof vi.fn>;
-const mockedPostSupplierReturn = supplierReturnService.postSupplierReturn as unknown as ReturnType<typeof vi.fn>;
 const mockedGetProducts = productService.getProducts as unknown as ReturnType<typeof vi.fn>;
 const mockedGetWarehouses = warehouseService.getWarehouses as unknown as ReturnType<typeof vi.fn>;
 const mockedGetSuppliers = supplierService.getSuppliers as unknown as ReturnType<typeof vi.fn>;
@@ -202,17 +209,20 @@ describe('SupplierReturnsPage', () => {
     await waitFor(() => expect(mockedDeleteSupplierReturn).toHaveBeenCalledWith('sret_1'));
   });
 
-  it('posts a draft return from the detail sheet', async () => {
+  it('navigates to the full-page record on row click — no detail sheet', async () => {
     mockedGetSupplierReturns.mockResolvedValue([makeSupplierReturn()]);
-    mockedPostSupplierReturn.mockResolvedValue(makeSupplierReturn({ status: 'posted', journalEntryId: 'je_1' }));
     renderPage();
     await screen.findByText('SRET-0001');
 
     fireEvent.click(screen.getByText('SRET-0001'));
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: /^post$/i }));
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/inventory/supplier-returns/sret_1'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 
-    await waitFor(() => expect(mockedPostSupplierReturn).toHaveBeenCalledWith('sret_1'));
+  it('redirects a legacy ?record=<id> deep link to the canonical record route', async () => {
+    mockedGetSupplierReturns.mockResolvedValue([makeSupplierReturn()]);
+    renderPage('/inventory/supplier-returns?record=sret_1');
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/inventory/supplier-returns/sret_1'));
   });
 
   it('hides create/manage actions for a user without inventory write permission', async () => {
@@ -223,9 +233,5 @@ describe('SupplierReturnsPage', () => {
 
     expect(screen.queryByRole('button', { name: /new return/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('SRET-0001'));
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).queryByRole('button', { name: /^post$/i })).not.toBeInTheDocument();
   });
 });

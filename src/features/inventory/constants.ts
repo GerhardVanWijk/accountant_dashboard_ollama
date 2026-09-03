@@ -29,16 +29,24 @@ export const INVENTORY_CURRENCY: CurrencyCode = 'ZAR';
  * "Standard rate — 15%". Takes the caller's already-loaded tax rates (via
  * useAllTaxRates(), src/features/tax/) rather than a static local list.
  *
- * A raw UUID is NEVER returned as a user-facing label: an id that doesn't
- * resolve (rates still loading, or a rate that was deleted) shows
- * "Unknown tax rate" instead. Callers that want the underlying id for a
- * debug tooltip can read `product.taxRateId` directly.
+ * A raw UUID is NEVER returned as a user-facing label. The three unresolved
+ * cases are kept distinct so a valid id is never mislabelled "unknown":
+ *   - no id at all                         → "No tax rate"
+ *   - id set, rate list still loading/failed → "…"  (pass `pending`)
+ *   - id set, list loaded, still no match    → "Unknown tax rate"
+ * Callers that want the underlying id for a debug tooltip can read
+ * `product.taxRateId` directly.
  */
-export function getTaxRateLabel(taxRateId: string | undefined, taxRates: TaxRate[]): string {
+export function getTaxRateLabel(
+  taxRateId: string | undefined,
+  taxRates: TaxRate[],
+  opts: { pending?: boolean } = {},
+): string {
   if (!taxRateId) return 'No tax rate';
   const rate = taxRates.find((t) => t.id === taxRateId);
-  if (!rate) return 'Unknown tax rate';
-  return Number.isFinite(rate.rate) ? `${rate.name} — ${rate.rate}%` : rate.name;
+  if (rate) return Number.isFinite(rate.rate) ? `${rate.name} — ${rate.rate}%` : rate.name;
+  if (opts.pending || taxRates.length === 0) return '…';
+  return 'Unknown tax rate';
 }
 
 /** Units of measure offered in the Product form's UOM select. */
