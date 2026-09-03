@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { PencilIcon } from 'lucide-react';
+import { PencilIcon, PrinterIcon } from 'lucide-react';
 import type { Invoice } from '@/types';
+import { BusinessDocumentPreviewModal, useBusinessDocument } from '@/features/businessDocuments';
+import type { RecordAction } from '@/components/app/record-page';
 import {
   DocumentLineTable,
   documentLineColumns,
@@ -72,13 +74,15 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
   const canUpdate = useCanAccess('invoicing', 'update');
   const canDelete = useCanAccess('invoicing', 'delete');
 
-  const { updateInvoice, deleteInvoice, markInvoiceAsSent, saving } = useInvoiceMutations();
+  const { updateInvoice, deleteInvoice, markInvoiceAsSent, copyInvoice, saving } = useInvoiceMutations();
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
   const [recordingPayment, setRecordingPayment] = useState(false);
   const [applyingDeposit, setApplyingDeposit] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const { viewModel, loading: docLoading, error: docError } = useBusinessDocument({ kind: 'invoice', record: invoice });
 
   const customerName = invoice ? customerMap.get(invoice.customerId) || 'Unknown customer' : '';
   const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -175,6 +179,28 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
   const availableDeposit = customerDepositReceipts.reduce((sum, r) => sum + r.unallocatedAmount, 0);
   const canApplyDeposit = canRecordPayment && availableDeposit > 0.01;
 
+  const secondaryActions: RecordAction[] = invoice
+    ? [
+        { label: 'Print / PDF', icon: PrinterIcon, onClick: () => setPreviewOpen(true) },
+        {
+          label: 'Duplicate',
+          onClick: () =>
+            void act(
+              () =>
+                copyInvoice(invoice.id).then((copy) => {
+                  if (copy?.id) navigate(`/sales/invoices/${copy.id}`);
+                }),
+              () => {},
+            ),
+        },
+        ...(invoice.status === 'draft' && canUpdate
+          ? [{ label: 'Edit', icon: PencilIcon, onClick: () => setEditing(true) }]
+          : canApplyDeposit
+            ? [{ label: `Apply deposit (${formatCurrency(availableDeposit)})`, onClick: () => setApplyingDeposit(true) }]
+            : []),
+      ]
+    : [];
+
   return (
     <RecordPageShell
       breadcrumbs={[
@@ -206,13 +232,7 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
                       ? { label: 'Record payment', onClick: () => setRecordingPayment(true) }
                       : undefined
                 }
-                secondary={
-                  invoice.status === 'draft' && canUpdate
-                    ? [{ label: 'Edit', icon: PencilIcon, onClick: () => setEditing(true) }]
-                    : canApplyDeposit
-                      ? [{ label: `Apply deposit (${formatCurrency(availableDeposit)})`, onClick: () => setApplyingDeposit(true) }]
-                      : []
-                }
+                secondary={secondaryActions}
                 danger={
                   invoice.status === 'draft' && canDelete
                     ? [{ label: 'Delete draft', onClick: () => setConfirmDelete(true) }]
@@ -434,6 +454,14 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
               onClose={() => setRecordingPayment(false)}
             />
           )}
+
+          <BusinessDocumentPreviewModal
+            open={previewOpen}
+            onClose={() => setPreviewOpen(false)}
+            viewModel={viewModel}
+            loading={docLoading}
+            error={docError}
+          />
 
           {applyingDeposit && (
             <ApplyDepositFormModal

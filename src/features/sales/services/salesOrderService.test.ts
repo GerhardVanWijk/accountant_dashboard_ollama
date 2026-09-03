@@ -2,17 +2,21 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { SalesOrderService } from './salesOrderService';
 import { MockSalesOrderRepository } from '@/repositories/mock/MockSalesOrderRepository';
 import { MockInvoiceRepository } from '@/repositories/mock/MockInvoiceRepository';
+import { AuditLogService } from '@/services/auditLogService';
+import { MockAuditLogRepository } from '@/repositories/mock/MockAuditLogRepository';
 import { seedSalesOrders } from '@/mock-data/salesOrders';
 
 describe('SalesOrderService', () => {
   let salesOrderService: SalesOrderService;
   let salesOrderRepository: MockSalesOrderRepository;
   let invoiceRepository: MockInvoiceRepository;
+  let auditLog: AuditLogService;
 
   beforeEach(() => {
     salesOrderRepository = new MockSalesOrderRepository();
     invoiceRepository = new MockInvoiceRepository([]);
-    salesOrderService = new SalesOrderService(salesOrderRepository, invoiceRepository);
+    auditLog = new AuditLogService(new MockAuditLogRepository());
+    salesOrderService = new SalesOrderService(salesOrderRepository, invoiceRepository, auditLog);
   });
 
   describe('getSalesOrders', () => {
@@ -117,6 +121,63 @@ describe('SalesOrderService', () => {
       const customerId = orders[0].customerId;
       const filtered = await salesOrderService.getSalesOrdersByCustomer(customerId);
       expect(filtered.every((o) => o.customerId === customerId)).toBe(true);
+    });
+  });
+
+  describe('duplicateSalesOrder (Phase 4B)', () => {
+    it('produces an independent PENDING order — new number, today, fresh line ids, quoteId dropped', async () => {
+      const source = await salesOrderService.createSalesOrder({
+        orderNumber: 'SO-2026-0100',
+        customerId: 'cust_x',
+        quoteId: 'quote-abc',
+        orderDate: '2026-01-01T00:00:00.000Z',
+        lineItems: [
+          { id: 'orig-line-1', description: 'Widget', quantity: 2, unitPrice: 50, taxAmount: 15, lineTotal: 100 },
+        ],
+        subtotal: 100,
+        taxTotal: 15,
+        total: 115,
+        currency: 'ZAR',
+        status: 'confirmed',
+        notes: 'keep me',
+      });
+
+      const copy = await salesOrderService.duplicateSalesOrder(source.id);
+
+      expect(copy.id).not.toBe(source.id);
+      expect(copy.status).toBe('pending');
+      expect(copy.quoteId).toBeUndefined();
+      expect(copy.orderNumber).toMatch(/^SO-\d{4}-\d{4}$/);
+      expect(copy.orderNumber).not.toBe(source.orderNumber);
+      expect(copy.notes).toBe('keep me');
+      expect(copy.lineItems[0].id).not.toBe('orig-line-1');
+
+      copy.lineItems[0].quantity = 999;
+      const reloaded = await salesOrderService.getSalesOrder(source.id);
+      expect(reloaded?.lineItems[0].quantity).toBe(2);
+    });
+
+    it('writes a "created" audit row naming the source order number', async () => {
+      const source = await salesOrderService.createSalesOrder({
+        orderNumber: 'SO-2026-0200',
+        customerId: 'cust_x',
+        orderDate: '2026-01-01T00:00:00.000Z',
+        lineItems: [{ id: 'l1', description: 'Widget', quantity: 1, unitPrice: 10, taxAmount: 1.5, lineTotal: 10 }],
+        subtotal: 10,
+        taxTotal: 1.5,
+        total: 11.5,
+        currency: 'ZAR',
+        status: 'confirmed',
+      });
+      const copy = await salesOrderService.duplicateSalesOrder(source.id);
+      const logs = await auditLog.getForRecord('SalesOrder', copy.id);
+      expect(logs).toHaveLength(1);
+      expect(logs[0].action).toBe('created');
+      expect(logs[0].reason).toContain('SO-2026-0200');
+    });
+
+    it('throws when the source does not exist', async () => {
+      await expect(salesOrderService.duplicateSalesOrder('nope')).rejects.toThrow(/not found/i);
     });
   });
 });

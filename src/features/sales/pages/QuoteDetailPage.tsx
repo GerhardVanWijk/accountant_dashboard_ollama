@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { PrinterIcon } from 'lucide-react';
 import type { Quote } from '@/types';
+import { BusinessDocumentPreviewModal, useBusinessDocument } from '@/features/businessDocuments';
 import {
   DocumentLineTable,
   documentLineColumns,
@@ -47,11 +49,13 @@ export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
   const { taxRates, loading: taxRatesLoading, error: taxRatesError } = useAllTaxRates();
 
   const {
-    deleteQuote, markAsSent, markAsAccepted, markAsDeclined, convertToSalesOrder, isLoading: isBusy,
+    deleteQuote, markAsSent, markAsAccepted, markAsDeclined, convertToSalesOrder, duplicateQuote, isLoading: isBusy,
   } = useQuoteMutations({ onSuccess: () => refetch() });
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const { viewModel, loading: docLoading, error: docError } = useBusinessDocument({ kind: 'quote', record: quote });
 
   const customerName = quote ? customerMap.get(quote.customerId) || 'Unknown customer' : '';
   const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -131,6 +135,18 @@ export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
               <RecordActionBar
                 busy={isBusy}
                 primary={primary}
+                secondary={[
+                  { label: 'Print / PDF', icon: PrinterIcon, onClick: () => setPreviewOpen(true) },
+                  {
+                    label: 'Duplicate',
+                    onClick: () =>
+                      void act(() =>
+                        duplicateQuote(quote.id).then((copy) => {
+                          if (copy?.id) navigate(`/sales/quotes/${copy.id}`);
+                        }),
+                      ),
+                  },
+                ]}
                 danger={[
                   ...(quote.status === 'sent' ? [{ label: 'Mark as declined', onClick: () => void act(() => markAsDeclined(quote.id)) }] : []),
                   ...(quote.status === 'draft' ? [{ label: 'Delete draft', onClick: () => setConfirmDelete(true) }] : []),
@@ -191,6 +207,14 @@ export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
               setConfirmDelete(false);
               void act(() => deleteQuote(quote.id), () => navigate('/sales/quotes'));
             }}
+          />
+
+          <BusinessDocumentPreviewModal
+            open={previewOpen}
+            onClose={() => setPreviewOpen(false)}
+            viewModel={viewModel}
+            loading={docLoading}
+            error={docError}
           />
         </>
       )}

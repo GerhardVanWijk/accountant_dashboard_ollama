@@ -50,6 +50,9 @@ export function useQuoteMutations(options?: UseQuoteMutationsOptions) {
   const convertToSalesOrder = (id: string) =>
     run(() => quoteService.convertToSalesOrder(id), () => undefined);
 
+  const duplicateQuote = (id: string) =>
+    run(() => quoteService.duplicateQuote(id), (q) => options?.onSuccess?.(q));
+
   return {
     isLoading,
     error,
@@ -60,5 +63,6 @@ export function useQuoteMutations(options?: UseQuoteMutationsOptions) {
     markAsAccepted,
     markAsDeclined,
     convertToSalesOrder,
+    duplicateQuote,
   };
 }

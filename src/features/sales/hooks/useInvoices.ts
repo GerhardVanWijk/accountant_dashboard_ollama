@@ -138,11 +138,28 @@ export function useInvoiceMutations() {
     }
   };
 
+  /** Copies an invoice into a new DRAFT invoice (never posts) — see InvoiceService.copyToNewDraftInvoice(). */
+  const copyInvoice = async (id: string) => {
+    setSaving(true);
+    try {
+      const service = getInvoiceService();
+      const invoice = await service.copyToNewDraftInvoice(id);
+      setError(null);
+      return invoice;
+    } catch (err) {
+      setError({ message: (err as Error).message });
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return {
     createInvoice,
     updateInvoice,
     deleteInvoice,
     markInvoiceAsSent,
+    copyInvoice,
     saving,
     error,
   };

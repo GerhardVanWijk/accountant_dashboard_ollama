@@ -1,0 +1,130 @@
+/*
+ * PHASE 4B — Global Business Documents print + screen strategy.
+ * Imported once from `src/features/businessDocuments/index.ts`.
+ *
+ * Printed paper is ALWAYS white background + dark text, regardless of the
+ * app theme — the literal colours below (and the matching Tailwind literals
+ * inside `BusinessDocument.tsx`) are the one documented exception to this
+ * codebase's semantic-token rule. See docs/BUSINESS_DOCUMENTS.md.
+ */
+
+.business-document {
+  /* A4 width. `min-height` (screen only) makes an empty sheet still look
+     like a page; print drops it so content paginates naturally. */
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 210mm;
+  margin-inline: auto;
+  padding: 16mm;
+  background: #ffffff;
+  color: #171717;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+@media screen {
+  .business-document {
+    min-height: 297mm;
+    box-shadow:
+      0 1px 3px rgba(15, 23, 42, 0.12),
+      0 10px 30px rgba(15, 23, 42, 0.08);
+  }
+}
+
+.business-document h1,
+.business-document h2,
+.business-document h3,
+.business-document p,
+.business-document table,
+.business-document td,
+.business-document th {
+  color: inherit;
+}
+
+.business-document__tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* On-screen grey canvas the sheet floats on inside the preview modal. */
+.business-document-print-root {
+  display: block;
+}
+@media screen {
+  .business-document-print-root {
+    background: #52525b;
+    padding: 24px 12px;
+  }
+}
+
+/*
+ * PRINT — gated on `body.printing-business-document`, which the preview
+ * modal adds just before `window.print()` and removes on `afterprint`.
+ * The whole app (`#root`) is hidden and the portal-hosted sheet is
+ * promoted into normal flow so it paginates. Footer flows at the end of
+ * the content — no `position: fixed`, no page numbers. The existing
+ * `@media print` block in globals.css (hides sidebar / topbar / toaster)
+ * still applies underneath as a safety net.
+ */
+@media print {
+  body.printing-business-document #root {
+    display: none !important;
+  }
+
+  body.printing-business-document [data-slot='dialog-overlay'] {
+    display: none !important;
+  }
+
+  body.printing-business-document [data-slot='dialog-content'] {
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    max-width: none !important;
+    max-height: none !important;
+    width: auto !important;
+    overflow: visible !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  body.printing-business-document [data-slot='dialog-content'] [data-slot='dialog-scroll-area'] {
+    overflow: visible !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  body.printing-business-document [data-slot='dialog-close'],
+  body.printing-business-document .business-document-modal__toolbar {
+    display: none !important;
+  }
+
+  body.printing-business-document .business-document-print-root {
+    background: none !important;
+    padding: 0 !important;
+  }
+
+  body.printing-business-document .business-document {
+    max-width: none;
+    min-height: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .business-document__lines thead {
+    display: table-header-group;
+  }
+  .business-document__lines tr {
+    break-inside: avoid;
+  }
+  .business-document__totals,
+  .business-document__footer,
+  .business-document__payment,
+  .business-document__parties {
+    break-inside: avoid;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}

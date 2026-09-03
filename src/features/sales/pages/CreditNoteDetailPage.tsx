@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { PrinterIcon } from 'lucide-react';
 import type { CreditNote } from '@/types';
+import { BusinessDocumentPreviewModal, useBusinessDocument } from '@/features/businessDocuments';
 import {
   DocumentLineTable,
   documentLineColumns,
@@ -68,6 +70,8 @@ export function CreditNoteDetailPage({ recordId, embedded }: RecordPageProps = {
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmVoid, setConfirmVoid] = useState(false);
   const [allocating, setAllocating] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const { viewModel, loading: docLoading, error: docError } = useBusinessDocument({ kind: 'credit_note', record: creditNote });
 
   const customerName = creditNote ? customerMap.get(creditNote.customerId) || 'Unknown customer' : '';
   const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -158,7 +162,12 @@ export function CreditNoteDetailPage({ recordId, embedded }: RecordPageProps = {
               <RecordActionBar
                 busy={isBusy}
                 primary={canAllocate ? { label: 'Allocate to invoice', onClick: () => setAllocating(true) } : undefined}
-                secondary={creditNote.status === 'draft' ? [{ label: 'Issue credit note', onClick: () => void act(() => issueCreditNote(creditNote.id)) }] : []}
+                secondary={[
+                  { label: 'Print / PDF', icon: PrinterIcon, onClick: () => setPreviewOpen(true) },
+                  ...(creditNote.status === 'draft'
+                    ? [{ label: 'Issue credit note', onClick: () => void act(() => issueCreditNote(creditNote.id)) }]
+                    : []),
+                ]}
                 danger={creditNote.status === 'draft' ? [{ label: 'Void', onClick: () => setConfirmVoid(true) }] : []}
               />
             }
@@ -325,6 +334,14 @@ export function CreditNoteDetailPage({ recordId, embedded }: RecordPageProps = {
               setConfirmVoid(false);
               void act(() => voidCreditNote(creditNote.id));
             }}
+          />
+
+          <BusinessDocumentPreviewModal
+            open={previewOpen}
+            onClose={() => setPreviewOpen(false)}
+            viewModel={viewModel}
+            loading={docLoading}
+            error={docError}
           />
 
           {allocating && (

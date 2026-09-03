@@ -46,6 +46,7 @@ beforeEach(() => {
     confirmOrder: vi.fn(),
     cancelOrder: vi.fn(),
     convertToInvoice: vi.fn(),
+    duplicateSalesOrder: vi.fn(),
   });
   vi.mocked(useQuotes).mockReturnValue({ quotes: [] } as never);
   vi.mocked(useInvoices).mockReturnValue({ invoices: [] } as never);
@@ -98,5 +99,11 @@ describe('SalesOrderDetailPage', () => {
     renderAt();
     expect(screen.queryByRole('button', { name: 'Convert to invoice' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Confirm order' })).not.toBeInTheDocument();
+  });
+
+  it('offers "Print / PDF" and "Duplicate" document actions (Phase 4B)', () => {
+    renderAt();
+    expect(screen.getByRole('button', { name: 'Print / PDF' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Duplicate' })).toBeInTheDocument();
   });
 });

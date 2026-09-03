@@ -1,6 +1,15 @@
-import type { Invoice, SalesOrder } from '@/types';
+import type { ID, Invoice, SalesOrder } from '@/types';
 import type { ISalesOrderRepository } from '@/repositories/ISalesOrderRepository';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
+import { newUuid } from '@/lib/uuid';
+import { auditLogService, type AuditLogService } from '@/services/auditLogService';
+import {
+  documentNumberPrefix,
+  nextDocumentNumber,
+} from '@/features/purchases/utils/nextDocumentNumber';
+
+/** No real authenticated actor for a system-initiated copy — same pattern as stockAdjustmentService. */
+const SYSTEM_USER_ID: ID = 'system';
 
 export type CreateSalesOrderDTO = Omit<SalesOrder, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -16,6 +25,8 @@ export class SalesOrderService {
   constructor(
     private readonly repository: ISalesOrderRepository,
     private readonly invoiceRepository: IInvoiceRepository,
+    /** Phase 4B-2: records a "created" audit row for a duplicated sales order. Defaults to the shared singleton. */
+    private readonly auditLog: AuditLogService = auditLogService,
   ) {}
 
   async getSalesOrders(): Promise<SalesOrder[]> {
@@ -128,6 +139,46 @@ export class SalesOrderService {
     await this.repository.update(orderId, { status: 'fulfilled' });
 
     return invoice;
+  }
+
+  /**
+   * Copies a sales order into a brand-new PENDING sales order — new
+   * number, today's order date, fresh line-item ids, party + notes
+   * carried over. `quoteId` is dropped (the copy is not from that quote).
+   * NO GL posting (sales orders never post). Throws if the source does
+   * not exist. Writes a `created` audit row naming the source order number.
+   */
+  async duplicateSalesOrder(id: string, duplicatedBy: ID = SYSTEM_USER_ID): Promise<SalesOrder> {
+    const source = await this.requireOrder(id);
+    const existing = await this.repository.getAll();
+    const copy = await this.repository.create({
+      id: '',
+      orderNumber: nextDocumentNumber(
+        existing.map((o) => o.orderNumber),
+        documentNumberPrefix(source.orderNumber, 'SO'),
+      ),
+      customerId: source.customerId,
+      orderDate: new Date().toISOString(),
+      lineItems: source.lineItems.map((line) => ({ ...line, id: newUuid() })),
+      subtotal: source.subtotal,
+      taxTotal: source.taxTotal,
+      total: source.total,
+      currency: source.currency,
+      status: 'pending',
+      notes: source.notes,
+      createdAt: '',
+      updatedAt: '',
+    });
+    await this.auditLog.log({
+      userId: duplicatedBy,
+      action: 'created',
+      module: 'sales',
+      recordType: 'SalesOrder',
+      recordId: copy.id,
+      reason: `Duplicated from ${source.orderNumber}`,
+      newValue: { copiedFromNumber: source.orderNumber },
+    });
+    return copy;
   }
 
   /** Get sales orders for a specific customer. */

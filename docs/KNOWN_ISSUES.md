@@ -77,13 +77,31 @@ the order `fulfilled`, and blocks a second conversion. There is no per-line "inv
 `partially_received`). "Sales order qty 10 → invoice qty 4 → 6 remaining" is not possible today.
 Useful future feature; not built (brief said report only).
 
-### The migrated full-page record pages have no export / formal print layout
-Confirmed 2026-09-03. The Phase-7 export framework (`src/features/export/` — `ExportMenu` CSV/Excel/
-`window.print()`, `PrintableReport`) is wired on **list** pages but on **none** of the new
-`*DetailPage` record pages, and there is no branded business-document print layout (header, company
-reg/VAT, bill-to, totals, terms) for Quote / Sales Order / Invoice / Credit Note / PO — `window.print()`
-on a record page prints the app chrome + on-screen HTML. Recommended follow-up: a shared
-`PrintableDocument` + `@media print` pass, plus `ExportMenu` on the record pages.
+### ~~The migrated full-page record pages have no export / formal print layout~~ — RESOLVED (Phase 4B, 2026-09-03)
+`src/features/businessDocuments/` now provides a branded A4 document system (id-free
+`BusinessDocumentViewModel` + 5 adapters + `BusinessDocument` A4 template + `businessDocuments.css`
+print strategy + `BusinessDocumentPreviewModal`). A **Print / PDF** action (and, for
+Quote / Sales Order / Purchase Order / Invoice, a **Duplicate** action) is wired onto the 5
+`*DetailPage`s. `ExportMenu` (CSV/Excel *data* export) on the record pages was **not** added —
+it stays list-oriented; the formal document is a separate surface. See `docs/BUSINESS_DOCUMENTS.md`.
+
+### ~~Company document profile — schema authored~~ — RESOLVED (Phase 4B-2, migration `0047` APPLIED 2026-09-03)
+Found 2026-09-03 (Phase 4B), built out in Phase 4B-2. `Company` has the optional fields
+(`tradingName`, `logo` = base64 data URL, `documentAddress` jsonb `Address`, `phone`, `email`,
+`website`, `documentTerms`, `documentsBankAccountId` → `bank_accounts` FK), the
+`SupabaseCompanyRepository` mapping, the `CompanyForm` "Document & branding" section (client-side
+logo validation, bank-account selector), and the businessDocuments adapters consume all of it from
+one source. **Migration `0047_company_document_profile` was APPLIED to the live project 2026-09-03**
+(`supabase/migrations/20260903120200__0047_company_document_profile.sql`). All 3 live `companies`
+rows are NULL on all 8 new columns — no profile data was invented or written; an admin sets real
+values through Company Settings. Post-apply verification (schema / FK / all-NULL / Trial Balance
+balanced / 0 new security advisors): `docs/SUPABASE_MIGRATION_GUIDE.md` § "0047".
+
+**Still open / deferred (not solved in 4B-2):**
+- `DocumentLineItem` has no per-line **discount** field → no Discount column on any document
+  (`Customer.defaultDiscountPercent` exists but is not captured per line).
+- `SalesOrder` has no **delivery address**, **customer-PO reference**, or **expected-delivery**
+  field → those are omitted from the printed sales order.
 
 ### FIFO stock-lot repository is still `MockStockLotRepository` in production wiring
 Found 2026-09-03 during the Increment-2 Mock-repository audit (record-detail full-page migration).

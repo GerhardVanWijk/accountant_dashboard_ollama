@@ -85,6 +85,14 @@ PrintableDocument
 ```
 
 ### Tasks
+- [x] **4B.0 Investigation** — done (Queen Bee handoff + this increment). See `docs/BUSINESS_DOCUMENTS.md`.
+- [x] **4B.1 `BusinessDocument` component** — `src/features/businessDocuments/` A4 template + `businessDocuments.css` (screen preview + `@media print` gated on `body.printing-business-document`).
+- [x] **4B.2 Per-document adapters + wrappers** — id-free `BusinessDocumentViewModel` + 5 pure adapters (quote/SO/invoice/credit-note/PO) + `useBusinessDocument` hook + `BusinessDocumentPreviewModal`; **Print / PDF** action on all 5 `*DetailPage`s. Email-ready standalone output: deferred.
+- [x] **4B.3 Duplicate / copy** — `quoteService.duplicateQuote` · `salesOrderService.duplicateSalesOrder` · `purchaseOrderService.duplicatePurchaseOrder` · `invoiceService.copyToNewDraftInvoice` (NOT credit note). New draft, new number, today, fresh line ids, guarded, tested. Not audit-logged (mirrors existing `create*` — see doc). Not run against live data.
+- [x] **4B.4 Tests** — +56 tests / +5 files (adapters ×17, `noInternalIds` scan ×10, `BusinessDocument` ×7, `BusinessDocumentPreviewModal` ×5, layout ×4, duplicate ×8 across the 4 service test files, "Print / PDF present" ×5 on the detail-page tests).
+- [x] **4B.5 Docs** — new `docs/BUSINESS_DOCUMENTS.md`; `KNOWN_ISSUES.md` "no formal print layout" closed + Company-document-profile gap logged; this section.
+
+**Historical task text (superseded by the above):**
 - [ ] **4B.0 Investigation** — inventory every existing print/export primitive (`src/features/export/`
   `ExportMenu` / `PrintableReport` / `PrintableReport`'s `@media print`), the `useCompany()` shape
   (logo? reg no? VAT no? banking details? address?), the `Customer`/`Supplier` address fields, the
@@ -115,6 +123,56 @@ PrintableDocument
 **CP-4B (review checkpoint):** component API + one worked example (Invoice) rendered; data-gap
 report (logo/bank details); list of any type/schema field added and why; full gate; confirm no
 accounting/DB change (or present the migration if one is truly required). **STOP.**
+
+---
+
+### PHASE 4B — DONE, uncommitted, branch `phase-9b-relationship-design-and-code` (2026-09-03)
+
+**No accounting / DB / migration / seed / posting / VAT / WAC / GL / reconciliation / flag change.**
+No `Company` type/table change (Company Settings gap **reported** with a proposed-but-unapplied
+`0047` sketch in `docs/BUSINESS_DOCUMENTS.md`, not implemented).
+
+| Area | Detail |
+|---|---|
+| New module | `src/features/businessDocuments/` — `types.ts` (id-free `BusinessDocumentViewModel` = the privacy boundary), `adapters/` (`shared.ts` + 5 pure adapters + `__fixtures__.ts`), `components/` (`BusinessDocument.tsx` A4 sheet, `BusinessDocumentPreviewModal.tsx`, `printBusinessDocument.ts`), `hooks/useBusinessDocument.ts`, `businessDocuments.css`, `index.ts`. |
+| Wiring | **Print / PDF** action + `<BusinessDocumentPreviewModal>` on `QuoteDetailPage` · `SalesOrderDetailPage` · `InvoiceDetailPage` · `CreditNoteDetailPage` · `PurchaseOrderDetailPage`. **Duplicate** action on all but Credit Note. `Icons.print` registry key added. |
+| Duplicate services | `quoteService.duplicateQuote` · `salesOrderService.duplicateSalesOrder` · `purchaseOrderService.duplicatePurchaseOrder` · `invoiceService.copyToNewDraftInvoice` + mutation-hook methods. Shared `documentNumberPrefix` added next to `nextDocumentNumber`. New draft only; NO GL post; NOT run against live data. |
+| Footer | Exact: `Generated with Vertex Accounting Solutions • {year} • All rights reserved.` — `{year} = new Date().getFullYear()`, never hardcoded. |
+| Print CSS | Gated on `body.printing-business-document`: hide `#root`, promote the portal-hosted sheet to static flow so it paginates; `@page { size:A4; margin:14mm }`; header repeats, rows/totals/footer `break-inside:avoid`; footer flows at end, no page numbers. White paper regardless of theme (documented literal-colour exception; no eslint-disable — repo has no colour rule). |
+| Gate | tsc ✅ · eslint `--max-warnings 0` ✅ · **2139 tests / 299 files** ✅ (was 2083 / 294 — **+56 / +5**) · `vite build` ✅ |
+| DB writes | **NONE.** Migrations: **NONE.** Commit / push / deploy / merge: **NO.** |
+
+**Outstanding:** human visual / browser QA of the printed output (A4 pagination, print dialog with
+headers/footers off, PDF export, dark-app → white-paper) — no Chrome DevTools / Playwright MCP in
+this env. Email-ready standalone output and `ExportMenu`-on-record-pages: deferred.
+
+---
+
+### PHASE 4B-2 — Company Document Profile + document hardening — DONE + COMMITTED + PUSHED, branch `phase-9b-relationship-design-and-code` (2026-09-03, Review 4B-3 close-out)
+
+**No accounting / journal / VAT / WAC / COGS / inventory / recon / allocation / posting / flag
+change. Migration `0047` APPLIED live (additive only). NO Supabase Storage bucket. Office National
+`0047` columns all left NULL. NOT merged to `main`, production NOT deployed.**
+
+| Area | Detail |
+|---|---|
+| Migration | **`0047_company_document_profile` — APPLIED to live 2026-09-03** (`supabase/migrations/20260903120200__0047_company_document_profile.sql`), after Stage-1 read-only pre-flight. Adds nullable `trading_name`, `logo` (base64 data URL — NOT Storage), `document_address` (jsonb `Address`), `phone`, `email`, `website`, `document_terms`, `documents_bank_account_id` (FK → `bank_accounts`, `on delete set null`) to `companies`. Additive, no defaults, no backfill. Post-apply: all 3 rows NULL on all 8 cols, TB balanced, 0 new advisors. Details: `docs/SUPABASE_MIGRATION_GUIDE.md` § 0047. |
+| Type + repo | `Company` gains those 8 optional fields; `SupabaseCompanyRepository` row type + `rowToCompany` + `companyToRow` (jsonb `document_address` ↔ `Address`; new keys written as SQL NULL on clear). `MockCompanyRepository` unchanged (spread). |
+| Company Settings | New "Document & branding" `FormSection` in `CompanyForm` + `companyFormSchema` (`companyToFormValues` / `formValuesToCompanyPatch`), incl. client-validated logo upload (png/jpeg/webp/svg, ≤ 512 KB → data URL, Replace / Remove) and a "Bank account shown on documents" selector with "None". `CompanyPage` passes `useBankAccounts()` and shows the logo / address / contact on the card. |
+| Global document integration | `adapters/shared.ts`: `issuerParty` emits `tradingAs` / `addressLines` / `email` / `phone` / `website`; `branding` emits `logoDataUrl = company.logo` + `issuerDisplayName = tradingName || name`. New `resolveDocumentTerms` (document-specific precedence) feeds `terms` on all 5 doc VMs. New `resolveDocumentsBankAccount` (id match + `active`). |
+| Banking | Phase 4B "exactly one active bank account" fallback **removed** from `useBusinessDocument` — replaced with `company.documentsBankAccountId` + `active` resolution; else the invoice payment block is omitted cleanly. |
+| Header | `DocumentHeader` revisited: `max-h-20 max-w-[280px] object-contain` logo, `break-words` long trading + legal names, legal name shown under a trading-name wordmark, multi-line address / contact. |
+| Duplicate/Copy audit | `QuoteService` / `SalesOrderService` / `PurchaseOrderService` / `InvoiceService` take an optional `auditLog: AuditLogService` ctor param (defaults to the shared singleton — no wiring change). Each duplicate method writes `action:'created'`, `module`, `recordType`, `reason: 'Duplicated from <source number>'`, `newValue.copiedFromNumber`. Actor defaults to `SYSTEM_USER_ID = 'system'`. |
+| Icons | Phase 4B's `Icons.print` registry key **reverted**; the direct `import { PrinterIcon } from 'lucide-react'` stays (established v0-era exception — `src/components/ui/Icon.tsx` doesn't exist, registry unused). |
+| Privacy | `noInternalIds.test.tsx` extended: invoice company carries a real-UUID `documentsBankAccountId` + resolved account ⇒ human bank details render, the FK UUID does not; logo renders as `<img src="data:…">`, base64 not dumped as text. All Phase 4B privacy assertions retained. |
+| Gate | tsc ✅ · eslint `--max-warnings 0` ✅ · **2169 tests / 300 files** ✅ (was 2139 / 299 — **+30 / +1**) · `vite build` ✅ |
+| DB writes | Migration `0047` applied (additive DDL only — zero rows written). Storage bucket: **NO.** |
+| Git | Two commits on `phase-9b-relationship-design-and-code`: `feat(company): add document branding profile` + `feat(sales,purchases): add professional A4 business documents`. Pushed to the branch. **`main` NOT merged. Production NOT deployed.** Cloudflare Pages branch preview auto-builds — see the preview URL in the Review 4B-3 report. |
+
+**Deferred, documented, NOT solved here:** per-line discount column; SalesOrder delivery-address /
+customer-PO-reference / expected-delivery. **Outstanding:** human visual / browser QA (no browser
+tooling in this env); a private Storage bucket for the logo remains a valid future alternative
+(its own review cycle).
 
 ---
 

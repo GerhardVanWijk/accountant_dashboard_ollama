@@ -96,4 +96,10 @@ describe('CreditNoteDetailPage', () => {
     renderAt('/sales/credit-notes/nope');
     expect(screen.getByText(/could not be found/i)).toBeInTheDocument();
   });
+
+  it('offers a "Print / PDF" action but never a "Duplicate" one (Phase 4B)', () => {
+    renderAt();
+    expect(screen.getByRole('button', { name: 'Print / PDF' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Duplicate' })).not.toBeInTheDocument();
+  });
 });

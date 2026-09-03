@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Link } from 'react-router-dom';
+import { PrinterIcon } from 'lucide-react';
 import type { SalesOrder } from '@/types';
+import { BusinessDocumentPreviewModal, useBusinessDocument } from '@/features/businessDocuments';
 import {
   DocumentLineTable,
   RecordActionBar,
@@ -58,8 +60,10 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const { viewModel, loading: docLoading, error: docError } = useBusinessDocument({ kind: 'sales_order', record: order });
 
-  const { deleteSalesOrder, confirmOrder, cancelOrder, convertToInvoice, isLoading: isBusy } = useSalesOrderMutations({
+  const { deleteSalesOrder, confirmOrder, cancelOrder, convertToInvoice, duplicateSalesOrder, isLoading: isBusy } = useSalesOrderMutations({
     onSuccess: () => refetch(),
   });
 
@@ -136,7 +140,21 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
                       }
                     : undefined
                 }
-                secondary={canConfirm ? [{ label: 'Confirm order', onClick: () => void act(() => confirmOrder(order.id), () => {}) }] : []}
+                secondary={[
+                  { label: 'Print / PDF', icon: PrinterIcon, onClick: () => setPreviewOpen(true) },
+                  {
+                    label: 'Duplicate',
+                    onClick: () =>
+                      void act(
+                        () =>
+                          duplicateSalesOrder(order.id).then((copy) => {
+                            if (copy?.id) navigate(`/sales/orders/${copy.id}`);
+                          }),
+                        () => {},
+                      ),
+                  },
+                  ...(canConfirm ? [{ label: 'Confirm order', onClick: () => void act(() => confirmOrder(order.id), () => {}) }] : []),
+                ]}
                 danger={[
                   ...(canCancel ? [{ label: 'Cancel order', onClick: () => void act(() => cancelOrder(order.id), () => {}) }] : []),
                   ...(canDelete ? [{ label: 'Delete draft', onClick: () => setConfirmDelete(true) }] : []),
@@ -200,6 +218,14 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
               setConfirmDelete(false);
               void act(() => deleteSalesOrder(order.id), () => navigate('/sales/orders'));
             }}
+          />
+
+          <BusinessDocumentPreviewModal
+            open={previewOpen}
+            onClose={() => setPreviewOpen(false)}
+            viewModel={viewModel}
+            loading={docLoading}
+            error={docError}
           />
         </>
       )}

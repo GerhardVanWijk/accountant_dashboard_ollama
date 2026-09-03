@@ -79,4 +79,10 @@ describe('PurchaseOrderDetailPage', () => {
     renderAt('/purchases/orders/nope');
     expect(screen.getByText(/could not be found/i)).toBeInTheDocument();
   });
+
+  it('offers "Print / PDF" and "Duplicate" document actions (Phase 4B)', () => {
+    renderAt();
+    expect(screen.getByRole('button', { name: 'Print / PDF' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Duplicate' })).toBeInTheDocument();
+  });
 });

@@ -153,13 +153,22 @@ function setup(
   };
 
   const repo = initialInvoices ? new MockInvoiceRepository(initialInvoices) : new MockInvoiceRepository();
-  const service = new InvoiceService(repo, engine, resolver, accountMapper, products, warehouses, options.lineProjector);
+  const service = new InvoiceService(
+    repo,
+    engine,
+    resolver,
+    accountMapper,
+    products,
+    warehouses,
+    options.lineProjector,
+    auditLog,
+  );
 
   const getJE = (id: string | undefined) => store.journalEntries.find((e) => e.id === id);
   const sum = (id: string | undefined, accountId: string, side: 'debit' | 'credit') =>
     (getJE(id)?.lines ?? []).filter((l) => l.accountId === accountId).reduce((s, l) => s + l[side], 0);
 
-  return { service, store, repo, seedProduct, getJE, sum };
+  return { service, store, repo, seedProduct, getJE, sum, auditLog };
 }
 
 describe('InvoiceService', () => {
@@ -797,6 +806,76 @@ describe('InvoiceService', () => {
         const results = await service.searchInvoices(allInvoices[0].invoiceNumber);
         expect(results.some((inv) => inv.invoiceNumber === allInvoices[0].invoiceNumber)).toBe(true);
       }
+    });
+  });
+
+  describe('copyToNewDraftInvoice (Phase 4B)', () => {
+    it('produces an independent DRAFT — new number, today, fresh line ids, no journal/paid/salesOrder', async () => {
+      const { service } = setup([]);
+      const source = await service.createInvoice({
+        invoiceNumber: 'INV-2026-0100',
+        customerId: 'cust_x',
+        salesOrderId: 'so-1',
+        issueDate: '2026-01-01T00:00:00.000Z',
+        dueDate: '2026-01-31T00:00:00.000Z',
+        lineItems: [
+          { id: 'orig-line-1', description: 'Widget', quantity: 2, unitPrice: 50, taxAmount: 15, lineTotal: 100 },
+        ],
+        subtotal: 100,
+        taxTotal: 15,
+        total: 115,
+        amountPaid: 40,
+        currency: 'ZAR',
+        status: 'partially_paid',
+        notes: 'keep me',
+        journalEntryId: 'je-1',
+      });
+
+      const copy = await service.copyToNewDraftInvoice(source.id);
+
+      expect(copy.id).not.toBe(source.id);
+      expect(copy.status).toBe('draft');
+      expect(copy.amountPaid).toBe(0);
+      expect(copy.journalEntryId).toBeUndefined();
+      expect(copy.salesOrderId).toBeUndefined();
+      expect(copy.invoiceNumber).toMatch(/^INV-\d{4}-\d{4}$/);
+      expect(copy.invoiceNumber).not.toBe(source.invoiceNumber);
+      expect(copy.total).toBe(115);
+      expect(copy.notes).toBe('keep me');
+      expect(new Date(copy.issueDate).getFullYear()).toBe(new Date().getFullYear());
+      expect(copy.lineItems[0].id).not.toBe('orig-line-1');
+
+      copy.lineItems[0].unitPrice = 999;
+      const reloaded = await service.getInvoice(source.id);
+      expect(reloaded?.lineItems[0].unitPrice).toBe(50);
+    });
+
+    it('writes a "created" audit row naming the source invoice number', async () => {
+      const { service, auditLog } = setup([]);
+      const source = await service.createInvoice({
+        invoiceNumber: 'INV-2026-0200',
+        customerId: 'cust_x',
+        issueDate: '2026-01-01T00:00:00.000Z',
+        dueDate: '2026-01-31T00:00:00.000Z',
+        lineItems: [{ id: 'l1', description: 'Widget', quantity: 1, unitPrice: 10, taxAmount: 1.5, lineTotal: 10 }],
+        subtotal: 10,
+        taxTotal: 1.5,
+        total: 11.5,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+      });
+      const copy = await service.copyToNewDraftInvoice(source.id);
+      const logs = await auditLog.getForRecord('Invoice', copy.id);
+      expect(logs).toHaveLength(1);
+      expect(logs[0].action).toBe('created');
+      expect(logs[0].reason).toContain('INV-2026-0200');
+      expect(logs[0].userId).toBe('system');
+    });
+
+    it('throws when the source invoice does not exist', async () => {
+      const { service } = setup([]);
+      await expect(service.copyToNewDraftInvoice('nope')).rejects.toThrow(/not found/i);
     });
   });
 });

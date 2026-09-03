@@ -17,3 +17,15 @@ export function nextDocumentNumber(
   }, 0);
   return `${prefix}-${year}-${String(max + 1).padStart(4, '0')}`;
 }
+
+/**
+ * Extracts the leading alphabetic prefix of a `PREFIX-YYYY-NNNN` document
+ * number (e.g. "INV" from "INV-2026-0007"), falling back to `fallback`
+ * when the head is missing or non-alphabetic. Used by the duplicate/copy
+ * service methods so a copied document keeps the source's own numbering
+ * convention.
+ */
+export function documentNumberPrefix(source: string, fallback: string): string {
+  const head = source.split('-')[0];
+  return head && /^[A-Za-z]+$/.test(head) ? head : fallback;
+}

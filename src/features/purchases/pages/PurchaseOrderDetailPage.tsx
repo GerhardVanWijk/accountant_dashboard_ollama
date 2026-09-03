@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { PrinterIcon } from 'lucide-react';
 import type { PurchaseOrder } from '@/types';
+import { BusinessDocumentPreviewModal, useBusinessDocument } from '@/features/businessDocuments';
 import {
   DocumentLineTable,
   documentLineColumns,
@@ -53,6 +55,8 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
   const isBusy = poMutations.isLoading || billMutations.isLoading;
 
   const [actionError, setActionError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const { viewModel, loading: docLoading, error: docError } = useBusinessDocument({ kind: 'purchase_order', record: po });
 
   const suppliersMap = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
   const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -152,6 +156,20 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
                 busy={isBusy}
                 primary={canConvert ? { label: 'Convert to bill', onClick: () => void convertToBill() } : undefined}
                 secondary={[
+                  { label: 'Print / PDF', icon: PrinterIcon, onClick: () => setPreviewOpen(true) },
+                  {
+                    label: 'Duplicate',
+                    onClick: () =>
+                      void (async () => {
+                        setActionError(null);
+                        try {
+                          const copy = await poMutations.duplicatePurchaseOrder(po.id);
+                          if (copy?.id) navigate(`/purchases/orders/${copy.id}`);
+                        } catch (err) {
+                          setActionError(err instanceof Error ? err.message : 'Could not duplicate this purchase order.');
+                        }
+                      })(),
+                  },
                   ...(canSend ? [{ label: 'Send to supplier', onClick: () => void act(() => poMutations.sendPurchaseOrder(po.id)) }] : []),
                   ...(canReceive ? [{ label: 'Record receipt', onClick: () => void act(() => poMutations.recordReceipt(po.id)) }] : []),
                 ]}
@@ -269,6 +287,14 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
           <RelatedRecordsSection items={relatedItems} />
 
           <RecordActivitySection recordType="PurchaseOrder" recordId={po.id} title="Record activity" subtitle="Changes and lifecycle events for this purchase order." />
+
+          <BusinessDocumentPreviewModal
+            open={previewOpen}
+            onClose={() => setPreviewOpen(false)}
+            viewModel={viewModel}
+            loading={docLoading}
+            error={docError}
+          />
         </>
       )}
     </RecordPageShell>
