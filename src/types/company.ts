@@ -1,4 +1,4 @@
-import type { BaseEntity, CurrencyCode, ID, ISODateString } from './common';
+import type { Address, BaseEntity, CurrencyCode, ID, ISODateString } from './common';
 
 /**
  * South African legal entity types under the Companies Act 71 of 2008 (plus
@@ -155,6 +155,36 @@ export interface Company extends BaseEntity {
   sbcEligibilitySetAt?: ISODateString;
   sbcEligibilityReason?: string;
   isActive: boolean;
+  /**
+   * Phase 4B-2 (migration 0047 — AUTHORED, NOT APPLIED) — "Document &
+   * branding" profile. Every field is optional and nullable in the DB;
+   * with all of them unset a printed document renders exactly as it did
+   * before this phase (name wordmark, no address block, no contact lines,
+   * no default terms, no payment block). See docs/BUSINESS_DOCUMENTS.md.
+   */
+  /** Trading-as name shown as the document issuer identity; falls back to `name`. */
+  tradingName?: string;
+  /**
+   * Base64 data URL of the company logo for formal documents
+   * (`data:image/png;base64,…`). NOT a Storage bucket URL — see migration
+   * 0047's header and docs/BUSINESS_DOCUMENTS.md for why. NULL / unset ⇒
+   * the trading/legal name is rendered as a text wordmark.
+   */
+  logo?: string;
+  /** Issuer address block on formal documents — the jsonb-Address pattern, same as `Customer.billingAddress`. */
+  documentAddress?: Address;
+  phone?: string;
+  email?: string;
+  website?: string;
+  /** Default terms & conditions / footer terms printed on quotes, invoices, credit notes and POs. */
+  documentTerms?: string;
+  /**
+   * Which bank account's human details print in the invoice
+   * payment-information block. NULL / unset ⇒ the payment block is omitted
+   * entirely (no fallback guessing). The id itself is never rendered on a
+   * document — only the resolved bank name / account number / branch.
+   */
+  documentsBankAccountId?: ID;
   /**
    * Phase T (migration 0010) — informational only, surfaced on the
    * Superuser Dashboard's tenant list. Optional here (rather than required

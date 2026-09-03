@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Company, ID } from '@/types';
+import type { Address, Company, ID } from '@/types';
 import type { ICompanyRepository } from './ICompanyRepository';
 
 /** One row of the `companies` table (snake_case) — see docs/SUPABASE_MIGRATION_GUIDE.md's Phase A schema. */
@@ -36,6 +36,15 @@ interface CompanyRow {
   sbc_eligibility_reason: string | null;
   is_active: boolean;
   subscription_tier: string;
+  // Phase 4B-2 — migration 0047 (AUTHORED, NOT APPLIED). All nullable.
+  trading_name: string | null;
+  logo: string | null;
+  document_address: Address | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  document_terms: string | null;
+  documents_bank_account_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -76,6 +85,14 @@ function rowToCompany(row: CompanyRow): Company {
     sbcEligibilityReason: row.sbc_eligibility_reason ?? undefined,
     isActive: row.is_active,
     subscriptionTier: row.subscription_tier,
+    tradingName: row.trading_name ?? undefined,
+    logo: row.logo ?? undefined,
+    documentAddress: row.document_address ?? undefined,
+    phone: row.phone ?? undefined,
+    email: row.email ?? undefined,
+    website: row.website ?? undefined,
+    documentTerms: row.document_terms ?? undefined,
+    documentsBankAccountId: row.documents_bank_account_id ?? undefined,
   };
 }
 
@@ -113,6 +130,18 @@ function companyToRow(entity: Partial<Company>): Record<string, unknown> {
   if (entity.sbcEligibilityReason !== undefined) row.sbc_eligibility_reason = entity.sbcEligibilityReason;
   if (entity.isActive !== undefined) row.is_active = entity.isActive;
   if (entity.subscriptionTier !== undefined) row.subscription_tier = entity.subscriptionTier;
+  // Phase 4B-2 document profile (migration 0047). `key in entity` — not
+  // `!== undefined` — so an explicit clear (logo "Remove", emptied field)
+  // is written through as SQL NULL rather than silently skipped.
+  if ('tradingName' in entity) row.trading_name = entity.tradingName ?? null;
+  if ('logo' in entity) row.logo = entity.logo ?? null;
+  if ('documentAddress' in entity) row.document_address = entity.documentAddress ?? null;
+  if ('phone' in entity) row.phone = entity.phone ?? null;
+  if ('email' in entity) row.email = entity.email ?? null;
+  if ('website' in entity) row.website = entity.website ?? null;
+  if ('documentTerms' in entity) row.document_terms = entity.documentTerms ?? null;
+  if ('documentsBankAccountId' in entity)
+    row.documents_bank_account_id = entity.documentsBankAccountId ?? null;
   return row;
 }
 
