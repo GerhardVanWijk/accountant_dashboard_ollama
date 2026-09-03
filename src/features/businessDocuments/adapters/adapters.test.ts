@@ -6,10 +6,10 @@ import { invoiceToBusinessDocument } from './invoiceToBusinessDocument';
 import { creditNoteToBusinessDocument } from './creditNoteToBusinessDocument';
 import { purchaseOrderToBusinessDocument } from './purchaseOrderToBusinessDocument';
 import {
-  businessDocumentFooterText,
   formatQuantity,
   resolveDocumentTerms,
   resolveDocumentsBankAccount,
+  vertexFooter,
 } from './shared';
 import * as fx from './__fixtures__';
 
@@ -22,12 +22,19 @@ describe('formatQuantity', () => {
   });
 });
 
-describe('businessDocumentFooterText', () => {
-  it('is the exact Vertex string with a dynamic year — never hardcoded', () => {
-    expect(businessDocumentFooterText(new Date('2031-06-01'))).toBe(
-      'Generated with Vertex Accounting Solutions • 2031 • All rights reserved.',
+describe('vertexFooter', () => {
+  it('returns the two fixed Vertex lines with a dynamic year — never hardcoded', () => {
+    const footer = vertexFooter(new Date('2031-06-01'));
+    expect(footer.generatedLine).toBe('Generated with Vertex Accounting Solutions');
+    expect(footer.rightsLine).toBe('© 2031 Vertex Accounting Solutions. All rights reserved.');
+  });
+
+  it('defaults the year to the current calendar year', () => {
+    expect(vertexFooter().rightsLine).toContain(String(new Date().getFullYear()));
+    // The source must never carry a hardcoded year literal.
+    expect(vertexFooter(new Date('2040-01-01')).rightsLine).toBe(
+      '© 2040 Vertex Accounting Solutions. All rights reserved.',
     );
-    expect(businessDocumentFooterText()).toContain(String(new Date().getFullYear()));
   });
 });
 
@@ -66,10 +73,37 @@ describe('salesOrderToBusinessDocument', () => {
     const vm = salesOrderToBusinessDocument(fx.salesOrder, fx.ctx({ quoteNumber: 'QUO-2026-0004' }));
     expect(vm.title).toBe('SALES ORDER');
     expect(vm.secondaryDate).toBeUndefined();
-    expect(vm.meta).toEqual([
-      { label: 'Customer account', value: 'CUST-0007' },
-      { label: 'Quote reference', value: 'QUO-2026-0004' },
-    ]);
+    expect(vm.meta).toEqual([{ label: 'Quote reference', value: 'QUO-2026-0004' }]);
+  });
+});
+
+describe('issuer / recipient headings', () => {
+  it('every document kind puts the issuer under a "From" heading', () => {
+    expect(quoteToBusinessDocument(fx.quote, fx.ctx()).issuerHeading).toBe('From');
+    expect(salesOrderToBusinessDocument(fx.salesOrder, fx.ctx()).issuerHeading).toBe('From');
+    expect(invoiceToBusinessDocument(fx.invoice, fx.ctx()).issuerHeading).toBe('From');
+    expect(creditNoteToBusinessDocument(fx.creditNote, fx.ctx()).issuerHeading).toBe('From');
+    expect(purchaseOrderToBusinessDocument(fx.purchaseOrder, fx.ctx()).issuerHeading).toBe('From');
+  });
+
+  it('uses a customer-appropriate recipient heading for sales documents and "Supplier" for a PO', () => {
+    expect(quoteToBusinessDocument(fx.quote, fx.ctx()).recipientHeading).toBe('Prepared for');
+    expect(salesOrderToBusinessDocument(fx.salesOrder, fx.ctx()).recipientHeading).toBe('Bill to');
+    expect(invoiceToBusinessDocument(fx.invoice, fx.ctx()).recipientHeading).toBe('Bill to');
+    expect(creditNoteToBusinessDocument(fx.creditNote, fx.ctx()).recipientHeading).toBe('Credit to');
+    const po = purchaseOrderToBusinessDocument(fx.purchaseOrder, fx.ctx());
+    expect(po.recipientHeading).toBe('Supplier');
+    expect(po.recipientHeading).not.toBe('Bill to');
+  });
+
+  it('no longer duplicates the customer / supplier account in the meta strip (it stays in the party block)', () => {
+    const inv = invoiceToBusinessDocument(fx.invoice, fx.ctx());
+    expect(inv.meta.some((m) => m.label === 'Customer account')).toBe(false);
+    expect(inv.recipient.accountReference).toBe('CUST-0007');
+
+    const po = purchaseOrderToBusinessDocument(fx.purchaseOrder, fx.ctx());
+    expect(po.meta.some((m) => m.label === 'Supplier account')).toBe(false);
+    expect(po.recipient.accountReference).toBe('SUPP-0003');
   });
 });
 
@@ -225,9 +259,25 @@ describe('company document profile (Phase 4B-2)', () => {
       tradingName: 'Vertex Impersonation Co',
     };
     const vm = invoiceToBusinessDocument(fx.invoice, fx.ctx({ company: sneaky }));
-    expect(vm.branding.footerText).toBe(
-      `Generated with Vertex Accounting Solutions • ${new Date().getFullYear()} • All rights reserved.`,
-    );
+    expect(vm.branding.vertexFooter).toEqual({
+      generatedLine: 'Generated with Vertex Accounting Solutions',
+      rightsLine: `© ${new Date().getFullYear()} Vertex Accounting Solutions. All rights reserved.`,
+    });
+  });
+
+  it('bakes the injected clock year into the footer for every document kind', () => {
+    const c = fx.ctx({ now: new Date('2030-02-01') });
+    for (const vm of [
+      quoteToBusinessDocument(fx.quote, c),
+      salesOrderToBusinessDocument(fx.salesOrder, c),
+      invoiceToBusinessDocument(fx.invoice, c),
+      creditNoteToBusinessDocument(fx.creditNote, c),
+      purchaseOrderToBusinessDocument(fx.purchaseOrder, c),
+    ]) {
+      expect(vm.branding.vertexFooter.rightsLine).toBe(
+        '© 2030 Vertex Accounting Solutions. All rights reserved.',
+      );
+    }
   });
 });
 

@@ -22,10 +22,9 @@ export function salesOrderToBusinessDocument(
 ): BusinessDocumentViewModel {
   if (!ctx.customer) throw new Error('salesOrderToBusinessDocument: customer is required');
 
-  const meta = [
-    metaField('Customer account', ctx.customer.customerNumber),
-    metaField('Quote reference', ctx.quoteNumber),
-  ].filter((f): f is BusinessDocumentMetaField => Boolean(f));
+  const meta = [metaField('Quote reference', ctx.quoteNumber)].filter(
+    (f): f is BusinessDocumentMetaField => Boolean(f),
+  );
 
   const { columns, lines } = mapLines(order.lineItems, ctx);
 
@@ -36,6 +35,7 @@ export function salesOrderToBusinessDocument(
     issuedOnLabel: 'Order date',
     issuedOn: formatDate(order.orderDate),
     issuer: issuerParty(ctx.company),
+    issuerHeading: 'From',
     recipient: customerParty(ctx.customer),
     recipientHeading: 'Bill to',
     meta,

@@ -86,13 +86,27 @@ export interface BusinessDocumentPaymentInfo {
   reference: string;
 }
 
+/**
+ * The global Vertex footer, as two plain pre-formatted strings so the
+ * template stays dumb and the `container.textContent` privacy scan keeps
+ * working. The year is baked in by `vertexFooter(now)` in the adapter
+ * layer — `new Date().getFullYear()`, never hardcoded. Company Settings
+ * can never influence this (no white-labelling).
+ */
+export interface BusinessDocumentVertexFooter {
+  /** `Generated with Vertex Accounting Solutions` */
+  generatedLine: string;
+  /** `© {year} Vertex Accounting Solutions. All rights reserved.` */
+  rightsLine: string;
+}
+
 export interface BusinessDocumentBranding {
-  /** Null today — no logo storage exists (Company Settings gap, see docs). */
+  /** Base64 data URL of the company logo (migration 0047); unset ⇒ text wordmark. */
   logoDataUrl?: string;
-  /** `company.name`, rendered as a wordmark when there is no logo. */
+  /** `company.tradingName || company.name`, rendered as a wordmark when there is no logo. */
   issuerDisplayName: string;
-  /** The exact footer string — dynamic year, never hardcoded. */
-  footerText: string;
+  /** The global Vertex footer — two plain strings, dynamic year already baked in. */
+  vertexFooter: BusinessDocumentVertexFooter;
 }
 
 export interface BusinessDocumentMetaField {
@@ -112,8 +126,10 @@ export interface BusinessDocumentViewModel {
   secondaryDateLabel?: string;
   secondaryDate?: string;
   issuer: BusinessDocumentParty;
+  /** Heading above the issuer party block — "From". */
+  issuerHeading: string;
   recipient: BusinessDocumentParty;
-  /** "Bill to" | "Supplier". */
+  /** "Bill to" | "Prepared for" | "Credit to" | "Supplier". */
   recipientHeading: string;
   /** Only when a distinct delivery address exists. */
   shipTo?: string[];

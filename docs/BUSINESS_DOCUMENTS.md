@@ -93,10 +93,15 @@ export interface BusinessDocumentPaymentInfo {
   branchCode?: string; swiftCode?: string; reference: string;
 }
 
+export interface BusinessDocumentVertexFooter {
+  generatedLine: string;         // "Generated with Vertex Accounting Solutions"
+  rightsLine: string;            // "© {year} Vertex Accounting Solutions. All rights reserved."
+}
+
 export interface BusinessDocumentBranding {
-  logoDataUrl?: string;          // null today — no logo storage
-  issuerDisplayName: string;     // company.name, rendered as a wordmark when no logo
-  footerText: string;            // exact string, dynamic year
+  logoDataUrl?: string;          // base64 data URL (migration 0047); unset ⇒ text wordmark
+  issuerDisplayName: string;     // company.tradingName || company.name, rendered as a wordmark when no logo
+  vertexFooter: BusinessDocumentVertexFooter;   // two plain strings, dynamic year already baked in
 }
 
 export interface BusinessDocumentMetaField { label: string; value: string; }
@@ -110,6 +115,7 @@ export interface BusinessDocumentViewModel {
   secondaryDateLabel?: string;
   secondaryDate?: string;
   issuer: BusinessDocumentParty;
+  issuerHeading: string;         // "From"
   recipient: BusinessDocumentParty;
   recipientHeading: string;      // "Bill to" | "Prepared for" | "Credit to" | "Supplier"
   shipTo?: string[];
@@ -138,7 +144,43 @@ Three layers, each independent:
 3. **`noInternalIds.test.tsx` scan.** Renders all 5 document kinds from fixtures whose ids are
    real-looking UUIDs and asserts `container.textContent` matches none of
    `/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i`, `/journal/i`, `/posting key/i`, `/company_id/i`,
-   `/seed/i`, `/Page \d+ of/i` — and that the exact Vertex footer IS present.
+   `/seed/i`, `/Page \d+ of/i` — and that the Vertex footer IS present.
+
+---
+
+## Layout (Phase 4B-VISUAL)
+
+The A4 sheet, top to bottom:
+
+1. **Letterhead header** — logo (`<img>`, `max-h-20 max-w-[280px] object-contain`) or, with no logo, a
+   text wordmark of `company.tradingName || company.name`; on the right the document **title**,
+   **number** and **date(s)**. **Nothing else** — the issuer address / reg / VAT / contact block was
+   removed from the header in Phase 4B-VISUAL. Thinner bottom padding so the content starts higher.
+2. **Parties row** — a real two-column grid (`.business-document__parties-grid`,
+   `grid-cols-2 gap-8`): the **issuer LEFT** under a `From` heading (`vm.issuerHeading`) with the full
+   identity block (legal name, `t/a`, address, contact, phone/email/website, reg no., VAT no.,
+   income-tax no. on tax docs), the **recipient RIGHT** under `vm.recipientHeading` ("Bill to" /
+   "Prepared for" / "Credit to" / "Supplier"). The grid is pinned to two columns **in `@media print`
+   too** — a responsive rule must never stack it. A rare `shipTo` renders as a full-width "Deliver
+   to" block *below* the grid, never as a third column. `break-inside: avoid`.
+3. **Meta strip** — the remaining references only (payment terms, source-doc numbers, credit-note
+   reason). The customer/supplier account is **no longer here** — see below.
+4. **Line table** — uppercase tracked header, a 2px rule under it, hairline row separators,
+   description left / figures right (`tabular-nums`). Authoritative values unchanged.
+5. **Totals** — right-aligned, `max-w-[16rem]`; the grand total is `text-base font-bold` with a 2px
+   rule above (rose for a credit note).
+6. **Lower section** (`.business-document__lower`) — for an **invoice that carries payment info**, a
+   two-column row: notes + terms LEFT, "Payment information" RIGHT. Otherwise notes + terms stacked
+   full width. Terms: `text-[11px] leading-relaxed max-w-[38rem] whitespace-pre-wrap` — wraps
+   naturally, never truncated. `break-inside: avoid`.
+7. **Footer** — the shared Vertex footer (below). One per sheet, flowing at content end.
+
+### Account shown once
+
+`PartyIdentity` prints `Account: {accountReference}` in the party block. The
+`metaField('Customer account' / 'Supplier account', …)` entry was **removed from every adapter** in
+Phase 4B-VISUAL so the account number appears exactly once — in the recipient party block, not also
+in the meta strip. (Quote and Purchase Order now have an empty `meta` array.)
 
 ---
 
@@ -228,14 +270,65 @@ carries a real-UUID `documentsBankAccountId` + a resolved account and asserts th
 nowhere while the bank details do; it also asserts the logo renders as `<img src="data:…">` and the
 base64 blob is not dumped as text.
 
-**Footer text (exact):**
+### Vertex footer (Phase 4B-VISUAL redesign)
+
+`branding.footerText` (one string) was replaced with a structured
+`branding.vertexFooter: { generatedLine, rightsLine }` — two plain pre-formatted strings, built by
+`vertexFooter(now = new Date())` in `adapters/shared.ts`:
 
 ```
-Generated with Vertex Accounting Solutions • {year} • All rights reserved.
+generatedLine:  Generated with Vertex Accounting Solutions
+rightsLine:     © {year} Vertex Accounting Solutions. All rights reserved.
 ```
 
-`{year}` is `new Date().getFullYear()` — computed at render, **never hardcoded**. There is no
-Vertex legal entity anywhere in the app, so none is invented.
+`{year}` is `now.getFullYear()` — computed at render, **never hardcoded** (an injectable clock,
+`ctx.now`, keeps this deterministic in tests). `<DocumentFooter>` renders `generatedLine` in
+`font-medium` next to a **restrained, print-safe monochrome "V" mark** — a 14px outline square
+(`border border-neutral-400 text-neutral-500`), NOT the app's `bg-brand`-filled `<Wordmark>`
+component (that filled ink block is theme-dependent and violates the white-paper / no-dark-block
+rules). `rightsLine` sits smaller and muted below. One `<DocumentFooter>` per sheet — no
+per-document footers. Company Settings has no field that can reach `vertexFooter`; there is no
+white-labelling.
+
+**Wordmark naming discrepancy.** The in-app `src/components/app/wordmark.tsx` renders **"Vertex
+Accounting"** (two words, no "Solutions"). This footer deliberately uses the user-specified
+**"Vertex Accounting Solutions"**. There is no legal-entity string anywhere in the app to
+reconcile against. If a single canonical product name is wanted, the two need to be aligned — flagged,
+not resolved here.
+
+---
+
+## Browser print metadata — what the app can and cannot control
+
+The browser's own print output adds four pieces of **chrome** that are NOT part of the `.business-document`
+sheet (our sheet renders none of them):
+
+| Position | Source | App control |
+|---|---|---|
+| **Top-centre** title | `document.title` | **Yes, partially.** `printBusinessDocument(documentNumber?)` saves `document.title`, sets it to the document number (e.g. `SO-2026-0004`) before `window.print()`, and restores it on `afterprint` (+ a 2 s fallback). The modal passes `viewModel.documentNumber`. This replaces the app title ("Accounting Suite") in that header with a clean business string. |
+| **Top-left** date / time | browser "Headers and footers" setting | **No.** No web API can set or suppress it. |
+| **Bottom-left** page URL | browser "Headers and footers" setting | **No.** No web API. |
+| **Bottom-right** page number (`1/1`) | browser "Headers and footers" setting | **No.** No web API. |
+
+`@page { margin: 0 }` can make Chrome drop the chrome entirely, but then the sheet content bleeds to
+the physical paper edge — not acceptable. **The only way to remove the date / URL / page number is
+for the user to untick "Headers and footers" in the print dialog.** The preview modal says so, in
+the toolbar above the sheet (never on the sheet):
+`For a clean PDF, turn off "Headers and footers" in your browser's print dialog.`
+
+## PDF export — native browser print stays (no library added)
+
+`package.json` carries **zero** PDF/canvas libraries (no jsPDF, html2canvas, react-pdf, pdfmake,
+paged.js, puppeteer). **Decision: keep native `window.print()` → "Save as PDF".** Rationale:
+
+- **jsPDF + html2canvas** rasterises the page — kills selectable text, degrades the logo and small
+  type, balloons file size.
+- **react-pdf** needs a second, parallel layout engine — the entire A4 template would have to be
+  rebuilt in its primitives and kept in sync.
+- **paged.js / print-CSS polyfills** are heavy and *still* cannot remove the native browser chrome.
+
+Native print + the "turn off Headers and footers" instruction is the correct trade for A4 fidelity,
+selectable text, bundle size and maintenance. Nothing was installed.
 
 ---
 
@@ -258,33 +351,41 @@ Vertex legal entity anywhere in the app, so none is invented.
   - `@page { size: A4; margin: 14mm }`.
   - `.business-document__lines thead { display: table-header-group }` (header repeats per page);
     `tr` / `.business-document__totals` / `.business-document__footer` / `.business-document__payment`
-    / `.business-document__parties` get `break-inside: avoid`.
+    / `.business-document__parties` / `.business-document__lower` get `break-inside: avoid`.
+  - `.business-document__parties-grid` is re-pinned to `grid-template-columns: 1fr 1fr !important`
+    inside `@media print` so the issuer/recipient columns stay side by side on paper.
   - The **footer flows at the end of the content** — no `position: fixed`, no page numbers
     (avoids the fixed-element / overlap pitfalls).
   - The pre-existing app-wide `@media print` block in `src/styles/globals.css` (hides sidebar /
     topbar / toaster) still applies underneath as a safety net.
-- **Browser header/footer:** the preview modal tells the user to turn off "Headers and footers"
-  in the print dialog so the page URL / date don't print over the document.
+- **Browser header/footer:** see "Browser print metadata" above — the modal toolbar tells the user
+  to turn off "Headers and footers"; `printBusinessDocument()` swaps `document.title` so the
+  top-centre header shows the document number instead of the app title.
 
 ---
 
 ## Per-document support
 
-| | Title | Issuer income-tax no. | Secondary date | Payment block | Meta fields |
-|---|---|---|---|---|---|
-| **Quote** | `QUOTE` | no | Valid until (`expiryDate`) | – | Customer account |
-| **Sales Order** | `SALES ORDER` | no | – (no field exists) | – | Customer account · Quote reference |
-| **Invoice** | `TAX INVOICE` / `INVOICE` (per `isVatRegistered`) | yes | Due date | if 1 active bank acct | Customer account · Payment terms · Sales order reference |
-| **Credit Note** | `CREDIT NOTE` (rose title + "Total credit") | yes | – | – | Customer account · Against invoice · Reason (+ detail when `other`) |
-| **Purchase Order** | `PURCHASE ORDER` | no (issuer is the buyer) | Expected delivery (`expectedDate`, if set) | – | Supplier account |
+All five put the issuer LEFT under a **`From`** heading and the recipient RIGHT.
+
+| | Title | Recipient heading | Issuer income-tax no. | Secondary date | Payment block | Meta fields |
+|---|---|---|---|---|---|---|
+| **Quote** | `QUOTE` | Prepared for | no | Valid until (`expiryDate`) | – | *(none)* |
+| **Sales Order** | `SALES ORDER` | Bill to | no | – (no field exists) | – | Quote reference |
+| **Invoice** | `TAX INVOICE` / `INVOICE` (per `isVatRegistered`) | Bill to | yes | Due date | nominated active bank acct | Payment terms · Sales order reference |
+| **Credit Note** | `CREDIT NOTE` (rose title + "Total credit") | Credit to | yes | – | – | Against invoice · Reason (+ detail when `other`) |
+| **Purchase Order** | `PURCHASE ORDER` | Supplier | no (issuer is the buyer) | Expected delivery (`expectedDate`, if set) | – | *(none)* |
+
+The customer/supplier account number now shows **only** in the recipient party block (`Account: …`),
+never also in the meta strip.
 
 - Line columns are always `description, quantity, unitPrice, vat, amount`; `code` is prepended and
   `unit` inserted after `quantity` **only** when at least one line resolves that value.
 - Invoice totals: `Subtotal, VAT, Total`; plus `Amount paid` + `Balance due` (`total - amountPaid`)
   **only when `amountPaid > 0`**.
-- Redundant header/meta: document number and dates live in the header block; the `meta` strip
-  carries only the *other* references (account, terms, source docs, reason) — it does not repeat
-  the number/date.
+- Redundant header/meta: document number and dates live in the header block; the account number
+  lives in the party block; the `meta` strip carries only the remaining references (terms, source
+  docs, reason) and can be empty.
 
 ### Data gaps rendered as clean omissions (not invented)
 
@@ -358,6 +459,7 @@ The registry addition was unnecessary and was removed.
 
 There is **no Chrome DevTools / Playwright MCP in this environment.** The actual printed output —
 A4 pagination, page breaks inside the line table, the browser print dialog with headers/footers
-off, PDF export from the print dialog, dark-theme-app → white-paper — has **not** been visually
-verified. A human must open a Quote / Invoice / Credit Note / PO detail page on the deploy, click
-**Print / PDF**, and check the sheet + a real print preview.
+off, PDF export from the print dialog, dark-theme-app → white-paper, the two-column parties row and
+the two-column invoice lower section on a real A4 page — has **not** been visually verified. A human
+must open a Quote / Invoice / Credit Note / PO detail page on the deploy, click **Print / PDF**, and
+check the sheet + a real print preview (with "Headers and footers" both on and off).

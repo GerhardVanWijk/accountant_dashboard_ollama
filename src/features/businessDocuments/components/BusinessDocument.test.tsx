@@ -8,10 +8,46 @@ import * as fx from '../adapters/__fixtures__';
 afterEach(cleanup);
 
 describe('BusinessDocument', () => {
-  it('falls back to a text wordmark when there is no logo', () => {
-    render(<BusinessDocument viewModel={invoiceToBusinessDocument(fx.invoice, fx.ctx())} />);
-    expect(screen.getByText('Office National Demo (Pty) Ltd')).toBeInTheDocument();
+  it('falls back to a text wordmark in the header when there is no logo', () => {
+    const { container } = render(
+      <BusinessDocument viewModel={invoiceToBusinessDocument(fx.invoice, fx.ctx())} />,
+    );
+    const header = container.querySelector('.business-document__header') as HTMLElement;
+    expect(within(header).getByText('Office National Demo (Pty) Ltd')).toBeInTheDocument();
     expect(screen.queryByRole('img')).toBeNull();
+  });
+
+  it('shows the issuer identity LEFT under a "From" heading — not in the header', () => {
+    const { container } = render(
+      <BusinessDocument
+        viewModel={invoiceToBusinessDocument(
+          fx.invoice,
+          fx.ctx({ company: fx.companyWithDocumentProfile }),
+        )}
+      />,
+    );
+    const header = container.querySelector('.business-document__header') as HTMLElement;
+    const parties = container.querySelector('.business-document__parties') as HTMLElement;
+
+    // The header carries only the logo + title/number/dates — no address / reg / VAT.
+    expect(within(header).queryByText('101 Corporate Park')).toBeNull();
+    expect(within(header).queryByText(/VAT no\./)).toBeNull();
+
+    // The parties row: issuer "From" on the left, recipient on the right.
+    expect(within(parties).getByText('From')).toBeInTheDocument();
+    expect(within(parties).getByText('Bill to')).toBeInTheDocument();
+    expect(within(parties).getByText('Office National Demo (Pty) Ltd')).toBeInTheDocument();
+    expect(within(parties).getByText('101 Corporate Park')).toBeInTheDocument();
+    expect(within(parties).getByText('FreshMart Retail')).toBeInTheDocument();
+
+    // Grid class the print stylesheet pins to two columns.
+    expect(parties.querySelector('.business-document__parties-grid')).not.toBeNull();
+  });
+
+  it('shows the account reference once — in the party block, not repeated in the meta strip', () => {
+    render(<BusinessDocument viewModel={invoiceToBusinessDocument(fx.invoice, fx.ctx())} />);
+    expect(screen.getAllByText(/CUST-0007/)).toHaveLength(1);
+    expect(screen.getByText('Account: CUST-0007')).toBeInTheDocument();
   });
 
   it('renders a logo image when a data URL is supplied', () => {

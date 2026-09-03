@@ -15,6 +15,7 @@ import type {
   BusinessDocumentLineColumn,
   BusinessDocumentParty,
   BusinessDocumentPaymentInfo,
+  BusinessDocumentVertexFooter,
 } from '../types';
 
 /**
@@ -23,9 +24,16 @@ import type {
  * object already stored.
  */
 
-/** The EXACT footer string. Dynamic year via `new Date().getFullYear()` — never hardcoded. */
-export function businessDocumentFooterText(now: Date = new Date()): string {
-  return `Generated with Vertex Accounting Solutions • ${now.getFullYear()} • All rights reserved.`;
+/**
+ * The global Vertex footer — two plain strings. The year comes from
+ * `now.getFullYear()` (injectable for tests), NEVER hardcoded. Company
+ * Settings has no field that can reach this; there is no white-labelling.
+ */
+export function vertexFooter(now: Date = new Date()): BusinessDocumentVertexFooter {
+  return {
+    generatedLine: 'Generated with Vertex Accounting Solutions',
+    rightsLine: `© ${now.getFullYear()} Vertex Accounting Solutions. All rights reserved.`,
+  };
 }
 
 /**
@@ -192,14 +200,14 @@ export function mapLines(lineItems: DocumentLineItem[], ctx: LineMappingContext)
  * Branding block. `logoDataUrl` is the company's stored base64 data URL
  * (migration 0047) when set — otherwise undefined and the template falls
  * back to a text wordmark. `issuerDisplayName` prefers the trading name.
- * `footerText` is the fixed global Vertex string — Company Settings can
+ * `vertexFooter` is the fixed global Vertex footer — Company Settings can
  * never influence it (no white-labelling).
  */
 export function branding(company: Company, now: Date = new Date()): BusinessDocumentBranding {
   return {
     logoDataUrl: company.logo || undefined,
     issuerDisplayName: company.tradingName || company.name,
-    footerText: businessDocumentFooterText(now),
+    vertexFooter: vertexFooter(now),
   };
 }
 

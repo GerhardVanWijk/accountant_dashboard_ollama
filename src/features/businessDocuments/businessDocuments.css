@@ -123,6 +123,20 @@
     break-inside: avoid;
   }
 
+  /* The parties row stays two side-by-side columns on paper — a global
+     responsive rule must never collapse it to a single stacked column at
+     print width. */
+  .business-document__parties-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* The notes / terms / payment row: keep it on one page where it fits;
+     allow a break only between its two columns if it genuinely cannot. */
+  .business-document__lower {
+    break-inside: avoid;
+  }
+
   @page {
     size: A4;
     margin: 14mm;

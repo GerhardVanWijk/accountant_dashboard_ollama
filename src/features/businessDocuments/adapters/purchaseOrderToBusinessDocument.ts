@@ -1,12 +1,11 @@
 import type { PurchaseOrder } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/app/format';
-import type { BusinessDocumentMetaField, BusinessDocumentViewModel } from '../types';
+import type { BusinessDocumentViewModel } from '../types';
 import {
   type AdapterContext,
   branding,
   issuerParty,
   mapLines,
-  metaField,
   resolveDocumentTerms,
   supplierParty,
 } from './shared';
@@ -23,10 +22,6 @@ export function purchaseOrderToBusinessDocument(
 ): BusinessDocumentViewModel {
   if (!ctx.supplier) throw new Error('purchaseOrderToBusinessDocument: supplier is required');
 
-  const meta = [metaField('Supplier account', ctx.supplier.supplierNumber)].filter(
-    (f): f is BusinessDocumentMetaField => Boolean(f),
-  );
-
   const { columns, lines } = mapLines(po.lineItems, ctx);
 
   return {
@@ -38,9 +33,10 @@ export function purchaseOrderToBusinessDocument(
     secondaryDateLabel: po.expectedDate ? 'Expected delivery' : undefined,
     secondaryDate: po.expectedDate ? formatDate(po.expectedDate) : undefined,
     issuer: issuerParty(ctx.company),
+    issuerHeading: 'From',
     recipient: supplierParty(ctx.supplier),
     recipientHeading: 'Supplier',
-    meta,
+    meta: [],
     columns,
     lines,
     totals: [

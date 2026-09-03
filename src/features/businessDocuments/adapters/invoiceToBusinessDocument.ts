@@ -31,7 +31,6 @@ export function invoiceToBusinessDocument(
   const isTax = ctx.company.isVatRegistered;
 
   const meta = [
-    metaField('Customer account', ctx.customer.customerNumber),
     metaField('Payment terms', ctx.customer.paymentTerms),
     metaField('Sales order reference', ctx.salesOrderNumber),
   ].filter((f): f is BusinessDocumentMetaField => Boolean(f));
@@ -60,6 +59,7 @@ export function invoiceToBusinessDocument(
     secondaryDateLabel: 'Due date',
     secondaryDate: formatDate(invoice.dueDate),
     issuer: issuerParty(ctx.company, { includeIncomeTaxNumber: true }),
+    issuerHeading: 'From',
     recipient: customerParty(ctx.customer),
     recipientHeading: 'Bill to',
     meta,

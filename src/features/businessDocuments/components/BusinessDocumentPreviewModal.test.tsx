@@ -33,6 +33,25 @@ describe('BusinessDocumentPreviewModal', () => {
     expect(document.body.classList.contains('printing-business-document')).toBe(false);
   });
 
+  it('swaps document.title to the document number for the print, then restores it on afterprint', () => {
+    const original = 'Accounting Suite';
+    document.title = original;
+    render(<BusinessDocumentPreviewModal open onClose={vi.fn()} viewModel={vm} />);
+    fireEvent.click(screen.getByRole('button', { name: /Print \/ Save PDF/ }));
+    expect(document.title).toBe('INV-2026-1072');
+    window.dispatchEvent(new Event('afterprint'));
+    expect(document.title).toBe(original);
+  });
+
+  it('tells the user how to get a clean PDF, outside the printable sheet', () => {
+    render(<BusinessDocumentPreviewModal open onClose={vi.fn()} viewModel={vm} />);
+    const tip = screen.getByText(/turn off .Headers and footers./i);
+    expect(tip).toBeInTheDocument();
+    // The helper text must never sit inside the printed document subtree.
+    expect(tip.closest('.business-document')).toBeNull();
+    expect(tip.closest('.business-document-modal__toolbar')).not.toBeNull();
+  });
+
   it('Close calls onClose', () => {
     const onClose = vi.fn();
     render(<BusinessDocumentPreviewModal open onClose={onClose} viewModel={vm} />);

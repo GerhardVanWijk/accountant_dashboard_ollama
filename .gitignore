@@ -13,3 +13,6 @@ coverage
 
 # Session scratch space -- never source
 scratchpad/
+
+# Local visual-QA / demo logo assets -- not source
+/vertex assets/

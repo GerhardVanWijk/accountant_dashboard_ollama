@@ -28,12 +28,18 @@ export function BusinessDocumentPreviewModal({
       }}
     >
       <DialogContent className="max-h-[calc(100%-2rem)] sm:max-w-[900px]" showCloseButton={false}>
-        <div className="business-document-modal__toolbar flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-          <DialogTitle>Document preview</DialogTitle>
-          <div className="flex items-center gap-2">
+        <div className="business-document-modal__toolbar flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
+          <div className="min-w-0">
+            <DialogTitle>Document preview</DialogTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              For a clean PDF, turn off &ldquo;Headers and footers&rdquo; in your browser&rsquo;s
+              print dialog.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
             <Button
               size="sm"
-              onClick={printBusinessDocument}
+              onClick={() => printBusinessDocument(viewModel?.documentNumber)}
               disabled={!viewModel || Boolean(loading)}
             >
               <PrinterIcon data-icon="inline-start" />
@@ -44,11 +50,6 @@ export function BusinessDocumentPreviewModal({
             </Button>
           </div>
         </div>
-
-        <p className="business-document-modal__toolbar text-xs text-muted-foreground">
-          Tip: in the browser print dialog, turn off &ldquo;Headers and footers&rdquo; so the page
-          URL and date don&rsquo;t print over the document.
-        </p>
 
         {loading ? (
           <div role="status" className="py-20 text-center text-sm text-muted-foreground">

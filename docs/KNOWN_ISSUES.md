@@ -103,6 +103,18 @@ balanced / 0 new security advisors): `docs/SUPABASE_MIGRATION_GUIDE.md` § "0047
 - `SalesOrder` has no **delivery address**, **customer-PO reference**, or **expected-delivery**
   field → those are omitted from the printed sales order.
 
+### Browser native print headers/footers cannot be suppressed by the web app — documented limitation (not a bug)
+Confirmed 2026-09-03 (Phase 4B-VISUAL). When a business document is printed, the browser adds its
+own page chrome: a top-left date, a bottom-left page URL and a bottom-right page number. **No web
+API can disable or alter these** — the only control is the user's "Headers and footers" checkbox in
+the print dialog. The app does what it can: `printBusinessDocument(documentNumber)` swaps
+`document.title` for the print so the **top-centre** header shows the document number (e.g.
+`INV-2026-1072`) instead of "Accounting Suite", and restores it on `afterprint`. The preview modal
+toolbar carries a one-line instruction to turn "Headers and footers" off for a clean PDF. `@page {
+margin: 0 }` would make Chrome drop the chrome but bleeds content to the sheet edge — rejected.
+No PDF library was added (native `window.print()` → "Save as PDF" is retained deliberately — see
+`docs/BUSINESS_DOCUMENTS.md` § "PDF export").
+
 ### FIFO stock-lot repository is still `MockStockLotRepository` in production wiring
 Found 2026-09-03 during the Increment-2 Mock-repository audit (record-detail full-page migration).
 `src/features/inventory/repositories/instances.ts:30` — `export const stockLotRepository = new

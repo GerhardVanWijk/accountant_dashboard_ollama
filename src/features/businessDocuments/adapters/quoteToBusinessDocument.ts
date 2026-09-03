@@ -1,13 +1,12 @@
 import type { Quote } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/app/format';
-import type { BusinessDocumentMetaField, BusinessDocumentViewModel } from '../types';
+import type { BusinessDocumentViewModel } from '../types';
 import {
   type AdapterContext,
   branding,
   customerParty,
   issuerParty,
   mapLines,
-  metaField,
   resolveDocumentTerms,
 } from './shared';
 
@@ -21,10 +20,6 @@ export function quoteToBusinessDocument(
 ): BusinessDocumentViewModel {
   if (!ctx.customer) throw new Error('quoteToBusinessDocument: customer is required');
 
-  const meta = [metaField('Customer account', ctx.customer.customerNumber)].filter(
-    (f): f is BusinessDocumentMetaField => Boolean(f),
-  );
-
   const { columns, lines } = mapLines(quote.lineItems, ctx);
 
   return {
@@ -36,9 +31,10 @@ export function quoteToBusinessDocument(
     secondaryDateLabel: 'Valid until',
     secondaryDate: formatDate(quote.expiryDate),
     issuer: issuerParty(ctx.company),
+    issuerHeading: 'From',
     recipient: customerParty(ctx.customer),
     recipientHeading: 'Prepared for',
-    meta,
+    meta: [],
     columns,
     lines,
     totals: [

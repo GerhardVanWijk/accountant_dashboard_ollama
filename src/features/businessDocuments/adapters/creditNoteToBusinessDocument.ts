@@ -37,7 +37,6 @@ export function creditNoteToBusinessDocument(
       : reasonLabel;
 
   const meta = [
-    metaField('Customer account', ctx.customer.customerNumber),
     metaField('Against invoice', ctx.originalInvoiceNumber),
     metaField('Reason', reasonValue),
   ].filter((f): f is BusinessDocumentMetaField => Boolean(f));
@@ -51,6 +50,7 @@ export function creditNoteToBusinessDocument(
     issuedOnLabel: 'Date',
     issuedOn: formatDate(creditNote.issueDate),
     issuer: issuerParty(ctx.company, { includeIncomeTaxNumber: true }),
+    issuerHeading: 'From',
     recipient: customerParty(ctx.customer),
     recipientHeading: 'Credit to',
     meta,

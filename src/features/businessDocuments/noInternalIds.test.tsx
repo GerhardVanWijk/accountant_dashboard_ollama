@@ -50,10 +50,11 @@ describe('business document — no internal identifiers on paper', () => {
       expect(text).not.toMatch(/bill-should-never-print/i);
     });
 
-    it(`${name}: renders the exact Vertex footer with this year`, () => {
+    it(`${name}: renders the two-line Vertex footer with this year`, () => {
       const { getByText } = render(<BusinessDocument viewModel={build()} />);
+      expect(getByText('Generated with Vertex Accounting Solutions')).toBeInTheDocument();
       expect(
-        getByText(`Generated with Vertex Accounting Solutions • ${new Date().getFullYear()} • All rights reserved.`),
+        getByText(`© ${new Date().getFullYear()} Vertex Accounting Solutions. All rights reserved.`),
       ).toBeInTheDocument();
     });
   }

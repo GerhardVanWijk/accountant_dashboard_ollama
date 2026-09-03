@@ -176,6 +176,34 @@ tooling in this env); a private Storage bucket for the logo remains a valid futu
 
 ---
 
+### PHASE 4B — VISUAL HARDENING PASS — DONE, uncommitted, branch `phase-9b-relationship-design-and-code` (2026-09-03)
+
+**Visual / print only. NO domain / accounting / VAT / WAC / COGS / AR / deposit / journal / stock /
+reconciliation / fulfilment change. NO migration, NO DB write, NO commit / push / deploy / merge.**
+Fixes the GLOBAL `src/features/businessDocuments/` A4 template from the user's manual QA of the
+deployed Sales Order — once, so it flows through Quote / SO / Invoice / Credit Note / PO.
+
+| Area | Detail |
+|---|---|
+| Two-column parties | Issuer LEFT under a `From` heading (new `vm.issuerHeading`), recipient RIGHT — side-by-side on A4 **and** in print (`.business-document__parties-grid` re-pinned to `1fr 1fr` in `@media print`). Issuer identity block **removed from `DocumentHeader`** (header = logo/wordmark + title + number + dates only; `pb-4`). `shipTo` → full-width "Deliver to" below the grid. |
+| Account shown once | `metaField('Customer account' / 'Supplier account', …)` deleted from all 5 adapters; the value stays in the party block as `Account: …`. Quote + PO now have empty `meta`. |
+| Vertex footer redesign | `branding.footerText` (string) → `branding.vertexFooter { generatedLine, rightsLine }` (structured, plain strings). `Generated with Vertex Accounting Solutions` + `© {year} Vertex Accounting Solutions. All rights reserved.`, `{year} = now.getFullYear()` (injectable clock, never hardcoded). Print-safe monochrome outline "V" mark (NOT the `bg-brand` `<Wordmark>`). One shared `DocumentFooter`. |
+| Print title swap | `printBusinessDocument(documentNumber?)` swaps `document.title` to the doc number for the print, restores on `afterprint` (+2 s fallback). Modal passes `viewModel.documentNumber`. Kills "Accounting Suite" in the browser's top-centre print header. |
+| Print UX helper | "Turn off Headers and footers" tip moved into the modal toolbar (`.business-document-modal__toolbar`, print-hidden), never on the sheet. Reworded. |
+| Lower section | Invoice with payment info → two columns (notes+terms LEFT, payment RIGHT); else stacked. Terms `max-w-[38rem] text-[11px] leading-relaxed whitespace-pre-wrap`, never truncated. `.business-document__lower` `break-inside: avoid`. |
+| Line items / totals | Visual polish only — uppercase tracked header, 2px rules, stronger `text-base font-bold` TOTAL. Authoritative values unchanged. |
+| Investigation (reported, not acted on) | Browser print metadata: top-centre = `document.title` (controllable via swap); top-left date / bottom-left URL / bottom-right page number = pure browser chrome, no web API — user must untick "Headers and footers". PDF: `package.json` has zero PDF/canvas libs; **native browser print stays** (option A); no library installed. |
+| Wordmark discrepancy | In-app `src/components/app/wordmark.tsx` renders "Vertex Accounting" (no "Solutions"); this footer uses the user's "Vertex Accounting Solutions". Flagged in `docs/BUSINESS_DOCUMENTS.md`, not reconciled. |
+| Files | `types.ts`, `adapters/shared.ts`, 5 adapters, `components/BusinessDocument.tsx`, `components/printBusinessDocument.ts`, `components/BusinessDocumentPreviewModal.tsx`, `businessDocuments.css`, `index.ts` + 4 test files. Docs: `BUSINESS_DOCUMENTS.md`, `KNOWN_ISSUES.md`, `CURRENT_TASKS.md`. |
+| Gate | tsc ✅ · eslint `--max-warnings 0` ✅ · **2178 tests / 300 files** ✅ (was 2169 / 300 — **+9 / +0**) · `vite build` ✅ |
+| DB writes | **NONE.** Migrations: **NONE.** Commit / push / deploy / merge: **NO.** |
+
+**Outstanding:** human visual / browser QA of the printed A4 (two-column parties + two-column
+invoice lower section on paper, pagination, print dialog with "Headers and footers" on/off, PDF
+export, dark-app → white-paper) — no Chrome DevTools / Playwright MCP in this env.
+
+---
+
 ## PHASE 5 — Sales fulfilment
 
 The core workflow. Target model:

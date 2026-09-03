@@ -9,6 +9,7 @@ export type {
   BusinessDocumentTotalRow,
   BusinessDocumentPaymentInfo,
   BusinessDocumentBranding,
+  BusinessDocumentVertexFooter,
   BusinessDocumentMetaField,
 } from './types';
 
@@ -28,7 +29,7 @@ export { invoiceToBusinessDocument } from './adapters/invoiceToBusinessDocument'
 export { creditNoteToBusinessDocument } from './adapters/creditNoteToBusinessDocument';
 export { purchaseOrderToBusinessDocument } from './adapters/purchaseOrderToBusinessDocument';
 export {
-  businessDocumentFooterText,
+  vertexFooter,
   resolveDocumentTerms,
   resolveDocumentsBankAccount,
   type AdapterContext,
