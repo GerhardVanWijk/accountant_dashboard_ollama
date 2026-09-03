@@ -593,3 +593,123 @@ National Demo)
 **NOT STARTED**
 
 **NO COMMITS. NO PUSHES.**
+
+---
+
+# SALES DOCUMENT WORKFLOW AUDIT — 2026-09-03 (record-page increment 3)
+
+Read-only audit of the Quote → Sales Order → Invoice → Receipt chain, done alongside the
+Inventory-transaction-page UX work. **No accounting behaviour was changed.** Findings:
+
+## Q1. Quote — commercial offer only, never posts
+`src/features/sales/services/quoteService.ts`. **Confirmed correct.** A Quote:
+- posts **no** journal entry, creates **no** AR, **no** VAT-output liability, **no** stock
+  movement, **no** COGS, **no** stock reservation.
+- statuses (`src/types/quote.ts` `QuoteStatus`): `draft · sent · accepted · declined · expired`.
+  There is **no** `converted` status value — "converted" is *derived* (a `SalesOrder` exists
+  with `quoteId === quote.id`). Transitions: `draft→sent` (`markAsSent`), `sent→accepted`
+  (`markAsAccepted`), `sent→declined` (`markAsDeclined`), `*→expired` (`markAsExpired`).
+  `convertToSalesOrder` requires `status === 'accepted'` and leaves the quote `accepted`.
+- delete is `draft`-only.
+
+## Q2. Sales Order — confirmed commercial order, NOT the accounting sale
+`src/features/sales/services/salesOrderService.ts`. **Confirmed correct — with one gap.** A Sales Order:
+- recognises **no** revenue, creates **no** AR, posts **no** VAT, issues **no** inventory,
+  posts **no** COGS.
+- statuses (`src/types/salesOrder.ts` `SalesOrderStatus`): `pending · confirmed · fulfilled ·
+  cancelled`. `convertToInvoice` creates a **draft** invoice (`invoice.salesOrderId` set) and
+  marks the order `fulfilled`; it is guarded against double-conversion by both the status check
+  **and** the `invoice.salesOrderId` back-reference.
+- **STOCK COMMITMENT: NOT IMPLEMENTED.** `StockBalance.quantityCommitted` exists in the type
+  (`src/types/stockBalance.ts`) and the `quantityAvailable()` helper subtracts it, but **nothing
+  ever writes it** — `stockBalanceService` hardcodes `quantityCommitted: 0` and
+  `stockService.getQuantityOnHand` has a literal `const quantityCommitted = 0; // TODO(Phase 2):
+  sum reservations from open Sales Orders`. So **Available === On hand** everywhere today. A
+  Sales Order does **not** contribute to a "Committed" figure. This increment did **not** invent
+  one (per brief §5 — "if no real commitment model exists: STOP and report"). See recommendation R3.
+
+## Q3. Invoice — the accounting event
+`src/services/invoiceService.ts` `postInvoice()`. **Confirmed correct, engine untouched.** One
+atomic `inventoryPostingEngine` call posts a single balanced entry:
+`DR Accounts Receivable · CR Sales Revenue (per resolved account) · CR VAT Output (if > 0) ·
+DR COGS (per product, engine-computed from WAC) · CR Inventory (per product)`. Posting flips
+`draft→sent` and stamps `journalEntryId`. Post-`draft`, `updateInvoice` refuses any change to an
+accounting-relevant field (only `dueDate` / `notes` remain editable) — enforced in the service,
+not just the UI. Delete is `draft`-only; a posted invoice is corrected with a credit note.
+
+## Q4. Partial payment — SUPPORTED and correct
+Invoice R10,000 → Receipt R3,000 → Outstanding R7,000 → Receipt R7,000 → Outstanding R0.
+- `customerReceiptService.recordReceipt()` posts `DR Cash and Bank / CR Accounts Receivable`
+  for the **full receipt amount**, then calls `invoiceService.recordPayment(invoiceId, amount)`
+  per allocation. `recordPayment` updates `amountPaid` + recalculates status
+  (`partially_paid` / `paid`) and posts **no** journal (the cash↔AR move already happened at
+  receipt time). Net GL after invoice + receipts: AR nets to zero. ✔
+- `InvoiceDetailPage` shows **Total / Paid / Outstanding** in the line-items totals block plus a
+  **Payments & receipts** table (each receipt clickable, with allocated amount). ✔
+- Partial payments are correctly **not** attachable to Quotes or Sales Orders (no `amountPaid`
+  field, no receipt allocation target).
+
+## Q5. Customer deposit / payment before invoice — ⚠️ ACCOUNTING GAP (reported, NOT changed)
+**This is the important finding.** `customerReceiptService.recordReceipt()` **always** posts:
+
+```
+DR  1000 Cash and Bank        <receipt amount>
+CR  1100 Accounts Receivable  <receipt amount>
+```
+
+regardless of how much is allocated. An unallocated receipt (`allocations: []`,
+`unallocatedAmount === receipt.amount`) is still **credited directly to Accounts Receivable**.
+
+- **Customer subledger effect:** the customer's AR balance goes **negative** (a credit balance
+  in a receivable account). There is **no** customer-deposit / "income received in advance" /
+  contract-liability account — `AccountMappingKey` (`accountMappingService.ts`) has no
+  `CUSTOMER_DEPOSIT` / `CONTRACT_LIABILITY` key, and none of codes 2xxx is mapped for it.
+- **Later allocation** (`allocateToInvoice` → `recordPayment`) posts **no** journal — it just
+  moves `unallocatedAmount` into `allocations[]` and bumps the invoice's `amountPaid`. Once the
+  invoice posts (`DR AR …`), AR nets to the correct outstanding figure. So the **end state is
+  right**, but during the window between deposit and invoice the balance sheet shows an
+  understated AR and a missing current liability.
+- **Is it intentional?** No evidence either way in the ledger docs. The only "deposit" the docs
+  mention is a **bank-reconciliation** training scenario (a deposit in transit), unrelated to
+  customer prepayments. Treating it as a **gap**, not a design decision.
+- **Correct treatment (IFRS 15 / SA GAAP):** a payment received before the performance
+  obligation is a **contract liability** — `DR Cash / CR Customer Deposits (Income Received in
+  Advance, ~2300)`; on invoicing, `DR Customer Deposits / CR Accounts Receivable` to apply it.
+- **Not fixed here** — it needs a new account-mapping key + a chart-of-accounts row + a branch
+  in `recordReceipt` (post CR to the deposit liability for the unallocated portion) + an
+  `allocateToInvoice` journal (`DR deposit / CR AR`). That is an explicit accounting design
+  decision + a DB change (new account), out of this inspect-only increment's scope. See
+  recommendation R1.
+- `CustomerReceiptDetailPage` already surfaces the unallocated ("On account") amount, so the
+  UI is not hiding it — but it currently labels it as AR-reducing, which is what the posting does.
+
+## Q6. Partial Sales-Order invoicing — NOT SUPPORTED
+`SalesOrderService.convertToInvoice` copies **all** lines at full quantity, then marks the order
+`fulfilled` and blocks any second conversion (status check + `invoice.salesOrderId` back-ref).
+There is no "quantity invoiced so far" / "remaining to invoice" tracking on `SalesOrder` or its
+lines, and no `partially_invoiced` status. (Contrast the purchase side, which *does* have
+`PurchaseOrderStatus = '… | partially_received | …'`.) Not built here (brief §11). See
+recommendation R2 — this is a genuinely useful feature for real accounting software.
+
+## Q7. Duplicate / copy — NOT SUPPORTED
+No `duplicate` / `clone` method on `quoteService`, `salesOrderService`, `purchaseOrderService`,
+or any sales/purchase service (`grep -rniE "duplicate|clone" src/features/*/services` → nothing).
+Not built here (brief §15 — "do not implement until service behaviour is safely defined"). See
+recommendation R4.
+
+## Q8. Print / export on the migrated full-page records — PARTIAL
+The Phase-7 shared export framework is `src/features/export/` — `ExportMenu` (CSV / Excel /
+`window.print()`) + `PrintableReport` (a generic dataset→table renderer, `hidden print:block`).
+- **List pages** wire `ExportMenu` widely.
+- **The new `*DetailPage` record pages wire NONE of it** — no `ExportMenu`, no `PrintableReport`,
+  no per-record print stylesheet. `window.print()` on a record page today prints the app chrome +
+  the record as raw on-screen HTML.
+- There is **no formal business-document print layout** (branded header, company reg/VAT,
+  bill-to, totals block, terms) for Quote / Sales Order / Invoice / Credit Note / PO. Brief §13
+  / §18 ask for one; it is a real sub-feature (a `PrintableDocument` component + `@media print`
+  pass), not wired here. See recommendation R5.
+
+## Q9. Edit actions on the full-page records — CORRECT, immutability respected
+Draft Invoice / draft Bill / draft PO expose **Edit**; once posted/sent the service layer
+(`invoiceService.updateInvoice`, `billService`, …) throws on any accounting-relevant change and
+the pages only render the Edit button in `draft`. No service guard was weakened.

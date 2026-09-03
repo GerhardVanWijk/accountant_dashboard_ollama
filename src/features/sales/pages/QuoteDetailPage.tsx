@@ -13,6 +13,7 @@ import {
   RecordSummaryGrid,
   RelatedRecordsSection,
   type RelatedRecordItem,
+  type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
@@ -33,8 +34,9 @@ import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
  * quoteService.markAsSent()/markAsAccepted()/markAsDeclined()/
  * convertToSalesOrder()/deleteQuote() calls as before.
  */
-export function QuoteDetailPage() {
-  const { quoteId } = useParams<{ quoteId: string }>();
+export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
+  const params = useParams<{ quoteId: string }>();
+  const quoteId = recordId ?? params.quoteId;
   const navigate = useNavigate();
 
   const { quotes, isLoading, error, refetch } = useQuotes();
@@ -113,6 +115,7 @@ export function QuoteDetailPage() {
       breadcrumbs={[{ label: 'Sales' }, { label: 'Quotes', to: '/sales/quotes' }, { label: quote?.quoteNumber ?? 'Quote' }]}
       backTo="/sales/quotes"
       backLabel="Quotes"
+      embedded={embedded}
       state={state}
       errorMessage={error?.message}
       notFoundMessage="This quote could not be found — it may have been deleted."

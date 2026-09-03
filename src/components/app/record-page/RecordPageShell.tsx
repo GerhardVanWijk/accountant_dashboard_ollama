@@ -20,6 +20,13 @@ export interface RecordPageShellProps {
   notFoundMessage?: string;
   children?: ReactNode;
   className?: string;
+  /**
+   * `true` when the page is rendered inside <RelatedRecordPreview> (an
+   * over-the-page overlay) rather than at its own route — hides the
+   * breadcrumb + "← back" link (the dialog has its own close affordance
+   * and the crumb targets would navigate the page behind the overlay).
+   */
+  embedded?: boolean;
 }
 
 /**
@@ -43,9 +50,11 @@ export function RecordPageShell({
   notFoundMessage = 'This record could not be found — it may have been deleted.',
   children,
   className,
+  embedded = false,
 }: RecordPageShellProps) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-6', className)}>
+      {!embedded && (
       <div className="flex flex-col gap-3">
         <nav aria-label="Breadcrumb">
           <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
@@ -78,6 +87,7 @@ export function RecordPageShell({
           {backLabel}
         </Link>
       </div>
+      )}
 
       {state === 'loading' && (
         <div role="status" className="flex flex-1 items-center justify-center gap-3 py-16 text-muted-foreground">

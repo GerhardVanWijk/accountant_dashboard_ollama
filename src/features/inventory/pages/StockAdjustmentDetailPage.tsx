@@ -6,6 +6,7 @@ import {
   RecordActivitySection,
   RecordPageHeader,
   RecordPageShell,
+  type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
@@ -28,8 +29,9 @@ import type { UpdateStockAdjustmentDTO } from '../services/stockAdjustmentServic
  * Inventory posting/costing unchanged — same
  * stockAdjustmentService.postAdjustment()/approve()/reverse() calls.
  */
-export function StockAdjustmentDetailPage() {
-  const { adjustmentId } = useParams<{ adjustmentId: string }>();
+export function StockAdjustmentDetailPage({ recordId, embedded }: RecordPageProps = {}) {
+  const params = useParams<{ adjustmentId: string }>();
+  const adjustmentId = recordId ?? params.adjustmentId;
   const navigate = useNavigate();
 
   const {
@@ -86,6 +88,7 @@ export function StockAdjustmentDetailPage() {
       breadcrumbs={[{ label: 'Inventory', to: '/inventory' }, { label: 'Stock adjustments', to: '/inventory/adjustments' }, { label: adjustment?.adjustmentNumber ?? 'Stock adjustment' }]}
       backTo="/inventory/adjustments"
       backLabel="Stock adjustments"
+      embedded={embedded}
       state={state}
       errorMessage={error?.message}
       notFoundMessage="This stock adjustment could not be found — it may have been deleted."

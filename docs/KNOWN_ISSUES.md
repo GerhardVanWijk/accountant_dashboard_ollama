@@ -22,6 +22,30 @@ awaiting human browser QA before any merge to `main`. Carried forward, **not fix
   (ledger / depreciation schedule / amortization schedule), deferred per brief §B.
 - **Create / edit modal shell width** still needs browser confirmation — not changed in this increment.
 
+### No stock reservation / commitment model — "Available" always equals "On hand"
+Confirmed 2026-09-03 (record-page increment-3 audit). `StockBalance.quantityCommitted` exists in the
+type and `quantityAvailable()` subtracts it, but **nothing ever writes it**: `stockBalanceService`
+hardcodes `quantityCommitted: 0` and `stockService.getQuantityOnHand` carries a literal
+`const quantityCommitted = 0; // TODO(Phase 2): sum reservations from open Sales Orders`. A confirmed
+Sales Order does **not** ring-fence stock, so every "Available" figure in the UI equals "On hand".
+Not a regression — never built. Recommended as a future feature (see `CURRENT_TASKS.md` increment-3
+DEFERRED); must not be faked with stock movements.
+
+### Partial Sales-Order invoicing is not supported
+Confirmed 2026-09-03. `SalesOrderService.convertToInvoice` copies every line at full quantity, marks
+the order `fulfilled`, and blocks a second conversion. There is no per-line "invoiced quantity" /
+"remaining to invoice" tracking and no `partially_invoiced` status (the purchase side *does* have
+`partially_received`). "Sales order qty 10 → invoice qty 4 → 6 remaining" is not possible today.
+Useful future feature; not built (brief said report only).
+
+### The migrated full-page record pages have no export / formal print layout
+Confirmed 2026-09-03. The Phase-7 export framework (`src/features/export/` — `ExportMenu` CSV/Excel/
+`window.print()`, `PrintableReport`) is wired on **list** pages but on **none** of the new
+`*DetailPage` record pages, and there is no branded business-document print layout (header, company
+reg/VAT, bill-to, totals, terms) for Quote / Sales Order / Invoice / Credit Note / PO — `window.print()`
+on a record page prints the app chrome + on-screen HTML. Recommended follow-up: a shared
+`PrintableDocument` + `@media print` pass, plus `ExportMenu` on the record pages.
+
 ### FIFO stock-lot repository is still `MockStockLotRepository` in production wiring
 Found 2026-09-03 during the Increment-2 Mock-repository audit (record-detail full-page migration).
 `src/features/inventory/repositories/instances.ts:30` — `export const stockLotRepository = new

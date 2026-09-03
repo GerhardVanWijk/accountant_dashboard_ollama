@@ -14,6 +14,7 @@ import {
   RelatedRecordsSection,
   type DocumentLineColumn,
   type RelatedRecordItem,
+  type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
@@ -44,8 +45,9 @@ const LINE_COLUMNS: DocumentLineColumn<Line>[] = [
  * SalesOrderService.convertToInvoice()/confirmOrder()/cancelOrder()/
  * deleteSalesOrder() calls as before.
  */
-export function SalesOrderDetailPage() {
-  const { orderId } = useParams<{ orderId: string }>();
+export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {}) {
+  const params = useParams<{ orderId: string }>();
+  const orderId = recordId ?? params.orderId;
   const navigate = useNavigate();
 
   const { salesOrders, isLoading, error, refetch } = useSalesOrders();
@@ -108,6 +110,7 @@ export function SalesOrderDetailPage() {
       ]}
       backTo="/sales/orders"
       backLabel="Sales orders"
+      embedded={embedded}
       state={state}
       notFoundMessage="This sales order could not be found — it may have been deleted."
     >

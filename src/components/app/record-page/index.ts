@@ -9,6 +9,14 @@ export {
 } from './DocumentLineTable';
 export { useLegacyRecordRedirect } from './useLegacyRecordRedirect';
 export { documentLineColumns, type DocumentLineColumnOptions } from './documentLineColumns';
+export type { RecordPageProps } from './recordPageProps';
+export {
+  resolveSourceDocument,
+  isOpaqueReference,
+  type ResolvedSourceDocument,
+  type RelatedRecordType,
+} from './sourceDocument';
+export { RelatedRecordPreview, type RelatedRecordPreviewProps } from './RelatedRecordPreview';
 
 // The page-scale section + related-records + activity sections are already
 // generic — re-exported here so a record page imports everything from one place.

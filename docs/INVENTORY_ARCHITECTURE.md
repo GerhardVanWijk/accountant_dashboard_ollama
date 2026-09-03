@@ -558,6 +558,18 @@ be treated as authority to erase posted evidence.
   / `RecordActionBar` / `DocumentLineTable`), not a `RecordDetailSheet`. Green active state and
   light/dark theming are automatic once routes exist. Item detail tabs use the shared `Tabs`
   (`variant="line"`).
+- **Transactions tab — movement ledger (2026-09-03, increment 3):** each row's **Source document**
+  cell is resolved from the structured `source_document_type` / `source_document_id` to the real
+  human number (INV-1072, BILL-2031, CN-1007, TRF-0012, ADJ-0015, ST-0004, OPEN-0001, SRET-0001) by
+  `resolveSourceDocument()` (`src/components/app/record-page/sourceDocument.ts`) — `isOpaqueReference()`
+  rejects the September seed's machine `"<type>:<uuid>"` reference and bare UUIDs, so a UUID is
+  **never** the primary label (raw ids stay under "Technical details"). Clicking the number opens
+  `<RelatedRecordPreview>` — the existing document `*DetailPage` in a large overlay OVER the product
+  page (no navigation, no second renderer) — with a real `href` kept for middle-click. Each row
+  expands to **Movement / Source / Accounting / Technical details**; the Accounting block shows the
+  linked journal entry + JE number, the Inventory GL (1200), the contra account by movement type
+  (5000 COGS · 2050 GRNI→AP · 5060 PPV · 5050 Adjustments · 1210 In Transit · 3950 OBE), a
+  plain-English relationship line, and the engine posting key. Presentation only — no engine change.
 
 ### 13.6 Permissions / audit / reconciliation / tests
 

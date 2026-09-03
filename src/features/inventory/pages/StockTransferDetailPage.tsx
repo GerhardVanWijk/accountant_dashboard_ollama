@@ -6,6 +6,7 @@ import {
   RecordActivitySection,
   RecordPageHeader,
   RecordPageShell,
+  type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
@@ -34,8 +35,9 @@ const PREVIEW_LABEL: Record<string, string> = {
  * journal preview and both posted journal entries, all on the page width.
  * Same stockTransferService.dispatch()/receive()/completeImmediate() calls.
  */
-export function StockTransferDetailPage() {
-  const { transferId } = useParams<{ transferId: string }>();
+export function StockTransferDetailPage({ recordId, embedded }: RecordPageProps = {}) {
+  const params = useParams<{ transferId: string }>();
+  const transferId = recordId ?? params.transferId;
   const navigate = useNavigate();
 
   const {
@@ -81,6 +83,7 @@ export function StockTransferDetailPage() {
       breadcrumbs={[{ label: 'Inventory', to: '/inventory' }, { label: 'Stock transfers', to: '/inventory/transfers' }, { label: transfer?.transferNumber ?? 'Stock transfer' }]}
       backTo="/inventory/transfers"
       backLabel="Stock transfers"
+      embedded={embedded}
       state={state}
       errorMessage={error?.message}
       notFoundMessage="This stock transfer could not be found — it may have been deleted."

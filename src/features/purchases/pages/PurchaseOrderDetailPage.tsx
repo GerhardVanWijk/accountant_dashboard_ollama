@@ -13,6 +13,7 @@ import {
   RecordSummaryGrid,
   RelatedRecordsSection,
   type RelatedRecordItem,
+  type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatCurrency, formatDate } from '@/lib/app/format';
@@ -33,8 +34,9 @@ import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
  * document level only. Same purchaseOrderService.sendPurchaseOrder()/
  * recordReceipt()/convertToBill() calls as before.
  */
-export function PurchaseOrderDetailPage() {
-  const { purchaseOrderId } = useParams<{ purchaseOrderId: string }>();
+export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps = {}) {
+  const params = useParams<{ purchaseOrderId: string }>();
+  const purchaseOrderId = recordId ?? params.purchaseOrderId;
   const navigate = useNavigate();
 
   const { purchaseOrders, isLoading, error, refetch } = usePurchaseOrders();
@@ -133,6 +135,7 @@ export function PurchaseOrderDetailPage() {
       breadcrumbs={[{ label: 'Purchases' }, { label: 'Purchase orders', to: '/purchases/orders' }, { label: po?.poNumber ?? 'Purchase order' }]}
       backTo="/purchases/orders"
       backLabel="Purchase orders"
+      embedded={embedded}
       state={state}
       errorMessage={error?.message}
       notFoundMessage="This purchase order could not be found — it may have been deleted."

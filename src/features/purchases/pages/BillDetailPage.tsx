@@ -13,6 +13,7 @@ import {
   RecordSummaryGrid,
   RelatedRecordsSection,
   type RelatedRecordItem,
+  type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatCurrency, formatDate } from '@/lib/app/format';
@@ -33,8 +34,9 @@ import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
  * GL posting. Same billService.postBill()/paymentService.createPayment()
  * calls as before — accounting unchanged.
  */
-export function BillDetailPage() {
-  const { billId } = useParams<{ billId: string }>();
+export function BillDetailPage({ recordId, embedded }: RecordPageProps = {}) {
+  const params = useParams<{ billId: string }>();
+  const billId = recordId ?? params.billId;
 
   const { bills, isLoading, error, refetch } = useBills();
   const bill = bills.find((b) => b.id === billId);
@@ -138,6 +140,7 @@ export function BillDetailPage() {
       breadcrumbs={[{ label: 'Purchases' }, { label: 'Expenses', to: '/purchases/bills' }, { label: bill?.billNumber ?? 'Bill' }]}
       backTo="/purchases/bills"
       backLabel="Expenses"
+      embedded={embedded}
       state={state}
       errorMessage={error?.message}
       notFoundMessage="This bill could not be found — it may have been deleted."

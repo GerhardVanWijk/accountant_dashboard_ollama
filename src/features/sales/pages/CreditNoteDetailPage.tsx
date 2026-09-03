@@ -13,6 +13,7 @@ import {
   RecordSummaryGrid,
   RelatedRecordsSection,
   type RelatedRecordItem,
+  type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
@@ -46,8 +47,9 @@ const EPSILON = 0.01;
  * creditNoteService.issueCreditNote()/voidCreditNote()/allocateToInvoice()
  * calls as before — accounting unchanged.
  */
-export function CreditNoteDetailPage() {
-  const { creditNoteId } = useParams<{ creditNoteId: string }>();
+export function CreditNoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
+  const params = useParams<{ creditNoteId: string }>();
+  const creditNoteId = recordId ?? params.creditNoteId;
 
   const { creditNotes, isLoading, error, refetch } = useCreditNotes();
   const creditNote = creditNotes.find((cn) => cn.id === creditNoteId);
@@ -140,6 +142,7 @@ export function CreditNoteDetailPage() {
       breadcrumbs={[{ label: 'Sales' }, { label: 'Credit notes', to: '/sales/credit-notes' }, { label: creditNote?.creditNoteNumber ?? 'Credit note' }]}
       backTo="/sales/credit-notes"
       backLabel="Credit notes"
+      embedded={embedded}
       state={state}
       errorMessage={error?.message}
       notFoundMessage="This credit note could not be found — it may have been deleted."

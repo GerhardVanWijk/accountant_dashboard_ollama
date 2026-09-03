@@ -84,6 +84,25 @@ describe('RecordPageShell', () => {
     expect(screen.getByRole('link', { name: 'Back to Sales orders' })).toHaveAttribute('href', '/sales/orders');
     expect(screen.getByText(/could not be found/i)).toBeInTheDocument();
   });
+
+  it('embedded (inside RelatedRecordPreview) drops the breadcrumb + back link chrome', () => {
+    render(
+      <MemoryRouter>
+        <RecordPageShell
+          breadcrumbs={[{ label: 'Sales' }, { label: 'Invoices', to: '/sales/invoices' }, { label: 'INV-1' }]}
+          backTo="/sales/invoices"
+          backLabel="Invoices"
+          state="ready"
+          embedded
+        >
+          <p>embedded body</p>
+        </RecordPageShell>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Back to Invoices' })).not.toBeInTheDocument();
+    expect(screen.getByText('embedded body')).toBeInTheDocument();
+  });
 });
 
 describe('useLegacyRecordRedirect', () => {

@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import type { RelatedRecordType, ResolvedSourceDocument } from '@/components/app/record-page';
 import type {
   Bill,
   Invoice,
@@ -43,20 +44,51 @@ export interface InventoryItemDetailProps {
   invoices?: Invoice[];
   bills?: Bill[];
   customers?: { id: string; name: string }[];
+  /** Source-document resolution + accounting trace + preview-overlay callback for the movement ledger. */
+  ledgerHelpers?: MovementLedgerHelpers;
 }
 
-/** Human-readable label + (where known) canonical route for a movement's source document. */
-const MOVEMENT_SOURCE: Record<string, { label: string; path?: (id: string) => string }> = {
-  invoice: { label: 'Invoice', path: (id) => `/sales/invoices/${id}` },
-  bill: { label: 'Bill', path: (id) => `/purchases/bills/${id}` },
-  credit_note: { label: 'Credit note', path: (id) => `/sales/credit-notes/${id}` },
-  purchase_order: { label: 'Purchase order', path: (id) => `/purchases/orders/${id}` },
-  stock_adjustment: { label: 'Stock adjustment', path: (id) => `/inventory/adjustments/${id}` },
-  stock_transfer: { label: 'Stock transfer', path: (id) => `/inventory/transfers/${id}` },
-  stock_take: { label: 'Stock take', path: (id) => `/inventory/stock-takes/${id}` },
-  opening_stock_batch: { label: 'Opening stock', path: (id) => `/inventory/opening-stock/${id}` },
-  supplier_return: { label: 'Supplier return', path: (id) => `/inventory/supplier-returns/${id}` },
-  reversal: { label: 'Reversal' },
+/**
+ * The per-movement accounting trace shown in the expanded ledger panel —
+ * journal number/link, the inventory GL account and its contra, the engine
+ * posting key and reversal evidence. Built by InventoryItemDetailPage from
+ * the loaded documents + journal entries (this component stays presentational).
+ */
+export interface MovementAccounting {
+  journalNumber?: string;
+  journalEntryId?: string;
+  /** The inventoryPostingEngine idempotency key, e.g. `invoice:<id>:post`. */
+  postingKey?: string;
+  /** Always the inventory asset account, "1200 Inventory". */
+  inventoryAccount: string;
+  /** COGS / GRNI / Inventory Adjustment / PPV, depending on the movement type. */
+  contraAccount?: string;
+  /** One line of plain English on the inventory ↔ contra relationship (COGS/AP/AR). */
+  contraRelationship?: string;
+  isReversal?: boolean;
+}
+
+export interface MovementLedgerHelpers {
+  /** Resolve a movement's source into a human doc number + route + preview type. Never returns a UUID. */
+  resolveSource?: (m: StockMovement) => ResolvedSourceDocument | undefined;
+  /** The accounting trace for a movement's expanded panel. */
+  resolveAccounting?: (m: StockMovement) => MovementAccounting | undefined;
+  /** Open <RelatedRecordPreview> over the current page instead of navigating away. */
+  onOpenPreview?: (type: RelatedRecordType, id: string, title: string) => void;
+}
+
+/** Fallback label when the page did not supply a `resolveSource` helper. */
+const SOURCE_LABEL: Record<string, string> = {
+  invoice: 'Invoice',
+  bill: 'Bill',
+  credit_note: 'Credit note',
+  purchase_order: 'Purchase order',
+  stock_adjustment: 'Stock adjustment',
+  stock_transfer: 'Stock transfer',
+  stock_take: 'Stock take',
+  opening_stock_batch: 'Opening stock',
+  supplier_return: 'Supplier return',
+  reversal: 'Reversal',
 };
 
 function SubTable({ head, children }: { head: string[]; children: React.ReactNode }) {
@@ -92,14 +124,80 @@ function SubTable({ head, children }: { head: string[]; children: React.ReactNod
  * exists. Each row expands to a full evidence panel with the raw ids folded
  * under "Technical details".
  */
+/** The source cell — a human doc number that opens a preview overlay, a link, or plain text. Never a UUID. */
+function SourceCell({
+  movement,
+  src,
+  onOpenPreview,
+}: {
+  movement: StockMovement;
+  src: ResolvedSourceDocument | undefined;
+  onOpenPreview?: MovementLedgerHelpers['onOpenPreview'];
+}) {
+  const fallbackLabel = movement.sourceDocumentType ? SOURCE_LABEL[movement.sourceDocumentType] : undefined;
+  const primary = src?.number ?? src?.label ?? fallbackLabel;
+  if (!primary) return <span className="text-muted-foreground">—</span>;
+
+  const title = src?.number ? `${src.label} ${src.number}` : (src?.label ?? primary);
+  const suffix = src?.number && src.label ? <span className="ml-1 text-muted-foreground">· {src.label}</span> : null;
+
+  if (src?.previewType && src.id && onOpenPreview) {
+    // Anchor (real href, so middle-click / open-in-new-tab still work) whose
+    // normal click opens <RelatedRecordPreview> OVER the page instead of navigating.
+    return (
+      <>
+        <Link
+          to={src.path ?? '#'}
+          className="font-medium text-brand hover:underline"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onOpenPreview(src.previewType!, src.id!, title);
+          }}
+        >
+          {primary}
+        </Link>
+        {suffix}
+      </>
+    );
+  }
+  if (src?.path) {
+    return (
+      <>
+        <Link to={src.path} className="font-medium text-brand hover:underline" onClick={(e) => e.stopPropagation()}>
+          {primary}
+        </Link>
+        {suffix}
+      </>
+    );
+  }
+  return (
+    <>
+      <span className="text-foreground">{primary}</span>
+      {suffix}
+    </>
+  );
+}
+
+/**
+ * Stock movement ledger — one row per movement with the columns needed to
+ * tell the whole story (date, movement, qty, warehouse, source, party,
+ * unit cost, value, resulting balance). The source document shows its
+ * human number (INV-1061, BILL-2005 …) and — where the type is previewable
+ * — opens <RelatedRecordPreview> OVER this page rather than navigating
+ * away. Each row expands to a full evidence panel: Movement / Source /
+ * Accounting, with the raw ids folded under "Technical details".
+ */
 function MovementLedger({
   movements,
   warehouseName,
   resolveParty,
+  helpers,
 }: {
   movements: StockMovement[];
   warehouseName: (id: string) => string;
   resolveParty: (m: StockMovement) => string | undefined;
+  helpers: MovementLedgerHelpers;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -117,6 +215,12 @@ function MovementLedger({
     running += m.quantityDelta;
     balanceAfter.set(m.id, running);
   }
+
+  const directionLabel = (m: StockMovement): string | undefined => {
+    if (m.type === 'transfer_in') return `Into ${warehouseName(m.warehouseId)}`;
+    if (m.type === 'transfer_out') return `Out of ${warehouseName(m.warehouseId)}`;
+    return undefined;
+  };
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
@@ -137,10 +241,8 @@ function MovementLedger({
         <tbody>
           {movements.map((m) => {
             const isOpen = expanded === m.id;
-            const src = m.sourceDocumentType ? MOVEMENT_SOURCE[m.sourceDocumentType] : undefined;
-            const srcLabel = src?.label ?? m.sourceDocumentType ?? null;
-            const ref = m.reference ?? null;
-            const href = src?.path && m.sourceDocumentId ? src.path(m.sourceDocumentId) : undefined;
+            const src = helpers.resolveSource?.(m);
+            const acc = isOpen ? helpers.resolveAccounting?.(m) : undefined;
             const party = resolveParty(m);
             const bal = balanceAfter.get(m.id);
             return (
@@ -161,20 +263,7 @@ function MovementLedger({
                   </td>
                   <td className="px-3 py-2">{warehouseName(m.warehouseId)}</td>
                   <td className="px-3 py-2 text-xs">
-                    {ref ? (
-                      href ? (
-                        <Link to={href} className="font-medium text-brand hover:underline" onClick={(e) => e.stopPropagation()}>
-                          {ref}
-                        </Link>
-                      ) : (
-                        <span className="text-foreground">{ref}</span>
-                      )
-                    ) : srcLabel ? (
-                      <span className="text-muted-foreground">{srcLabel}</span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                    {ref && srcLabel ? <span className="ml-1 text-muted-foreground">· {srcLabel}</span> : null}
+                    <SourceCell movement={m} src={src} onOpenPreview={helpers.onOpenPreview} />
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{party ?? '—'}</td>
                   <td className="figure px-3 py-2 text-right tabular-nums">{m.unitCost != null ? formatCurrency(m.unitCost) : '—'}</td>
@@ -184,25 +273,31 @@ function MovementLedger({
                 {isOpen && (
                   <tr className="border-b border-border bg-muted/20 last:border-0">
                     <td colSpan={9} className="px-3 py-3">
-                      <div className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-3">
                         <div>
                           <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Movement</p>
                           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
                             <dt className="text-muted-foreground">Type</dt>
                             <dd>{MOVEMENT_TYPE_LABELS[m.type]}</dd>
-                            <dt className="text-muted-foreground">Date</dt>
+                            <dt className="text-muted-foreground">Date / time</dt>
                             <dd>{formatDate(m.movementDate ?? m.createdAt)}</dd>
                             <dt className="text-muted-foreground">Quantity</dt>
                             <dd>{m.quantityDelta > 0 ? `+${m.quantityDelta}` : m.quantityDelta}</dd>
                             <dt className="text-muted-foreground">Warehouse</dt>
                             <dd>{warehouseName(m.warehouseId)}</dd>
-                            <dt className="text-muted-foreground">Unit cost</dt>
+                            {directionLabel(m) ? (
+                              <>
+                                <dt className="text-muted-foreground">Direction</dt>
+                                <dd>{directionLabel(m)}</dd>
+                              </>
+                            ) : null}
+                            <dt className="text-muted-foreground">Historical unit cost</dt>
                             <dd>{m.unitCost != null ? formatCurrency(m.unitCost) : '—'}</dd>
-                            <dt className="text-muted-foreground">Total value</dt>
+                            <dt className="text-muted-foreground">Movement value</dt>
                             <dd>{m.totalCost != null ? formatCurrency(m.totalCost) : '—'}</dd>
                             {bal != null ? (
                               <>
-                                <dt className="text-muted-foreground">Balance after</dt>
+                                <dt className="text-muted-foreground">Resulting balance</dt>
                                 <dd>{bal}</dd>
                               </>
                             ) : null}
@@ -211,10 +306,16 @@ function MovementLedger({
                         <div>
                           <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Source</p>
                           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
-                            <dt className="text-muted-foreground">Document</dt>
-                            <dd>{srcLabel ?? '—'}</dd>
-                            <dt className="text-muted-foreground">Reference</dt>
-                            <dd>{href ? <Link to={href} className="text-brand hover:underline">{ref}</Link> : (ref ?? '—')}</dd>
+                            <dt className="text-muted-foreground">Document type</dt>
+                            <dd>{src?.label ?? (m.sourceDocumentType ? SOURCE_LABEL[m.sourceDocumentType] : '—')}</dd>
+                            <dt className="text-muted-foreground">Document number</dt>
+                            <dd>
+                              {src && (src.number || src.label) ? (
+                                <SourceCell movement={m} src={src} onOpenPreview={helpers.onOpenPreview} />
+                              ) : (
+                                '—'
+                              )}
+                            </dd>
                             <dt className="text-muted-foreground">Party</dt>
                             <dd>{party ?? '—'}</dd>
                             {m.notes ? (
@@ -225,21 +326,72 @@ function MovementLedger({
                             ) : null}
                           </dl>
                         </div>
+                        <div>
+                          <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Accounting</p>
+                          {acc ? (
+                            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                              <dt className="text-muted-foreground">Journal entry</dt>
+                              <dd>
+                                {acc.journalEntryId ? (
+                                  <Link
+                                    to={`/accounting/journals?record=${acc.journalEntryId}`}
+                                    className="text-brand hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {acc.journalNumber ?? 'View journal entry'}
+                                  </Link>
+                                ) : (
+                                  acc.journalNumber ?? '—'
+                                )}
+                              </dd>
+                              <dt className="text-muted-foreground">Inventory GL</dt>
+                              <dd>{acc.inventoryAccount}</dd>
+                              {acc.contraAccount ? (
+                                <>
+                                  <dt className="text-muted-foreground">Contra</dt>
+                                  <dd>{acc.contraAccount}</dd>
+                                </>
+                              ) : null}
+                              {acc.contraRelationship ? (
+                                <>
+                                  <dt className="text-muted-foreground">Relationship</dt>
+                                  <dd>{acc.contraRelationship}</dd>
+                                </>
+                              ) : null}
+                              {acc.postingKey ? (
+                                <>
+                                  <dt className="text-muted-foreground">Posting key</dt>
+                                  <dd className="font-mono text-[11px]">{acc.postingKey}</dd>
+                                </>
+                              ) : null}
+                              {acc.isReversal || m.reversalOfMovementId ? (
+                                <>
+                                  <dt className="text-muted-foreground">Reversal</dt>
+                                  <dd>{m.reversalOfMovementId ? 'Reverses an earlier movement' : 'Reversing entry'}</dd>
+                                </>
+                              ) : null}
+                            </dl>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              No linked journal entry — this movement type does not post to the general ledger, or the entry is not loaded.
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <details className="mt-2 text-xs">
+                      <details className="mt-3 text-xs">
                         <summary className="cursor-pointer text-muted-foreground">Technical details</summary>
                         <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 font-mono text-[11px] text-muted-foreground">
-                          <dt>Movement ID</dt>
+                          <dt>Movement UUID</dt>
                           <dd>{m.id}</dd>
                           {m.sourceDocumentId ? (
                             <>
-                              <dt>Source doc ID</dt>
+                              <dt>Source UUID</dt>
                               <dd>{m.sourceDocumentId}</dd>
                             </>
                           ) : null}
                           {m.sourceDocumentLineId ? (
                             <>
-                              <dt>Source line ID</dt>
+                              <dt>Line UUID</dt>
                               <dd>{m.sourceDocumentLineId}</dd>
                             </>
                           ) : null}
@@ -320,6 +472,7 @@ export function InventoryItemDetail({
   invoices = [],
   bills = [],
   customers = [],
+  ledgerHelpers = {},
 }: InventoryItemDetailProps) {
   const [tab, setTab] = useState('overview');
 
@@ -491,7 +644,12 @@ export function InventoryItemDetail({
           <p className="mb-3 text-xs text-muted-foreground">
             Every stock event for this item, newest first. Click a row for the full evidence — source document, party and accounting trace.
           </p>
-          <MovementLedger movements={productMovements} warehouseName={warehouseName} resolveParty={resolveParty} />
+          <MovementLedger
+            movements={productMovements}
+            warehouseName={warehouseName}
+            resolveParty={resolveParty}
+            helpers={ledgerHelpers}
+          />
         </RecordDetailSection>
       ),
     },

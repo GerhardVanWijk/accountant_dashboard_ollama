@@ -1,5 +1,13 @@
 # ROUTE REGISTRY
 
+> **Record-page overlays (2026-09-03, increment 3):** every `*DetailPage` below marked
+> "(record page)" also accepts `{ recordId, embedded }` (`RecordPageProps`) and can be
+> rendered by `<RelatedRecordPreview>` as a large over-the-page overlay — no new route, no
+> second renderer. Used by the Inventory Item movement ledger so clicking INV-/BILL-/TRF-…
+> opens the document without leaving the product page. Previewable types: invoice, bill,
+> purchase order, credit note, sales order, quote, supplier return, stock transfer, stock
+> adjustment, stock take, opening stock.
+
 | Route Endpoint | Feature Domain | Page Title | Navigation Section |
 |---|---|---|---|
 | `/` | `dashboard` / `marketing` | Executive Overview (authenticated) / Homepage (unauthenticated, M6) | Sidebar Top |

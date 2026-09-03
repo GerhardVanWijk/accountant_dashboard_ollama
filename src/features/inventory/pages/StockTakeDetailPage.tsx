@@ -6,6 +6,7 @@ import {
   RecordActivitySection,
   RecordPageHeader,
   RecordPageShell,
+  type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
@@ -29,8 +30,9 @@ import type { UpdateStockTakeDTO } from '../services/stockTakeService';
  * adjustment it posts. Same stockTakeService.freeze()/enterCounts()/
  * markReadyForReview()/postStockTake() calls — counting logic unchanged.
  */
-export function StockTakeDetailPage() {
-  const { stockTakeId } = useParams<{ stockTakeId: string }>();
+export function StockTakeDetailPage({ recordId, embedded }: RecordPageProps = {}) {
+  const params = useParams<{ stockTakeId: string }>();
+  const stockTakeId = recordId ?? params.stockTakeId;
   const navigate = useNavigate();
 
   const {
@@ -85,6 +87,7 @@ export function StockTakeDetailPage() {
       breadcrumbs={[{ label: 'Inventory', to: '/inventory' }, { label: 'Stock takes', to: '/inventory/stock-takes' }, { label: stockTake?.stockTakeNumber ?? 'Stock take' }]}
       backTo="/inventory/stock-takes"
       backLabel="Stock takes"
+      embedded={embedded}
       state={state}
       errorMessage={error?.message}
       notFoundMessage="This stock take could not be found — it may have been deleted."

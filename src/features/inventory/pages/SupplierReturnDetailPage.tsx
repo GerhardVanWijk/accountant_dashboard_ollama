@@ -6,6 +6,7 @@ import {
   RecordActivitySection,
   RecordPageHeader,
   RecordPageShell,
+  type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
@@ -29,8 +30,9 @@ import type { UpdateSupplierReturnDTO } from '../services/supplierReturnService'
  * R0.00) on the page width. Same supplierReturnService.postSupplierReturn()
  * call — WAC / PPV accounting unchanged.
  */
-export function SupplierReturnDetailPage() {
-  const { supplierReturnId } = useParams<{ supplierReturnId: string }>();
+export function SupplierReturnDetailPage({ recordId, embedded }: RecordPageProps = {}) {
+  const params = useParams<{ supplierReturnId: string }>();
+  const supplierReturnId = recordId ?? params.supplierReturnId;
   const navigate = useNavigate();
 
   const {
@@ -72,6 +74,7 @@ export function SupplierReturnDetailPage() {
       breadcrumbs={[{ label: 'Inventory', to: '/inventory' }, { label: 'Supplier returns', to: '/inventory/supplier-returns' }, { label: supplierReturn?.returnNumber ?? 'Supplier return' }]}
       backTo="/inventory/supplier-returns"
       backLabel="Supplier returns"
+      embedded={embedded}
       state={state}
       errorMessage={error?.message}
       notFoundMessage="This supplier return could not be found — it may have been deleted."

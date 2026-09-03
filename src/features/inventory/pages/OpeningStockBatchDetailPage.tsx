@@ -6,6 +6,7 @@ import {
   RecordActivitySection,
   RecordPageHeader,
   RecordPageShell,
+  type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
@@ -28,8 +29,9 @@ import type { UpdateOpeningStockBatchDTO } from '../services/openingStockBatchSe
  * balance is accurate" checkbox must be ticked before Confirm enables,
  * matching openingStockBatchService.confirmBatch()'s contract.
  */
-export function OpeningStockBatchDetailPage() {
-  const { batchId } = useParams<{ batchId: string }>();
+export function OpeningStockBatchDetailPage({ recordId, embedded }: RecordPageProps = {}) {
+  const params = useParams<{ batchId: string }>();
+  const batchId = recordId ?? params.batchId;
   const navigate = useNavigate();
 
   const {
@@ -71,6 +73,7 @@ export function OpeningStockBatchDetailPage() {
       breadcrumbs={[{ label: 'Inventory', to: '/inventory' }, { label: 'Opening stock', to: '/inventory/opening-stock' }, { label: batch?.batchNumber ?? 'Opening stock batch' }]}
       backTo="/inventory/opening-stock"
       backLabel="Opening stock"
+      embedded={embedded}
       state={state}
       errorMessage={error?.message}
       notFoundMessage="This opening stock batch could not be found — it may have been deleted."

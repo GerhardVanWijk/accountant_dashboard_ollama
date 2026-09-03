@@ -14,6 +14,7 @@ import {
   RecordSummaryGrid,
   RelatedRecordsSection,
   type RelatedRecordItem,
+  type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
@@ -47,8 +48,9 @@ import { invoiceService } from '@/services';
  * invoiceService.markInvoiceAsSent()/deleteInvoice()/updateInvoice() calls,
  * the same posted-invoice immutability (edit is draft-only).
  */
-export function InvoiceDetailPage() {
-  const { invoiceId } = useParams<{ invoiceId: string }>();
+export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) {
+  const params = useParams<{ invoiceId: string }>();
+  const invoiceId = recordId ?? params.invoiceId;
   const navigate = useNavigate();
 
   const { invoices, loading, error, refetch } = useInvoices();
@@ -174,6 +176,7 @@ export function InvoiceDetailPage() {
       ]}
       backTo="/sales/invoices"
       backLabel="Invoices"
+      embedded={embedded}
       state={state}
       errorMessage={error ?? undefined}
       notFoundMessage="This invoice could not be found — it may have been deleted."

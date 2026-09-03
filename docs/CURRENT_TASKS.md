@@ -13,8 +13,9 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` complete
 **COMPLETED**
 - Increment 1 — record-page framework, Sales Order + Inventory Product full pages, tax-rate wiring fix, inventory-cluster native-`<select>` sweep.
 - Increment 2 — remaining 12 record types migrated to full pages, 15 detail sheets deleted, app-wide **transaction-form** dropdown sweep, tax-rate regression guard.
+- Increment 3 (**UNCOMMITTED**) — inventory movement ledger: human source-document numbers (no UUIDs) + `RelatedRecordPreview` over-the-page overlay + expandable Movement/Source/Accounting/Technical panel; sales-document workflow **audit** (quote/SO/invoice non-posting rules confirmed, partial-payment confirmed, **customer-deposit accounting gap** + partial-SO-invoicing + stock-commitment absence reported, not changed). See `# RECORD DETAIL — INCREMENT 3` below.
 
-Gate green on `phase-9b-relationship-design-and-code`: tsc ✅ · eslint `--max-warnings 0` ✅ · **2052 tests / 293 files** ✅ · `vite build` ✅. Committed `3318e7b` + pushed to the branch (no merge to `main`).
+Gate green on `phase-9b-relationship-design-and-code`: tsc ✅ · eslint `--max-warnings 0` ✅ · **2063 tests / 294 files** ✅ · `vite build` ✅. Increments 1–2 committed `3318e7b` + pushed; **increment 3 is uncommitted, awaiting review**.
 
 **Cloudflare Pages preview deployment** (auto-built from the branch push — production `main` / `https://vertex-accounting.pages.dev` untouched):
 - Branch preview: **https://phase-9b-relationship-design.vertex-accounting.pages.dev**
@@ -277,6 +278,50 @@ Fixed Asset (depreciation schedule), Lease (amortization schedule).
   the module landing page is a one-line change once those pages settle.
 - *Record-page print stylesheet* — the new pages have real URLs now; a `@media print` pass would make
   an invoice/PO page a serviceable hand-out.
+
+---
+
+# RECORD DETAIL — INCREMENT 3: inventory transaction investigation + sales workflow audit — 2026-09-03 (UNCOMMITTED, branch `phase-9b-relationship-design-and-code`)
+
+**Inspect / code / UI only. No accounting, DB, migration, seed, GL, WAC or flag change.** Gate green
+(tsc ✅ · eslint `--max-warnings 0` ✅ · **2063 tests / 294 files** ✅ · `vite build` ✅). **Not committed.**
+
+### Code shipped
+
+| Area | Change |
+|---|---|
+| **Source-document resolution** (`src/components/app/record-page/sourceDocument.ts`) | `resolveSourceDocument({type,id,reference}, resolveNumber)` → `{ label, number, path, previewType }`. `isOpaqueReference()` rejects the September seed's machine `"<type>:<uuid>"` reference **and** bare UUIDs — the ledger now shows **INV-1072 / BILL-2031 / CN-… / TRF-… / ADJ-… / ST-… / OPEN-… / SRET-…**, resolved from the structured `source_document_id`, never a UUID. Raw ids stay under "Technical details". Unit-tested (`sourceDocument.test.ts`, 10 cases). |
+| **`RelatedRecordPreview`** (`src/components/app/record-page/RelatedRecordPreview.tsx`) | Large/wide document overlay (`5xl` desktop, near-full-screen mobile — shared `DialogContent`, scrolls internally) that renders an **existing** `*DetailPage` over the current page. Registry lazy-loads the 11 previewable pages (invoice, bill, PO, credit note, sales order, quote, supplier return, transfer, adjustment, stock take, opening stock). Closing returns to the exact page + scroll (the page never unmounts). No second renderer. Side-effect: the 11 pages code-split → main bundle 3,362 kB → 2,462 kB. |
+| **`RecordPageProps` + `RecordPageShell embedded`** | Every `*DetailPage` now accepts `{ recordId?, embedded? }` (falls back to `useParams`); `embedded` hides the breadcrumb + back-link chrome so the page renders cleanly inside the overlay. 11 pages updated (2 lines each). |
+| **Movement ledger — expandable evidence panel** (`InventoryItemDetail.tsx`) | Each row expands to **Movement** (type · date · qty · warehouse · direction for transfers · historical unit cost · movement value · resulting balance), **Source** (document type · human number → opens preview · party · notes), **Accounting** (journal entry link + **JE number**, Inventory GL 1200, contra account [5000 COGS / 2050 GRNI→AP / 5060 PPV / 5050 Adjustments / 1210 In Transit / 3950 OBE by movement type], plain-English relationship, engine **posting key**, reversal evidence), and **Technical details** (movement/source/line UUIDs). Source cell click opens `RelatedRecordPreview` — a real `href` is kept so middle-click still deep-links. |
+| **`InventoryItemDetailPage`** | Loads the doc collections (credit notes, quotes, sales orders, POs, adjustments, transfers, stock takes, supplier returns, opening-stock batches) + journal entries; builds `numberById` / `journalEntryIdBySource` / `journalNumberById` maps; passes `ledgerHelpers` (`resolveSource` / `resolveAccounting` / `onOpenPreview`) to `InventoryItemDetail`; renders the preview overlay. |
+
+### Audit findings (read-only — see `docs/ACCOUNTING_RELATIONSHIPS.md` § "SALES DOCUMENT WORKFLOW AUDIT — 2026-09-03")
+
+| # | Question | Result |
+|---|---|---|
+| Quote accounting rule | **Confirmed correct** — commercial offer only; no GL / AR / VAT / stock / COGS / reservation. Statuses `draft·sent·accepted·declined·expired` (no `converted` value — it's derived). |
+| Sales Order accounting rule | **Confirmed correct** — no revenue / AR / VAT / issue / COGS. `convertToInvoice` → draft invoice + `fulfilled`, double-convert-guarded. |
+| **Stock commitment** | **NOT IMPLEMENTED.** `quantityCommitted` is hardcoded `0` (`stockBalanceService`, `stockService` TODO). **Available === On hand.** A Sales Order contributes nothing to "Committed". Not invented (brief §5). |
+| Invoice accounting rule | **Confirmed correct, engine untouched** — `DR AR / CR Sales / CR VAT Output` + `DR COGS / CR Inventory` via the one atomic engine. |
+| **Partial payment** | **SUPPORTED & correct** — receipt posts `DR Cash / CR AR` full amount; `recordPayment` tracks `amountPaid` + status, no extra journal; AR nets to zero. Invoice page shows Total / Paid / Outstanding + allocation history. |
+| **Customer deposit / pre-invoice receipt** | **⚠️ ACCOUNTING GAP (reported, NOT changed).** An unallocated receipt is credited **directly to Accounts Receivable** (negative customer AR), not to a customer-deposit liability — there is no such account key. End state after invoicing is correct; the interim balance sheet understates AR and omits a current liability. Fix needs a new CoA account + mapping key + posting branch = explicit accounting decision + DB change. |
+| **Partial SO invoicing** | **NOT SUPPORTED** — `convertToInvoice` copies all lines at full qty, marks `fulfilled`, blocks re-conversion. No "remaining to invoice" tracking, no `partially_invoiced` status. |
+| Duplicate / copy | **NOT SUPPORTED** — no `duplicate`/`clone` on any sales/purchase service. |
+| Print / export on record pages | **PARTIAL** — Phase-7 `ExportMenu` / `PrintableReport` exist and list pages use them; **the new `*DetailPage`s wire none of it** and there is **no formal business-document print layout**. |
+| Edit actions | **Correct** — draft-only Edit; service layer throws on post-`draft` accounting changes; no guard weakened. |
+
+### Increment 3 — DEFERRED / NOT DONE (need approval — see §20 report)
+
+- Customer deposit / prepayment liability posting (accounting decision + new CoA account + DB).
+- Partial Sales-Order invoicing (`SalesOrder` line-level "invoiced qty" tracking + `partially_invoiced`).
+- Real stock reservation / commitment model (write `quantityCommitted` from open Sales Orders).
+- Formal `PrintableDocument` layout + `@media print` for Quote / SO / Invoice / Credit Note / PO, and
+  wiring `ExportMenu` (CSV / Excel / Print) onto the record pages.
+- Duplicate / copy actions for Quote / Sales Order / Purchase Order.
+- `JournalEntryDetailPage` (the movement Accounting panel + every record page still links the journal
+  entry via `?record=` → the side-sheet).
+- Deep-linking related-record clicks *inside* a preview to a nested preview (they navigate today).
 
 ---
 
