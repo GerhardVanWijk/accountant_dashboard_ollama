@@ -1,6 +1,6 @@
 -- 0045b — Historical reclassification of pre-Increment-4A unapplied customer receipts
 -- ============================================================================
--- AUTHORED, NOT APPLIED. Presented for the Review 4A-4 checkpoint.
+-- AUTHORED, NOT APPLIED. Presented for the Review 4A-DB2 checkpoint.
 --
 -- DO NOT RUN until:
 --   1. migrations 0045 + 0046 have been applied, AND
@@ -28,15 +28,67 @@
 --     CR 2600 Customer Deposits    <unapplied amount>
 -- dated at the original receipt's own date, source = 'reclassification'.
 --
--- DETERMINISTIC IDEMPOTENCY: one row per corrected receipt in
+-- ============================================================================
+-- ORDERING FIX (Review 4A-DB1b, 2026-09-03)
+-- ----------------------------------------------------------------------------
+-- The first authored version tried to "claim the (company, receipt) slot" in
+-- public.deposit_reclassification_log with a PLACEHOLDER journal_entry_id
+-- ('00000000-...') BEFORE posting the JE, then backfill it. Migration 0046
+-- defines that column as  `journal_entry_id uuid NOT NULL REFERENCES
+-- public.journal_entries(id)`  — the placeholder violates the FK and neither
+-- NULL nor a sentinel can be inserted. First execution aborted 23503 and the
+-- whole transaction rolled back cleanly (0 rows written, journal counter
+-- unmoved at 4174).
+--
+-- The schema is correct and stays strict (NOT NULL + FK + UNIQUE). This script
+-- is reordered to never insert a placeholder:
+--
+--   Step 1  EARLY IDEMPOTENCY  — SELECT the (company_id, receipt_id) row in
+--           deposit_reclassification_log. If it exists, RAISE and abort
+--           BEFORE any JE is created. This is the normal "already done /
+--           re-run" guard.
+--   Step 2  SAFETY VALIDATION  — every previously reviewed check (receipt
+--           exists / locked FOR UPDATE / exact unallocated_amount / original
+--           JE posted with full AR credit / open period / 1100 + 2600 resolve
+--           and 2600 is active-liability-credit / no stray reclassification
+--           JE by memo).
+--   Step 3  POST THE JE FIRST  — create_journal_entry_with_lines(company,''
+--           -> allocate_journal_number, receipt date, reviewed memo,
+--           source='reclassification', DR 1100 / CR 2600). Capture the REAL
+--           returned v_je.id.
+--   Step 4  INSERT THE LOG with the REAL v_je.id (no placeholder, no NULL),
+--           `ON CONFLICT (company_id, receipt_id) DO NOTHING RETURNING id`.
+--           A NULL return here means a concurrent transaction inserted the
+--           same (company_id, receipt_id) between Step 1 and Step 4 — RAISE,
+--           which rolls back the JE just posted, its journal_lines, and the
+--           journal-number allocation (all in this one transaction).
+--
+-- TWO-LAYER IDEMPOTENCY
+--   * Normal retry / already complete : the Step 1 SELECT aborts before any
+--     write — no JE, no counter movement.
+--   * Concurrent double-run : both transactions can pass Step 1, but the
+--     UNIQUE (company_id, receipt_id) constraint lets only one INSERT succeed
+--     at Step 4; the loser gets no returned id, RAISEs, and its freshly
+--     posted JE + lines + counter increment all roll back. No duplicate
+--     persistent JE remains.
+--
+-- JOURNAL-NUMBER ROLLBACK SAFETY
+--   allocate_journal_number() is `UPDATE journal_number_counters
+--   SET next_value = next_value + 1 ... RETURNING next_value - 1`. The UPDATE
+--   holds a row lock for the life of the transaction; a concurrent allocator
+--   for the same company blocks until this transaction ends. On ROLLBACK the
+--   increment is undone and the number is reused by the next caller. Verified
+--   against live behaviour: the failed first attempt left next_value = 4174
+--   unchanged.
+--
+-- DETERMINISTIC IDENTITY: one row per corrected receipt in
 -- public.deposit_reclassification_log (UNIQUE (company_id, receipt_id),
--- created by migration 0046). The INSERT ... ON CONFLICT DO NOTHING is the
--- primary duplicate guard; the memo-text check is a secondary sanity check.
+-- created by migration 0046). The memo-text check is a secondary sanity check.
 --
 -- ALL-OR-NOTHING: one BEGIN..COMMIT. Every prerequisite is asserted inside a
 -- DO block; any failed assertion RAISEs and the whole transaction rolls back.
 -- Journal numbers are allocated by the standard atomic allocate_journal_number()
--- (NOT a hard-coded JE-4174..4176 assumption). Two post-write reconciliation
+-- (NOT a hard-coded JE-4174..4176 assumption). Four post-write reconciliation
 -- assertions must pass before COMMIT.
 -- ============================================================================
 
@@ -83,7 +135,9 @@ begin
       v_ar_credited numeric;
       v_reclass_id uuid;
     begin
-      -- receipt still exists, in this company, with the expected unapplied balance
+      ----------------------------------------------------------------
+      -- STEP 2a: receipt exists, correct company, LOCKED, exact balance
+      ----------------------------------------------------------------
       select * into v_rcpt from public.customer_receipts
         where company_id = v_company and receipt_number = r.receipt_number
         for update;
@@ -93,13 +147,14 @@ begin
           r.receipt_number, v_rcpt.unallocated_amount, r.expected_unapplied;
       end if;
 
-      -- DETERMINISTIC idempotency: claim the (company, receipt) slot first.
-      insert into public.deposit_reclassification_log (company_id, receipt_id, journal_entry_id, unallocated_amount)
-        values (v_company, v_rcpt.id, '00000000-0000-0000-0000-000000000000', r.expected_unapplied)
-        on conflict (company_id, receipt_id) do nothing
-        returning id into v_reclass_id;
-      if v_reclass_id is null then
-        raise exception 'ABORT: % already reclassified (deposit_reclassification_log)', r.receipt_number;
+      ----------------------------------------------------------------
+      -- STEP 1: EARLY IDEMPOTENCY — abort BEFORE creating any JE
+      ----------------------------------------------------------------
+      if exists (
+        select 1 from public.deposit_reclassification_log l
+        where l.company_id = v_company and l.receipt_id = v_rcpt.id
+      ) then
+        raise exception 'ABORT: % already reclassified (deposit_reclassification_log row exists)', r.receipt_number;
       end if;
 
       -- secondary sanity check: no stray reclassification JE mentions this receipt
@@ -111,7 +166,9 @@ begin
         raise exception 'ABORT: a reclassification JE for % already exists (memo check)', r.receipt_number;
       end if;
 
-      -- original JE exists, is posted, and currently credits AR for the full amount
+      ----------------------------------------------------------------
+      -- STEP 2b: original JE exists, is posted, credits AR for the full amount
+      ----------------------------------------------------------------
       if v_rcpt.journal_entry_id is null then raise exception 'ABORT: % has no journal_entry_id', r.receipt_number; end if;
       select * into v_je from public.journal_entries where id = v_rcpt.journal_entry_id;
       if not found or v_je.status <> 'posted' then raise exception 'ABORT: % original JE missing/not posted', r.receipt_number; end if;
@@ -122,7 +179,9 @@ begin
           r.receipt_number, v_ar_credited, v_rcpt.amount;
       end if;
 
-      -- open period covering the receipt date
+      ----------------------------------------------------------------
+      -- STEP 2c: open period covering the receipt date
+      ----------------------------------------------------------------
       if not exists (
         select 1 from public.accounting_periods p
         where p.company_id = v_company and p.status = 'open'
@@ -131,7 +190,9 @@ begin
         raise exception 'ABORT: no open period covers % (%)', r.receipt_number, v_rcpt.date::date;
       end if;
 
-      -- post the correction entry via the canonical atomic path
+      ----------------------------------------------------------------
+      -- STEP 3: POST THE CORRECTION JE FIRST (canonical atomic path)
+      ----------------------------------------------------------------
       v_je := public.create_journal_entry_with_lines(
         v_company, '', v_rcpt.date,
         'Increment 4A — reclassify unapplied ' || r.receipt_number || ' from Accounts Receivable to Customer Deposits',
@@ -142,7 +203,19 @@ begin
         )
       );
 
-      update public.deposit_reclassification_log set journal_entry_id = v_je.id where id = v_reclass_id;
+      ----------------------------------------------------------------
+      -- STEP 4: INSERT THE LOG WITH THE REAL JE id (no placeholder, no NULL)
+      --         UNIQUE (company_id, receipt_id) is the race guard: a NULL
+      --         return here means a concurrent txn won the slot -> RAISE,
+      --         which rolls back the JE just posted above.
+      ----------------------------------------------------------------
+      insert into public.deposit_reclassification_log (company_id, receipt_id, journal_entry_id, unallocated_amount)
+        values (v_company, v_rcpt.id, v_je.id, r.expected_unapplied)
+        on conflict (company_id, receipt_id) do nothing
+        returning id into v_reclass_id;
+      if v_reclass_id is null then
+        raise exception 'ABORT: % was reclassified concurrently between the pre-check and the log insert — rolling back the correction JE just posted', r.receipt_number;
+      end if;
     end;
   end loop;
 
@@ -170,7 +243,14 @@ begin
     where company_id = v_company and source = 'reclassification';
   if v_cnt <> 3 then raise exception 'ABORT: % reclassification JEs posted (expected 3)', v_cnt; end if;
 
-  raise notice 'OK: 3 reclassification entries posted; GL 2600 = 4250.00; TB balanced.';
+  -- every reclassification-log row points at a real posted reclassification JE
+  select count(*) into v_cnt
+    from public.deposit_reclassification_log l
+    join public.journal_entries je on je.id = l.journal_entry_id
+   where l.company_id = v_company and je.source = 'reclassification' and je.status = 'posted';
+  if v_cnt <> 3 then raise exception 'ABORT: % log rows linked to a posted reclassification JE (expected 3)', v_cnt; end if;
+
+  raise notice 'OK: 3 reclassification entries posted; GL 2600 = 4250.00; TB balanced; 3 log rows linked.';
 end $$;
 
 commit;
