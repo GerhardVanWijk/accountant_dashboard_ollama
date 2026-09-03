@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 
 export interface SbcEligibilityFormProps {
   currentValue: boolean;
@@ -50,10 +50,15 @@ export function SbcEligibilityForm({ currentValue, onSubmit, onCancel, onDirtyCh
       </p>
       <Field>
         <FieldLabel htmlFor="sbcEligible">Is SBC-eligible?</FieldLabel>
-        <NativeSelect id="sbcEligible" value={isEligible ? 'yes' : 'no'} onChange={(e) => setIsEligible(e.target.value === 'yes')}>
-          <option value="no">No — standard corporate rate applies</option>
-          <option value="yes">Yes — SBC brackets apply</option>
-        </NativeSelect>
+        <EnumSelect
+          id="sbcEligible"
+          value={isEligible ? 'yes' : 'no'}
+          onValueChange={(value) => setIsEligible(value === 'yes')}
+          options={[
+            { value: 'no', label: 'No — standard corporate rate applies' },
+            { value: 'yes', label: 'Yes — SBC brackets apply' },
+          ]}
+        />
       </Field>
       <Field>
         <FieldLabel htmlFor="sbcReason">Reason (required)</FieldLabel>

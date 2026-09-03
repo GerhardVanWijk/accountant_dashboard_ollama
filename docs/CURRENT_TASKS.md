@@ -27,7 +27,7 @@ Gate green on `phase-9b-relationship-design-and-code`: tsc ✅ · eslint `--max-
 
 **KNOWN NON-BLOCKING ISSUES**
 - `MockStockLotRepository` / FIFO limitation — FIFO stock lots are in-memory only; not exercised (every seeded product is weighted-average). See `docs/KNOWN_ISSUES.md`.
-- Deferred configuration / admin `NativeSelect` sweep (~34 non-transaction forms) — lower-traffic, partial CSS mitigation in place.
+- ~~Deferred configuration / admin `NativeSelect` sweep (~34 non-transaction forms)~~ — **DONE 2026-09-03** (`### GLOBAL SELECT MIGRATION`); zero native `<select>` app-wide, guard `noNativeSelect.global.test.ts`.
 - Journal Entry detail still sheet-backed (`?record=`) — no full-page `JournalEntryDetailPage` yet.
 - GL Account / Fixed Asset / Lease intentionally retained as sheets this increment (borderline records, per brief §B).
 - Create / edit modal shell width still requires browser confirmation.
@@ -408,7 +408,9 @@ Phase 5 is complete and merged.** Rough priority order:
 - [ ] **7A** Human browser / visual QA of the whole deployment candidate (never run in this env —
   no Chrome DevTools / Playwright MCP): Increments 1–4A UI, the 4B documents, the Phase-5 fulfilment
   screens, `EnumSelect` / `SearchableSelect` popups, `AccountingPreview` full-width, modal shell widths.
-- [ ] **7B** Deferred configuration / admin `NativeSelect` sweep (~34 non-transaction forms).
+- [x] **7B** Deferred configuration / admin `NativeSelect` sweep (~34 non-transaction forms) —
+  **DONE 2026-09-03**, see `### GLOBAL SELECT MIGRATION`. Zero native `<select>` app-wide (guard:
+  `noNativeSelect.global.test.ts`). Browser QA of the new popups folds into 7A.
 - [ ] **7C** `JournalEntryDetailPage` (full page) — every record page still deep-links the JE via
   `?record=` → the side-sheet.
 - [ ] **7D** GL Account / Fixed Asset / Lease → full pages (the 3 borderline records kept as sheets).
@@ -631,20 +633,10 @@ Fixed Asset (depreciation schedule), Lease (amortization schedule).
 
 ### Increment 2 — DEFERRED
 
-- **Non-transaction `NativeSelect` sweep (~34 files):** admin (`CompanyForm`, `UsersPage`,
-  `SuperUserDashboardPage`, `OnboardingPage`), tax-config pages/forms (`IncomeTaxPage`,
-  `ProvisionalTaxPage`, `DeferredTaxPage`, `SbcEligibilityForm`, `AdjustmentsTable`, `EclProvisionPage`),
-  compliance (`CalculateScoreForm`, `ReportingFrameworkOverrideForm`), banking (`BankAccountForm`,
-  `TransactionForm`, `AllocationRows`, `ReconciliationWorkspace` raw `<select>`, `StatementImportWizard`),
-  settings, reports date/scope controls, `AccountForm`, `JournalEntryForm`, `EmployeeForm`,
-  `PostPayrollRunForm`, `RelatedPartyForm(+Transaction)`, `AssetForm`, `DisposeAssetForm`,
-  `PostAcquisitionForm`, `WarehouseForm`, `CustomerForm`, `SupplierForm`, `TaxRateForm`,
-  `import/ImportWizard`, `inventory/reports/DateRangeControl`.
-  *Why deferred:* the user's dropdown complaint is specifically about the **document / transaction**
-  forms (line editors, allocation, method) — those are done. The config/admin forms are lower-traffic,
-  many are single-select-of-3, and touching ~34 more files + their tests is a materially bigger surface
-  than this increment should carry. The global `@layer base` `select option { … }` CSS still applies to
-  them as a partial mitigation.
+- **Non-transaction `NativeSelect` sweep (~34 files):** ✅ **DONE — see `### GLOBAL SELECT MIGRATION`
+  below** (2026-09-03). Every non-transaction `NativeSelect` / raw `<select>` in the list that follows
+  has been migrated to `EnumSelect` / `SearchableSelect`; the app now has **zero** native `<select>`
+  outside `native-select.tsx` + test files, enforced by `noNativeSelect.global.test.ts`.
 - **GL Account / Fixed Asset / Lease → full page:** the three borderline records (ledger table /
   depreciation schedule / amortization schedule) — kept as sheets this increment per brief §B.
 - **Full inventory line-table consolidation onto `DocumentLineTable`** (see note above).
@@ -665,15 +657,104 @@ Fixed Asset (depreciation schedule), Lease (amortization schedule).
 - *Shared `AllocationTable` component* — Customer Receipt and Supplier Payment now render an identical
   Document / Original / Allocated / Remaining table; Bill and Invoice render near-identical
   payment/receipt tables. One component would DRY four call sites.
-- *`EnumSelect` interaction test helper* — base-ui `Select` needs `pointerDown`+`pointerUp`+`click` on
-  the option in jsdom (discovered while fixing `CreditNoteForm.test`). A `selectEnumOption(label)` test
-  util in `src/test/` would stop every future test re-deriving that.
+- ~~*`EnumSelect` interaction test helper*~~ — **DONE** (`tests/helpers/selectEnumOption.ts`:
+  `selectEnumOption`, `selectEnumOptionWithin`, `selectSearchableOption`), added in the GLOBAL SELECT
+  MIGRATION.
 
 **Nice to have**
 - *Breadcrumb "up to module" links* — the first breadcrumb crumb (e.g. "Sales") is inert; wiring it to
   the module landing page is a one-line change once those pages settle.
 - *Record-page print stylesheet* — the new pages have real URLs now; a `@media print` pass would make
   an invoice/PO page a serviceable hand-out.
+
+---
+
+# GLOBAL SELECT MIGRATION — native `<select>` → Vertex `EnumSelect` / `SearchableSelect` — 2026-09-03 (COMMITTED + PUSHED, branch `phase-9b-relationship-design-and-code`; `main` NOT merged, production NOT deployed)
+
+**Trigger:** human browser QA found the OS-native dropdown menu (light popup in dark mode) on
+Companies → Edit → Legal entity type. The fix is global — every remaining native select, not one field.
+
+**Pure UI. No business / accounting / VAT / journal / deposit / inventory / domain-enum / schema /
+migration change. No DB write. No commit / push / deploy.**
+
+**Canonical components (already existed — nothing new built):**
+- `EnumSelect` (`@/components/app/combobox`) — short fixed enums. Wraps the base-ui `Select`: themed
+  dark popup, `Portal` + `z-50` + `isolate`, viewport-anchored (`w-[var(--anchor-width)]`,
+  `max-h-[var(--available-height)]` + internal scroll), prefers-down, full keyboard model. **One change:**
+  now passes `items={options}` to the base-ui root so `<Select.Value>` renders the selected label when
+  closed (was showing the raw value in jsdom → broke `IncomeTaxPage.test`; correct behaviour anyway).
+- `SearchableSelect` (`@/components/app/combobox`) — long / searchable lists (GL accounts, asset /
+  entity pickers). Same dark popup + a filter box.
+
+**Audit — native `<select>` / `<NativeSelect>` count:** ~45 feature-file usages across 34 files
+**before → 0 after** (outside `src/components/ui/shadcn/native-select.tsx` + test files). Category C
+(`<select multiple>`) was empty; **category D (kept-native-for-a-reason) is empty** — everything
+migrated cleanly, including the import-wizard column-mapping grids.
+
+**Converted surfaces (by feature):**
+- **admin:** `CompanyForm` (legal entity type ← the QA-flagged field, accounting basis, VAT filing
+  frequency, VAT accounting basis, documents bank account), `UsersPage` (assign-role + per-row role),
+  `SuperUserDashboardPage` (per-row role).
+- **auth / settings:** `OnboardingPage` (legal entity type — `defaultValues` now seeds
+  `legalEntityType: 'private_company'` to preserve the old always-had-a-value native behaviour),
+  `SettingsPage` (theme).
+- **customers / suppliers:** `CustomerForm` (status, tax status, currency, payment terms),
+  `SupplierForm` (category, status, payment terms, payment method).
+- **employees:** `EmployeeForm` (status, employment type, pay frequency), `PostPayrollRunForm`
+  (net-pay account → `SearchableSelect`).
+- **assets:** `AssetForm` (category, depreciation method), `DisposeAssetForm` (asset picker + proceeds
+  account → `SearchableSelect`), `PostAcquisitionForm` (funding source → `SearchableSelect`).
+- **relatedParties:** `RelatedPartyForm` (relationship type), `RelatedPartyTransactionForm` (related
+  party picker).
+- **inventory:** `WarehouseForm` (status), `reports/DateRangeControl` (preset).
+- **accounting:** `AccountForm` (master type, normal balance → `EnumSelect`; parent account →
+  `SearchableSelect`), `JournalEntryForm` (per-line account → `SearchableSelect`).
+- **banking:** `BankAccountForm` (account type, bank name, status → `EnumSelect`; linked GL account →
+  `SearchableSelect`), `TransactionForm` (3 bank-account selects), `AllocationRows` (GL account →
+  `SearchableSelect`, VAT rate → `EnumSelect`), `ReconciliationWorkspace` (the raw `<select>` state
+  filter), `StatementImportWizard` (bank account, format override).
+- **tax:** `TaxRateForm` (VAT treatment, applies-to), `IncomeTaxPage` / `ProvisionalTaxPage` /
+  `DeferredTaxPage` (financial-year picker), `incomeTax/SbcEligibilityForm` (yes/no),
+  `incomeTax/AdjustmentsTable` (category, direction).
+- **compliance:** `CalculateScoreForm` (financial year), `ReportingFrameworkOverrideForm` (framework).
+- **financialInstruments:** `EclProvisionPage` (financial year).
+- **reports:** `cashFlow/CashFlowStatementPage`, `financialStatements/IncomeStatementPage`
+  (financial-year picker).
+- **import:** `ImportWizard` (target-field pickers, column-mapping grid, duplicate strategy).
+
+**Retained native selects:** NONE. `src/components/ui/shadcn/native-select.tsx` still exists (the
+component) but has zero callers; `src/styles/globals.css`'s `select option { … }` stopgap is left in
+place (harmless, and documents the reason the migration was needed).
+
+**RHF files** wrapped each field in `<Controller>` (precedent `ProductForm.tsx`); **useState files**
+went `value` / `onValueChange` direct. Option **values** (enum keys), labels, order, `id` (for
+`<FieldLabel htmlFor>`), `name`, disabled / invalid / `<FieldError>` render, and the controlled value
+on edit-existing-record are all preserved per field. The `AccountForm` master-type side effects
+(re-default `normalBalance`, clear `parentAccountId`) are kept inside `onValueChange`.
+
+**Guard:** `src/components/app/combobox/noNativeSelect.global.test.ts` — one test that walks all of
+`src/`, strips comments, and collects every file where `NativeSelect` / `/<select[\s/>]/` appears
+outside `native-select.tsx`, the (empty) `INTENTIONAL_NATIVE_SELECT` allow-list, and test files;
+asserts the list is empty (a failure names every offender). The two earlier per-form guards
+(`noNativeSelect.test.ts`, `noNativeSelectInTransactionForms.test.ts`) keep running with their
+explicit `MIGRATED_FORMS` lists.
+
+**Tests:** `tests/helpers/selectEnumOption.ts` (new shared helper). New `AccountForm.test.tsx` (6:
+EnumSelect + SearchableSelect render / selected-value / type-side-effect / id round-trip / type-scoped
+parent list). New `CompanyForm` "Legal entity type" block (4). Updated `CompanyForm`, `UsersPage`,
+`SettingsPage`, `StatementImportWizard`, `IncomeTaxPage` tests for the base-ui interaction model.
+**2178 → 2189 tests, 300 → 302 files**, all green.
+
+**Gate:** `npm run type-check` ✅ · `npm run lint` (`--max-warnings 0`) ✅ · `npm run test` ✅
+2189 / 302 · `npm run build` ✅.
+
+**Remaining visual / browser-only risks (fold into human QA 7A):** the `EnumSelect` /
+`SearchableSelect` popup on a real device — dark styling, downward opening near the viewport bottom,
+long-list internal scroll, `SearchableSelect` filter typing, long product / customer / supplier
+names wrapping vs truncating, layering above a `Dialog` / `Sheet` / drawer, ~400px mobile width
+(popup never wider than the viewport), keyboard nav (Tab / Enter / arrows / Esc), and specifically
+Companies → Edit → **Legal entity type**. No Chrome DevTools / Playwright MCP in this env — jsdom
+tests cover the wiring, not the rendered popup.
 
 ---
 

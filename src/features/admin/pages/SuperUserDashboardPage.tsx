@@ -4,13 +4,14 @@ import { SectionCard } from '@/components/app/page-header';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { useAuthStore } from '@/stores/authStore';
 import type { AuditLogAccessEntry, Company, Profile, ProfileRole } from '@/types';
 import { companyService } from '@/features/admin/services';
 import { profileService, auditLogAccessService } from '@/features/auth/services';
 
 const PROFILE_ROLES: ProfileRole[] = ['admin', 'accountant', 'manager', 'operator', 'viewer'];
+const PROFILE_ROLE_OPTIONS = PROFILE_ROLES.map((role) => ({ value: role, label: role }));
 
 function TenantDetail({ company, actorId }: { company: Company; actorId: string }) {
   const [users, setUsers] = useState<Profile[]>([]);
@@ -119,17 +120,13 @@ function TenantDetail({ company, actorId }: { company: Company; actorId: string 
                   <tr key={user.id} className="border-b border-border last:border-0">
                     <td className="px-4 py-2">{user.email ?? '—'}</td>
                     <td className="px-4 py-2">
-                      <NativeSelect
+                      <EnumSelect
                         value={user.role}
                         disabled={busyId === user.id}
-                        onChange={(e) => void changeRole(user.id, e.target.value as ProfileRole)}
-                      >
-                        {PROFILE_ROLES.map((role) => (
-                          <option key={role} value={role}>
-                            {role}
-                          </option>
-                        ))}
-                      </NativeSelect>
+                        aria-label={`Role for ${user.email ?? user.id}`}
+                        onValueChange={(value) => void changeRole(user.id, value as ProfileRole)}
+                        options={PROFILE_ROLE_OPTIONS}
+                      />
                     </td>
                     <td className="px-4 py-2">
                       <StatusBadge status={user.isActive ? 'active' : 'suspended'} />

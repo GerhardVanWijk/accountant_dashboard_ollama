@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { selectEnumOption } from '../../../../tests/helpers/selectEnumOption';
 import { SettingsPage } from './SettingsPage';
 import { profileService } from '@/features/auth/services';
 import { companyService } from '@/features/admin/services';
@@ -118,7 +119,8 @@ describe('SettingsPage', () => {
     );
 
     fireEvent.click(screen.getByRole('tab', { name: /preferences/i }));
-    fireEvent.change(await screen.findByLabelText(/theme/i), { target: { value: 'dark' } });
+    await screen.findByLabelText(/theme/i);
+    selectEnumOption(/theme/i, 'Dark');
 
     expect(useThemeStore.getState().theme).toBe('dark');
   });

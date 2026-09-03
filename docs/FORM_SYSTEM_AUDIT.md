@@ -8,10 +8,13 @@ Read-only. No code written.
 > - *"Dark selects: 100% done"* — the `globals.css` `select option { … }` rule is **not**
 >   honoured by the browser on the deploy; native option menus still render light. Fix is
 >   `EnumSelect` (small enums) / `SearchableSelect` + `*Combobox` (entity lists) — base-ui
->   dark popups, not CSS. **DONE:** every inventory + sales + purchases **transaction**
->   form (line editors, allocation, method, reason, invoice picker). **DEFERRED:** ~34
->   non-transaction `NativeSelect` forms (admin / tax-config / compliance / settings /
->   reports / banking-import) — global `select option {}` CSS is the partial mitigation.
+>   dark popups, not CSS. **DONE (transaction forms):** every inventory + sales + purchases
+>   transaction form (line editors, allocation, method, reason, invoice picker).
+>   **DONE (everything else, 2026-09-03 GLOBAL SELECT MIGRATION):** all ~34 non-transaction
+>   forms too (admin / auth / settings / customers / suppliers / employees / assets /
+>   relatedParties / accounting / banking / tax / compliance / financialInstruments / reports /
+>   import). **Zero** native `<select>` app-wide now, guarded by
+>   `src/components/app/combobox/noNativeSelect.global.test.ts`.
 > - *"Detail side: 100% unified via `RecordDetailSheet` — leave it"* — reversed. Complex
 >   records (line items / actions / accounting / tabs) move to **full-page routes**
 >   (`/module/records/:id`). **DONE:** all 13 (Sales Order, Inventory Item, Quote, Invoice,
@@ -28,7 +31,9 @@ Read-only. No code written.
 - **3 tabbed editable forms** (Customer, Supplier, Transaction) each hand-roll the fixed-height + internal-scroll recipe with 3 different heights (`min-h-0 flex-1`, `h-[28rem]`, `h-[30rem]`). `SettingsPage` + 2 detail pages have tabs with no height stabilisation.
 - **Dirty-state / unsaved-changes: nonexistent** — 0 files. Every modal discards edits silently on close.
 - **Validation UX split in two**: ~16 RHF+zod master-data forms (`Field`/`FieldError`, per-field errors) vs ~11 useState document/transaction forms (single `formError` banner, no per-field errors). Server-error placement inconsistent even within tier 1. No required-field markers anywhere.
-- **Dark selects: 100% done** — `globals.css` rule + `NativeSelect` everywhere, 0 raw `<select>`, nothing to do.
+- **Dark selects: 100% done** — ~~`globals.css` rule + `NativeSelect` everywhere~~ **superseded**: every
+  dropdown is now `EnumSelect` / `SearchableSelect` (base-ui dark popup); **0** native `<select>` /
+  `NativeSelect` app-wide, guarded by `noNativeSelect.global.test.ts` (2026-09-03).
 - **Detail side: 100% unified** — all 17 record-detail surfaces go through `RecordDetailSheet`; none internally tabbed. Leave it.
 
 ## `form-surface.ts` today

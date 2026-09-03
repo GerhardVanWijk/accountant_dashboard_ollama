@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Account, FixedAsset } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { SearchableSelect } from '@/components/app/combobox';
 import { formatCurrency } from '@/lib/app/format';
 import { FormBody, FormFooter } from '@/components/app/form';
 
@@ -47,13 +47,16 @@ export function PostAcquisitionForm({ asset, accounts, onSubmit, onCancel, onDir
       </p>
       <Field>
         <FieldLabel htmlFor="contraAccountId">Funding Source</FieldLabel>
-        <NativeSelect id="contraAccountId" value={contraAccountId} onChange={(e) => setContraAccountId(e.target.value)}>
-          {contraCandidates.map((account) => (
-            <option key={account.id} value={account.id}>
-              {account.code} - {account.name}
-            </option>
-          ))}
-        </NativeSelect>
+        <SearchableSelect
+          id="contraAccountId"
+          value={contraAccountId || null}
+          onChange={(value) => setContraAccountId(value ?? '')}
+          options={contraCandidates.map((account) => ({
+            value: account.id,
+            label: `${account.code} - ${account.name}`,
+            keywords: account.code,
+          }))}
+        />
         <FieldDescription>
           The account credited for the acquisition — Accounts Payable if bought on credit, Cash and Bank if paid
           immediately.

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { BankAccount, Company } from '@/types';
+import { selectEnumOption } from '../../../../tests/helpers/selectEnumOption';
 import { CompanyForm } from './CompanyForm';
 import {
   companyFormSchema,
@@ -77,11 +78,45 @@ function renderForm(overrides: Partial<Company> = {}) {
   return { onSubmit };
 }
 
+describe('CompanyForm — Legal entity type (Vertex EnumSelect)', () => {
+  it('renders the legal entity type as a base-ui combobox, not a native <select>', () => {
+    renderForm();
+    const trigger = screen.getByLabelText('Legal entity type');
+    expect(trigger).toHaveAttribute('role', 'combobox');
+    expect(trigger.tagName).not.toBe('SELECT');
+  });
+
+  it('shows an existing company\'s legal entity type as the selected value', () => {
+    renderForm({ legalEntityType: 'trust' });
+    expect(screen.getByLabelText('Legal entity type')).toHaveTextContent('Trust');
+  });
+
+  it('submits the enum value (not the label) when a new type is picked', async () => {
+    const onSubmit = vi.fn();
+    render(
+      <CompanyForm company={company} bankAccounts={bankAccounts} onSubmit={onSubmit} onCancel={vi.fn()} />,
+    );
+
+    selectEnumOption('Legal entity type', 'Trust');
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ legalEntityType: 'trust' });
+  });
+
+  it('keeps the other three selects on the same Vertex component', () => {
+    renderForm();
+    for (const label of ['Accounting basis', 'VAT filing frequency', 'VAT accounting basis']) {
+      expect(screen.getByLabelText(label)).toHaveAttribute('role', 'combobox');
+    }
+  });
+});
+
 describe('CompanyForm — Document & branding', () => {
   it('lists the company bank accounts plus a "None" option', () => {
     renderForm();
-    const select = screen.getByLabelText('Bank account shown on documents') as HTMLSelectElement;
-    const options = within(select).getAllByRole('option').map((o) => o.textContent);
+    fireEvent.click(screen.getByLabelText('Bank account shown on documents'));
+    const options = screen.getAllByRole('option').map((o) => o.textContent);
     expect(options[0]).toMatch(/None/);
     expect(options.some((o) => o?.includes('Business Cheque'))).toBe(true);
     expect(options.some((o) => o?.includes('Old Savings') && o?.includes('inactive'))).toBe(true);

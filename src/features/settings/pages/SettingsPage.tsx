@@ -7,7 +7,7 @@ import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Avatar, AvatarFallback } from '@/components/ui/shadcn/avatar';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { supabase } from '@/config/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore, type ThemePreference } from '@/stores/themeStore';
@@ -162,13 +162,12 @@ function PreferencesTab() {
     <SectionCard title="Display" description="How the workspace looks on this device.">
       <Field className="max-w-xs">
         <FieldLabel htmlFor="theme-preference">Theme</FieldLabel>
-        <NativeSelect id="theme-preference" value={theme} onChange={(e) => setTheme(e.target.value as ThemePreference)}>
-          {THEME_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </NativeSelect>
+        <EnumSelect
+          id="theme-preference"
+          value={theme}
+          onValueChange={(value) => setTheme(value as ThemePreference)}
+          options={THEME_OPTIONS}
+        />
       </Field>
     </SectionCard>
   );

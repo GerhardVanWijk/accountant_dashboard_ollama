@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 
 const FRAMEWORK_LABELS: Record<ReportingFramework, string> = {
   full_ifrs: 'Full IFRS',
@@ -58,14 +58,15 @@ export function ReportingFrameworkOverrideForm({ currentFramework, suggestedFram
       </p>
       <Field>
         <FieldLabel htmlFor="frameworkSelect">New reporting framework</FieldLabel>
-        <NativeSelect id="frameworkSelect" value={framework} onChange={(e) => setFramework(e.target.value as ReportingFramework)}>
-          {(Object.keys(FRAMEWORK_LABELS) as ReportingFramework[]).map((value) => (
-            <option key={value} value={value}>
-              {FRAMEWORK_LABELS[value]}
-              {value === suggestedFramework ? ' (suggested)' : ''}
-            </option>
-          ))}
-        </NativeSelect>
+        <EnumSelect
+          id="frameworkSelect"
+          value={framework}
+          onValueChange={(value) => setFramework(value as ReportingFramework)}
+          options={(Object.keys(FRAMEWORK_LABELS) as ReportingFramework[]).map((value) => ({
+            value,
+            label: `${FRAMEWORK_LABELS[value]}${value === suggestedFramework ? ' (suggested)' : ''}`,
+          }))}
+        />
       </Field>
       <Field>
         <FieldLabel htmlFor="frameworkReason">Reason (required)</FieldLabel>

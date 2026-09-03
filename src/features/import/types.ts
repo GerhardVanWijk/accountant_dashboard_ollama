@@ -115,7 +115,7 @@ export interface ImportExecutionSummary {
   draftRecordId?: string;
 }
 
-/** One extra input the wizard's Confirm step collects before `execute()` runs — e.g. "which frozen stock take are these counts for". Rendered as a `<select>`; the chosen value lands in `ImportExecuteOptions.params[key]`. */
+/** One extra input the wizard's Confirm step collects before `execute()` runs — e.g. "which frozen stock take are these counts for". Rendered as an EnumSelect dropdown; the chosen value lands in `ImportExecuteOptions.params[key]`. */
 export interface ImportConfirmField {
   key: string;
   label: string;

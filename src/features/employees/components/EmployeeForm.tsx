@@ -8,9 +8,13 @@ import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { EMPLOYMENT_TYPE_LABELS, EMPLOYEE_STATUS_LABELS, PAY_FREQUENCY_LABELS, PAYROLL_CURRENCY } from '../constants';
 import type { CreateEmployeeDTO, UpdateEmployeeDTO } from '../services';
+
+const EMPLOYEE_STATUS_OPTIONS = Object.entries(EMPLOYEE_STATUS_LABELS).map(([value, label]) => ({ value, label }));
+const EMPLOYMENT_TYPE_OPTIONS = Object.entries(EMPLOYMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }));
+const PAY_FREQUENCY_OPTIONS = Object.entries(PAY_FREQUENCY_LABELS).map(([value, label]) => ({ value, label }));
 
 function isNonNegativeNumber(value: string): boolean {
   return value.trim() !== '' && !Number.isNaN(Number(value)) && Number(value) >= 0;
@@ -128,13 +132,20 @@ export function EmployeeForm({ employee, onSubmit, onCancel, onDirtyChange }: Em
         </Field>
         <Field>
           <FieldLabel htmlFor="status">Status</FieldLabel>
-          <NativeSelect id="status" {...register('status')}>
-            {Object.entries(EMPLOYEE_STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="status"
+            render={({ field, fieldState }) => (
+              <EnumSelect
+                id="status"
+                name="status"
+                value={field.value ?? 'active'}
+                onValueChange={field.onChange}
+                invalid={Boolean(fieldState.error)}
+                options={EMPLOYEE_STATUS_OPTIONS}
+              />
+            )}
+          />
         </Field>
       </div>
 
@@ -181,23 +192,37 @@ export function EmployeeForm({ employee, onSubmit, onCancel, onDirtyChange }: Em
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Field>
           <FieldLabel htmlFor="employmentType">Employment Type</FieldLabel>
-          <NativeSelect id="employmentType" {...register('employmentType')}>
-            {Object.entries(EMPLOYMENT_TYPE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="employmentType"
+            render={({ field, fieldState }) => (
+              <EnumSelect
+                id="employmentType"
+                name="employmentType"
+                value={field.value ?? 'permanent'}
+                onValueChange={field.onChange}
+                invalid={Boolean(fieldState.error)}
+                options={EMPLOYMENT_TYPE_OPTIONS}
+              />
+            )}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="payFrequency">Pay Frequency</FieldLabel>
-          <NativeSelect id="payFrequency" {...register('payFrequency')}>
-            {Object.entries(PAY_FREQUENCY_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="payFrequency"
+            render={({ field, fieldState }) => (
+              <EnumSelect
+                id="payFrequency"
+                name="payFrequency"
+                value={field.value ?? 'monthly'}
+                onValueChange={field.onChange}
+                invalid={Boolean(fieldState.error)}
+                options={PAY_FREQUENCY_OPTIONS}
+              />
+            )}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="startDate">Start Date</FieldLabel>

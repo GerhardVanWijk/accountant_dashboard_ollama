@@ -17,11 +17,15 @@ each section.
 The record-detail full-page migration (increments 1 + 2) is committed + pushed to the branch and
 awaiting human browser QA before any merge to `main`. Carried forward, **not fixed**, none blocking:
 - **`MockStockLotRepository` / FIFO** — see the entry immediately below.
-- **Deferred configuration / admin `NativeSelect` sweep** (~34 non-transaction forms: admin, tax-config,
-  compliance, settings, reports date/scope, banking import, `AccountForm`/`JournalEntryForm`/`EmployeeForm`
-  /`AssetForm`/`WarehouseForm`/`CustomerForm`/`SupplierForm`/`TaxRateForm` etc.). Lower-traffic; the global
-  `@layer base` `select option { … }` CSS still applies as partial mitigation. The **transaction / document**
-  forms (line editors, allocation, payment method) are done.
+- ~~**Deferred configuration / admin `NativeSelect` sweep**~~ — **RESOLVED 2026-09-03** (GLOBAL SELECT
+  MIGRATION, `docs/CURRENT_TASKS.md`). Every non-transaction native `<select>` migrated to `EnumSelect` /
+  `SearchableSelect`; **zero** native `<select>` app-wide outside `native-select.tsx` + test files, guarded
+  by `src/components/app/combobox/noNativeSelect.global.test.ts`. Pure UI, no domain/DB change.
+  Committed + pushed to the branch 2026-09-03 (`main` not merged). **Real-browser check of the new
+  popups is the one remaining risk** — dark styling, downward opening near the viewport bottom,
+  long-list scroll, `SearchableSelect` filter typing, long entity-name wrapping, layering over a
+  Dialog/Sheet/drawer, ~400px mobile width, keyboard nav, and Companies → Edit → Legal entity type.
+  jsdom tests cover the wiring only; folds into human QA 7A.
 - **Journal Entry detail is still sheet-backed** — every new record page's "View journal entry" link opens
   `/accounting/journals?record=<id>` (the side-sheet). A full-page `JournalEntryDetailPage` is a later increment.
 - **GL Account / Fixed Asset / Lease retained as side-sheets** this increment — the three borderline records

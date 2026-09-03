@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, FileUp, Loader2 } from 'lucide-react';
 import { FormShell, FormHeader, FormBody } from '@/components/app/form';
 import { Button } from '@/components/ui/shadcn/button';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { DuplicateStrategy, ImportAdapter, ImportRowResult } from '../types';
 import { useImportWizard } from '../hooks/useImportWizard';
@@ -273,14 +273,12 @@ function TargetStep({
             {field.label}
             {field.required && ' *'}
           </label>
-          <NativeSelect id={`target-${field.key}`} value={values[field.key]} onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}>
-            <option value="">Select…</option>
-            {field.options.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </NativeSelect>
+          <EnumSelect
+            id={`target-${field.key}`}
+            value={values[field.key]}
+            onValueChange={(value) => setValues((prev) => ({ ...prev, [field.key]: value }))}
+            options={[{ value: '', label: 'Select…' }, ...field.options]}
+          />
           {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
           {field.options.length === 0 && <p className="text-xs text-status-warning">None available — nothing eligible was found.</p>}
         </div>
@@ -331,18 +329,15 @@ function MappingStep({
               {field.label}
               {field.required && ' *'}
             </label>
-            <NativeSelect
+            <EnumSelect
               id={`map-${field.key}`}
-              value={mapping[field.key] ?? ''}
-              onChange={(e) => onChange({ ...mapping, [field.key]: e.target.value === '' ? undefined : Number(e.target.value) })}
-            >
-              <option value="">— not mapped —</option>
-              {headers.map((h, i) => (
-                <option key={i} value={i}>
-                  {h || `Column ${i + 1}`}
-                </option>
-              ))}
-            </NativeSelect>
+              value={mapping[field.key] === undefined ? '' : String(mapping[field.key])}
+              onValueChange={(value) => onChange({ ...mapping, [field.key]: value === '' ? undefined : Number(value) })}
+              options={[
+                { value: '', label: '— not mapped —' },
+                ...headers.map((h, i) => ({ value: String(i), label: h || `Column ${i + 1}` })),
+              ]}
+            />
           </div>
         ))}
       </div>
@@ -417,11 +412,16 @@ function ReviewStep({
             <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             {counts.duplicate} row{counts.duplicate === 1 ? '' : 's'} already exist. Choose how to handle them.
           </p>
-          <NativeSelect aria-label="Duplicate handling" value={duplicateStrategy} onChange={(e) => onDuplicateStrategyChange(e.target.value as DuplicateStrategy)}>
-            <option value="skip">Skip existing</option>
-            <option value="update">Update existing</option>
-            <option value="error">Treat as an error</option>
-          </NativeSelect>
+          <EnumSelect
+            aria-label="Duplicate handling"
+            value={duplicateStrategy}
+            onValueChange={(value) => onDuplicateStrategyChange(value as DuplicateStrategy)}
+            options={[
+              { value: 'skip', label: 'Skip existing' },
+              { value: 'update', label: 'Update existing' },
+              { value: 'error', label: 'Treat as an error' },
+            ]}
+          />
         </div>
       )}
 

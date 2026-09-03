@@ -6,7 +6,7 @@ import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
 import { FormShell, FormHeader } from '@/components/app/form';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { RecordLink } from '@/components/app/record-link';
 import { formatCurrency } from '@/lib/app/format';
 import { SYSTEM_USER_ID } from '@/features/accounting/services';
@@ -86,17 +86,12 @@ export function IncomeTaxPage() {
         description="Corporate income tax computation, SBC eligibility, and the accounting-profit-to-taxable-income reconciliation."
         actions={
           sortedFinancialYears.length > 0 ? (
-            <NativeSelect
+            <EnumSelect
               aria-label="Financial Year"
               value={activeFinancialYearId ?? ''}
-              onChange={(e) => setSelectedFinancialYearId(e.target.value)}
-            >
-              {sortedFinancialYears.map((year) => (
-                <option key={year.id} value={year.id}>
-                  {year.name}
-                </option>
-              ))}
-            </NativeSelect>
+              onValueChange={setSelectedFinancialYearId}
+              options={sortedFinancialYears.map((year) => ({ value: year.id, label: year.name }))}
+            />
           ) : undefined
         }
       />

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import type { CreateWarehouseDTO, UpdateWarehouseDTO } from '../services/warehouseService';
 
@@ -125,10 +125,23 @@ export function WarehouseForm({ warehouse, onSubmit, onCancel, onDirtyChange }: 
         />
         <Field>
           <FieldLabel htmlFor="wh-status">Status</FieldLabel>
-          <NativeSelect id="wh-status" {...register('status')}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="status"
+            render={({ field, fieldState }) => (
+              <EnumSelect
+                id="wh-status"
+                name="status"
+                value={field.value ?? 'active'}
+                onValueChange={field.onChange}
+                invalid={Boolean(fieldState.error)}
+                options={[
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' },
+                ]}
+              />
+            )}
+          />
         </Field>
       </div>
       </FormBody>

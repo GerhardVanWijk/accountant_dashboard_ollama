@@ -3,7 +3,7 @@ import type { Account } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { SearchableSelect } from '@/components/app/combobox';
 
 export interface PostPayrollRunFormProps {
   accounts: Account[];
@@ -39,13 +39,16 @@ export function PostPayrollRunForm({ accounts, onSubmit, onCancel, onDirtyChange
       <FormBody>
       <Field>
         <FieldLabel htmlFor="contraAccountId">Net Pay Account</FieldLabel>
-        <NativeSelect id="contraAccountId" value={contraAccountId} onChange={(e) => setContraAccountId(e.target.value)}>
-          {accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {account.code} - {account.name}
-            </option>
-          ))}
-        </NativeSelect>
+        <SearchableSelect
+          id="contraAccountId"
+          value={contraAccountId || null}
+          onChange={(value) => setContraAccountId(value ?? '')}
+          options={accounts.map((account) => ({
+            value: account.id,
+            label: `${account.code} - ${account.name}`,
+            keywords: account.code,
+          }))}
+        />
         <FieldDescription>
           Pick Cash and Bank if net pay is disbursed immediately, or Net Pay Payable if the EFT batch runs later.
           PAYE/UIF/SDL always post to their own dedicated liability accounts regardless of this choice.

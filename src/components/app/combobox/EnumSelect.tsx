@@ -50,7 +50,13 @@ export function EnumSelect({
   'aria-label': ariaLabel,
 }: EnumSelectProps) {
   return (
-    <Select value={value} onValueChange={(v) => onValueChange(String(v ?? ''))} name={name} disabled={disabled}>
+    <Select
+      items={options}
+      value={value}
+      onValueChange={(v) => onValueChange(String(v ?? ''))}
+      name={name}
+      disabled={disabled}
+    >
       <SelectTrigger
         id={id}
         aria-label={ariaLabel}

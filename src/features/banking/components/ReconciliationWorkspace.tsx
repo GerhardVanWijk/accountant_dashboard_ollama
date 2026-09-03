@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { EnumSelect } from '@/components/app/combobox';
 import {
   RecordDetailField,
   RecordDetailSection,
@@ -408,19 +409,19 @@ export function ReconciliationWorkspace(props: ReconciliationWorkspaceProps) {
                 aria-label="Filter statement lines"
                 className="h-7 min-w-32 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
-              <select
+              <EnumSelect
                 aria-label="Filter by state"
                 value={stateFilter}
-                onChange={(e) => setStateFilter(e.target.value as LineDisplayState | 'all')}
-                className="h-7 rounded-md border border-input bg-transparent px-1.5 text-xs"
-              >
-                <option value="all">All states</option>
-                {(Object.keys(STATE_META) as LineDisplayState[]).map((s) => (
-                  <option key={s} value={s}>
-                    {STATE_META[s].label} ({stateCounts[s]})
-                  </option>
-                ))}
-              </select>
+                onValueChange={(value) => setStateFilter(value as LineDisplayState | 'all')}
+                className="h-7 w-auto min-w-36 text-xs"
+                options={[
+                  { value: 'all', label: 'All states' },
+                  ...(Object.keys(STATE_META) as LineDisplayState[]).map((s) => ({
+                    value: s,
+                    label: `${STATE_META[s].label} (${stateCounts[s]})`,
+                  })),
+                ]}
+              />
               <span className="shrink-0 text-xs text-muted-foreground">{filteredRows.length}</span>
             </div>
             <div className="app-scroll max-h-[28rem] overflow-y-auto">

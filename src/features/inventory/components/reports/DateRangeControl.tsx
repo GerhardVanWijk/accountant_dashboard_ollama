@@ -1,7 +1,12 @@
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
-import { NativeSelect } from '@/components/ui/shadcn/native-select';
+import { EnumSelect } from '@/components/app/combobox';
 import { DATE_RANGE_PRESET_LABELS, type DateRangePreset } from '../../reports/dateRange';
+
+const DATE_RANGE_PRESET_OPTIONS = (Object.keys(DATE_RANGE_PRESET_LABELS) as DateRangePreset[]).map((p) => ({
+  value: p,
+  label: DATE_RANGE_PRESET_LABELS[p],
+}));
 
 interface DateRangeControlProps {
   preset: DateRangePreset;
@@ -27,17 +32,12 @@ export function DateRangeControl({ preset, onPresetChange, start, end, onCustomC
     <div className="flex flex-wrap items-end gap-2">
       <Field className="w-40">
         <FieldLabel htmlFor={`${idPrefix}-preset`}>Date range</FieldLabel>
-        <NativeSelect
+        <EnumSelect
           id={`${idPrefix}-preset`}
           value={preset}
-          onChange={(e) => onPresetChange(e.target.value as DateRangePreset)}
-        >
-          {(Object.keys(DATE_RANGE_PRESET_LABELS) as DateRangePreset[]).map((p) => (
-            <option key={p} value={p}>
-              {DATE_RANGE_PRESET_LABELS[p]}
-            </option>
-          ))}
-        </NativeSelect>
+          onValueChange={(v) => onPresetChange(v as DateRangePreset)}
+          options={DATE_RANGE_PRESET_OPTIONS}
+        />
       </Field>
       <Field className="w-36">
         <FieldLabel htmlFor={`${idPrefix}-start`}>From</FieldLabel>
