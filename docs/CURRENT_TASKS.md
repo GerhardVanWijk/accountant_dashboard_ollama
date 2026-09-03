@@ -14,7 +14,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` complete
 - Increment 1 — record-page framework, Sales Order + Inventory Product full pages, tax-rate wiring fix, inventory-cluster native-`<select>` sweep.
 - Increment 2 — remaining 12 record types migrated to full pages, 15 detail sheets deleted, app-wide **transaction-form** dropdown sweep, tax-rate regression guard.
 
-Gate green on `phase-9b-relationship-design-and-code`: tsc ✅ · eslint `--max-warnings 0` ✅ · **2052 tests / 293 files** ✅ · `vite build` ✅. Committed + pushed to the branch (no merge to `main`).
+Gate green on `phase-9b-relationship-design-and-code`: tsc ✅ · eslint `--max-warnings 0` ✅ · **2052 tests / 293 files** ✅ · `vite build` ✅. Committed `3318e7b` + pushed to the branch (no merge to `main`).
+
+**Cloudflare Pages preview deployment** (auto-built from the branch push — production `main` / `https://vertex-accounting.pages.dev` untouched):
+- Branch preview: **https://phase-9b-relationship-design.vertex-accounting.pages.dev**
+- This commit: https://6fb60958.vertex-accounting.pages.dev
 
 **BLOCKING FINAL PRODUCTION DEPLOYMENT**
 - Human visual / browser QA of the deployment candidate (never run in this env — no Chrome DevTools / Playwright MCP).
