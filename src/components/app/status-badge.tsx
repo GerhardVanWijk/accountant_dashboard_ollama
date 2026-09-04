@@ -153,6 +153,13 @@ const statusMap: Record<string, { tone: Tone; label: string }> = {
   expired: { tone: 'neutral', label: 'Expired' },
   confirmed: { tone: 'info', label: 'Confirmed' },
   fulfilled: { tone: 'positive', label: 'Fulfilled' },
+  /* Sales Order derived fulfilment / invoicing progress (Phase 5B.1) —
+   * computed from linked invoice lines, never a stored status. */
+  not_fulfilled: { tone: 'neutral', label: 'Not fulfilled' },
+  partially_fulfilled: { tone: 'warning', label: 'Partially fulfilled' },
+  not_invoiced: { tone: 'neutral', label: 'Not invoiced' },
+  partially_invoiced: { tone: 'warning', label: 'Partially invoiced' },
+  fully_invoiced: { tone: 'positive', label: 'Fully invoiced' },
 
   /* Inventory workflows (Phase 5) — StockAdjustment/StockTransfer/StockTake/
    * SupplierReturn/OpeningStockBatch statuses (src/types/stockAdjustment.ts

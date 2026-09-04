@@ -33,7 +33,9 @@ import { useStockAlerts } from '../hooks/useStockAlerts';
 import { useWarehouses } from '../hooks/useWarehouses';
 import { useStockMovements } from '../hooks/useStockMovements';
 import { useStockBalances } from '../hooks/useStockBalances';
+import { useStockCommitments } from '../hooks/useStockCommitments';
 import { useProductCategories } from '../hooks/useProductCategories';
+import { applyStockCommitments } from '../utils/applyStockCommitments';
 import { InventoryTable } from '../components/InventoryTable';
 import { ProductFormModal } from '../components/ProductFormModal';
 import { calculateInventoryTotals } from '../utils/calculateInventoryTotals';
@@ -112,6 +114,7 @@ export function InventoryOverviewPage() {
   const { warehouses } = useWarehouses();
   const { movements } = useStockMovements();
   const { balances } = useStockBalances();
+  const { commitments } = useStockCommitments();
   const { categories } = useProductCategories();
   const { suppliers } = useSuppliers();
   const navigate = useNavigate();
@@ -124,6 +127,11 @@ export function InventoryOverviewPage() {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [visibleRows, setVisibleRows] = useState<InventoryRow[]>([]);
   const [activeFilters, setActiveFilters] = useState<{ label: string; value: string }[]>([]);
+
+  // Feed the inventory register balances hydrated with the derived committed
+  // quantity (Phase 5A) — storage still holds 0; `buildInventoryRows` reads
+  // `quantityCommitted` off the rows it is given, no signature change.
+  const hydratedBalances = useMemo(() => applyStockCommitments(balances, commitments), [balances, commitments]);
 
   const totals = calculateInventoryTotals(products);
   const trackedInStock = products.filter((p) => p.trackInventory && p.quantityOnHand > 0).length;
@@ -292,7 +300,7 @@ export function InventoryOverviewPage() {
         <SectionCard title="Inventory register" description="Every item with its stock position, valuation and margin." bodyClassName="p-4 sm:p-5">
           <InventoryTable
             products={products}
-            balances={balances}
+            balances={hydratedBalances}
             categories={categories}
             suppliers={suppliers}
             warehouses={warehouses}

@@ -1,0 +1,21 @@
+-- 0048_sales_order_status_closed
+-- Phase 5B FINAL. APPLIED to project bcaffvpibpitpuqglszn 2026-09-04
+-- (recorded version 20260904115109). Adds the `closed` commercial status to
+-- `sales_order_status`.
+--
+-- `closed` = the business intentionally ABANDONED the un-invoiced remainder of a
+-- Sales Order (e.g. the customer cancelled part of the order after it was
+-- partly invoiced). It is DISTINCT from `fulfilled`, which means every ordered
+-- quantity was actually supplied through posted invoices. Closing the remainder
+-- has NO GL / stock / invoice / commitment effect — it just ends the commercial
+-- commitment, so `StockCommitmentService` (which only commits `confirmed`
+-- orders) stops reserving the un-fulfilled quantity.
+--
+-- ADDITIVE ONLY. `ALTER TYPE ... ADD VALUE` cannot run inside a transaction and
+-- cannot be rolled back — so this migration contains nothing else. It is inert
+-- until Phase 5B code that reads/writes `closed` is deployed; every existing
+-- row keeps its current status.
+--
+-- `IF NOT EXISTS` makes the migration idempotent (Postgres 12+).
+
+alter type public.sales_order_status add value if not exists 'closed';

@@ -139,3 +139,99 @@ describe('SalesLineItemsEditor product picker', () => {
     expect(added.productId).toBeUndefined();
   });
 });
+
+describe('SalesLineItemsEditor stock availability caption (Phase 5A)', () => {
+  it('shows On hand / Committed / Available, netting the derived external commitment', () => {
+    const products = [makeProduct({ quantityOnHand: 20 })];
+    render(
+      <SalesLineItemsEditor
+        lineItems={[makeLine({ productId: 'prod_1', quantity: 5 })]}
+        onChange={vi.fn()}
+        taxRates={[]}
+        products={products}
+        showStockAvailability
+        externalCommittedFor={() => 8}
+      />,
+    );
+    // 20 on hand − 8 committed elsewhere = 12 available; ordering 5 is fine.
+    expect(screen.getByText(/On hand 20 · Committed 8 · Available 12/)).toBeInTheDocument();
+    expect(screen.queryByText(/more than the/)).not.toBeInTheDocument();
+  });
+
+  it('warns (without blocking) when a line orders more than available, citing the committed units', () => {
+    const products = [makeProduct({ quantityOnHand: 10 })];
+    render(
+      <SalesLineItemsEditor
+        lineItems={[makeLine({ productId: 'prod_1', quantity: 9 })]}
+        onChange={vi.fn()}
+        taxRates={[]}
+        products={products}
+        showStockAvailability
+        externalCommittedFor={() => 6}
+      />,
+    );
+    // 10 − 6 = 4 available, line orders 9.
+    expect(
+      screen.getByText(/this line orders 9, more than the 4 available \(6 committed to other confirmed orders\)/),
+    ).toBeInTheDocument();
+  });
+
+  it('uses warehouse-scoped on-hand (not company-wide) when a line targets a specific warehouse', () => {
+    const products = [makeProduct({ quantityOnHand: 100 })]; // company-wide
+    const warehouses = [
+      { id: 'wh_a', name: 'A', code: 'A', isDefault: true, status: 'active' as const, createdAt: '', updatedAt: '' },
+      { id: 'wh_b', name: 'B', code: 'B', isDefault: false, status: 'active' as const, createdAt: '', updatedAt: '' },
+    ];
+    render(
+      <SalesLineItemsEditor
+        lineItems={[makeLine({ productId: 'prod_1', quantity: 9, warehouseId: 'wh_b' })]}
+        onChange={vi.fn()}
+        taxRates={[]}
+        products={products}
+        warehouses={warehouses}
+        showStockAvailability
+        externalCommittedFor={() => 0}
+        onHandFor={(_p, wh) => (wh === 'wh_b' ? 6 : undefined)}
+      />,
+    );
+    // warehouse B has only 6 on hand -> available 6, orders 9 -> shortage against 6, not 100.
+    expect(screen.getByText(/On hand 6 · Committed 0 · Available 6/)).toBeInTheDocument();
+    expect(screen.getByText(/this line orders 9, more than the 6 available/)).toBeInTheDocument();
+  });
+
+  it('separates "other orders" from "other lines on this order" in the shortage caption', () => {
+    const products = [makeProduct({ quantityOnHand: 10 })];
+    render(
+      <SalesLineItemsEditor
+        lineItems={[
+          makeLine({ productId: 'prod_1', quantity: 7 }),
+          makeLine({ productId: 'prod_1', quantity: 2 }),
+        ]}
+        onChange={vi.fn()}
+        taxRates={[]}
+        products={products}
+        showStockAvailability
+        externalCommittedFor={() => 5}
+      />,
+    );
+    // line 1: on hand 10, external 5 + 2 on the other line here = 7 committed, available 3, orders 7.
+    expect(
+      screen.getByText(
+        /this line orders 7, more than the 3 available \(5 committed to other confirmed orders, 2 to other lines on this order\)/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('no caption when showStockAvailability is off', () => {
+    render(
+      <SalesLineItemsEditor
+        lineItems={[makeLine({ productId: 'prod_1', quantity: 5 })]}
+        onChange={vi.fn()}
+        taxRates={[]}
+        products={[makeProduct()]}
+        externalCommittedFor={() => 3}
+      />,
+    );
+    expect(screen.queryByText(/On hand/)).not.toBeInTheDocument();
+  });
+});

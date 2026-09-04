@@ -95,6 +95,8 @@ function setup(
     /** omit the default warehouse entirely (no-warehouse-configured case). */
     noDefaultWarehouse?: boolean;
     lineProjector?: IDocumentLineProjector;
+    /** Phase 5B.2: the post-commit Sales Order status-sync callback. */
+    onInvoicePosted?: (invoice: Invoice) => Promise<void>;
   } = {},
 ) {
   const accountRepository = new MockAccountRepository(seedAccounts);
@@ -162,6 +164,7 @@ function setup(
     warehouses,
     options.lineProjector,
     auditLog,
+    options.onInvoicePosted,
   );
 
   const getJE = (id: string | undefined) => store.journalEntries.find((e) => e.id === id);
@@ -675,6 +678,51 @@ describe('InvoiceService', () => {
       expect(store.journalEntries).toHaveLength(1);
       expect(store.movements.filter((m) => m.type === 'sale')).toHaveLength(1);
       expect(store.products.get('prod_1')!.quantityOnHand).toBe(9_995);
+    });
+  });
+
+  describe('postInvoice — onInvoicePosted callback (Phase 5B.2 sales-order status sync)', () => {
+    async function postDraft(
+      onInvoicePosted: (invoice: Invoice) => Promise<void>,
+      invoiceOverrides: Partial<Parameters<InvoiceService['createInvoice']>[0]> = {},
+    ) {
+      const { service } = setup([], { onInvoicePosted });
+      const draft = await service.createInvoice({
+        invoiceNumber: 'INV-2026-CB',
+        customerId: 'cust_test',
+        issueDate: '2026-08-21T00:00:00.000Z',
+        dueDate: '2026-09-21T00:00:00.000Z',
+        lineItems: [],
+        subtotal: 100,
+        taxTotal: 0,
+        total: 100,
+        amountPaid: 0,
+        currency: 'ZAR',
+        status: 'draft',
+        ...invoiceOverrides,
+      });
+      return { service, posted: await service.postInvoice(draft.id) };
+    }
+
+    it('fires with the posted invoice AFTER the status transition when salesOrderId is set', async () => {
+      const seen: Invoice[] = [];
+      const { posted } = await postDraft(async (inv) => { seen.push(inv); }, { salesOrderId: 'so_cb' });
+      expect(seen).toHaveLength(1);
+      expect(seen[0].id).toBe(posted.id);
+      expect(seen[0].status).toBe('sent');
+      expect(seen[0].journalEntryId).toBeDefined();
+    });
+
+    it('does NOT fire for an invoice with no salesOrderId', async () => {
+      const cb = vi.fn(async () => {});
+      await postDraft(cb);
+      expect(cb).not.toHaveBeenCalled();
+    });
+
+    it('is best-effort — a throwing callback never fails or rolls back the post', async () => {
+      const { posted } = await postDraft(async () => { throw new Error('sync boom'); }, { salesOrderId: 'so_cb' });
+      expect(posted.status).toBe('sent');
+      expect(posted.journalEntryId).toBeDefined();
     });
   });
 

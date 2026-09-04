@@ -23,6 +23,25 @@ export interface SalesLineItemsEditorProps {
    * Part R): a Sales Order stays a non-posting commitment document.
    */
   showStockAvailability?: boolean;
+  /**
+   * Derived stock commitment (Phase 5A): units of a product already committed
+   * to OTHER confirmed sales orders, for `(productId, warehouseId)` — the
+   * line's warehouse when set, otherwise summed across warehouses. Passed down
+   * by `SalesOrderForm` from `useStockCommitments()`. When omitted, the stock
+   * caption falls back to on-hand only. This never reserves stock, posts, or
+   * blocks submit.
+   */
+  externalCommittedFor?: (productId: string, warehouseId?: string) => number;
+  /**
+   * Per-warehouse on-hand quantity for `(productId, warehouseId)` from
+   * `stock_balances` — used ONLY when a line carries an explicit `warehouseId`
+   * (multi-warehouse tenants), so the "On hand" figure is at the SAME
+   * warehouse scope as `externalCommittedFor`. Returns `undefined` when there
+   * is no balance row; the caption then falls back to the company-wide
+   * `product.quantityOnHand`. Fixes the Phase 5A caption mixing company-wide
+   * on-hand with warehouse-scoped committed (docs/KNOWN_ISSUES.md).
+   */
+  onHandFor?: (productId: string, warehouseId?: string) => number | undefined;
   disabled?: boolean;
 }
 
@@ -46,6 +65,8 @@ export function SalesLineItemsEditor({
   products = [],
   warehouses = [],
   showStockAvailability = false,
+  externalCommittedFor,
+  onHandFor,
   disabled = false,
 }: SalesLineItemsEditorProps) {
   const showWarehouseColumn = warehouses.length > 1;
@@ -68,10 +89,21 @@ export function SalesLineItemsEditor({
     if (!line?.productId) return null;
     const product = products.find((p) => p.id === line.productId);
     if (!product || !product.trackInventory) return null;
-    const onHand = product.quantityOnHand;
-    const available = onHand - committedElsewhere(product.id, index);
-    const short = (line.quantity || 0) > available;
-    return { onHand, available, short, ordered: line.quantity || 0 };
+    // Keep on-hand and committed at the SAME warehouse scope: when the line
+    // targets a specific warehouse use that warehouse's on-hand + committed,
+    // otherwise the company-wide on-hand + committed summed across warehouses.
+    const scopedWarehouseId = line.warehouseId;
+    const onHand =
+      (scopedWarehouseId ? onHandFor?.(product.id, scopedWarehouseId) : undefined) ?? product.quantityOnHand;
+    // Derived commitment to OTHER confirmed sales orders (Phase 5A).
+    const externalCommitted = externalCommittedFor?.(product.id, scopedWarehouseId) ?? 0;
+    // Units this same document already spoke for on its other lines.
+    const onOtherLinesHere = committedElsewhere(product.id, index);
+    const committed = externalCommitted + onOtherLinesHere;
+    const available = onHand - committed;
+    const ordered = line.quantity || 0;
+    const short = ordered > available;
+    return { onHand, committed, externalCommitted, onOtherLinesHere, available, short, ordered };
   }
 
   const gridCols = showWarehouseColumn
@@ -235,12 +267,19 @@ export function SalesLineItemsEditor({
             <p
               className={`px-1 text-xs tabular-nums sm:px-0 ${availability.short ? 'text-status-warning' : 'text-muted-foreground'}`}
             >
-              On hand {availability.onHand.toLocaleString('en-ZA')} · Available{' '}
+              On hand {availability.onHand.toLocaleString('en-ZA')} · Committed{' '}
+              {availability.committed.toLocaleString('en-ZA')} · Available{' '}
               {availability.available.toLocaleString('en-ZA')}
               {availability.short && (
                 <>
                   {' '}
-                  — this line orders {availability.ordered.toLocaleString('en-ZA')}, more than is available.
+                  — this line orders {availability.ordered.toLocaleString('en-ZA')}, more than the{' '}
+                  {availability.available.toLocaleString('en-ZA')} available (
+                  {availability.externalCommitted.toLocaleString('en-ZA')} committed to other confirmed orders
+                  {availability.onOtherLinesHere > 0
+                    ? `, ${availability.onOtherLinesHere.toLocaleString('en-ZA')} to other lines on this order`
+                    : ''}
+                  ).
                 </>
               )}
             </p>

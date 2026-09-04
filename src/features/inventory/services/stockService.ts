@@ -2,6 +2,12 @@ import type { ID, Product, StockMovement, StockMovementType } from '@/types';
 import type { IStockMovementRepository } from '../repositories/IStockMovementRepository';
 import type { IProductRepository } from '../repositories/IProductRepository';
 import { productRepository, stockMovementRepository } from '../repositories/instances';
+import {
+  commitmentKey,
+  getCommittedForProduct,
+  stockCommitmentService,
+  type StockCommitmentLookup,
+} from './stockCommitmentService';
 
 function nowISO(): string {
   return new Date().toISOString();
@@ -74,6 +80,12 @@ export class StockService {
   constructor(
     private readonly movementRepository: IStockMovementRepository,
     private readonly productRepository: IProductRepository,
+    /**
+     * Derived stock commitment (Phase 5A). Defaults to the shared singleton;
+     * a test injects a fake so `getQuantityAvailable` can be exercised without
+     * a Sales Order repository.
+     */
+    private readonly commitmentSource: StockCommitmentLookup = stockCommitmentService,
   ) {}
 
   /** The full append-only ledger, newest-independent order as stored (see docs/INVENTORY_DOMAIN.md). */
@@ -97,17 +109,19 @@ export class StockService {
    * Quantity Available = Quantity on Hand − Quantity Committed + Quantity
    * on Order (docs/INVENTORY_DOMAIN.md § Stock Quantity Attributes).
    *
-   * Quantity Committed (reserved against open Sales Orders) and Quantity on
-   * Order (incoming against open Purchase Orders) are always 0 for now —
-   * Sales Orders / Purchase Orders don't exist yet, they land in Phase 2.
-   * The full formula is still applied so this function's shape/contract
-   * doesn't need to change once those modules exist; only the two inputs
-   * go from hardcoded 0 to real aggregates.
+   * Quantity Committed is the derived stock commitment (Phase 5A): the sum of
+   * confirmed Sales Order line quantities for this product (scoped to
+   * `warehouseId` when given, else across every warehouse). It is NOT stored
+   * and NOT a stock movement. Quantity on Order (incoming against open
+   * Purchase Orders) stays 0 until Phase 6.
    */
   async getQuantityAvailable(productId: ID, warehouseId?: ID): Promise<number> {
     const quantityOnHand = await this.getQuantityOnHand(productId, warehouseId);
-    const quantityCommitted = 0; // TODO(Phase 2): sum reservations from open Sales Orders
-    const quantityOnOrder = 0; // TODO(Phase 2): sum incoming quantity from open Purchase Orders
+    const commitments = await this.commitmentSource.getCommitmentMap();
+    const quantityCommitted = warehouseId
+      ? commitments.get(commitmentKey(productId, warehouseId)) ?? 0
+      : getCommittedForProduct(commitments, productId);
+    const quantityOnOrder = 0; // TODO(Phase 6): sum incoming quantity from open Purchase Orders
     return quantityOnHand - quantityCommitted + quantityOnOrder;
   }
 

@@ -206,6 +206,18 @@ export, dark-app → white-paper) — no Chrome DevTools / Playwright MCP in thi
 
 ## PHASE 5 — Sales fulfilment
 
+> **PHASE 5A: COMPLETE** — stock commitment, committed `4233dc2` + pushed (branch, not merged).
+> **PHASE 5B: COMPLETE (2026-09-04, uncommitted working tree)** — CP-5B-0 design + 5B.1 (line link
+> + derived quantities) + 5B.2 (partial-invoice picker) + 5B.3 (remaining commitment) + 5B.4
+> (atomic `create_invoice_from_sales_order` RPC — migration **0049 APPLIED**; `closed` commercial
+> status — migration **0048 APPLIED**; "Close remaining"; `cancelOrder` tightened; the 5B.1
+> relationship backfill **RUN** — 9 links, relationship-only, all accounting fingerprints
+> unchanged). Gate: tsc / eslint / **2348 tests / 310 files** / build all green.
+> `NORMALIZED_DOCUMENT_LINES_ENABLED` still `false`. **Not committed / pushed / merged / deployed.**
+> Full detail: `docs/SALES_FULFILMENT.md`. Deferred → future phases: `sales_order_lines`
+> normalization (was "5B.5" → Phase 6/7), delivery notes (5C), credit-note/partial-cancel polish
+> (5D), a request-id idempotency log + shared-repo cleanup (Phase 7).
+
 The core workflow. Target model:
 
 ```
@@ -241,79 +253,152 @@ On Hand
 Later (Phase 6, not 5A): also `On Order` (open POs), `In Transit` (transfers), `Backordered`.
 
 ### Tasks
-- [ ] **5A.0 Investigation (read-only)** — trace `StockBalance`, `stockBalanceService`,
-  `stockService.getQuantityOnHand`, `quantityAvailable()`, every UI that shows "Available" / "On hand"
-  (`SalesLineItemsEditor` stock caption, inventory register, product detail), and every place a
-  reservation would need to be created/released/adjusted. Decide: **derived** (recompute committed
-  from open SO lines on read — simplest, always consistent) **vs. materialised** (a
-  `stock_reservations` table + triggers/service — needed only if read performance demands it).
-  Strong prior: **derive first**, matching how aging/margin are already derived.
-- [ ] **5A.1 Commitment source of truth** — a Sales Order line, while the SO is
-  `confirmed` and not fully delivered, commits `ordered − delivered` units of its product at its
-  warehouse. Draft/pending SOs commit nothing; cancelled/fully-delivered commit nothing.
-- [ ] **5A.2 `quantityCommitted` wired** — `stockBalanceService` / `stockService` compute real
-  committed quantity (per product + warehouse). `quantityAvailable() = onHand − committed`.
-- [ ] **5A.3 UI** — "On hand / Committed / Available" shown on the product detail, the inventory
-  register, and the Sales / (later) Delivery line editors. The SO line editor warns when a line
-  commits more than **available** (not just on-hand).
-- [ ] **5A.4 Over-commitment policy** — decide + document: allow over-commitment with a warning
-  (creates a backorder concept later) vs. block. Prior: **warn, don't block** (real businesses
-  take orders they can't yet fill).
-- [ ] **5A.5 Tests** — committed = Σ open confirmed-SO undelivered lines; released on cancel /
-  full delivery; available never used as if it were on-hand for a real movement; no
-  `stock_movement` is ever created by a commitment.
-- [ ] **5A.6 Docs** — `docs/INVENTORY_ARCHITECTURE.md` commitment section; close the KNOWN_ISSUES entry.
+- [x] **5A.0 Investigation (read-only)** — done. Decision: **DERIVED** (recompute committed from
+  confirmed SO lines on read), matching aging/margin. No `stock_reservations` table.
+- [x] **5A.1 Commitment source of truth** — a `confirmed` Sales Order line commits its **full
+  ordered quantity** of its product at its warehouse (default-warehouse fallback). `pending` /
+  `fulfilled` / `cancelled` commit nothing — so `convertToInvoice()` (→ `fulfilled`) releases it.
+  (Per-line `ordered − delivered` netting deferred to 5B — no `deliveredQty` exists yet.)
+- [x] **5A.2 `quantityCommitted` wired** — `stockCommitmentService.getCommitmentMap()` +
+  `applyStockCommitments()` hydrator; `stockService.getQuantityAvailable` /
+  `stockBalanceService.getAvailable` derive committed from the map (row field ignored, still 0 in
+  storage). `Available = onHand − committed`.
+- [x] **5A.3 UI** — "On hand / Committed / Available" on the item-detail Stock tab + summary, the
+  inventory register (hydrated balances), and `SalesLineItemsEditor` (Sales Order form). The SO
+  line editor warns when a line orders more than **available** (nets external commitment).
+- [x] **5A.4 Over-commitment policy** — **warn, don't block** (documented in
+  `docs/INVENTORY_ARCHITECTURE.md`).
+- [x] **5A.5 Tests** — `stockCommitmentService.test.ts` (Σ confirmed-SO lines; pending/fulfilled/
+  cancelled = 0; no productId / non-positive qty skipped; default-warehouse fallback; fulfilled
+  releases; **no movement repo — structural assertion**); `applyStockCommitments.test.ts`
+  (hydration + synthetic rows + negative Available); `stockCommitmentContext.test.ts`
+  (self-commitment exclusion: `ownCommitmentMap` / `externalCommittedFor` + CP-5A scenarios
+  T1–T13, T18); `SalesOrderForm.commitments.test.tsx` (self-exclusion end-to-end);
+  `stockService` / `stockBalanceService` / `SalesLineItemsEditor` updated.
+- [x] **5A.6 Docs** — `docs/INVENTORY_ARCHITECTURE.md` § "STOCK COMMITMENT (PHASE 5A)" incl. the
+  document-context self-commitment exclusion + Phase 5B boundary; `KNOWN_ISSUES.md` entry moved
+  Open → Resolved.
 
 **CP-5A:** model decision (derived vs materialised) with rationale; the exact commit/release rules;
 any migration (only if materialised); UI screenshots-by-description; full gate. **STOP.**
 
 ---
 
-### PHASE 5B — Partial Sales Order fulfilment  *(two-dimensional state)*
+### PHASE 5A — DONE + CP-5A APPROVED + COMMITTED + PUSHED, branch `phase-9b-relationship-design-and-code` (commit `4233dc2`, 2026-09-04)
 
-**Context / gap:** `SalesOrderService.convertToInvoice` copies **all** lines at full quantity,
-marks the order `fulfilled`, and blocks re-conversion. No per-line "delivered / invoiced" tracking,
-no `partially_*` status. (`docs/KNOWN_ISSUES.md` § "Partial Sales-Order invoicing".)
+**CP-5A FINAL: APPROVED 2026-09-04.** All Phase 5A files squashed into one clean commit
+`4233dc2` ("feat(inventory,sales): derive stock commitment from confirmed Sales Orders (Phase 5A)")
+and pushed to `phase-9b-relationship-design-and-code`. Gate at commit: tsc ✅ · eslint
+`--max-warnings 0` ✅ · **2231 tests / 306 files** ✅ · `vite build` ✅. **NOT merged to `main`,
+NOT deployed** (per instruction). Cloudflare Pages branch preview auto-builds from the push.
 
-### Required design decision (settle at CP-5B-0)
-**Fulfilment state and invoicing state are SEPARATE dimensions**, not one squeezed `status` field —
-*preferred, if the architecture allows*:
+**Status labels:** derived architecture + all consumers **DONE**; self-commitment fix **DONE**;
+warn-only over-commitment policy **DONE**; accounting isolation **VERIFIED**; no migration / no DB
+write / no seed / no flag change **CONFIRMED**; CP-5A review **APPROVED + SHIPPED TO BRANCH**;
+per-line delivered/invoiced netting **DEFERRED → Phase 5B** (now designed — see CP-5B-0 /
+`docs/SALES_FULFILMENT.md`); demo-seed of confirmed SOs so the feature is visibly exercised on prod
+**DEFERRED** (separate approval — touches live data).
 
-```
-commercialStatus :  draft · pending · confirmed · cancelled
-fulfilmentStatus :  not_started · partially_delivered · delivered
-invoicingStatus  :  not_invoiced · partially_invoiced · invoiced
-```
-plus per-line counters:
-```
-SalesOrderLine:  productId · orderedQty · deliveredQty · invoicedQty   (→ remainingToDeliver, remainingToInvoice derived)
-```
+**Model decision + rationale:** **DERIVED, no schema change.** `stock_balances.quantity_committed`
+stays 0 in storage; committed is recomputed on read from `confirmed` Sales Order lines — always
+consistent, matches how aging / margin are already derived. **No `stock_reservations` table, no
+migration, no Supabase write, no `stock_movement` ever created by a commitment.**
 
-### Tasks
-- [ ] **5B.0 Investigation + design** — `SalesOrder` / `SalesOrderLine` shape, `convertToInvoice`,
-  `salesOrderService` statuses, every consumer of `salesOrder.status` (list filters, badges, the
-  "converted invoice" deep-link, dashboards). Produce the state-model proposal (separate dimensions
-  vs. combined) with a migration sketch and a compatibility plan for existing SOs.
-- [ ] **5B.1 Line-level counters** — `deliveredQty` / `invoicedQty` on each SO line (default 0);
-  `remainingToDeliver` / `remainingToInvoice` derived. Migration + backfill (existing `fulfilled`
-  SOs → `deliveredQty = invoicedQty = orderedQty`).
-- [ ] **5B.2 Status dimensions** — add `fulfilmentStatus` + `invoicingStatus` (or the agreed
-  shape); `commercialStatus` keeps the old values. Recompute on every delivery / invoice event.
-- [ ] **5B.3 `createInvoiceFromSalesOrder(soId, lines[])`** — replaces the all-or-nothing
-  `convertToInvoice`: caller picks quantities (≤ remainingToInvoice, and — once 5C lands — ≤
-  delivered). Bumps `invoicedQty`, recomputes `invoicingStatus`. The invoice still posts through
-  the **unchanged** engine.
-- [ ] **5B.4 UI** — SO detail shows the per-line Ordered / Delivered / Invoiced / Remaining grid;
-  "Create invoice" opens a quantity picker; status badges show both dimensions.
-- [ ] **5B.5 Tests** — SO 10 → invoice 4 → invoice 3 → 3 remaining; `invoicingStatus` transitions;
-  cannot invoice more than ordered (or, post-5C, more than delivered); existing single-shot
-  conversion still works; engine untouched (revenue/COGS/VAT identical per invoice).
-- [ ] **5B.6 Docs** — `docs/SALES_FULFILMENT.md` (new); update `ACCOUNTING_RELATIONSHIPS.md` SO section.
+**Commit / release rule:** `confirmed` SO → each line commits its full `quantity` of `productId` at
+`line.warehouseId` (→ `Warehouse.isDefault` when absent). `pending` / `fulfilled` / `cancelled`
+commit nothing — `SalesOrderService.convertToInvoice()` flips to `fulfilled`, releasing the
+commitment with no extra bookkeeping. No-productId / non-positive-qty lines commit nothing.
 
-**CP-5B-0 (design checkpoint, BEFORE code):** the state model (separate vs combined) + migration
-sketch + existing-data plan. **STOP for approval.**
-**CP-5B (implementation checkpoint):** migration authored not applied; full gate; backfill dry-run
-counts (read-only) for any live SO. **STOP.**
+**Layering:** `StockCommitmentService` depends on the `ISalesOrderRepository` **interface**, never
+`salesOrderService` — no inventory ↔ sales service cycle. `instances.ts` holds a second
+`SupabaseSalesOrderRepository` (safe: shared DB, no in-memory divergence).
+
+| Area | Files |
+|---|---|
+| New service | `src/features/inventory/services/stockCommitmentService.ts` — `commitmentKey()`, `StockCommitmentLookup`, `StockCommitmentService.getCommitmentMap()`, `getCommittedForProduct()`, singleton. |
+| New pure util | `src/features/inventory/utils/applyStockCommitments.ts` — hydrates `quantityCommitted` from the map; synthesizes `synthetic_<key>` zero-on-hand rows for commitment-only keys (Available goes negative). |
+| New hook | `src/features/inventory/hooks/useStockCommitments.ts` — mirrors `useStockBalances`. |
+| Repo wiring | `instances.ts` — `+ salesOrderRepository = new SupabaseSalesOrderRepository(supabase)` (read-only, documented). |
+| Availability services | `stockService.ts` / `stockBalanceService.ts` — optional `StockCommitmentLookup` ctor dep (default singleton); `getQuantityAvailable` / `getAvailable` derive committed from the map. `applyDelta` / `rebuildFromMovements` **still emit 0**. |
+| Consumers hydrated | `useStockOnHandData.ts` (+ commitment map in the parallel fetch → every stock/analysis report), `InventoryOverviewPage.tsx` (register), `InventoryItemDetail.tsx` + `InventoryItemDetailPage.tsx` (Stock tab per-warehouse table + On hand / Committed / Available summary, `commitments` prop). |
+| Sales UI (5A.3) | `SalesLineItemsEditor.tsx` — `externalCommittedFor?(productId, warehouseId?)` prop; caption `On hand N · Committed N · Available N`; `text-status-warning` + "…more than the Y available (Z already committed to other confirmed orders)" when `ordered > available`; **never blocks submit**. `SalesOrderForm.tsx` — `useStockCommitments()` → passes the accessor. |
+| Self-commitment fix (CP-5A correction) | `stockCommitmentService.ts` — extracted private `accumulateOrderCommitments()` (shared by the global rollup + the new helpers); added exported pure helpers `ownCommitmentMap(order, defaultWarehouseId)` (the persisted order's own contribution to the global map — **empty unless `order.status === 'confirmed'`**) and `externalCommittedFor(global, own, productId, warehouseId?)` (= `max(0, global − own)`, warehouse-scoped or summed across warehouses). `SalesOrderForm.tsx` — `defaultWarehouseId` from `warehouses.find(w => w.isDefault)`, `ownCommitments = useMemo(ownCommitmentMap(salesOrder, defaultWarehouseId))` (computed from the **persisted** order, not live form state), `externalCommittedFor` closure delegates to the helper. **Global map / register / product detail / stock reports unchanged — they still count the edited order.** |
+| Tests | `+ stockCommitmentService.test.ts` (7), `+ applyStockCommitments.test.ts` (5), `+ stockCommitmentContext.test.ts` (24 — `ownCommitmentMap` / `externalCommittedFor` + the CP-5A worked scenarios T1–T13, T18), `+ SalesOrderForm.commitments.test.tsx` (2 — self-exclusion end-to-end), `SalesLineItemsEditor.test.tsx` (+3), `stockService.test.ts` / `stockBalanceService.test.ts` rewired to inject a fake `StockCommitmentLookup`; page/modal tests gained a `useStockCommitments` mock. |
+
+**Gate (after self-commitment fix):** tsc ✅ · eslint `--max-warnings 0` ✅ · **2231 tests / 306
+files** ✅ (Phase 5A base was 2205 / 304 — self-commitment fix adds **+26 tests / +2 files**, no
+test deleted, no coverage reduction) · `vite build` ✅.
+
+**No migration. No Supabase write. No commit / push. No GL / posting / inventory-engine file
+touched.** `reconcileInventory.ts` untouched (stays on-hand-only).
+
+**Flag / caveat:** `committed` displays **0** for a product until a `confirmed` Sales Order
+references it (the 2026-09 seed has SOs but their status mix may leave many products at 0). A
+demo-seed of confirmed SOs to make the feature visibly exercised in the deployed app is proposed as
+a **separate approval item** (not done here — would touch live data).
+
+**For the Queen at CP-5A:**
+1. ~~Editing an already-`confirmed` SO double-counts its own lines as "committed elsewhere".~~
+   **FIXED** — document-context self-commitment exclusion (`ownCommitmentMap` +
+   `externalCommittedFor`), applied only in `SalesOrderForm`. Worked example: onHand 20, SO-A
+   (this order) 5, SO-B (elsewhere) 7 → globalCommitted 12, ownCommitted 5, externalCommitted 7,
+   editor available = 20 − 7 = **13**. SO-B's 7 still counts. The global map / register / product
+   detail / reports still see the full 12.
+2. Demo-seed of confirmed SOs (separate approval) — worth doing before human browser QA so 5A is
+   visible on the deployed app? Still open. `committed` shows 0 for any product with no
+   product-linked confirmed SO — **correct**, not a defect.
+3. `SupabaseSalesOrderRepository` is now instantiated twice (sales barrel + inventory
+   `instances.ts`). Both are stateless wrappers over the same Supabase client — no correctness
+   impact. Logged in `KNOWN_ISSUES.md` as **LOW** architectural cleanup only.
+
+**Phase 5B boundary (audited, NOT implemented):** `DocumentLineItem` (`src/types/common.ts`) has
+**no** `deliveredQty` / `fulfilledQty` / `invoicedQty` field, no invoice-line ↔ sales-order-line
+relationship, no conversion-tracking counters. `SalesOrderStatus` is exactly
+`pending | confirmed | fulfilled | cancelled` — no `partially_*` state. `convertToInvoice` copies
+every line at full quantity and flips the whole order to `fulfilled`. So Phase 5A can only model
+commitment as the **whole ordered quantity while `confirmed`**; per-line
+`ordered − delivered − cancelled` netting needs the 5B persistence model (counters + split
+fulfilment/invoicing status) and is out of scope here.
+
+---
+
+### PHASE 5B — Partial Sales Order fulfilment — **COMPLETE (2026-09-04, uncommitted)**
+
+Full detail: **`docs/SALES_FULFILMENT.md`**. Final model:
+- `DocumentLineItem.salesOrderLineId?` (jsonb, invoice lines only) is the authoritative SO-line ↔
+  invoice-line link. `postedFulfilledQty` / `draftInvoicedQty` / `remainingToInvoiceQty` /
+  `remainingToFulfilQty` / `fulfilmentStatus` / `invoicingStatus` are **DERIVED** — no stored counters.
+- `SalesOrderService.createInvoiceFromSalesOrder(soId, selections[])` → a draft invoice for a chosen
+  per-line quantity subset; the caller sends only `{salesOrderLineId, quantity}`, everything else is
+  derived from the SO line. `PartialInvoicePicker` large modal. `convertToInvoice` = "invoice all
+  remaining". Multiple invoices per SO.
+- **Concurrency:** the write goes through the atomic Postgres RPC `create_invoice_from_sales_order`
+  (migration **0049, APPLIED**) — `SECURITY INVOKER`, locks the SO `FOR UPDATE`, re-derives every
+  line's remaining inside the transaction, builds lines from the authoritative SO jsonb, creates a
+  `draft` invoice with **no** GL/stock/journal, doesn't touch SO status. `RpcSalesOrderDraftInvoiceWriter`
+  wires it; `LocalSalesOrderDraftInvoiceWriter` for tests.
+- **`closed` commercial status** (migration **0048, APPLIED** — `ALTER TYPE sales_order_status ADD
+  VALUE 'closed'`). `closeRemaining()` abandons the un-invoiced remainder of a partly-invoiced
+  `confirmed` order — **zero accounting effect**, releases the commitment (derived). `cancelOrder`
+  tightened to reject once any invoice is linked. `SalesOrderList` filter + `SalesOrderDetailPage`
+  action + confirm dialog updated.
+- **Stock commitment** (5B.3): a `confirmed` SO line commits `max(0, orderedQty − Σ posted
+  invoice-line qty)`. Draft/void release nothing. Reduces to the Phase-5A rule. `closed` commits 0.
+- Posting is unchanged: `postInvoice` / `inventoryPostingEngine*` **byte-unchanged**; each partial
+  invoice posts its own quantities atomically (`postingKey = invoice:<id>:post`).
+- **5B.1 relationship backfill RUN** (2026-09-04): the 3 September SO→invoice pairs
+  (`INV-1068/1072/1074`) linked — 9 lines, exact `(product, qty, price)`+position match, 0
+  ambiguous, relationship-only (invoice financial fingerprint, TB, GL 1200, valuation, all counts
+  byte-identical before/after).
+
+**Gate:** tsc ✅ · eslint `--max-warnings 0` ✅ · **2348 tests / 310 files** ✅ · build ✅. Security
+advisors 0 ERROR. `NORMALIZED_DOCUMENT_LINES_ENABLED` still `false`.
+**Not committed / pushed / merged / deployed** — awaiting review.
+
+**Deferred → later phases (NOT reopened as 5B):** `sales_order_lines` normalization (was "5B.5" →
+Phase 6/7 with the 9B flag review); delivery notes (**5C**); credit-note ↔ remaining + per-line
+partial cancellation (**5D**); `create_invoice_from_sales_order` request-id idempotency log +
+shared-repo cleanup + `InvoiceDetailPage`/product-ledger SO hop (**Phase 7**).
 
 ---
 

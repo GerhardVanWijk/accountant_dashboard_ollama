@@ -7,13 +7,22 @@ import {
   documentNumberPrefix,
   nextDocumentNumber,
 } from '@/features/purchases/utils/nextDocumentNumber';
+import {
+  buildInvoiceFromSelections,
+  canCloseRemaining,
+  computeSalesOrderFulfilment,
+  fullRemainingSelections,
+  type SalesOrderInvoiceSelection,
+} from '../utils/salesOrderFulfilment';
+import {
+  LocalSalesOrderDraftInvoiceWriter,
+  type SalesOrderDraftInvoiceWriter,
+} from './salesOrderDraftInvoiceWriter';
 
 /** No real authenticated actor for a system-initiated copy — same pattern as stockAdjustmentService. */
 const SYSTEM_USER_ID: ID = 'system';
 
 export type CreateSalesOrderDTO = Omit<SalesOrder, 'id' | 'createdAt' | 'updatedAt'>;
-
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Business-logic layer for Sales Orders. Sales Orders are pre-accounting
@@ -22,12 +31,25 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
  * docs/LEDGER_ARCHITECTURE.md.
  */
 export class SalesOrderService {
+  private readonly invoiceWriter: SalesOrderDraftInvoiceWriter;
+
   constructor(
     private readonly repository: ISalesOrderRepository,
     private readonly invoiceRepository: IInvoiceRepository,
     /** Phase 4B-2: records a "created" audit row for a duplicated sales order. Defaults to the shared singleton. */
     private readonly auditLog: AuditLogService = auditLogService,
-  ) {}
+    /**
+     * Phase 5B FINAL: persists a draft invoice created from a Sales Order.
+     * Defaults to the in-process `LocalSalesOrderDraftInvoiceWriter` (writes
+     * through `invoiceRepository`); the Supabase-backed production wiring
+     * injects `RpcSalesOrderDraftInvoiceWriter`, which routes through the
+     * atomic `create_invoice_from_sales_order` RPC (the DB is then the final
+     * concurrency authority — migration 0049).
+     */
+    invoiceWriter?: SalesOrderDraftInvoiceWriter,
+  ) {
+    this.invoiceWriter = invoiceWriter ?? new LocalSalesOrderDraftInvoiceWriter(invoiceRepository);
+  }
 
   async getSalesOrders(): Promise<SalesOrder[]> {
     return this.repository.getAll();
@@ -73,72 +95,141 @@ export class SalesOrderService {
     return this.repository.update(id, { status: 'confirmed' });
   }
 
-  /** Cancels a sales order. */
+  /**
+   * Cancels a sales order that has NOT been invoiced. Once any invoice
+   * (draft or posted) is linked, the order is a real commercial commitment —
+   * the remainder must be `closeRemaining()`d instead so the invoiced portion
+   * and its accounting stay intact.
+   */
   async cancelOrder(id: string): Promise<SalesOrder> {
     const order = await this.requireOrder(id);
-    if (order.status === 'fulfilled') {
-      throw new Error(`Cannot cancel sales order "${id}": it has already been fulfilled.`);
+    if (order.status === 'fulfilled' || order.status === 'closed' || order.status === 'cancelled') {
+      throw new Error(`Cannot cancel sales order "${id}": its status is "${order.status}".`);
+    }
+    const invoices = await this.invoiceRepository.getAll();
+    const linked = invoices.filter((inv) => inv.salesOrderId === order.id && inv.status !== 'void');
+    if (linked.length > 0) {
+      throw new Error(
+        `Cannot cancel sales order "${id}": it has already been invoiced (${linked.map((i) => i.invoiceNumber).join(', ')}). ` +
+          `Close the remaining quantity instead.`,
+      );
     }
     return this.repository.update(id, { status: 'cancelled' });
   }
 
   /**
-   * Converts a Sales Order into a new draft Invoice, carrying over the
-   * customer, line items, and totals, and setting
-   * `invoice.salesOrderId = salesOrder.id`. No GL posting happens here —
-   * the invoice stays 'draft' until InvoiceService.postInvoice() is called
-   * from the Invoices module. Marks the order 'fulfilled' since converting
-   * to an invoice is this app's definition of an order being fulfilled
-   * (there is no separate goods-receipt/dispatch step modeled yet).
+   * Phase 5B FINAL — ends the commercial commitment of a partly-invoiced
+   * Sales Order: the business has decided NOT to supply the remaining ordered
+   * quantity. Sets `status = 'closed'`.
+   *
+   * This is DISTINCT from `fulfilled` (every ordered quantity actually
+   * supplied) — a `closed` order was short-shipped on purpose. It has **zero**
+   * accounting or inventory effect: no journal, no stock movement, no COGS,
+   * no revenue, no VAT, no AR, no invoice. It simply stops
+   * `StockCommitmentService` (which only reserves for `confirmed` orders) from
+   * committing the un-invoiced remainder. The already-invoiced lines and their
+   * postings are untouched.
+   *
+   * Allowed only for a `confirmed` order that has some invoicing progress and
+   * some remaining un-invoiced quantity (`canCloseRemaining`). A pending order
+   * or a confirmed order with nothing invoiced is `cancelOrder()`d instead.
+   */
+  async closeRemaining(id: string, closedBy: ID = SYSTEM_USER_ID): Promise<SalesOrder> {
+    const order = await this.requireOrder(id);
+    const invoices = await this.invoiceRepository.getAll();
+    const fulfilment = computeSalesOrderFulfilment(order, invoices);
+    if (!canCloseRemaining(order, fulfilment)) {
+      throw new Error(
+        `Cannot close the remaining quantity of sales order "${id}" (status: ${order.status}, ` +
+          `invoiced: ${fulfilment.postedFulfilledQty}, remaining: ${fulfilment.remainingToFulfilQty}). ` +
+          `Only a confirmed, partly-invoiced order with an un-invoiced remainder can be closed — otherwise cancel it.`,
+      );
+    }
+    const updated = await this.repository.update(id, { status: 'closed' });
+    await this.auditLog.log({
+      userId: closedBy,
+      action: 'sales_order_closed',
+      module: 'sales',
+      recordType: 'SalesOrder',
+      recordId: id,
+      reason: `Closed remaining quantity — abandoned ${fulfilment.remainingToFulfilQty} un-invoiced unit(s)`,
+      newValue: {
+        status: 'closed',
+        orderedQty: fulfilment.orderedQty,
+        invoicedQty: fulfilment.postedFulfilledQty,
+        abandonedQty: fulfilment.remainingToFulfilQty,
+      },
+    });
+    return updated;
+  }
+
+  /**
+   * Converts a Sales Order into a new draft Invoice for **every quantity still
+   * remaining to invoice** — the one-click "invoice the rest" path (Phase 5B.1).
+   * Delegates to `createInvoiceFromSalesOrder` with the full remaining
+   * selection; throws once every line is already fully covered by existing
+   * (draft + posted, non-void) linked invoices.
    */
   async convertToInvoice(orderId: string): Promise<Invoice> {
     const order = await this.requireOrder(orderId);
-    if (order.status === 'cancelled') {
-      throw new Error(`Cannot invoice sales order "${orderId}": it has been cancelled.`);
-    }
-    if (order.status === 'fulfilled') {
-      throw new Error(`Cannot invoice sales order "${orderId}": it has already been fulfilled.`);
-    }
-
-    // Belt-and-braces against a double conversion even if the order's
-    // status was somehow moved back off 'fulfilled' — the source
-    // relationship (`invoice.salesOrderId`) is the authority.
     const existing = await this.invoiceRepository.getAll();
-    const alreadyInvoiced = existing.find((inv) => inv.salesOrderId === order.id);
-    if (alreadyInvoiced) {
+    const selections = fullRemainingSelections(order, existing);
+    if (selections.length === 0) {
+      const linked = existing.filter((inv) => inv.salesOrderId === order.id && inv.status !== 'void');
+      const legacy = linked.find(
+        (inv) => inv.lineItems.length > 0 && inv.lineItems.every((l) => !l.salesOrderLineId),
+      );
+      if (legacy) {
+        throw new Error(
+          `Cannot invoice sales order "${orderId}": it was already converted to invoice ${legacy.invoiceNumber}.`,
+        );
+      }
+      if (order.status === 'cancelled' || order.status === 'closed') {
+        throw new Error(`Cannot invoice sales order "${orderId}": its status is "${order.status}".`);
+      }
+      if (order.status === 'fulfilled' && linked.length === 0) {
+        throw new Error(`Cannot invoice sales order "${orderId}": it has already been fulfilled.`);
+      }
+      const nums = linked.map((i) => i.invoiceNumber).join(', ');
       throw new Error(
-        `Cannot invoice sales order "${orderId}": it was already converted to invoice ${alreadyInvoiced.invoiceNumber}.`,
+        `Cannot invoice sales order "${orderId}": every line is already fully invoiced${nums ? ` (${nums})` : ''}.`,
       );
     }
+    return this.createInvoiceFromSalesOrder(orderId, selections);
+  }
 
-    const invoiceNumber = order.orderNumber.startsWith('SO-')
-      ? order.orderNumber.replace('SO-', 'INV-')
-      : `INV-${Date.now()}`;
-    const now = new Date();
-    const dueDate = new Date(now.getTime() + THIRTY_DAYS_MS);
-
-    const invoice = await this.invoiceRepository.create({
-      id: '',
-      invoiceNumber,
-      customerId: order.customerId,
-      salesOrderId: order.id,
-      issueDate: now.toISOString(),
-      dueDate: dueDate.toISOString(),
-      lineItems: order.lineItems,
-      subtotal: order.subtotal,
-      taxTotal: order.taxTotal,
-      total: order.total,
-      amountPaid: 0,
-      currency: order.currency,
-      status: 'draft',
-      notes: `Invoiced from ${order.orderNumber}`,
-      createdAt: '',
-      updatedAt: '',
-    });
-
-    await this.repository.update(orderId, { status: 'fulfilled' });
-
-    return invoice;
+  /**
+   * Phase 5B.2 — create a DRAFT invoice for an explicit per-line quantity
+   * selection. The request identifies only `{ salesOrderLineId, quantity }`;
+   * every other field (productId / warehouseId / taxRateId / unitPrice /
+   * description / totals) is DERIVED from the authoritative Sales Order line —
+   * the caller's product / price / description are never trusted.
+   *
+   * `buildInvoiceFromSelections` runs here for fail-fast validation (SO exists,
+   * not cancelled / closed / legacy-fulfilled; each `salesOrderLineId` on the
+   * order; no duplicates; quantity finite, > 0, ≤ 3dp, ≤ current
+   * `remainingToInvoiceQty`). The actual write is delegated to
+   * `this.invoiceWriter`: the Supabase wiring routes it through the atomic
+   * `create_invoice_from_sales_order` RPC (migration 0049), which LOCKS the
+   * Sales Order and re-validates inside the transaction — the database is the
+   * final concurrency authority. The local writer (tests / mock repos) writes
+   * the already-validated `built` result through the invoice repository.
+   *
+   * Every created invoice line gets a FRESH `id` (never the SO line id) and
+   * carries `salesOrderLineId`. No GL / stock / VAT posting — the invoice stays
+   * `draft`. The commercial status is NOT touched here (a draft never flips it —
+   * the `confirmed → fulfilled` flip happens at post time via
+   * `InvoiceService.onInvoicePosted`).
+   */
+  async createInvoiceFromSalesOrder(
+    orderId: string,
+    selections: readonly SalesOrderInvoiceSelection[],
+    createdBy: ID = SYSTEM_USER_ID,
+  ): Promise<Invoice> {
+    const order = await this.requireOrder(orderId);
+    const existing = await this.invoiceRepository.getAll();
+    const built = buildInvoiceFromSelections(order, existing, selections);
+    return this.invoiceWriter.write({ order, existingInvoices: existing, built, selections, createdBy });
   }
 
   /**

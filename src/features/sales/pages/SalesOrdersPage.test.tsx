@@ -21,7 +21,7 @@ beforeEach(() => {
   vi.mocked(useSalesOrders).mockReturnValue({ salesOrders: [so], isLoading: false, error: null, refetch: vi.fn() });
   vi.mocked(useSalesOrderMutations).mockReturnValue({
     isLoading: false, error: null, createSalesOrder: vi.fn(), updateSalesOrder: vi.fn(),
-    deleteSalesOrder: vi.fn(), confirmOrder: vi.fn(), cancelOrder: vi.fn(), convertToInvoice: vi.fn(), duplicateSalesOrder: vi.fn(),
+    deleteSalesOrder: vi.fn(), confirmOrder: vi.fn(), cancelOrder: vi.fn(), closeRemaining: vi.fn(), convertToInvoice: vi.fn(), createInvoiceFromSalesOrder: vi.fn(), duplicateSalesOrder: vi.fn(),
   });
   vi.mocked(useCustomerMap).mockReturnValue({ customers: new Map([['c1', 'FreshMart']]), loading: false, error: null });
   vi.mocked(useCustomerList).mockReturnValue({ customers: [], loading: false, error: null } as never);

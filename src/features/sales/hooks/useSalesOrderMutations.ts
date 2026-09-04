@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import type { SalesOrder } from '@/types';
+import type { Invoice, SalesOrder } from '@/types';
 import { salesOrderService, type CreateSalesOrderDTO } from '../services';
+import type { SalesOrderInvoiceSelection } from '../utils/salesOrderFulfilment';
 
 export interface UseSalesOrderMutationsOptions {
   onSuccess?: (order: SalesOrder) => void;
@@ -44,8 +45,16 @@ export function useSalesOrderMutations(options?: UseSalesOrderMutationsOptions) 
   const cancelOrder = (id: string) =>
     run(() => salesOrderService.cancelOrder(id), (o) => options?.onSuccess?.(o));
 
+  /** Phase 5B FINAL: abandon the un-invoiced remainder of a partly-invoiced order. */
+  const closeRemaining = (id: string) =>
+    run(() => salesOrderService.closeRemaining(id), (o) => options?.onSuccess?.(o));
+
   const convertToInvoice = (id: string) =>
     run(() => salesOrderService.convertToInvoice(id), () => undefined);
+
+  /** Phase 5B.2: create a draft invoice for an explicit per-line quantity selection. */
+  const createInvoiceFromSalesOrder = (id: string, selections: readonly SalesOrderInvoiceSelection[]): Promise<Invoice> =>
+    run(() => salesOrderService.createInvoiceFromSalesOrder(id, selections), () => undefined);
 
   const duplicateSalesOrder = (id: string) =>
     run(() => salesOrderService.duplicateSalesOrder(id), (o) => options?.onSuccess?.(o));
@@ -58,7 +67,9 @@ export function useSalesOrderMutations(options?: UseSalesOrderMutationsOptions) 
     deleteSalesOrder,
     confirmOrder,
     cancelOrder,
+    closeRemaining,
     convertToInvoice,
+    createInvoiceFromSalesOrder,
     duplicateSalesOrder,
   };
 }

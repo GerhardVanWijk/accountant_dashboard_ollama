@@ -9,6 +9,8 @@ import { SupabaseStockTransferRepository } from './SupabaseStockTransferReposito
 import { SupabaseStockTakeRepository } from './SupabaseStockTakeRepository';
 import { SupabaseOpeningStockBatchRepository } from './SupabaseOpeningStockBatchRepository';
 import { SupabaseSupplierReturnRepository } from './SupabaseSupplierReturnRepository';
+import { SupabaseSalesOrderRepository } from '@/repositories/SupabaseSalesOrderRepository';
+import { SupabaseInvoiceRepository } from '@/repositories/SupabaseInvoiceRepository';
 import { supabase } from '@/config/supabase';
 
 /**
@@ -45,3 +47,22 @@ export const stockTransferRepository = new SupabaseStockTransferRepository(supab
 export const stockTakeRepository = new SupabaseStockTakeRepository(supabase);
 export const openingStockBatchRepository = new SupabaseOpeningStockBatchRepository(supabase);
 export const supplierReturnRepository = new SupabaseSupplierReturnRepository(supabase);
+
+/**
+ * Read-only, used by `stockCommitmentService` for the derived stock-commitment
+ * model (Phase 5A) — recompute `quantityCommitted` from confirmed Sales Order
+ * lines on read, no schema change and no Supabase write. A second
+ * Supabase-backed instance is safe: shared DB, no in-memory divergence (the
+ * hazard is only with `Mock*Repository`), so this never disagrees with the
+ * sales feature's own `SupabaseSalesOrderRepository`.
+ */
+export const salesOrderRepository = new SupabaseSalesOrderRepository(supabase);
+
+/**
+ * Read-only, used by `stockCommitmentService` (Phase 5B.3) to net each
+ * confirmed Sales Order line down to its remaining un-fulfilled commitment
+ * (`orderedQty − Σ posted invoice-line qty linked via `salesOrderLineId`).
+ * Same safety note as `salesOrderRepository` above: a second Supabase-backed
+ * instance over the shared client, no in-memory divergence.
+ */
+export const invoiceRepository = new SupabaseInvoiceRepository(supabase);

@@ -13,6 +13,7 @@ import {
   RecordPageSection,
   RecordPageShell,
   RecordSummaryGrid,
+  RelatedRecordPreview,
   RelatedRecordsSection,
   type DocumentLineColumn,
   type RelatedRecordItem,
@@ -26,16 +27,51 @@ import { useSalesOrderMutations } from '@/features/sales/hooks/useSalesOrderMuta
 import { useQuotes } from '@/features/sales/hooks/useQuotes';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { useCustomerMap } from '@/features/sales/hooks/useCustomerMap';
+import { PartialInvoicePicker } from '@/features/sales/components/PartialInvoicePicker';
+import {
+  canCloseRemaining,
+  computeSalesOrderFulfilment,
+  displayFulfilmentStatus,
+  displayInvoicingStatus,
+  type SalesOrderInvoiceSelection,
+  type SalesOrderLineFulfilment,
+} from '@/features/sales/utils/salesOrderFulfilment';
 
 type Line = SalesOrder['lineItems'][number];
 
-const LINE_COLUMNS: DocumentLineColumn<Line>[] = [
-  { key: 'description', header: 'Description', cell: (l) => l.description },
-  { key: 'qty', header: 'Qty', align: 'right', cell: (l) => l.quantity.toFixed(2) },
-  { key: 'unit', header: 'Unit price', align: 'right', cell: (l) => formatCurrency(l.unitPrice) },
-  { key: 'tax', header: 'Tax', align: 'right', cell: (l) => formatCurrency(l.taxAmount) },
-  { key: 'total', header: 'Total', align: 'right', cell: (l) => formatCurrency(l.lineTotal) },
-];
+const fmtQty = (n: number) => n.toLocaleString('en-ZA', { maximumFractionDigits: 3 });
+
+function lineColumns(
+  fulfilmentByLine: Map<string, SalesOrderLineFulfilment>,
+  showProgress: boolean,
+): DocumentLineColumn<Line>[] {
+  const cols: DocumentLineColumn<Line>[] = [
+    { key: 'description', header: 'Description', cell: (l) => l.description },
+    { key: 'qty', header: 'Ordered', align: 'right', cell: (l) => fmtQty(l.quantity) },
+  ];
+  if (showProgress) {
+    cols.push(
+      {
+        key: 'fulfilled',
+        header: 'Invoiced',
+        align: 'right',
+        cell: (l) => fmtQty(fulfilmentByLine.get(l.id)?.postedFulfilledQty ?? 0),
+      },
+      {
+        key: 'remaining',
+        header: 'Remaining',
+        align: 'right',
+        cell: (l) => fmtQty(fulfilmentByLine.get(l.id)?.remainingToFulfilQty ?? l.quantity),
+      },
+    );
+  }
+  cols.push(
+    { key: 'unit', header: 'Unit price', align: 'right', cell: (l) => formatCurrency(l.unitPrice) },
+    { key: 'tax', header: 'Tax', align: 'right', cell: (l) => formatCurrency(l.taxAmount) },
+    { key: 'total', header: 'Total', align: 'right', cell: (l) => formatCurrency(l.lineTotal) },
+  );
+  return cols;
+}
 
 /**
  * Full-page Sales Order detail — route `/sales/orders/:orderId`. Replaces
@@ -56,20 +92,66 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
   const order = salesOrders.find((o) => o.id === orderId);
   const { customers: customerMap } = useCustomerMap();
   const { quotes } = useQuotes();
-  const { invoices } = useInvoices();
+  const { invoices, refetch: refetchInvoices } = useInvoices();
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [invoicePreviewId, setInvoicePreviewId] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const [pickerBusy, setPickerBusy] = useState(false);
+  const [createdInvoice, setCreatedInvoice] = useState<{ id: string; number: string } | null>(null);
+  const [confirmClose, setConfirmClose] = useState(false);
   const { viewModel, loading: docLoading, error: docError } = useBusinessDocument({ kind: 'sales_order', record: order });
 
-  const { deleteSalesOrder, confirmOrder, cancelOrder, convertToInvoice, duplicateSalesOrder, isLoading: isBusy } = useSalesOrderMutations({
+  const fulfilment = useMemo(
+    () => (order ? computeSalesOrderFulfilment(order, invoices) : undefined),
+    [order, invoices],
+  );
+  const fulfilmentByLine = useMemo(() => {
+    const map = new Map<string, SalesOrderLineFulfilment>();
+    fulfilment?.lines.forEach((l) => map.set(l.salesOrderLineId, l));
+    return map;
+  }, [fulfilment]);
+  const linkedInvoices = useMemo(
+    () =>
+      order
+        ? invoices
+            .filter((inv) => inv.salesOrderId === order.id && inv.status !== 'void')
+            .sort((a, b) => a.issueDate.localeCompare(b.issueDate))
+        : [],
+    [order, invoices],
+  );
+  // Show the Ordered/Invoiced/Remaining detail only once there is line-level
+  // evidence, or the order is confirmed/pending (nothing invoiced yet) — a
+  // legacy full conversion has no trustworthy per-line numbers.
+  const showProgress = Boolean(
+    fulfilment && (fulfilment.hasLineLevelEvidence || linkedInvoices.length === 0),
+  );
+
+  const { deleteSalesOrder, confirmOrder, cancelOrder, closeRemaining, createInvoiceFromSalesOrder, duplicateSalesOrder, isLoading: isBusy } = useSalesOrderMutations({
     onSuccess: () => refetch(),
   });
 
+  async function handleCreateInvoice(selections: SalesOrderInvoiceSelection[]) {
+    if (!order) return;
+    setPickerError(null);
+    setPickerBusy(true);
+    try {
+      const invoice = await createInvoiceFromSalesOrder(order.id, selections);
+      setPickerOpen(false);
+      setCreatedInvoice({ id: invoice.id, number: invoice.invoiceNumber });
+      await Promise.all([refetch(), refetchInvoices()]);
+    } catch (err) {
+      setPickerError(err instanceof Error ? err.message : 'Could not create the invoice.');
+    } finally {
+      setPickerBusy(false);
+    }
+  }
+
   const customerName = order ? customerMap.get(order.customerId) || 'Unknown customer' : '';
   const sourceQuote = order?.quoteId ? quotes.find((q) => q.id === order.quoteId) : undefined;
-  const convertedInvoice = order ? invoices.find((inv) => inv.salesOrderId === order.id) : undefined;
 
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!order) return [];
@@ -79,14 +161,9 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
     if (sourceQuote) {
       items.push({ label: 'Source quote', value: <Link className="font-medium text-brand hover:underline" to="/sales/quotes">{sourceQuote.quoteNumber}</Link> });
     }
-    if (convertedInvoice) {
-      items.push({
-        label: 'Converted to invoice',
-        value: <Link className="font-medium text-brand hover:underline" to={`/sales/invoices/${convertedInvoice.id}`}>{convertedInvoice.invoiceNumber}</Link>,
-      });
-    }
+    // Invoices are shown in their own richer "Related invoices" table below.
     return items;
-  }, [order, customerName, sourceQuote, convertedInvoice]);
+  }, [order, customerName, sourceQuote]);
 
   async function act(fn: () => Promise<unknown>, after: () => void) {
     setActionError(null);
@@ -101,9 +178,34 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
   const state = isLoading ? 'loading' : error ? 'error' : order ? 'ready' : 'not-found';
 
   const canConfirm = order?.status === 'pending';
-  const canCancel = order != null && order.status !== 'fulfilled' && order.status !== 'cancelled';
-  const canConvert = order != null && order.status !== 'cancelled' && order.status !== 'fulfilled';
+  const someInvoiced = Boolean(
+    fulfilment && (fulfilment.postedFulfilledQty > 0 || fulfilment.draftInvoicedQty > 0),
+  );
+  // Cancel = the whole order, before any invoicing. Once invoiced, close the remainder instead.
+  const canCancel =
+    order != null &&
+    (order.status === 'pending' || order.status === 'confirmed') &&
+    !someInvoiced &&
+    linkedInvoices.length === 0;
+  const canClose = Boolean(order && fulfilment && canCloseRemaining(order, fulfilment));
+  const canConvert =
+    order != null &&
+    order.status !== 'cancelled' &&
+    order.status !== 'closed' &&
+    order.status !== 'fulfilled' &&
+    fulfilment != null &&
+    fulfilment.legacyLinkedInvoiceIds.length === 0 &&
+    fulfilment.remainingToInvoiceQty > 0;
   const canDelete = order?.status === 'pending';
+  const convertLabel = someInvoiced ? 'Invoice remaining' : 'Create invoice';
+  const abandonValue = fulfilment
+    ? order!.lineItems.reduce((sum, l) => {
+        const f = fulfilmentByLine.get(l.id);
+        const rem = f?.remainingToFulfilQty ?? 0;
+        const orderedQty = l.quantity || 1;
+        return sum + (l.lineTotal / orderedQty) * rem;
+      }, 0)
+    : 0;
 
   return (
     <RecordPageShell
@@ -131,12 +233,12 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
                 primary={
                   canConvert
                     ? {
-                        label: 'Convert to invoice',
-                        onClick: () =>
-                          void act(
-                            () => convertToInvoice(order.id).then((inv) => { if (inv?.id) navigate(`/sales/invoices/${inv.id}`); }),
-                            () => {},
-                          ),
+                        label: convertLabel,
+                        onClick: () => {
+                          setPickerError(null);
+                          setCreatedInvoice(null);
+                          setPickerOpen(true);
+                        },
                       }
                     : undefined
                 }
@@ -156,6 +258,7 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
                   ...(canConfirm ? [{ label: 'Confirm order', onClick: () => void act(() => confirmOrder(order.id), () => {}) }] : []),
                 ]}
                 danger={[
+                  ...(canClose ? [{ label: 'Close remaining', onClick: () => setConfirmClose(true) }] : []),
                   ...(canCancel ? [{ label: 'Cancel order', onClick: () => void act(() => cancelOrder(order.id), () => {}) }] : []),
                   ...(canDelete ? [{ label: 'Delete draft', onClick: () => setConfirmDelete(true) }] : []),
                 ]}
@@ -169,6 +272,42 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
             </div>
           )}
 
+          {createdInvoice && (
+            <div
+              role="status"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-status-positive/30 bg-status-positive-muted px-4 py-3 text-sm"
+            >
+              <span>
+                Draft invoice <strong className="figure">{createdInvoice.number}</strong> created. Post it from the
+                invoice to move stock and the ledger.
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  className="font-medium text-brand hover:underline"
+                  onClick={() => setInvoicePreviewId(createdInvoice.id)}
+                >
+                  View invoice
+                </button>
+                <button
+                  type="button"
+                  className="font-medium text-brand hover:underline"
+                  onClick={() => navigate(`/sales/invoices/${createdInvoice.id}`)}
+                >
+                  Open full invoice
+                </button>
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={() => setCreatedInvoice(null)}
+                  aria-label="Dismiss"
+                >
+                  ✕
+                </button>
+              </span>
+            </div>
+          )}
+
           <RecordPageSection title="Overview">
             <RecordSummaryGrid>
               <RecordField label="Customer" value={customerName} />
@@ -176,12 +315,48 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
               <RecordField label="Currency" value={order.currency} />
               <RecordField label="Status" value={<StatusBadge status={order.status} />} />
               {sourceQuote && <RecordField label="Source quote" value={sourceQuote.quoteNumber} />}
+              <RecordField label="Total" value={formatCurrency(order.total)} />
+              {fulfilment && showProgress && (
+                <>
+                  <RecordField
+                    label="Invoicing"
+                    value={<StatusBadge status={displayInvoicingStatus(order, fulfilment)} />}
+                  />
+                  <RecordField
+                    label="Fulfilment"
+                    value={<StatusBadge status={displayFulfilmentStatus(order, fulfilment)} />}
+                  />
+                  <RecordField label="Ordered" value={<span className="tabular-nums">{fmtQty(fulfilment.orderedQty)}</span>} />
+                  <RecordField label="Invoiced (posted)" value={<span className="tabular-nums">{fmtQty(fulfilment.postedFulfilledQty)}</span>} />
+                  {fulfilment.draftInvoicedQty > 0 && (
+                    <RecordField label="In draft invoices" value={<span className="tabular-nums">{fmtQty(fulfilment.draftInvoicedQty)}</span>} />
+                  )}
+                  <RecordField label="Remaining to invoice" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToInvoiceQty)}</span>} />
+                  <RecordField label="Remaining to fulfil" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToFulfilQty)}</span>} />
+                  {order.status === 'confirmed' && fulfilment.remainingToFulfilQty > 0 && (
+                    <RecordField
+                      label="Stock committed"
+                      value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToFulfilQty)} unit(s) reserved</span>}
+                    />
+                  )}
+                  {order.status === 'closed' && (
+                    <RecordField
+                      label="Closed"
+                      value={
+                        <span className="tabular-nums">
+                          {fmtQty(fulfilment.remainingToFulfilQty)} un-invoiced unit(s) abandoned · commitment released
+                        </span>
+                      }
+                    />
+                  )}
+                </>
+              )}
             </RecordSummaryGrid>
           </RecordPageSection>
 
           <RecordPageSection title="Line items">
             <DocumentLineTable
-              columns={LINE_COLUMNS}
+              columns={lineColumns(fulfilmentByLine, showProgress)}
               rows={order.lineItems}
               rowKey={(l) => l.id}
               totals={[
@@ -191,6 +366,45 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
               ]}
             />
           </RecordPageSection>
+
+          {linkedInvoices.length > 0 && (
+            <RecordPageSection title="Related invoices">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs tracking-wide text-muted-foreground uppercase">
+                      <th className="py-2 pr-3 font-medium">Invoice</th>
+                      <th className="py-2 pr-3 font-medium">Issued</th>
+                      <th className="py-2 pr-3 font-medium">Status</th>
+                      <th className="py-2 pr-3 text-right font-medium">Total</th>
+                      <th className="py-2 text-right font-medium">Outstanding</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {linkedInvoices.map((inv) => (
+                      <tr key={inv.id} className="border-b border-border/60 last:border-0">
+                        <td className="py-2 pr-3">
+                          <button
+                            type="button"
+                            className="font-medium text-brand hover:underline"
+                            onClick={() => setInvoicePreviewId(inv.id)}
+                          >
+                            {inv.invoiceNumber}
+                          </button>
+                        </td>
+                        <td className="py-2 pr-3 text-muted-foreground">{formatDate(inv.issueDate)}</td>
+                        <td className="py-2 pr-3"><StatusBadge status={inv.status} /></td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{formatCurrency(inv.total)}</td>
+                        <td className="py-2 text-right tabular-nums">
+                          {formatCurrency(Math.max(0, inv.total - inv.amountPaid))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </RecordPageSection>
+          )}
 
           {order.notes && (
             <RecordPageSection title="Notes">
@@ -220,12 +434,54 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
             }}
           />
 
+          <ConfirmDialog
+            open={confirmClose}
+            onOpenChange={setConfirmClose}
+            title={`Close remaining on ${order.orderNumber}?`}
+            description={
+              fulfilment
+                ? `The customer will NOT be supplied the remaining ${fmtQty(fulfilment.remainingToFulfilQty)} un-invoiced unit(s) ` +
+                  `(about ${formatCurrency(abandonValue)}). The ${fmtQty(fulfilment.postedFulfilledQty)} already invoiced and their ` +
+                  `accounting are untouched. No stock moves, no journal, no credit note — the reserved stock is simply released.`
+                : ''
+            }
+            confirmLabel="Close remaining"
+            destructive
+            onConfirm={() => {
+              setConfirmClose(false);
+              void act(() => closeRemaining(order.id), () => {});
+            }}
+          />
+
           <BusinessDocumentPreviewModal
             open={previewOpen}
             onClose={() => setPreviewOpen(false)}
             viewModel={viewModel}
             loading={docLoading}
             error={docError}
+          />
+
+          <PartialInvoicePicker
+            open={pickerOpen}
+            onClose={() => setPickerOpen(false)}
+            order={order}
+            invoices={invoices}
+            customerName={customerName}
+            error={pickerError}
+            submitting={pickerBusy}
+            onSubmit={handleCreateInvoice}
+          />
+
+          <RelatedRecordPreview
+            open={invoicePreviewId != null}
+            onClose={() => setInvoicePreviewId(null)}
+            type="invoice"
+            id={invoicePreviewId ?? undefined}
+            title={
+              linkedInvoices.find((i) => i.id === invoicePreviewId)?.invoiceNumber
+                ? `Invoice ${linkedInvoices.find((i) => i.id === invoicePreviewId)?.invoiceNumber}`
+                : 'Invoice'
+            }
           />
         </>
       )}

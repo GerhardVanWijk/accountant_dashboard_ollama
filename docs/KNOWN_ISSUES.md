@@ -65,21 +65,95 @@ key + a branch in `recordReceipt` (CR the deposit liability for the unallocated 
 out of an inspect-only increment's scope. Full detail: `docs/ACCOUNTING_RELATIONSHIPS.md` § "SALES
 DOCUMENT WORKFLOW AUDIT — 2026-09-03" Q5.
 
-### No stock reservation / commitment model — "Available" always equals "On hand"
-Confirmed 2026-09-03 (record-page increment-3 audit). `StockBalance.quantityCommitted` exists in the
-type and `quantityAvailable()` subtracts it, but **nothing ever writes it**: `stockBalanceService`
-hardcodes `quantityCommitted: 0` and `stockService.getQuantityOnHand` carries a literal
-`const quantityCommitted = 0; // TODO(Phase 2): sum reservations from open Sales Orders`. A confirmed
-Sales Order does **not** ring-fence stock, so every "Available" figure in the UI equals "On hand".
-Not a regression — never built. Recommended as a future feature (see `CURRENT_TASKS.md` increment-3
-DEFERRED); must not be faked with stock movements.
+### ~~No stock reservation / commitment model — "Available" always equals "On hand"~~ — RESOLVED (Phase 5A, 2026-09-03, code-complete/uncommitted)
+See the Resolved section below.
 
-### Partial Sales-Order invoicing is not supported
-Confirmed 2026-09-03. `SalesOrderService.convertToInvoice` copies every line at full quantity, marks
-the order `fulfilled`, and blocks a second conversion. There is no per-line "invoiced quantity" /
-"remaining to invoice" tracking and no `partially_invoiced` status (the purchase side *does* have
-`partially_received`). "Sales order qty 10 → invoice qty 4 → 6 remaining" is not possible today.
-Useful future feature; not built (brief said report only).
+### ~~Partial Sales-Order invoicing~~ — RESOLVED (Phase 5B, 2026-09-04, uncommitted; migrations 0048+0049 APPLIED)
+- **Severity:** was HIGH → resolved. **Status:** Phase 5B COMPLETE, uncommitted on `phase-9b-relationship-design-and-code`.
+- **Done:** `DocumentLineItem.salesOrderLineId?` link; `createInvoiceFromSalesOrder(soId, selections[])`
+  via the atomic `create_invoice_from_sales_order` RPC (migration 0049) + `PartialInvoicePicker` modal;
+  multiple invoices per SO; derived progress badges; `StockCommitmentService` commits only the
+  remaining quantity; document-level `closed` status (migration 0048) + `closeRemaining()` to abandon
+  an un-invoiced remainder. "SO qty 10 → invoice 2 → invoice 3 → close 5" works end to end.
+- **Accounting impact:** none — engine untouched; each invoice posts exactly its own quantities;
+  closing posts nothing.
+- **Deployment blocker:** no.
+- **Deferred (not blockers):** per-line partial cancellation → 5D; delivery notes → 5C;
+  `sales_order_lines` normalization → Phase 6/7.
+
+### ~~Phase 5B.2: create-invoice-from-Sales-Order is not row-locked atomic (concurrency race)~~ — RESOLVED (Phase 5B FINAL / 5B.4, 2026-09-04)
+Migration **0049** (`create_invoice_from_sales_order`, APPLIED) makes it atomic: `SECURITY INVOKER`,
+locks the `sales_orders` row `FOR UPDATE`, re-derives every line's remaining (`ordered − Σ non-void
+draft+posted linked qty`) **inside the transaction**, rejects an over-invoice, creates the `draft`
+in one commit. `RpcSalesOrderDraftInvoiceWriter` routes the production path through it;
+`buildInvoiceFromSelections` stays as fail-fast UX validation. Rollback-wrapped smoke test confirmed
+the in-transaction remaining check. Residual (LOW, → Phase 7): no client request-id idempotency
+log, so a lost-response retry *can* create a second draft — but the remaining cap (which counts
+existing drafts) rejects it once it would exceed the ordered quantity.
+
+### Phase 5B.2: `PartialInvoicePicker` uses company-wide product on-hand for its stock hint
+- **Area:** `src/features/sales/components/PartialInvoicePicker.tsx`. **Severity:** LOW. **Status:** open, new. **Deployment blocker:** no.
+- **Observed:** the per-line "On hand / Committed / Available" hint uses `product.quantityOnHand`
+  (company-wide) + `getCommittedForProduct` (summed across warehouses), even when the SO line targets
+  one warehouse. Same class as the (now-fixed) `SalesLineItemsEditor` issue, but here it's a
+  read-only advisory in a modal that creates a *draft* — final availability is validated at posting.
+- **Recommended fix:** hydrate per-warehouse `stock_balances` when the line has a `warehouseId`
+  (reuse `useStockBalances` + `onHandFor` as `SalesLineItemsEditor` now does). Fold into 5B.6 or a
+  Phase 7 polish pass.
+
+### `SupabaseSalesOrderRepository` / `SupabaseInvoiceRepository` instantiated in several composition points
+- **Area:** DI wiring. **Severity:** LOW. **Status:** open, cleanup only. **Pre-existing** (5A), widened by 5B.3 and 5B.2. **Deployment blocker:** no.
+- **Observed:** `SupabaseSalesOrderRepository` is now constructed in `src/features/sales/services/index.ts`,
+  `src/features/inventory/repositories/instances.ts` (5B.3, for `stockCommitmentService`) and
+  `src/services/index.ts` (5B.2, for `syncSalesOrderStatusAfterPost`); `SupabaseInvoiceRepository`
+  in `src/services/index.ts` and inventory `instances.ts`. All are **stateless wrappers over the
+  same shared `supabase` client** — no in-memory cache, no divergence hazard (that risk exists only
+  with `Mock*Repository`).
+- **Accounting / data impact:** none. Every instance reads the same rows.
+- **Recommended fix:** a single shared repository export each feature imports — deferred, not worth
+  a cross-feature refactor now. **Target:** Phase 7 hardening.
+
+### Phase 5A: `committed` shows 0 for products with no product-linked confirmed Sales Order — NOT a defect
+The derived commitment is correct: with no `confirmed` Sales Order line referencing a product, that
+product's committed quantity **is** 0, so Available == On Hand. The current demo/live DB may have
+few or no product-linked confirmed SOs, so the feature can look inert on the deployed app. A
+demo-seed of confirmed SOs to exercise it visibly is proposed as a **separate approval item**
+(`docs/CURRENT_TASKS.md` Phase 5A) — it would touch live data and is out of scope for the fix.
+
+### ~~Phase 5A: Sales Order line caption pairs company-wide On Hand with warehouse-scoped Committed~~ — RESOLVED (Phase 5B.1, 2026-09-04, uncommitted)
+`SalesLineItemsEditor` now takes an `onHandFor(productId, warehouseId?)` accessor; when a line
+targets a specific warehouse the caption uses that warehouse's `stock_balances` on-hand so on-hand
+and committed are at the **same scope**. `SalesOrderForm` wires it from `useStockBalances()`.
+Falls back to company-wide `product.quantityOnHand` when there is no balance row / no line
+warehouse. Regression test: `SalesLineItemsEditor.test.tsx` "uses warehouse-scoped on-hand".
+
+### ~~Phase 5A: over-commitment warning text attributes same-document lines to "other orders"~~ — RESOLVED (Phase 5B.1, 2026-09-04, uncommitted)
+The shortage caption now reads "(N committed to other confirmed orders, M to other lines on this
+order)" — the same-document contribution is named separately and only shown when non-zero.
+Regression test: `SalesLineItemsEditor.test.tsx` "separates 'other orders' from 'other lines on
+this order'".
+
+### Phase 5B.1: Product-detail movement ledger does not surface the originating Sales Order
+- **Area:** `src/features/inventory/components/InventoryItemDetail.tsx` (`MovementLedger`). **Severity:** LOW. **Status:** open, new.
+- **Observed:** a `sale` movement's evidence panel resolves the invoice, customer, warehouse, qty,
+  unit cost and resulting balance (Increment 3) but not the Sales Order the invoice line came from,
+  even though the data path now exists (`stock_movements.source_document_line_id` →
+  `invoice_lines/jsonb line` → `salesOrderLineId` → SO).
+- **Accounting / data impact:** none — display completeness only.
+- **Recommended fix:** extend the ledger's `resolveSource` to add a "Sales order" row + preview when
+  the invoice line carries `salesOrderLineId`. Small, UI-only. **Target:** a focused 5B follow-up
+  or Phase 7. Deliberately not done in 5B.1 to avoid destabilising the large `InventoryItemDetail`
+  component this checkpoint.
+
+### Phase 5B.1: legacy SO→invoice conversions have no line-level link until the backfill runs
+- **Area:** `docs/db-changes/5b1_backfill_sales_order_line_links.sql`. **Severity:** LOW. **Status:** authored, NOT run.
+- **Observed:** the 3 September SO→invoice pairs (`INV-1068/1072/1074`) were created before
+  `salesOrderLineId` existed, so their invoice lines carry no link. `computeSalesOrderFulfilment`
+  falls back to the commercial `fulfilled` status for them (`displayInvoicingStatus`) — correct, but
+  the per-line Ordered/Invoiced/Remaining grid is hidden for those orders (`hasLineLevelEvidence`
+  false). They are all `fulfilled`, so commitment is unaffected.
+- **Recommended fix:** run the guarded backfill script (needs explicit approval — it writes live
+  jsonb). Deterministic, idempotent, refuses to guess.
 
 ### ~~The migrated full-page record pages have no export / formal print layout~~ — RESOLVED (Phase 4B, 2026-09-03)
 `src/features/businessDocuments/` now provides a branded A4 document system (id-free
@@ -244,6 +318,55 @@ this repo is `gerhard.ark.of.war@gmail.com` (repo-local override, set 2026-08-20
 global git config) — intentional, don't "fix" it back to the global default.
 
 ## Resolved
+
+### No stock reservation / commitment model — "Available" always equalled "On hand"
+**Resolved (Phase 5A, 2026-09-03 — code-complete, uncommitted on `phase-9b-relationship-design-and-code`).**
+
+**Before:** `StockBalance.quantityCommitted` existed in the type and `quantityAvailable()` subtracted
+it, but nothing ever wrote it — `stockBalanceService` hardcoded `quantityCommitted: 0` and
+`stockService.getQuantityAvailable` carried `const quantityCommitted = 0; // TODO(Phase 2)`. A
+confirmed Sales Order did not ring-fence stock; every "Available" figure equalled "On hand".
+
+**After:** committed quantity is **derived on read** from confirmed Sales Order lines — no schema
+change, no `stock_reservations` table, no migration, no Supabase write, no `stock_movement`. New
+`stockCommitmentService.getCommitmentMap()` (Σ confirmed-SO line quantities per product+warehouse,
+default-warehouse fallback), `applyStockCommitments()` pure hydrator (+ synthetic zero-on-hand rows
+so Available can show negative), `useStockCommitments()` hook. `stockService.getQuantityAvailable`
+and `stockBalanceService.getAvailable` derive `committed` from the map (row's own field ignored —
+still 0 in storage). Inventory register, item-detail Stock tab, and the Sales Order line editor
+("On hand · Committed · Available", warn-don't-block) all show the real value. `applyDelta` /
+`rebuildFromMovements` still emit 0 (committed is not ledger-derivable). Full detail:
+`docs/INVENTORY_ARCHITECTURE.md` § "STOCK COMMITMENT (PHASE 5A)". Gate (after the self-commitment
+fix below): tsc / eslint `--max-warnings 0` / **2231 tests / 306 files** / `vite build` all green.
+
+**Still 0 until data exists:** `committed` displays 0 for a product until a `confirmed` Sales Order
+references it. `On Order` (open POs) and `In Transit` (transfers) stay out of the formula until
+Phase 6. Per-line `ordered − delivered` netting is Phase 5B.
+
+### Editing a confirmed Sales Order made it compete with itself for stock (self-commitment)
+**Resolved (Phase 5A CP-5A correction, 2026-09-03 — code-complete, uncommitted on
+`phase-9b-relationship-design-and-code`).**
+
+- **Area:** Inventory / Sales — `SalesOrderForm` line-editor availability caption.
+- **Severity:** Medium (spurious shortage warning; display only, never blocked submit or touched
+  stock/GL).
+- **Observed:** opening an already-`confirmed` Sales Order for editing — the global
+  `getCommitmentMap()` already contains that order's own quantities, so the line editor counted the
+  order's own reserved units as "committed to other orders" and could show a false shortage.
+- **Expected:** the order's own reserved units are not "committed elsewhere" from its own editor's
+  point of view; only *other* confirmed orders reduce available-for-this-order.
+- **Accounting impact:** none — Sales Orders never post; caption is a read-only display signal.
+- **Data impact:** none — no persistence, no cleanup needed (commitment is derived).
+- **Fix:** document-context exclusion at the `SalesOrderForm` layer only — new pure helpers
+  `ownCommitmentMap(order, defaultWarehouseId)` (the persisted order's own contribution to the
+  global map; empty unless `status === 'confirmed'`) and
+  `externalCommittedFor(global, own, productId, warehouseId?)` = `max(0, global − own)`. The global
+  map / inventory register / product detail / stock reports / availability services are unchanged —
+  they still count the edited order. `StockCommitmentService` is **not** globally altered.
+- **Evidence:** `src/features/inventory/services/stockCommitmentContext.test.ts` (24 tests,
+  incl. worked example onHand 20 / own 5 / external 7 → editor available 13),
+  `src/features/sales/components/SalesOrderForm.commitments.test.tsx`. Detail:
+  `docs/INVENTORY_ARCHITECTURE.md` § "Document-context self-commitment exclusion".
 
 ### Every product showed "Unknown tax rate" (and tax dropdowns offered dead ids) in the deployed app
 Found 2026-09-03 during live browser QA. `taxRateService`

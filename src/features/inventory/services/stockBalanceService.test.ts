@@ -78,11 +78,16 @@ describe('StockBalanceService', () => {
   });
 
   describe('getAvailable', () => {
-    it('is onHand - committed + onOrder', async () => {
-      const { service } = setup([
-        makeBalance({ productId: 'prod_1', warehouseId: 'wh_1', quantityOnHand: 100, quantityCommitted: 30, quantityOnOrder: 12 }),
+    it('is onHand - derived committed + onOrder (Phase 5A — the row committed field is ignored)', async () => {
+      const repository = new MockStockBalanceRepository([
+        // quantityCommitted on the row is 0 in real storage; even a stale
+        // non-zero value here must be ignored in favour of the derived map.
+        makeBalance({ productId: 'prod_1', warehouseId: 'wh_1', quantityOnHand: 100, quantityCommitted: 999, quantityOnOrder: 12 }),
       ]);
-      await expect(service.getAvailable('prod_1', 'wh_1')).resolves.toBe(82);
+      const service = new StockBalanceService(repository, {
+        getCommitmentMap: async () => new Map<string, number>([['prod_1__wh_1', 30]]),
+      });
+      await expect(service.getAvailable('prod_1', 'wh_1')).resolves.toBe(82); // 100 - 30 + 12
     });
 
     it('returns 0 when no balance row exists for the pair', async () => {

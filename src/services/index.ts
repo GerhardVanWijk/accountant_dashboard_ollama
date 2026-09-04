@@ -1,5 +1,8 @@
+import type { Invoice } from '@/types';
 import { InvoiceService } from './invoiceService';
 import { SupabaseInvoiceRepository } from '@/repositories/SupabaseInvoiceRepository';
+import { SupabaseSalesOrderRepository } from '@/repositories/SupabaseSalesOrderRepository';
+import { isFullyPostedInvoiced } from '@/features/sales/utils/salesOrderFulfilment';
 import { accountMappingService } from '@/features/accounting/services';
 import {
   inventoryAccountResolver,
@@ -24,25 +27,46 @@ const invoiceLineProjector = new SupabaseDocumentLineProjector(supabase, {
   foreignKeyColumn: 'invoice_id',
 });
 
+const invoiceRepositoryForService = new SupabaseInvoiceRepository(supabase);
+
+/**
+ * Phase 5B.2: when an SO-derived invoice posts and it now completes every
+ * line's POSTED coverage, flip the Sales Order's stored commercial status
+ * `confirmed → fulfilled`. Read-only `SupabaseSalesOrderRepository` (same
+ * "second instance is safe over the shared client" note as
+ * `stockCommitmentService`). Pure `isFullyPostedInvoiced` decides. Draft
+ * invoices never reach here (postInvoice only calls this after a successful
+ * post), so a later draft edit/delete can't strand a stale `fulfilled`.
+ */
+const salesOrderRepositoryForSync = new SupabaseSalesOrderRepository(supabase);
+async function syncSalesOrderStatusAfterPost(invoice: Invoice): Promise<void> {
+  if (!invoice.salesOrderId) return;
+  const order = await salesOrderRepositoryForSync.getById(invoice.salesOrderId);
+  // `confirmed` → the normal path. `closed` → defensive: the order's remainder
+  // was abandoned but a still-open draft was posted anyway and now completes
+  // every line — the truthful state is `fulfilled`, not a stale `closed`.
+  if (!order || (order.status !== 'confirmed' && order.status !== 'closed')) return;
+  const allInvoices = await invoiceRepositoryForService.getAll();
+  if (isFullyPostedInvoiced(order, allInvoices)) {
+    await salesOrderRepositoryForSync.update(order.id, { status: 'fulfilled' });
+  }
+}
+
 /**
  * Shared InvoiceService singleton. Phase 3: it no longer posts through
  * `journalEntryService` + a separate `inventoryPoster` — the ONE atomic
  * inventory posting engine (`periodGuardedInventoryPostingEngine`) posts
  * the single revenue/AR/VAT + COGS/inventory journal entry and moves stock
- * in one RPC. Accounts resolve product → category → generic key via
- * `inventoryAccountResolver` (the deprecated `CategoryAccountMappingService`
- * read path is gone).
- *
- * TODO(Queen — instances.ts): inject the engine / resolver / product /
- * warehouse singletons from a single composition root instead of importing
- * them here.
+ * in one RPC.
  */
 export const invoiceService = new InvoiceService(
-  new SupabaseInvoiceRepository(supabase),
+  invoiceRepositoryForService,
   periodGuardedInventoryPostingEngine,
   inventoryAccountResolver,
   accountMappingService,
   productService,
   warehouseService,
   invoiceLineProjector,
+  undefined,
+  syncSalesOrderStatusAfterPost,
 );
