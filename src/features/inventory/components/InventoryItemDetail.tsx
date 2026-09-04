@@ -13,6 +13,7 @@ import type {
   TaxRate,
   Warehouse,
 } from '@/types';
+import { quantityAvailable } from '@/types';
 import { RecordDetailField, RecordDetailSection } from '@/components/app/record-detail-sheet';
 import { RecordAuditHistorySection } from '@/components/app/record-audit-history';
 import { StatusBadge } from '@/components/app/status-badge';
@@ -21,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn
 import { cn } from '@/lib/utils';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { getTaxRateLabel, MOVEMENT_TYPE_LABELS } from '../constants';
+import { applyStockCommitments } from '../utils/applyStockCommitments';
 
 /** The standard Chart-of-Accounts code + name for each inventory posting role. */
 const GENERIC_ACCOUNT: Record<AccountRole, { code: string; name: string }> = {
@@ -44,6 +46,14 @@ export interface InventoryItemDetailProps {
   invoices?: Invoice[];
   bills?: Bill[];
   customers?: { id: string; name: string }[];
+  /**
+   * Derived stock-commitment map (Phase 5A), keyed by
+   * `commitmentKey(productId, warehouseId)`. `stock_balances.quantity_committed`
+   * is 0 in storage; this hydrates the Stock tab's per-warehouse table and the
+   * On hand / Committed / Available summary with the real value. Supplied by
+   * `InventoryItemDetailPage` via `useStockCommitments()`.
+   */
+  commitments?: Map<string, number>;
   /** Source-document resolution + accounting trace + preview-overlay callback for the movement ledger. */
   ledgerHelpers?: MovementLedgerHelpers;
 }
@@ -472,6 +482,7 @@ export function InventoryItemDetail({
   invoices = [],
   bills = [],
   customers = [],
+  commitments,
   ledgerHelpers = {},
 }: InventoryItemDetailProps) {
   const [tab, setTab] = useState('overview');
@@ -504,7 +515,23 @@ export function InventoryItemDetail({
         .sort((a, b) => (b.movementDate ?? b.createdAt).localeCompare(a.movementDate ?? a.createdAt)),
     [product, movements],
   );
-  const productBalances = useMemo(() => balances.filter((b) => b.productId === product.id), [product, balances]);
+  // Hydrate this product's balance rows with the derived committed quantity
+  // (Phase 5A) — storage holds 0. `applyStockCommitments` may synthesize rows
+  // for commitment keys with no balance row (stock committed at a warehouse
+  // that has never held it → Available negative); filter back to this product
+  // since the map spans every product.
+  const productBalances = useMemo(
+    () =>
+      applyStockCommitments(
+        balances.filter((b) => b.productId === product.id),
+        commitments ?? new Map<string, number>(),
+      ).filter((b) => b.productId === product.id),
+    [product, balances, commitments],
+  );
+  const productCommitted = useMemo(
+    () => productBalances.reduce((sum, b) => sum + b.quantityCommitted, 0),
+    [productBalances],
+  );
 
   const salesMovements = productMovements.filter((m) => m.type === 'sale' || m.type === 'sales_return');
   const purchaseMovements = productMovements.filter((m) => m.type === 'goods_received' || m.type === 'purchase_return');
@@ -565,6 +592,19 @@ export function InventoryItemDetail({
           )}
           <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
             <RecordDetailField label="Company on hand" value={product.quantityOnHand} />
+            <RecordDetailField label="Committed" value={productCommitted} />
+            <RecordDetailField
+              label="Available"
+              value={
+                product.trackInventory
+                  ? quantityAvailable({
+                      quantityOnHand: product.quantityOnHand,
+                      quantityCommitted: productCommitted,
+                      quantityOnOrder: 0,
+                    })
+                  : '—'
+              }
+            />
             <RecordDetailField label="Reorder level" value={product.reorderLevel ?? '—'} />
             <RecordDetailField label="Current WAC" value={<Amount value={product.costPrice} />} />
             <RecordDetailField

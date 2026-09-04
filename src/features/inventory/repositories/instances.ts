@@ -9,6 +9,7 @@ import { SupabaseStockTransferRepository } from './SupabaseStockTransferReposito
 import { SupabaseStockTakeRepository } from './SupabaseStockTakeRepository';
 import { SupabaseOpeningStockBatchRepository } from './SupabaseOpeningStockBatchRepository';
 import { SupabaseSupplierReturnRepository } from './SupabaseSupplierReturnRepository';
+import { SupabaseSalesOrderRepository } from '@/repositories/SupabaseSalesOrderRepository';
 import { supabase } from '@/config/supabase';
 
 /**
@@ -45,3 +46,13 @@ export const stockTransferRepository = new SupabaseStockTransferRepository(supab
 export const stockTakeRepository = new SupabaseStockTakeRepository(supabase);
 export const openingStockBatchRepository = new SupabaseOpeningStockBatchRepository(supabase);
 export const supplierReturnRepository = new SupabaseSupplierReturnRepository(supabase);
+
+/**
+ * Read-only, used by `stockCommitmentService` for the derived stock-commitment
+ * model (Phase 5A) — recompute `quantityCommitted` from confirmed Sales Order
+ * lines on read, no schema change and no Supabase write. A second
+ * Supabase-backed instance is safe: shared DB, no in-memory divergence (the
+ * hazard is only with `Mock*Repository`), so this never disagrees with the
+ * sales feature's own `SupabaseSalesOrderRepository`.
+ */
+export const salesOrderRepository = new SupabaseSalesOrderRepository(supabase);

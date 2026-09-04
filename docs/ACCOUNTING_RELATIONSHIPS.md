@@ -620,13 +620,18 @@ Inventory-transaction-page UX work. **No accounting behaviour was changed.** Fin
   cancelled`. `convertToInvoice` creates a **draft** invoice (`invoice.salesOrderId` set) and
   marks the order `fulfilled`; it is guarded against double-conversion by both the status check
   **and** the `invoice.salesOrderId` back-reference.
-- **STOCK COMMITMENT: NOT IMPLEMENTED.** `StockBalance.quantityCommitted` exists in the type
-  (`src/types/stockBalance.ts`) and the `quantityAvailable()` helper subtracts it, but **nothing
-  ever writes it** — `stockBalanceService` hardcodes `quantityCommitted: 0` and
-  `stockService.getQuantityOnHand` has a literal `const quantityCommitted = 0; // TODO(Phase 2):
-  sum reservations from open Sales Orders`. So **Available === On hand** everywhere today. A
-  Sales Order does **not** contribute to a "Committed" figure. This increment did **not** invent
-  one (per brief §5 — "if no real commitment model exists: STOP and report"). See recommendation R3.
+- **STOCK COMMITMENT — was NOT implemented at the time of this audit; now DERIVED (Phase 5A,
+  2026-09-03).** As audited: `StockBalance.quantityCommitted` existed in the type but nothing wrote
+  it, so Available === On hand everywhere. **Phase 5A** added a **derived** commitment:
+  `stockCommitmentService.getCommitmentMap()` recomputes committed on read as Σ `confirmed`
+  Sales Order line quantities per (product, warehouse); `stockService.getQuantityAvailable` /
+  `stockBalanceService.getAvailable` and the UI rollups net it. **Still no schema change, no
+  `stock_reservations` table, no migration, no Supabase write, no `stock_movement`** — a Sales
+  Order commitment remains a pure operational reservation with zero accounting effect
+  (no JE / GL / COGS / VAT / AR). `stock_balances.quantity_committed` stays 0 in storage.
+  Editing a confirmed order excludes its own contribution at the form layer only
+  (`ownCommitmentMap`). Full detail: `docs/INVENTORY_ARCHITECTURE.md` § "STOCK COMMITMENT
+  (PHASE 5A)".
 
 ## Q3. Invoice — the accounting event
 `src/services/invoiceService.ts` `postInvoice()`. **Confirmed correct, engine untouched.** One

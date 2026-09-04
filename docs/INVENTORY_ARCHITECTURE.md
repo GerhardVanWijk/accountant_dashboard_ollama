@@ -947,3 +947,128 @@ generation, status-transition guards, posted-record immutability, audit DI). Sup
   migration** until that report is approved. Phase 3 then implements atomic/idempotent posting,
   normalized source-line movement evidence, the same-product WAC race fix, real semantic account
   resolution, authorization/audit wiring, repository composition and `reconcileInventory()`.
+
+---
+
+# STOCK COMMITMENT (PHASE 5A)
+
+**Added:** 2026-09-03 · **Status:** code-complete, uncommitted on `phase-9b-relationship-design-and-code`.
+
+## Model — DERIVED, no schema change
+
+`stock_balances.quantity_committed` stays **0 in storage**. There is **no `stock_reservations`
+table, no migration, no Supabase write, and no `stock_movement`** is ever created by a commitment.
+The real committed quantity is **recomputed on read** from confirmed Sales Order lines — the same
+way aging and margin are already derived.
+
+```
+Available  =  On Hand  −  Committed  ( + On Order, still 0 until Phase 6 )
+Committed  =  Σ  confirmed Sales Order line quantities,  per (product, warehouse)
+```
+
+### Commit / release rule (exact)
+
+| Sales Order status | Effect on Committed |
+|---|---|
+| `pending`   | commits **nothing** |
+| `confirmed` | each line commits its **full ordered quantity** of `productId` at `line.warehouseId` (→ `Warehouse.isDefault` when the line carries none) |
+| `fulfilled` | commits **nothing** — `SalesOrderService.convertToInvoice()` flips the order to `fulfilled`, which **releases** the commitment with no extra bookkeeping |
+| `cancelled` | commits **nothing** |
+
+A line with no `productId`, or a non-positive `quantity`, commits nothing. A warehouse-less line
+when no default warehouse exists commits nothing.
+
+> Phase 5A commits the **whole ordered quantity** while the order is `confirmed`. Per-line
+> `ordered − delivered` netting arrives with Phase 5B's line-level counters; until then there is no
+> `deliveredQty` to subtract.
+
+## Layering — no service cycle
+
+`StockCommitmentService` (`src/features/inventory/services/stockCommitmentService.ts`) depends on
+the **`ISalesOrderRepository`** interface (from `@/repositories`), never on `salesOrderService`, so
+there is no inventory ↔ sales **service** cycle. `instances.ts` constructs a second
+`SupabaseSalesOrderRepository` — safe because it is a shared database with no in-memory divergence
+(the hazard exists only with `Mock*Repository`).
+
+## Read path
+
+- `commitmentKey(productId, warehouseId)` → `"${productId}__${warehouseId}"` — the shared map key.
+- `stockCommitmentService.getCommitmentMap(): Promise<Map<string, number>>` — confirmed-SO rollup.
+- `applyStockCommitments(balances, map)` (`src/features/inventory/utils/`) — pure hydrator: replaces
+  `quantityCommitted` on each fetched `StockBalance` from the map, and **synthesizes** a
+  zero-on-hand `synthetic_<key>` row for every commitment key with **no** balance row (stock
+  committed at a warehouse that has never physically held it — Available must show negative; the
+  downstream row builders only iterate the rows they are handed). Synthetic rows carry empty
+  timestamps and are never written back.
+- `useStockCommitments()` — hook mirroring `useStockBalances` (`{ commitments, loading, error, refetch }`).
+
+`buildInventoryRows` / `buildStockOnHandRows` are **unchanged** — they are fed hydrated balances by
+their callers (`InventoryOverviewPage`, `useStockOnHandData`).
+
+## Availability services
+
+`stockService.getQuantityAvailable` and `stockBalanceService.getAvailable` take an optional
+`StockCommitmentLookup` constructor dependency (default: the shared `stockCommitmentService`
+singleton; a test injects a fake). Both now derive `committed` from the commitment map — the
+`StockBalance` row's own `quantityCommitted` is **ignored** (always 0 in storage).
+`applyDelta` / `rebuildFromMovements` still emit `quantityCommitted: 0` — committed is **not**
+ledger-derivable.
+
+## Over-commitment policy — WARN, DON'T BLOCK
+
+The Sales Order line editor (`SalesLineItemsEditor`, opt-in via `showStockAvailability`, wired only
+by `SalesOrderForm`) shows `On hand N · Committed N · Available N` under each tracked-product line
+and turns the caption `text-status-warning` when `ordered > available`, with wording
+*"this line orders X, more than the Y available (Z already committed to other confirmed orders)."*
+It **never blocks submit** — real businesses take orders they cannot yet fill (the seed of a
+backorder concept, Phase 6A). A Sales Order remains a non-posting commitment document. There is
+**no** hard validation, silent quantity reduction, or stock / posting side effect.
+
+## Document-context self-commitment exclusion
+
+`getCommitmentMap()` is a **global** rollup. When you open an already-`confirmed` Sales Order for
+editing, that order's own quantities are *already* inside the global map — so a naive
+`available = onHand − globalCommitted` would tell the user the order's **own** reserved units are
+"committed to other orders", and could show a spurious shortage on the order competing with itself.
+
+The fix lives **only at the document-context availability layer in `SalesOrderForm`**, never in
+`StockCommitmentService`:
+
+```
+ownCommitmentMap(order, defaultWarehouseId)   // the PERSISTED order's own contribution to the
+                                              // global map; EMPTY unless order.status === 'confirmed'
+externalCommittedFor(global, own, p, wh?)  =  max(0, global(key) − own(key))          // wh given
+                                           =  max(0, Σ global for p − Σ own for p)     // wh omitted
+editorAvailable                            =  onHand − externalCommittedFor(...)       // minus other
+                                              //          lines on the same doc for the same product
+```
+
+- `ownCommitmentMap` reuses the exact same per-line filter + `warehouseId ?? Warehouse.isDefault`
+  fallback as the global rollup (shared private `accumulateOrderCommitments`), so multiple lines of
+  one product in one warehouse **sum**, and different warehouses stay in **separate buckets**
+  (SO-A P/CPT=3, P/JHB=2 → subtract 3 from CPT and 2 from JHB, never 5 from both).
+- It is computed from the **persisted** `salesOrder` prop, not the live-edited form state — the
+  global map reflects what is persisted, and in-progress line edits are already netted by the
+  editor's own `committedElsewhere`.
+- A `pending` / `fulfilled` / `cancelled` persisted order contributes nothing to the global map, so
+  `ownCommitmentMap` is empty for it and nothing is subtracted.
+- **Only** `SalesOrderForm`'s per-line availability caption is affected. The global commitment map,
+  the inventory register, the product-detail Stock tab, the stock-on-hand report and both
+  availability services still count the edited order **normally** — the current order is never
+  globally removed from `StockCommitmentService`.
+
+Worked example — onHand 20, SO-A (being edited) commits 5, SO-B (elsewhere) commits 7, same
+product + warehouse: `globalCommitted = 12`, `ownCommitted = 5`, `externalCommitted = 7`,
+`editorAvailable = 20 − 7 = 13`. Ordering 5 on SO-A raises no warning; SO-B's 7 still counts.
+
+## Phase 5B boundary (not implemented)
+
+Phase 5A commits the **whole ordered quantity** while an order is `confirmed`. It cannot net out
+partial progress because the persistence model has none: `DocumentLineItem` (`src/types/common.ts`)
+carries **no** `deliveredQty` / `fulfilledQty` / `invoicedQty`, there is **no** invoice-line ↔
+sales-order-line relationship and **no** conversion-tracking counters, and `SalesOrderStatus` is
+exactly `pending | confirmed | fulfilled | cancelled` with no `partially_*` state.
+`SalesOrderService.convertToInvoice()` copies every line at full quantity and flips the whole order
+to `fulfilled`. Phase 5B introduces per-line `ordered / delivered / invoiced` counters (and split
+fulfilment/invoicing status) and only then should Committed become
+`Σ (orderedQty − deliveredQty − cancelledQty)` per line. Until then there is nothing to subtract.

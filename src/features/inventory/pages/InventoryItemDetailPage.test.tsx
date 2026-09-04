@@ -12,6 +12,7 @@ vi.mock('@/features/sales/hooks/useCustomerMap', () => ({ useCustomerList: () =>
 vi.mock('@/features/purchases/hooks/useBills', () => ({ useBills: () => ({ bills: [{ id: 'bill_1', supplierId: 'sup_1' }] }) }));
 vi.mock('../hooks/useWarehouses', () => ({ useWarehouses: () => ({ warehouses: [{ id: 'wh_1', name: 'Main DC' }] }) }));
 vi.mock('../hooks/useStockBalances', () => ({ useStockBalances: () => ({ balances: [] }) }));
+vi.mock('../hooks/useStockCommitments', () => ({ useStockCommitments: () => ({ commitments: new Map(), loading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('../hooks/useProductCategories', () => ({ useProductCategories: () => ({ categories: [] }) }));
 
 const movementsMock = vi.fn<() => { movements: StockMovement[] }>();

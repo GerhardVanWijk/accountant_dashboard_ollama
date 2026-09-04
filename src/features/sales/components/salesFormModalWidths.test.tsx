@@ -8,6 +8,9 @@ import { SalesOrderFormModal } from './SalesOrderFormModal';
 vi.mock('@/features/tax/hooks/useTaxRates', () => ({ useTaxRates: () => ({ taxRates: [] }) }));
 vi.mock('@/features/inventory/hooks/useProducts', () => ({ useProducts: () => ({ products: [] }) }));
 vi.mock('@/features/inventory/hooks/useWarehouses', () => ({ useWarehouses: () => ({ warehouses: [] }) }));
+vi.mock('@/features/inventory/hooks/useStockCommitments', () => ({
+  useStockCommitments: () => ({ commitments: new Map(), loading: false, error: null, refetch: vi.fn() }),
+}));
 
 function shell() {
   return document.querySelector('[data-slot="form-shell"]') as HTMLElement;

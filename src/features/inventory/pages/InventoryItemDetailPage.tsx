@@ -26,6 +26,7 @@ import { useProducts } from '../hooks/useProducts';
 import { useWarehouses } from '../hooks/useWarehouses';
 import { useStockMovements } from '../hooks/useStockMovements';
 import { useStockBalances } from '../hooks/useStockBalances';
+import { useStockCommitments } from '../hooks/useStockCommitments';
 import { useProductCategories } from '../hooks/useProductCategories';
 import { useStockAdjustments } from '../hooks/useStockAdjustments';
 import { useStockTransfers } from '../hooks/useStockTransfers';
@@ -97,6 +98,7 @@ export function InventoryItemDetailPage() {
   const { warehouses } = useWarehouses();
   const { movements } = useStockMovements();
   const { balances } = useStockBalances();
+  const { commitments } = useStockCommitments();
   const { categories } = useProductCategories();
   const { suppliers } = useSuppliers();
   const { taxRates, loading: taxRatesLoading, error: taxRatesError } = useAllTaxRates();
@@ -236,6 +238,7 @@ export function InventoryItemDetailPage() {
             product={product}
             movements={movements}
             balances={balances}
+            commitments={commitments}
             warehouses={warehouses}
             categories={categories}
             suppliers={suppliers}

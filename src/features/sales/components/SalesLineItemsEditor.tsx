@@ -23,6 +23,15 @@ export interface SalesLineItemsEditorProps {
    * Part R): a Sales Order stays a non-posting commitment document.
    */
   showStockAvailability?: boolean;
+  /**
+   * Derived stock commitment (Phase 5A): units of a product already committed
+   * to OTHER confirmed sales orders, for `(productId, warehouseId)` — the
+   * line's warehouse when set, otherwise summed across warehouses. Passed down
+   * by `SalesOrderForm` from `useStockCommitments()`. When omitted, the stock
+   * caption falls back to on-hand only. This never reserves stock, posts, or
+   * blocks submit.
+   */
+  externalCommittedFor?: (productId: string, warehouseId?: string) => number;
   disabled?: boolean;
 }
 
@@ -46,6 +55,7 @@ export function SalesLineItemsEditor({
   products = [],
   warehouses = [],
   showStockAvailability = false,
+  externalCommittedFor,
   disabled = false,
 }: SalesLineItemsEditorProps) {
   const showWarehouseColumn = warehouses.length > 1;
@@ -69,9 +79,14 @@ export function SalesLineItemsEditor({
     const product = products.find((p) => p.id === line.productId);
     if (!product || !product.trackInventory) return null;
     const onHand = product.quantityOnHand;
-    const available = onHand - committedElsewhere(product.id, index);
-    const short = (line.quantity || 0) > available;
-    return { onHand, available, short, ordered: line.quantity || 0 };
+    // Derived commitment to OTHER confirmed sales orders (Phase 5A) + units
+    // this same document already spoke for on other lines.
+    const externalCommitted = externalCommittedFor?.(product.id, line.warehouseId) ?? 0;
+    const committed = externalCommitted + committedElsewhere(product.id, index);
+    const available = onHand - committed;
+    const ordered = line.quantity || 0;
+    const short = ordered > available;
+    return { onHand, committed, available, short, ordered };
   }
 
   const gridCols = showWarehouseColumn
@@ -235,12 +250,15 @@ export function SalesLineItemsEditor({
             <p
               className={`px-1 text-xs tabular-nums sm:px-0 ${availability.short ? 'text-status-warning' : 'text-muted-foreground'}`}
             >
-              On hand {availability.onHand.toLocaleString('en-ZA')} · Available{' '}
+              On hand {availability.onHand.toLocaleString('en-ZA')} · Committed{' '}
+              {availability.committed.toLocaleString('en-ZA')} · Available{' '}
               {availability.available.toLocaleString('en-ZA')}
               {availability.short && (
                 <>
                   {' '}
-                  — this line orders {availability.ordered.toLocaleString('en-ZA')}, more than is available.
+                  — this line orders {availability.ordered.toLocaleString('en-ZA')}, more than the{' '}
+                  {availability.available.toLocaleString('en-ZA')} available ({availability.committed.toLocaleString('en-ZA')}{' '}
+                  already committed to other confirmed orders).
                 </>
               )}
             </p>

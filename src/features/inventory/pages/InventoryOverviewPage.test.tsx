@@ -30,6 +30,7 @@ vi.mock('../hooks/useStockAlerts', () => ({ useStockAlerts: () => ({ lowStock: [
 vi.mock('../hooks/useWarehouses', () => ({ useWarehouses: () => ({ warehouses: [{ id: 'w1', name: 'Main' }] }) }));
 vi.mock('../hooks/useStockMovements', () => ({ useStockMovements: () => ({ movements: [] }) }));
 vi.mock('../hooks/useStockBalances', () => ({ useStockBalances: () => ({ balances: [] }) }));
+vi.mock('../hooks/useStockCommitments', () => ({ useStockCommitments: () => ({ commitments: new Map(), loading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('../hooks/useProductCategories', () => ({ useProductCategories: () => ({ categories: [] }) }));
 
 function renderPage() {

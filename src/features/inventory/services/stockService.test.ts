@@ -65,8 +65,33 @@ describe('StockService', () => {
   });
 
   describe('getQuantityAvailable', () => {
-    it('equals Quantity on Hand (Committed and On Order are 0 pending Phase 2)', async () => {
-      const { stockService } = setup([], [makeMovement({ warehouseId: 'wh_1', quantityDelta: 30 })]);
+    it('nets the derived stock commitment (Phase 5A) off on hand, scoped to the warehouse', async () => {
+      const productRepository = new MockProductRepository([]);
+      const movementRepository = new MockStockMovementRepository([
+        makeMovement({ warehouseId: 'wh_1', quantityDelta: 30 }),
+        makeMovement({ warehouseId: 'wh_2', quantityDelta: 10 }),
+      ]);
+      const commitmentSource = {
+        getCommitmentMap: async () =>
+          new Map<string, number>([
+            ['prod_test_1__wh_1', 12],
+            ['prod_test_1__wh_2', 3],
+          ]),
+      };
+      const stockService = new StockService(movementRepository, productRepository, commitmentSource);
+
+      // warehouse-scoped: 30 on hand − 12 committed at wh_1
+      await expect(stockService.getQuantityAvailable('prod_test_1', 'wh_1')).resolves.toBe(18);
+      // company-wide: 40 on hand − (12 + 3) committed across warehouses
+      await expect(stockService.getQuantityAvailable('prod_test_1')).resolves.toBe(25);
+    });
+
+    it('equals on hand when nothing is committed', async () => {
+      const stockService = new StockService(
+        new MockStockMovementRepository([makeMovement({ warehouseId: 'wh_1', quantityDelta: 30 })]),
+        new MockProductRepository([]),
+        { getCommitmentMap: async () => new Map<string, number>() },
+      );
 
       await expect(stockService.getQuantityAvailable('prod_test_1', 'wh_1')).resolves.toBe(30);
     });

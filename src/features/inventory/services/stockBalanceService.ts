@@ -1,7 +1,11 @@
 import type { ID, StockBalance, StockMovement } from '@/types';
-import { quantityAvailable } from '@/types';
 import type { IStockBalanceRepository } from '../repositories/IStockBalanceRepository';
 import { stockBalanceRepository } from '../repositories/instances';
+import {
+  commitmentKey,
+  stockCommitmentService,
+  type StockCommitmentLookup,
+} from './stockCommitmentService';
 
 export interface ApplyStockDeltaInput {
   /**
@@ -43,7 +47,15 @@ function balanceKey(productId: ID, warehouseId: ID): string {
  * repo instance, docs/ARCHITECTURE.md).
  */
 export class StockBalanceService {
-  constructor(private readonly repository: IStockBalanceRepository) {}
+  constructor(
+    private readonly repository: IStockBalanceRepository,
+    /**
+     * Derived stock commitment (Phase 5A) — `stock_balances.quantity_committed`
+     * stays 0 in storage; `getAvailable` nets the real committed quantity here
+     * on read. Defaults to the shared singleton; a test injects a fake.
+     */
+    private readonly commitmentSource: StockCommitmentLookup = stockCommitmentService,
+  ) {}
 
   /** Every maintained balance row. */
   async getBalances(): Promise<StockBalance[]> {
@@ -90,14 +102,19 @@ export class StockBalanceService {
   }
 
   /**
-   * Quantity Available = onHand − committed + onOrder
-   * (`quantityAvailable()` helper, src/types/stockBalance.ts). Returns 0
-   * when no balance row exists yet for the pair.
+   * Quantity Available = onHand − committed + onOrder. `onHand` / `onOrder`
+   * come from the balance-cache row; `committed` is the DERIVED stock
+   * commitment (Phase 5A, confirmed Sales Order lines for this
+   * product + warehouse) — the row's own `quantityCommitted` is ignored
+   * because it is always 0 in storage. Returns 0 when no balance row exists
+   * yet for the pair.
    */
   async getAvailable(productId: ID, warehouseId: ID): Promise<number> {
     const balance = await this.getBalance(productId, warehouseId);
     if (!balance) return 0;
-    return quantityAvailable(balance);
+    const commitments = await this.commitmentSource.getCommitmentMap();
+    const committed = commitments.get(commitmentKey(productId, warehouseId)) ?? 0;
+    return balance.quantityOnHand - committed + balance.quantityOnOrder;
   }
 
   /**
