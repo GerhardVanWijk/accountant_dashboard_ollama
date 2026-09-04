@@ -1,0 +1,27 @@
+-- 0051_stock_movement_type_delivery
+-- Phase 5C-A (docs/DELIVERY_NOTES_DESIGN.md Part 25). AUTHORED, NOT APPLIED
+-- (hardened CP-5C-A gate). Renumbered from 0050 during the CP-5C-A hardening
+-- pass to make room for the 0050 composite-key prerequisite.
+--
+-- Adds the `delivery` stock-movement type a Delivery Note's stock issue is
+-- tagged with. `ALTER TYPE ... ADD VALUE` cannot run inside a transaction and
+-- cannot share one with any other DDL (the same restriction 0021 and 0048
+-- documented) — kept in its own migration for exactly that reason. Ordered
+-- after the composite-key prerequisite (0050) purely for readability; there
+-- is no real dependency either way — 0054 (the RPC) never hard-codes
+-- `'delivery'::public.stock_movement_type` as a literal in its own SQL
+-- text, it only ever appears as plain jsonb text, cast to the enum at
+-- RUNTIME inside the ALREADY-EXISTING `post_inventory_transaction` (0031)
+-- when that function processes `v_line->>'movement_type'`.
+--
+-- Existing values (0006 + 0021): goods_received, sale, sales_return,
+-- transfer_in, transfer_out, adjustment, opening, purchase_return,
+-- write_off, stock_gain, stock_take, correction.
+--
+-- ADDITIVE ONLY, idempotent (`IF NOT EXISTS`, Postgres 12+). Inert until
+-- Phase 5C-B code that reads/writes it is deployed; every existing
+-- `stock_movements` row keeps its current type. Re-verified read-only
+-- against the live project (2026-09-04) that `'delivery'` is not already a
+-- value of `stock_movement_type` — confirmed absent.
+
+alter type public.stock_movement_type add value if not exists 'delivery';
