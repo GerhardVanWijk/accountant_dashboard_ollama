@@ -10,6 +10,7 @@ import { SupabaseStockTakeRepository } from './SupabaseStockTakeRepository';
 import { SupabaseOpeningStockBatchRepository } from './SupabaseOpeningStockBatchRepository';
 import { SupabaseSupplierReturnRepository } from './SupabaseSupplierReturnRepository';
 import { SupabaseSalesOrderRepository } from '@/repositories/SupabaseSalesOrderRepository';
+import { SupabaseInvoiceRepository } from '@/repositories/SupabaseInvoiceRepository';
 import { supabase } from '@/config/supabase';
 
 /**
@@ -56,3 +57,12 @@ export const supplierReturnRepository = new SupabaseSupplierReturnRepository(sup
  * sales feature's own `SupabaseSalesOrderRepository`.
  */
 export const salesOrderRepository = new SupabaseSalesOrderRepository(supabase);
+
+/**
+ * Read-only, used by `stockCommitmentService` (Phase 5B.3) to net each
+ * confirmed Sales Order line down to its remaining un-fulfilled commitment
+ * (`orderedQty − Σ posted invoice-line qty linked via `salesOrderLineId`).
+ * Same safety note as `salesOrderRepository` above: a second Supabase-backed
+ * instance over the shared client, no in-memory divergence.
+ */
+export const invoiceRepository = new SupabaseInvoiceRepository(supabase);

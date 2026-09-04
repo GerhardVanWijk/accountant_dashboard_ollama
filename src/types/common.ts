@@ -62,6 +62,20 @@ export interface DocumentLineItem {
   taxAmount: number;
   lineTotal: number;
   /**
+   * Invoice lines only (Phase 5B.1): the `id` of the Sales Order line this
+   * invoice line fulfils. Set once by `SalesOrderService.convertToInvoice()`
+   * (and, later, `createInvoiceFromSalesOrder()`), never edited afterwards.
+   * It is the AUTHORITATIVE, stored SO-line ↔ invoice-line relationship —
+   * the same product can appear on several SO lines (different warehouses,
+   * prices, descriptions), so the link must be the stable line id, never a
+   * `productId` / description / price match. Lives in the jsonb `line_items`
+   * (jsonb stays authoritative — `NORMALIZED_DOCUMENT_LINES_ENABLED` is off).
+   * Absent on quote / sales-order / purchase-order / bill / credit-note
+   * lines and on any invoice line not derived from a Sales Order.
+   * See docs/SALES_FULFILMENT.md.
+   */
+  salesOrderLineId?: ID;
+  /**
    * Bill lines only: flags this line as a fixed asset to be capitalized
    * to the Asset Register instead of expensed/inventoried — see
    * FixedAssetLineDetails' doc comment (src/types/fixedAsset.ts) and

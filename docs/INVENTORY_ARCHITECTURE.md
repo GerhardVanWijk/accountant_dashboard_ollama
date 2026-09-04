@@ -950,37 +950,50 @@ generation, status-transition guards, posted-record immutability, audit DI). Sup
 
 ---
 
-# STOCK COMMITMENT (PHASE 5A)
+# STOCK COMMITMENT (PHASE 5A + 5B.3)
 
-**Added:** 2026-09-03 · **Status:** code-complete, uncommitted on `phase-9b-relationship-design-and-code`.
+**Added:** 2026-09-03 (5A) · **Evolved:** 2026-09-04 (5B.3 — remaining commitment) ·
+**Status:** 5A committed `4233dc2`; 5B.3 code-complete, uncommitted on
+`phase-9b-relationship-design-and-code`.
 
 ## Model — DERIVED, no schema change
 
 `stock_balances.quantity_committed` stays **0 in storage**. There is **no `stock_reservations`
 table, no migration, no Supabase write, and no `stock_movement`** is ever created by a commitment.
-The real committed quantity is **recomputed on read** from confirmed Sales Order lines — the same
-way aging and margin are already derived.
+The real committed quantity is **recomputed on read** from confirmed Sales Order lines, netted
+against posted-invoice progress — the same way aging and margin are already derived.
 
 ```
 Available  =  On Hand  −  Committed  ( + On Order, still 0 until Phase 6 )
-Committed  =  Σ  confirmed Sales Order line quantities,  per (product, warehouse)
+Committed  =  Σ  max(0, orderedQty − postedFulfilledQty)  over confirmed Sales Order lines,  per (product, warehouse)
+             postedFulfilledQty = Σ  posted (non-draft, non-void) invoice-line qty
+                                     linked to that SO line via  DocumentLineItem.salesOrderLineId
 ```
+
+With **no linked posted invoice** this is byte-identical to the Phase 5A rule (`Committed =
+orderedQty`). 5B.3 only subtracts real, posted fulfilment.
 
 ### Commit / release rule (exact)
 
 | Sales Order status | Effect on Committed |
 |---|---|
 | `pending`   | commits **nothing** |
-| `confirmed` | each line commits its **full ordered quantity** of `productId` at `line.warehouseId` (→ `Warehouse.isDefault` when the line carries none) |
-| `fulfilled` | commits **nothing** — `SalesOrderService.convertToInvoice()` flips the order to `fulfilled`, which **releases** the commitment with no extra bookkeeping |
+| `confirmed` | each line commits its **remaining** quantity `max(0, orderedQty − postedFulfilledQty)` of `productId` at `line.warehouseId` (→ `Warehouse.isDefault` when the line carries none) |
+| `fulfilled` | commits **nothing** — `convertToInvoice()` flips the order to `fulfilled` once every line is fully invoiced |
 | `cancelled` | commits **nothing** |
 
-A line with no `productId`, or a non-positive `quantity`, commits nothing. A warehouse-less line
-when no default warehouse exists commits nothing.
+- A line with no `productId`, or a non-positive `quantity`, commits nothing. A warehouse-less line
+  when no default warehouse exists commits nothing.
+- A **draft** invoice releases **nothing** (`postedFulfilledQty` counts only `status ∉ {draft, void}`).
+- A **void** invoice releases nothing.
+- Netting is per SO line: invoicing from `wh_main` does not release a `wh_of` commitment.
+- Over-invoicing a line floors the remaining commitment at 0 (never negative).
 
-> Phase 5A commits the **whole ordered quantity** while the order is `confirmed`. Per-line
-> `ordered − delivered` netting arrives with Phase 5B's line-level counters; until then there is no
-> `deliveredQty` to subtract.
+`StockCommitmentService` gained a read-only `IInvoiceRepository` (inventory `instances.ts`
+`invoiceRepository`, same second-Supabase-instance safety note as `salesOrderRepository`). The
+`SalesOrderForm` self-exclusion (`ownCommitmentMap`) takes the same
+`sumInvoicedBySalesOrderLine(invoices, isPostedInvoiceStatus)` map so "own" and "global" net
+identically.
 
 ## Layering — no service cycle
 
@@ -1061,14 +1074,47 @@ Worked example — onHand 20, SO-A (being edited) commits 5, SO-B (elsewhere) co
 product + warehouse: `globalCommitted = 12`, `ownCommitted = 5`, `externalCommitted = 7`,
 `editorAvailable = 20 − 7 = 13`. Ordering 5 on SO-A raises no warning; SO-B's 7 still counts.
 
-## Phase 5B boundary (not implemented)
+## Phase 5B — COMPLETE (2026-09-04, uncommitted; migrations 0048 + 0049 APPLIED)
 
-Phase 5A commits the **whole ordered quantity** while an order is `confirmed`. It cannot net out
-partial progress because the persistence model has none: `DocumentLineItem` (`src/types/common.ts`)
-carries **no** `deliveredQty` / `fulfilledQty` / `invoicedQty`, there is **no** invoice-line ↔
-sales-order-line relationship and **no** conversion-tracking counters, and `SalesOrderStatus` is
-exactly `pending | confirmed | fulfilled | cancelled` with no `partially_*` state.
-`SalesOrderService.convertToInvoice()` copies every line at full quantity and flips the whole order
-to `fulfilled`. Phase 5B introduces per-line `ordered / delivered / invoiced` counters (and split
-fulfilment/invoicing status) and only then should Committed become
-`Σ (orderedQty − deliveredQty − cancelledQty)` per line. Until then there is nothing to subtract.
+**DONE (5B.1 + 5B.2 + 5B.3):**
+
+- `DocumentLineItem.salesOrderLineId?` (jsonb, invoice lines only — same "one document type"
+  pattern as `fixedAssetDetails`). **No schema migration.** `sales_order_lines` normalized
+  projection = deferred 5B.5.
+- `invoicedQty` / `fulfilledQty` are **DERIVED** (`src/features/sales/utils/salesOrderFulfilment.ts`)
+  from immutable posted-invoice lines — never stored counters. Field name is `fulfilledQty`, not
+  `deliveredQty` (no independent delivery evidence until 5C).
+- **5B.2:** `SalesOrderService.createInvoiceFromSalesOrder(soId, selections[])` — the caller picks
+  `{ salesOrderLineId, quantity }`; the service derives everything else from the SO line and rejects
+  a quantity > that line's current `remainingToInvoiceQty` (`= ordered − Σ posted − Σ draft`,
+  re-derived from a fresh fetch → stale selections caught). `PartialInvoicePicker` large modal is
+  the UI. `convertToInvoice` = "invoice all remaining" (delegates). Multiple invoices per SO;
+  1:1 guard removed; legacy full conversions still blocked.
+- Commitment formula (above): `max(0, orderedQty − postedFulfilledQty)` while `confirmed`.
+  **Reduces to the 5A rule when nothing is invoiced.** Live prod has 0 `confirmed` SOs → no visible
+  change; GL 1200 ↔ valuation unaffected (commitment never posts). A DRAFT invoice (picker output)
+  releases nothing; only POSTING it moves stock + releases commitment.
+- `fulfilmentStatus` / `invoicingStatus` are **derived selectors**. The stored
+  `SalesOrderStatus` `confirmed → fulfilled` flip now happens **only at POST time** when every line
+  is fully POSTED-invoiced (`InvoiceService.onInvoicePosted` → `syncSalesOrderStatusAfterPost`), so
+  deleting/editing a draft can't strand a stale `fulfilled`.
+
+**5B.4 (DONE):**
+- **Atomic RPC** `public.create_invoice_from_sales_order` (migration **0049, APPLIED**) — `SECURITY
+  INVOKER`, `search_path=public`, revoked from `public`/`anon`, granted to `authenticated`. Locks
+  the `sales_orders` row `FOR UPDATE`, re-derives every line's `remaining = ordered − Σ non-void
+  (draft+posted) linked qty` in-transaction, builds lines from the authoritative SO jsonb, inserts
+  a `draft` invoice. **No `journal_entries` / `journal_lines` / `stock_movements`, no
+  `create_journal_entry_with_lines`, no `post_inventory_transaction`. Does not `update
+  sales_orders`.** The concurrency race from CP-5B.2 is closed — two racing callers serialise on the
+  SO lock and the second sees the first's draft as "taken".
+- **`closed` status** (migration **0048, APPLIED** — `ALTER TYPE sales_order_status ADD VALUE
+  'closed'`). `closeRemaining()` abandons the un-invoiced remainder of a partly-invoiced `confirmed`
+  order — no journal, no movement, no COGS/revenue/VAT/AR, no invoice. `StockCommitmentService`
+  (`=== 'confirmed'` gate) stops committing the remainder purely by re-derivation, no DB write.
+- **5B.1 relationship backfill RUN** — the 3 September SO→invoice pairs linked (9 lines,
+  relationship-only, all accounting fingerprints byte-identical before/after).
+
+**Deferred → future phases:** `sales_order_lines` normalized projection (Phase 6/7 with the 9B flag
+review); delivery notes (5C — moves the stock-movement/COGS trigger to delivery); credit-note ↔
+remaining + per-line partial cancel (5D); a request-id idempotency log on the RPC (Phase 7).

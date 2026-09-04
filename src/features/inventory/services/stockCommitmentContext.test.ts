@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DocumentLineItem, SalesOrder } from '@/types';
+import type { DocumentLineItem, Invoice, SalesOrder } from '@/types';
 import {
   commitmentKey,
   externalCommittedFor,
@@ -8,6 +8,7 @@ import {
   StockCommitmentService,
 } from './stockCommitmentService';
 import type { ISalesOrderRepository } from '@/repositories/ISalesOrderRepository';
+import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
 import type { IWarehouseRepository } from '../repositories/IWarehouseRepository';
 import type { Warehouse } from '@/types';
 
@@ -59,10 +60,11 @@ const WAREHOUSES: Warehouse[] = [
 ];
 const DEFAULT_WH = 'wh_main';
 
-function globalMap(orders: SalesOrder[], warehouses: Warehouse[] = WAREHOUSES) {
+function globalMap(orders: SalesOrder[], warehouses: Warehouse[] = WAREHOUSES, invoices: Invoice[] = []) {
   const salesOrderRepo = { getAll: async () => orders } as unknown as ISalesOrderRepository;
   const warehouseRepo = { getAll: async () => warehouses } as unknown as IWarehouseRepository;
-  return new StockCommitmentService(salesOrderRepo, warehouseRepo).getCommitmentMap();
+  const invoiceRepo = { getAll: async () => invoices } as unknown as IInvoiceRepository;
+  return new StockCommitmentService(salesOrderRepo, warehouseRepo, invoiceRepo).getCommitmentMap();
 }
 
 /** Editor availability for one product/warehouse, as `SalesOrderForm` composes it. */

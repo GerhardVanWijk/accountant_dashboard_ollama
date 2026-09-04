@@ -99,6 +99,15 @@ export class InvoiceService {
     private readonly lineProjector: IDocumentLineProjector = new NoopDocumentLineProjector(),
     /** Phase 4B-2: records a "created" audit row for an invoice copied via `copyToNewDraftInvoice`. Defaults to the shared singleton. */
     private readonly auditLog: AuditLogService = auditLogService,
+    /**
+     * Phase 5B.2: after an invoice derived from a Sales Order POSTS, re-derive
+     * that order's commercial status (flip `confirmed → fulfilled` once every
+     * line is fully POSTED-invoiced). Defaults to a no-op so tests and other
+     * constructions are unaffected — the production root
+     * (src/services/index.ts) wires the real one. Best-effort: a failure here
+     * never fails or rolls back the (already-committed) invoice posting.
+     */
+    private readonly onInvoicePosted: (invoice: Invoice) => Promise<void> = async () => {},
   ) {}
 
   async getInvoices(): Promise<Invoice[]> {
@@ -338,7 +347,19 @@ export class InvoiceService {
       journal: { source: 'invoice', memo: docLabel },
     });
 
-    return this.repository.update(id, { status: 'sent', journalEntryId: result.journalEntryId });
+    const posted = await this.repository.update(id, { status: 'sent', journalEntryId: result.journalEntryId });
+
+    // Phase 5B.2: keep a Sales Order's commercial status in step once its
+    // invoices are fully posted. Best-effort — never undo a successful post.
+    if (posted.salesOrderId) {
+      try {
+        await this.onInvoicePosted(posted);
+      } catch (error) {
+        console.warn(`postInvoice: sales-order status sync failed for invoice ${posted.invoiceNumber} (posting itself is unaffected):`, error);
+      }
+    }
+
+    return posted;
   }
 
   /**

@@ -688,13 +688,59 @@ regardless of how much is allocated. An unallocated receipt (`allocations: []`,
 - `CustomerReceiptDetailPage` already surfaces the unallocated ("On account") amount, so the
   UI is not hiding it — but it currently labels it as AR-reducing, which is what the posting does.
 
-## Q6. Partial Sales-Order invoicing — NOT SUPPORTED
-`SalesOrderService.convertToInvoice` copies **all** lines at full quantity, then marks the order
-`fulfilled` and blocks any second conversion (status check + `invoice.salesOrderId` back-ref).
-There is no "quantity invoiced so far" / "remaining to invoice" tracking on `SalesOrder` or its
-lines, and no `partially_invoiced` status. (Contrast the purchase side, which *does* have
-`PurchaseOrderStatus = '… | partially_received | …'`.) Not built here (brief §11). See
-recommendation R2 — this is a genuinely useful feature for real accounting software.
+## Q6. Partial Sales-Order invoicing — PHASE 5B COMPLETE (2026-09-04, uncommitted; migrations 0048+0049 APPLIED)
+As audited (pre-5B): `convertToInvoice` copied **all** lines at full quantity, marked the order
+`fulfilled`, and blocked any second conversion.
+
+**Now:**
+- `SalesOrderService.createInvoiceFromSalesOrder(soId, selections[])` — the caller picks
+  `{ salesOrderLineId, quantity }`; every accounting field (product / warehouse / tax / unit price /
+  description / line totals / VAT) is DERIVED from the authoritative Sales Order line.
+- The **write is atomic**: the Supabase path routes through the `create_invoice_from_sales_order`
+  Postgres RPC (migration **0049**, `SECURITY INVOKER`) which locks the SO row `FOR UPDATE`,
+  re-derives every line's remaining (`orderedQty − Σ non-void draft+posted linked qty`) inside the
+  transaction, and rejects an over-invoice — the CP-5B.2 concurrency race is closed. The RPC creates
+  a **`draft`** invoice only: no journal, no `journal_lines`, no `stock_movements`, no SO-status
+  change.
+- Each partial invoice still POSTS through the **byte-unchanged** engine as its own atomic entry
+  (`DR AR / CR Revenue / CR VAT Output` + `DR COGS / CR Inventory`), for **that invoice's quantities
+  only**. `postingKey = invoice:<id>:post` — N partial invoices = N distinct keys, N distinct sets
+  of fresh line ids. No double COGS / revenue / VAT / AR / stock movement.
+- **`closed` commercial status** (migration **0048**): `SalesOrderService.closeRemaining()` abandons
+  the un-invoiced remainder of a partly-invoiced `confirmed` order. **Zero accounting effect** — no
+  journal, no stock movement, no COGS/revenue/VAT/AR, no invoice, no credit note. Distinct from
+  `fulfilled` (which means every ordered quantity was actually supplied). The already-invoiced lines
+  and their postings are untouched; the reserved stock is released purely by re-derivation.
+- `cancelOrder` tightened — rejected once any non-void invoice is linked ("close the remaining
+  quantity instead").
+- Payment / deposit behaviour unchanged and never gates fulfilment; a draft invoice releases no
+  stock commitment (only POSTING it does — 5B.3).
+- **5B.1 relationship backfill RUN** — the 3 legacy September SO→invoice pairs
+  (`INV-1068/1072/1074`) now carry `salesOrderLineId` on all 9 lines (relationship-only; trial
+  balance, GL 1200, inventory valuation, invoice/SO financial fingerprints byte-identical
+  before/after).
+
+**Now (Phase 5B.1 / 5B.3 — `docs/SALES_FULFILMENT.md` §13):**
+- `DocumentLineItem.salesOrderLineId?` (jsonb, invoice lines only, **no migration**) is the
+  authoritative SO-line ↔ invoice-line link. `invoicedQty` / `remainingToInvoiceQty` /
+  `invoicingStatus` / `fulfilmentStatus` are **DERIVED** from immutable posted-invoice lines
+  (`src/features/sales/utils/salesOrderFulfilment.ts`) — never stored counters.
+- `convertToInvoice` bills only the **remaining** quantity, stamps the link + a fresh line id, and
+  can be called repeatedly → **multiple invoices per Sales Order** (the 1:1 `invoice.salesOrderId`
+  guard is gone; a pre-5B.1 legacy full conversion is still detected and blocked). Each invoice
+  still posts through the **unchanged** engine with its own `postingKey = invoice:<id>:post`.
+- Accounting timing **unchanged**: on `postInvoice()` the stock movement + COGS + revenue/VAT/AR
+  all post together, atomically, for **that invoice's line quantities only**. A draft invoice
+  posts nothing and releases no stock commitment. Partial customer payment posts only
+  `DR Cash / CR AR` and never touches fulfilment, commitment, COGS, or the derived statuses —
+  **payment status does not gate fulfilment.**
+- Stock commitment (5B.3): a `confirmed` SO line now commits
+  `max(0, orderedQty − Σ posted invoice-line qty linked)`, per (product, warehouse). Draft/void
+  release nothing. Reduces to the Phase 5A whole-quantity rule when nothing is invoiced.
+
+**Still pending (5B.2+):** the per-line quantity picker / `createInvoiceFromSalesOrder(soId,
+lines[])`, the document-level `closed` status, and the guarded historical backfill
+(`docs/db-changes/5b1_backfill_sales_order_line_links.sql` — authored, NOT run).
 
 ## Q7. Duplicate / copy — NOT SUPPORTED
 No `duplicate` / `clone` method on `quoteService`, `salesOrderService`, `purchaseOrderService`,

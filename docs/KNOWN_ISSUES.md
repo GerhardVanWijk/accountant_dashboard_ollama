@@ -68,26 +68,50 @@ DOCUMENT WORKFLOW AUDIT — 2026-09-03" Q5.
 ### ~~No stock reservation / commitment model — "Available" always equals "On hand"~~ — RESOLVED (Phase 5A, 2026-09-03, code-complete/uncommitted)
 See the Resolved section below.
 
-### Partial Sales-Order invoicing is not supported
-Confirmed 2026-09-03. `SalesOrderService.convertToInvoice` copies every line at full quantity, marks
-the order `fulfilled`, and blocks a second conversion. There is no per-line "invoiced quantity" /
-"remaining to invoice" tracking and no `partially_invoiced` status (the purchase side *does* have
-`partially_received`). "Sales order qty 10 → invoice qty 4 → 6 remaining" is not possible today.
-Useful future feature; not built (brief said report only). **Blocks Phase 5A commitment precision:**
-because there is no `deliveredQty` / `invoicedQty` per line, Phase 5A can only commit the *whole*
-ordered quantity while an order is `confirmed` — partial-progress netting is **Phase 5B** (per-line
-`ordered / delivered / invoiced` counters + split fulfilment/invoicing status).
+### ~~Partial Sales-Order invoicing~~ — RESOLVED (Phase 5B, 2026-09-04, uncommitted; migrations 0048+0049 APPLIED)
+- **Severity:** was HIGH → resolved. **Status:** Phase 5B COMPLETE, uncommitted on `phase-9b-relationship-design-and-code`.
+- **Done:** `DocumentLineItem.salesOrderLineId?` link; `createInvoiceFromSalesOrder(soId, selections[])`
+  via the atomic `create_invoice_from_sales_order` RPC (migration 0049) + `PartialInvoicePicker` modal;
+  multiple invoices per SO; derived progress badges; `StockCommitmentService` commits only the
+  remaining quantity; document-level `closed` status (migration 0048) + `closeRemaining()` to abandon
+  an un-invoiced remainder. "SO qty 10 → invoice 2 → invoice 3 → close 5" works end to end.
+- **Accounting impact:** none — engine untouched; each invoice posts exactly its own quantities;
+  closing posts nothing.
+- **Deployment blocker:** no.
+- **Deferred (not blockers):** per-line partial cancellation → 5D; delivery notes → 5C;
+  `sales_order_lines` normalization → Phase 6/7.
 
-### Phase 5A commitment: `SupabaseSalesOrderRepository` instantiated twice
-- **Area:** Inventory repositories / DI wiring. **Severity:** LOW. **Status:** open, cleanup only.
-- **Observed:** `SupabaseSalesOrderRepository` is constructed in both
-  `src/features/sales/services/index.ts` and `src/features/inventory/repositories/instances.ts`
-  (the latter added for `stockCommitmentService`). Verified: both are **stateless wrappers over the
+### ~~Phase 5B.2: create-invoice-from-Sales-Order is not row-locked atomic (concurrency race)~~ — RESOLVED (Phase 5B FINAL / 5B.4, 2026-09-04)
+Migration **0049** (`create_invoice_from_sales_order`, APPLIED) makes it atomic: `SECURITY INVOKER`,
+locks the `sales_orders` row `FOR UPDATE`, re-derives every line's remaining (`ordered − Σ non-void
+draft+posted linked qty`) **inside the transaction**, rejects an over-invoice, creates the `draft`
+in one commit. `RpcSalesOrderDraftInvoiceWriter` routes the production path through it;
+`buildInvoiceFromSelections` stays as fail-fast UX validation. Rollback-wrapped smoke test confirmed
+the in-transaction remaining check. Residual (LOW, → Phase 7): no client request-id idempotency
+log, so a lost-response retry *can* create a second draft — but the remaining cap (which counts
+existing drafts) rejects it once it would exceed the ordered quantity.
+
+### Phase 5B.2: `PartialInvoicePicker` uses company-wide product on-hand for its stock hint
+- **Area:** `src/features/sales/components/PartialInvoicePicker.tsx`. **Severity:** LOW. **Status:** open, new. **Deployment blocker:** no.
+- **Observed:** the per-line "On hand / Committed / Available" hint uses `product.quantityOnHand`
+  (company-wide) + `getCommittedForProduct` (summed across warehouses), even when the SO line targets
+  one warehouse. Same class as the (now-fixed) `SalesLineItemsEditor` issue, but here it's a
+  read-only advisory in a modal that creates a *draft* — final availability is validated at posting.
+- **Recommended fix:** hydrate per-warehouse `stock_balances` when the line has a `warehouseId`
+  (reuse `useStockBalances` + `onHandFor` as `SalesLineItemsEditor` now does). Fold into 5B.6 or a
+  Phase 7 polish pass.
+
+### `SupabaseSalesOrderRepository` / `SupabaseInvoiceRepository` instantiated in several composition points
+- **Area:** DI wiring. **Severity:** LOW. **Status:** open, cleanup only. **Pre-existing** (5A), widened by 5B.3 and 5B.2. **Deployment blocker:** no.
+- **Observed:** `SupabaseSalesOrderRepository` is now constructed in `src/features/sales/services/index.ts`,
+  `src/features/inventory/repositories/instances.ts` (5B.3, for `stockCommitmentService`) and
+  `src/services/index.ts` (5B.2, for `syncSalesOrderStatusAfterPost`); `SupabaseInvoiceRepository`
+  in `src/services/index.ts` and inventory `instances.ts`. All are **stateless wrappers over the
   same shared `supabase` client** — no in-memory cache, no divergence hazard (that risk exists only
   with `Mock*Repository`).
-- **Accounting / data impact:** none. The two instances always read the same rows.
-- **Recommended fix:** a single shared `salesOrderRepository` export both features import — deferred,
-  not worth a cross-feature refactor now.
+- **Accounting / data impact:** none. Every instance reads the same rows.
+- **Recommended fix:** a single shared repository export each feature imports — deferred, not worth
+  a cross-feature refactor now. **Target:** Phase 7 hardening.
 
 ### Phase 5A: `committed` shows 0 for products with no product-linked confirmed Sales Order — NOT a defect
 The derived commitment is correct: with no `confirmed` Sales Order line referencing a product, that
@@ -96,33 +120,40 @@ few or no product-linked confirmed SOs, so the feature can look inert on the dep
 demo-seed of confirmed SOs to exercise it visibly is proposed as a **separate approval item**
 (`docs/CURRENT_TASKS.md` Phase 5A) — it would touch live data and is out of scope for the fix.
 
-### Phase 5A: Sales Order line caption pairs company-wide On Hand with warehouse-scoped Committed
-- **Area:** `src/features/sales/components/SalesLineItemsEditor.tsx` (`availabilityFor`). **Severity:** LOW.
-  **Status:** open, display-only, multi-warehouse tenants only.
-- **Observed:** the stock caption uses `product.quantityOnHand` (company-wide, summed across every
-  warehouse) as "On hand" but, when a line carries a `warehouseId` (only possible when
-  `warehouses.length > 1`), `externalCommittedFor` returns the **warehouse-scoped** committed
-  quantity. The two figures are then at different scopes, so "Available" can be overstated for that
-  line. In a single-warehouse tenant `line.warehouseId` is always `undefined` → committed is summed
-  across warehouses too → the caption is internally consistent.
-- **Expected:** both figures at the same scope (per-warehouse on-hand from `stock_balances`, or
-  company-wide committed).
-- **Accounting / data impact:** none — the caption is an advisory hint, never reserves stock, posts,
-  or blocks submit. The company-wide `quantityOnHand` in this caption predates Phase 5A.
-- **Recommended fix:** feed the SO line editor the per-warehouse `StockBalance` on-hand (hydrated the
-  same way the inventory register is) so both sides are warehouse-scoped. Small, UI-only; fold into
-  the Phase 5B Sales Order line rework or a Phase 7 polish pass.
+### ~~Phase 5A: Sales Order line caption pairs company-wide On Hand with warehouse-scoped Committed~~ — RESOLVED (Phase 5B.1, 2026-09-04, uncommitted)
+`SalesLineItemsEditor` now takes an `onHandFor(productId, warehouseId?)` accessor; when a line
+targets a specific warehouse the caption uses that warehouse's `stock_balances` on-hand so on-hand
+and committed are at the **same scope**. `SalesOrderForm` wires it from `useStockBalances()`.
+Falls back to company-wide `product.quantityOnHand` when there is no balance row / no line
+warehouse. Regression test: `SalesLineItemsEditor.test.tsx` "uses warehouse-scoped on-hand".
 
-### Phase 5A: over-commitment warning text attributes same-document lines to "other orders"
-- **Area:** `src/features/sales/components/SalesLineItemsEditor.tsx` warning copy. **Severity:** LOW.
-  **Status:** open, wording only.
-- **Observed:** the shortage caption reads "(N already committed to other confirmed orders)" where N
-  is `externalCommitted + committedElsewhere` — `committedElsewhere` being other lines for the same
-  product **on the order being edited**. When a SKU appears on multiple lines of the current order,
-  the label slightly overstates "other orders".
-- **Accounting / data impact:** none — text only.
-- **Recommended fix:** split the caption into "committed to other orders" vs "already on this order",
-  or drop the parenthetical attribution. Cosmetic; fold into the Phase 5B editor rework.
+### ~~Phase 5A: over-commitment warning text attributes same-document lines to "other orders"~~ — RESOLVED (Phase 5B.1, 2026-09-04, uncommitted)
+The shortage caption now reads "(N committed to other confirmed orders, M to other lines on this
+order)" — the same-document contribution is named separately and only shown when non-zero.
+Regression test: `SalesLineItemsEditor.test.tsx` "separates 'other orders' from 'other lines on
+this order'".
+
+### Phase 5B.1: Product-detail movement ledger does not surface the originating Sales Order
+- **Area:** `src/features/inventory/components/InventoryItemDetail.tsx` (`MovementLedger`). **Severity:** LOW. **Status:** open, new.
+- **Observed:** a `sale` movement's evidence panel resolves the invoice, customer, warehouse, qty,
+  unit cost and resulting balance (Increment 3) but not the Sales Order the invoice line came from,
+  even though the data path now exists (`stock_movements.source_document_line_id` →
+  `invoice_lines/jsonb line` → `salesOrderLineId` → SO).
+- **Accounting / data impact:** none — display completeness only.
+- **Recommended fix:** extend the ledger's `resolveSource` to add a "Sales order" row + preview when
+  the invoice line carries `salesOrderLineId`. Small, UI-only. **Target:** a focused 5B follow-up
+  or Phase 7. Deliberately not done in 5B.1 to avoid destabilising the large `InventoryItemDetail`
+  component this checkpoint.
+
+### Phase 5B.1: legacy SO→invoice conversions have no line-level link until the backfill runs
+- **Area:** `docs/db-changes/5b1_backfill_sales_order_line_links.sql`. **Severity:** LOW. **Status:** authored, NOT run.
+- **Observed:** the 3 September SO→invoice pairs (`INV-1068/1072/1074`) were created before
+  `salesOrderLineId` existed, so their invoice lines carry no link. `computeSalesOrderFulfilment`
+  falls back to the commercial `fulfilled` status for them (`displayInvoicingStatus`) — correct, but
+  the per-line Ordered/Invoiced/Remaining grid is hidden for those orders (`hasLineLevelEvidence`
+  false). They are all `fulfilled`, so commitment is unaffected.
+- **Recommended fix:** run the guarded backfill script (needs explicit approval — it writes live
+  jsonb). Deterministic, idempotent, refuses to guess.
 
 ### ~~The migrated full-page record pages have no export / formal print layout~~ — RESOLVED (Phase 4B, 2026-09-03)
 `src/features/businessDocuments/` now provides a branded A4 document system (id-free

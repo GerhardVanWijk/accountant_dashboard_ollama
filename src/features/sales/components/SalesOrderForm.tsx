@@ -12,11 +12,14 @@ import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
+import { useStockBalances } from '@/features/inventory/hooks/useStockBalances';
 import { useStockCommitments } from '@/features/inventory/hooks/useStockCommitments';
 import {
   externalCommittedFor as resolveExternalCommitted,
   ownCommitmentMap,
 } from '@/features/inventory/services/stockCommitmentService';
+import { useInvoices } from '@/features/sales/hooks/useInvoices';
+import { isPostedInvoiceStatus, sumInvoicedBySalesOrderLine } from '@/features/sales/utils/salesOrderFulfilment';
 
 export interface SalesOrderFormProps {
   customers: Customer[];
@@ -45,7 +48,9 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
   const { taxRates } = useTaxRates();
   const { products } = useProducts();
   const { warehouses } = useWarehouses();
+  const { balances } = useStockBalances();
   const { commitments } = useStockCommitments();
+  const { invoices } = useInvoices();
 
   /**
    * Derived stock commitment (Phase 5A) — units of a product committed to
@@ -62,12 +67,22 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
    * product detail / reports are untouched.
    */
   const defaultWarehouseId = warehouses.find((w) => w.isDefault)?.id;
+  // Phase 5B.3: net the persisted order's own posted-invoice progress so the
+  // "own" contribution matches what the global commitment map now counts.
+  const fulfilledByLine = useMemo(
+    () => sumInvoicedBySalesOrderLine(invoices, (inv) => isPostedInvoiceStatus(inv.status)),
+    [invoices],
+  );
   const ownCommitments = useMemo(
-    () => ownCommitmentMap(salesOrder, defaultWarehouseId),
-    [salesOrder, defaultWarehouseId],
+    () => ownCommitmentMap(salesOrder, defaultWarehouseId, fulfilledByLine),
+    [salesOrder, defaultWarehouseId, fulfilledByLine],
   );
   const externalCommittedFor = (productId: string, warehouseId?: string) =>
     resolveExternalCommitted(commitments, ownCommitments, productId, warehouseId);
+  const onHandFor = (productId: string, warehouseId?: string) =>
+    warehouseId
+      ? balances.find((b) => b.productId === productId && b.warehouseId === warehouseId)?.quantityOnHand
+      : undefined;
   const [orderNumber, setOrderNumber] = useState(salesOrder?.orderNumber ?? defaultOrderNumber);
   const [customerId, setCustomerId] = useState(salesOrder?.customerId ?? customers[0]?.id ?? '');
   const [orderDate, setOrderDate] = useState(salesOrder ? salesOrder.orderDate.slice(0, 10) : today());
@@ -158,6 +173,7 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
         warehouses={warehouses}
         showStockAvailability
         externalCommittedFor={externalCommittedFor}
+        onHandFor={onHandFor}
         disabled={isSubmitting}
       />
 

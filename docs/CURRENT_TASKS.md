@@ -206,6 +206,18 @@ export, dark-app → white-paper) — no Chrome DevTools / Playwright MCP in thi
 
 ## PHASE 5 — Sales fulfilment
 
+> **PHASE 5A: COMPLETE** — stock commitment, committed `4233dc2` + pushed (branch, not merged).
+> **PHASE 5B: COMPLETE (2026-09-04, uncommitted working tree)** — CP-5B-0 design + 5B.1 (line link
+> + derived quantities) + 5B.2 (partial-invoice picker) + 5B.3 (remaining commitment) + 5B.4
+> (atomic `create_invoice_from_sales_order` RPC — migration **0049 APPLIED**; `closed` commercial
+> status — migration **0048 APPLIED**; "Close remaining"; `cancelOrder` tightened; the 5B.1
+> relationship backfill **RUN** — 9 links, relationship-only, all accounting fingerprints
+> unchanged). Gate: tsc / eslint / **2348 tests / 310 files** / build all green.
+> `NORMALIZED_DOCUMENT_LINES_ENABLED` still `false`. **Not committed / pushed / merged / deployed.**
+> Full detail: `docs/SALES_FULFILMENT.md`. Deferred → future phases: `sales_order_lines`
+> normalization (was "5B.5" → Phase 6/7), delivery notes (5C), credit-note/partial-cancel polish
+> (5D), a request-id idempotency log + shared-repo cleanup (Phase 7).
+
 The core workflow. Target model:
 
 ```
@@ -272,13 +284,20 @@ any migration (only if materialised); UI screenshots-by-description; full gate. 
 
 ---
 
-### PHASE 5A — DONE + self-commitment correction applied, uncommitted, branch `phase-9b-relationship-design-and-code` (2026-09-03)
+### PHASE 5A — DONE + CP-5A APPROVED + COMMITTED + PUSHED, branch `phase-9b-relationship-design-and-code` (commit `4233dc2`, 2026-09-04)
+
+**CP-5A FINAL: APPROVED 2026-09-04.** All Phase 5A files squashed into one clean commit
+`4233dc2` ("feat(inventory,sales): derive stock commitment from confirmed Sales Orders (Phase 5A)")
+and pushed to `phase-9b-relationship-design-and-code`. Gate at commit: tsc ✅ · eslint
+`--max-warnings 0` ✅ · **2231 tests / 306 files** ✅ · `vite build` ✅. **NOT merged to `main`,
+NOT deployed** (per instruction). Cloudflare Pages branch preview auto-builds from the push.
 
 **Status labels:** derived architecture + all consumers **DONE**; self-commitment fix **DONE**;
 warn-only over-commitment policy **DONE**; accounting isolation **VERIFIED**; no migration / no DB
-write / no seed / no flag change **CONFIRMED**; CP-5A review **IN REVIEW** (Queen assembles the
-final report); per-line delivered/invoiced netting **DEFERRED → Phase 5B**; demo-seed of confirmed
-SOs so the feature is visibly exercised on prod **DEFERRED** (separate approval — touches live data).
+write / no seed / no flag change **CONFIRMED**; CP-5A review **APPROVED + SHIPPED TO BRANCH**;
+per-line delivered/invoiced netting **DEFERRED → Phase 5B** (now designed — see CP-5B-0 /
+`docs/SALES_FULFILMENT.md`); demo-seed of confirmed SOs so the feature is visibly exercised on prod
+**DEFERRED** (separate approval — touches live data).
 
 **Model decision + rationale:** **DERIVED, no schema change.** `stock_balances.quantity_committed`
 stays 0 in storage; committed is recomputed on read from `confirmed` Sales Order lines — always
@@ -343,51 +362,43 @@ fulfilment/invoicing status) and is out of scope here.
 
 ---
 
-### PHASE 5B — Partial Sales Order fulfilment  *(two-dimensional state)*
+### PHASE 5B — Partial Sales Order fulfilment — **COMPLETE (2026-09-04, uncommitted)**
 
-**Context / gap:** `SalesOrderService.convertToInvoice` copies **all** lines at full quantity,
-marks the order `fulfilled`, and blocks re-conversion. No per-line "delivered / invoiced" tracking,
-no `partially_*` status. (`docs/KNOWN_ISSUES.md` § "Partial Sales-Order invoicing".)
+Full detail: **`docs/SALES_FULFILMENT.md`**. Final model:
+- `DocumentLineItem.salesOrderLineId?` (jsonb, invoice lines only) is the authoritative SO-line ↔
+  invoice-line link. `postedFulfilledQty` / `draftInvoicedQty` / `remainingToInvoiceQty` /
+  `remainingToFulfilQty` / `fulfilmentStatus` / `invoicingStatus` are **DERIVED** — no stored counters.
+- `SalesOrderService.createInvoiceFromSalesOrder(soId, selections[])` → a draft invoice for a chosen
+  per-line quantity subset; the caller sends only `{salesOrderLineId, quantity}`, everything else is
+  derived from the SO line. `PartialInvoicePicker` large modal. `convertToInvoice` = "invoice all
+  remaining". Multiple invoices per SO.
+- **Concurrency:** the write goes through the atomic Postgres RPC `create_invoice_from_sales_order`
+  (migration **0049, APPLIED**) — `SECURITY INVOKER`, locks the SO `FOR UPDATE`, re-derives every
+  line's remaining inside the transaction, builds lines from the authoritative SO jsonb, creates a
+  `draft` invoice with **no** GL/stock/journal, doesn't touch SO status. `RpcSalesOrderDraftInvoiceWriter`
+  wires it; `LocalSalesOrderDraftInvoiceWriter` for tests.
+- **`closed` commercial status** (migration **0048, APPLIED** — `ALTER TYPE sales_order_status ADD
+  VALUE 'closed'`). `closeRemaining()` abandons the un-invoiced remainder of a partly-invoiced
+  `confirmed` order — **zero accounting effect**, releases the commitment (derived). `cancelOrder`
+  tightened to reject once any invoice is linked. `SalesOrderList` filter + `SalesOrderDetailPage`
+  action + confirm dialog updated.
+- **Stock commitment** (5B.3): a `confirmed` SO line commits `max(0, orderedQty − Σ posted
+  invoice-line qty)`. Draft/void release nothing. Reduces to the Phase-5A rule. `closed` commits 0.
+- Posting is unchanged: `postInvoice` / `inventoryPostingEngine*` **byte-unchanged**; each partial
+  invoice posts its own quantities atomically (`postingKey = invoice:<id>:post`).
+- **5B.1 relationship backfill RUN** (2026-09-04): the 3 September SO→invoice pairs
+  (`INV-1068/1072/1074`) linked — 9 lines, exact `(product, qty, price)`+position match, 0
+  ambiguous, relationship-only (invoice financial fingerprint, TB, GL 1200, valuation, all counts
+  byte-identical before/after).
 
-### Required design decision (settle at CP-5B-0)
-**Fulfilment state and invoicing state are SEPARATE dimensions**, not one squeezed `status` field —
-*preferred, if the architecture allows*:
+**Gate:** tsc ✅ · eslint `--max-warnings 0` ✅ · **2348 tests / 310 files** ✅ · build ✅. Security
+advisors 0 ERROR. `NORMALIZED_DOCUMENT_LINES_ENABLED` still `false`.
+**Not committed / pushed / merged / deployed** — awaiting review.
 
-```
-commercialStatus :  draft · pending · confirmed · cancelled
-fulfilmentStatus :  not_started · partially_delivered · delivered
-invoicingStatus  :  not_invoiced · partially_invoiced · invoiced
-```
-plus per-line counters:
-```
-SalesOrderLine:  productId · orderedQty · deliveredQty · invoicedQty   (→ remainingToDeliver, remainingToInvoice derived)
-```
-
-### Tasks
-- [ ] **5B.0 Investigation + design** — `SalesOrder` / `SalesOrderLine` shape, `convertToInvoice`,
-  `salesOrderService` statuses, every consumer of `salesOrder.status` (list filters, badges, the
-  "converted invoice" deep-link, dashboards). Produce the state-model proposal (separate dimensions
-  vs. combined) with a migration sketch and a compatibility plan for existing SOs.
-- [ ] **5B.1 Line-level counters** — `deliveredQty` / `invoicedQty` on each SO line (default 0);
-  `remainingToDeliver` / `remainingToInvoice` derived. Migration + backfill (existing `fulfilled`
-  SOs → `deliveredQty = invoicedQty = orderedQty`).
-- [ ] **5B.2 Status dimensions** — add `fulfilmentStatus` + `invoicingStatus` (or the agreed
-  shape); `commercialStatus` keeps the old values. Recompute on every delivery / invoice event.
-- [ ] **5B.3 `createInvoiceFromSalesOrder(soId, lines[])`** — replaces the all-or-nothing
-  `convertToInvoice`: caller picks quantities (≤ remainingToInvoice, and — once 5C lands — ≤
-  delivered). Bumps `invoicedQty`, recomputes `invoicingStatus`. The invoice still posts through
-  the **unchanged** engine.
-- [ ] **5B.4 UI** — SO detail shows the per-line Ordered / Delivered / Invoiced / Remaining grid;
-  "Create invoice" opens a quantity picker; status badges show both dimensions.
-- [ ] **5B.5 Tests** — SO 10 → invoice 4 → invoice 3 → 3 remaining; `invoicingStatus` transitions;
-  cannot invoice more than ordered (or, post-5C, more than delivered); existing single-shot
-  conversion still works; engine untouched (revenue/COGS/VAT identical per invoice).
-- [ ] **5B.6 Docs** — `docs/SALES_FULFILMENT.md` (new); update `ACCOUNTING_RELATIONSHIPS.md` SO section.
-
-**CP-5B-0 (design checkpoint, BEFORE code):** the state model (separate vs combined) + migration
-sketch + existing-data plan. **STOP for approval.**
-**CP-5B (implementation checkpoint):** migration authored not applied; full gate; backfill dry-run
-counts (read-only) for any live SO. **STOP.**
+**Deferred → later phases (NOT reopened as 5B):** `sales_order_lines` normalization (was "5B.5" →
+Phase 6/7 with the 9B flag review); delivery notes (**5C**); credit-note ↔ remaining + per-line
+partial cancellation (**5D**); `create_invoice_from_sales_order` request-id idempotency log +
+shared-repo cleanup + `InvoiceDetailPage`/product-ledger SO hop (**Phase 7**).
 
 ---
 

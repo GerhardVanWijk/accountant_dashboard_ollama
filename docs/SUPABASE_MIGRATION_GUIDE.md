@@ -1539,3 +1539,60 @@ WARN set, unchanged by this migration).
 | Office National backfill | **none.** No `trading_name` / `logo` / `document_address` / `phone` / `email` / `website` / `document_terms` / `documents_bank_account_id` value is written for the live `Office National Demo (Pty) Ltd` row (or any row). No profile data invented. |
 | Rollback | `alter table companies drop column if exists trading_name, drop column if exists logo, drop column if exists document_address, drop column if exists phone, drop column if exists email, drop column if exists website, drop column if exists document_terms, drop column if exists documents_bank_account_id;` — purely additive, so the drop is clean (no data migration to reverse) |
 | RLS | none added — the columns inherit the existing `companies` row-level policies unchanged |
+
+### 0048 — `sales_order_status` `closed` value (Phase 5B FINAL, APPLIED 2026-09-04)
+
+`supabase/migrations/20260904115109__0048_sales_order_status_closed.sql`. Applied via the Supabase
+MCP `apply_migration` (recorded version `20260904115109`; the repo file was renamed to match).
+`alter type public.sales_order_status add value if not exists 'closed'` — idempotent, additive,
+**nothing else in the file** (`ALTER TYPE ADD VALUE` cannot share a transaction and cannot be rolled
+back; recreating the enum is the only "rollback"). Inert until Phase 5B code that reads/writes
+`closed` deploys; every existing `sales_orders` row keeps its status.
+
+**Post-apply:** `sales_order_status` now `{pending, confirmed, fulfilled, cancelled, closed}` (5
+values). 0 rows changed. Trial balance unchanged.
+
+### 0049 — `create_invoice_from_sales_order` atomic RPC (Phase 5B FINAL, APPLIED 2026-09-04)
+
+`supabase/migrations/20260904115239__0049_create_invoice_from_sales_order_rpc.sql`. Applied via
+`apply_migration` (recorded `20260904115239`), after 0048. Closes the CP-5B.2 create/create
+concurrency race — the database is the final authority on "cannot invoice more than remains".
+
+**Contract:** `public.create_invoice_from_sales_order(p_sales_order_id uuid, p_selections jsonb,
+p_created_by text default null, p_issue_date timestamptz default null) returns jsonb`
+(`{ invoice_id, invoice_number, subtotal, tax_total, total }`).
+
+| Aspect | Detail |
+|---|---|
+| Security | `SECURITY INVOKER`; `set search_path to 'public'`; `revoke all ... from public, anon`; `grant execute ... to authenticated`. `v_company := get_my_company_id()` — client never supplies a company id. `prosecdef = false` confirmed post-apply. |
+| Concurrency | `select ... from sales_orders where id = $1 and company_id = v_company for update` — locks the SO row, serialising every concurrent create-invoice for that order. |
+| Remaining check | re-derived in-txn: `taken = Σ (il.quantity)` over `invoices i, jsonb_array_elements(i.line_items) il` where `i.sales_order_id = $1 and i.status <> 'void' and il->>'salesOrderLineId' = <line>` (draft + posted both count). `quantity > ordered − taken` → `raise exception '... only % remain to invoice'`. |
+| Input validation | array non-empty; per selection: `salesOrderLineId` present, not duplicated, belongs to the SO's `line_items`; `quantity` numeric, `> 0`, `= round(quantity, 3)`. Also rejects a `cancelled` / `closed` SO and a pre-5B.1 legacy full conversion. |
+| Line build | `productId` / `warehouseId` / `taxRateId` / `description` / `unitPrice` from the **SO line jsonb** (`v_sel->>'productId'` etc. are **never read**). Fresh `gen_random_uuid()` id + `salesOrderLineId`. Whole-line billing preserves the SO line's exact `lineTotal`/`taxAmount`; a partial recomputes at `taxAmount/lineTotal`. |
+| Writes | ONE `insert into invoices (... status 'draft' ...)` + ONE `insert into audit_log_entries (action 'created')`. Invoice number `INV-<year>-NNNN` via `max+1` with an `on unique_violation` retry loop (×25). |
+| Does NOT | touch `journal_entries` / `journal_lines` / `stock_movements`; call `create_journal_entry_with_lines` / `post_inventory_transaction`; `update sales_orders` (a draft never flips commercial status). |
+| Post-apply verification | rollback-wrapped smoke test against `SO-2026-0004` (JWT claim set): RPC returned `{invoice_id, invoice_number: 'INV-2026-0001', total: 0}`; created line carried the fresh id + `salesOrderLineId` + SO-line `taxRateId`/`description`; a follow-up over-invoice (`quantity 5`) rejected **inside the same transaction** ("only 0.000 remain"); the outer block then raised to roll back — **83 invoices before and after, 0 smoke leftovers, invoice financial fingerprint + trial balance unchanged**. `get_advisors(security)` = **0 ERROR**, no new WARN attributable to 0048/0049 (RPC is `SECURITY INVOKER` + revoked from `anon`). |
+| Rollback | `drop function public.create_invoice_from_sales_order(uuid, jsonb, text, timestamptz);` — additive, no data to reverse. |
+
+### 5B.1 relationship backfill — RUN 2026-09-04 (data script, not a tracked migration)
+
+Logic from `docs/db-changes/5b1_backfill_sales_order_line_links.sql`, executed via the Supabase MCP
+against Office National (`676c6cda-...`) after a fresh read-only audit. Adds `salesOrderLineId` to
+the 9 jsonb invoice lines of `INV-1068` / `INV-1072` / `INV-1074` (the 3 September SO→invoice
+pairs), matched **exactly one** SO line each on `(productId, quantity, unitPrice)` + array position
+(0 ambiguous, 0 unmatched, 0 cross-company). **Relationship-only** — the following were captured immediately before and immediately after and
+compared for equality (a within-run diff, not cross-environment constants):
+
+```sql
+-- invoice financial fingerprint (returned 4ad2b9f2000c521906b81ddb63d1c97c before AND after)
+select md5(string_agg(id::text || subtotal || tax_total || total || status || amount_paid, ',' order by id))
+from invoices;
+-- sales_orders fingerprint, trial-balance diff, JE/JL/stock-movement counts, GL 1200, inventory valuation
+```
+
+Result: invoice fingerprint, sales-order fingerprint, `sum(debit) − sum(credit)` (0.00),
+GL 1200 (1 478 853.74), inventory valuation (1 478 853.74), JE count (247), journal-line count
+(928), stock-movement count (343), invoice count (83) all **identical before and after**. Idempotent
+(skips a line that already has the key). `SO-2026-0004` (pending, placeholder line) had nothing to
+link. Independent QA (`general-purpose` subagent) re-verified all counts + TB + advisors and the
+9-link integrity.

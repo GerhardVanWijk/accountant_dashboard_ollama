@@ -27,11 +27,15 @@ const CUSTOMERS: Customer[] = [
 ];
 
 vi.mock('@/features/tax/hooks/useTaxRates', () => ({ useTaxRates: () => ({ taxRates: [] }) }));
+vi.mock('@/features/sales/hooks/useInvoices', () => ({ useInvoices: () => ({ invoices: [], loading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('@/features/inventory/hooks/useProducts', () => ({ useProducts: () => ({ products: PRODUCTS }) }));
 vi.mock('@/features/inventory/hooks/useWarehouses', () => ({
   useWarehouses: () => ({
     warehouses: [{ id: 'wh_main', name: 'Main', code: 'MAIN', isDefault: true, status: 'active', createdAt: '', updatedAt: '' }],
   }),
+}));
+vi.mock('@/features/inventory/hooks/useStockBalances', () => ({
+  useStockBalances: () => ({ balances: [], loading: false, error: null, refetch: vi.fn() }),
 }));
 // Global commitment map = SO-A (this order, 5) + SO-B (elsewhere, 7) = 12 for p1 @ wh_main.
 vi.mock('@/features/inventory/hooks/useStockCommitments', () => ({

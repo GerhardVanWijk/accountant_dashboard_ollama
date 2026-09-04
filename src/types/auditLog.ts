@@ -35,6 +35,10 @@ export type AuditAction =
   | 'inventory_account_mapping_changed'
   | 'stock_import_committed'
   | 'supplier_return_posted'
+  // Sales fulfilment (Phase 5B) — the business abandoned a Sales Order's
+  // un-invoiced remainder ("Close remaining"). Not the same as 'cancelled'
+  // (which is the whole order, before any invoicing).
+  | 'sales_order_closed'
   // Shared Import Framework (Phase 6, docs/IMPORT_EXPORT_ARCHITECTURE.md).
   // One summary row per completed import run (recordType 'ImportBatch',
   // recordId a synthetic `import_<timestamp>` — there is no single existing

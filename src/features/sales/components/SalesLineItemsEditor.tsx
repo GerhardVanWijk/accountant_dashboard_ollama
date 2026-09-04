@@ -32,6 +32,16 @@ export interface SalesLineItemsEditorProps {
    * blocks submit.
    */
   externalCommittedFor?: (productId: string, warehouseId?: string) => number;
+  /**
+   * Per-warehouse on-hand quantity for `(productId, warehouseId)` from
+   * `stock_balances` — used ONLY when a line carries an explicit `warehouseId`
+   * (multi-warehouse tenants), so the "On hand" figure is at the SAME
+   * warehouse scope as `externalCommittedFor`. Returns `undefined` when there
+   * is no balance row; the caption then falls back to the company-wide
+   * `product.quantityOnHand`. Fixes the Phase 5A caption mixing company-wide
+   * on-hand with warehouse-scoped committed (docs/KNOWN_ISSUES.md).
+   */
+  onHandFor?: (productId: string, warehouseId?: string) => number | undefined;
   disabled?: boolean;
 }
 
@@ -56,6 +66,7 @@ export function SalesLineItemsEditor({
   warehouses = [],
   showStockAvailability = false,
   externalCommittedFor,
+  onHandFor,
   disabled = false,
 }: SalesLineItemsEditorProps) {
   const showWarehouseColumn = warehouses.length > 1;
@@ -78,15 +89,21 @@ export function SalesLineItemsEditor({
     if (!line?.productId) return null;
     const product = products.find((p) => p.id === line.productId);
     if (!product || !product.trackInventory) return null;
-    const onHand = product.quantityOnHand;
-    // Derived commitment to OTHER confirmed sales orders (Phase 5A) + units
-    // this same document already spoke for on other lines.
-    const externalCommitted = externalCommittedFor?.(product.id, line.warehouseId) ?? 0;
-    const committed = externalCommitted + committedElsewhere(product.id, index);
+    // Keep on-hand and committed at the SAME warehouse scope: when the line
+    // targets a specific warehouse use that warehouse's on-hand + committed,
+    // otherwise the company-wide on-hand + committed summed across warehouses.
+    const scopedWarehouseId = line.warehouseId;
+    const onHand =
+      (scopedWarehouseId ? onHandFor?.(product.id, scopedWarehouseId) : undefined) ?? product.quantityOnHand;
+    // Derived commitment to OTHER confirmed sales orders (Phase 5A).
+    const externalCommitted = externalCommittedFor?.(product.id, scopedWarehouseId) ?? 0;
+    // Units this same document already spoke for on its other lines.
+    const onOtherLinesHere = committedElsewhere(product.id, index);
+    const committed = externalCommitted + onOtherLinesHere;
     const available = onHand - committed;
     const ordered = line.quantity || 0;
     const short = ordered > available;
-    return { onHand, committed, available, short, ordered };
+    return { onHand, committed, externalCommitted, onOtherLinesHere, available, short, ordered };
   }
 
   const gridCols = showWarehouseColumn
@@ -257,8 +274,12 @@ export function SalesLineItemsEditor({
                 <>
                   {' '}
                   — this line orders {availability.ordered.toLocaleString('en-ZA')}, more than the{' '}
-                  {availability.available.toLocaleString('en-ZA')} available ({availability.committed.toLocaleString('en-ZA')}{' '}
-                  already committed to other confirmed orders).
+                  {availability.available.toLocaleString('en-ZA')} available (
+                  {availability.externalCommitted.toLocaleString('en-ZA')} committed to other confirmed orders
+                  {availability.onOtherLinesHere > 0
+                    ? `, ${availability.onOtherLinesHere.toLocaleString('en-ZA')} to other lines on this order`
+                    : ''}
+                  ).
                 </>
               )}
             </p>

@@ -1,7 +1,12 @@
 import type { SalesOrder } from '@/types';
 import type { ISalesOrderRepository } from '@/repositories/ISalesOrderRepository';
+import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
+import {
+  isPostedInvoiceStatus,
+  sumInvoicedBySalesOrderLine,
+} from '@/features/sales/utils/salesOrderFulfilment';
 import type { IWarehouseRepository } from '../repositories/IWarehouseRepository';
-import { salesOrderRepository, warehouseRepository } from '../repositories/instances';
+import { invoiceRepository, salesOrderRepository, warehouseRepository } from '../repositories/instances';
 
 /**
  * Stable per-(product, warehouse) key. Shared by the commitment map, the
@@ -26,23 +31,35 @@ export interface StockCommitmentLookup {
  * `commitmentKey(productId, warehouseId ?? defaultWarehouseId)` and summed
  * (so multiple lines of the same product in the same warehouse add up, and
  * different warehouses stay in separate buckets). A line with no `productId`
- * or a non-positive quantity is skipped; a warehouse-less line is skipped when
- * there is no default warehouse. Shared verbatim by the global rollup
- * (`getCommitmentMap`) and the single-order contribution (`ownCommitmentMap`)
- * so the two can never disagree on filtering or warehouse fallback.
+ * or a non-positive **remaining** quantity is skipped; a warehouse-less line is
+ * skipped when there is no default warehouse. Shared verbatim by the global
+ * rollup (`getCommitmentMap`) and the single-order contribution
+ * (`ownCommitmentMap`) so the two can never disagree on filtering, warehouse
+ * fallback, or how much has been fulfilled.
+ *
+ * Phase 5B.3: the committed quantity for a line is its REMAINING un-fulfilled
+ * quantity — `max(0, orderedQty − postedFulfilledQty)` — where
+ * `postedFulfilledQty` comes from `fulfilledByLine` (Σ posted invoice-line qty
+ * linked to that SO line via `salesOrderLineId`). With an empty map this
+ * reduces exactly to the Phase 5A rule (`committed = orderedQty`). A DRAFT
+ * invoice is deliberately NOT in `fulfilledByLine` — a draft never releases
+ * commitment.
  */
 function accumulateOrderCommitments(
   map: Map<string, number>,
   order: Pick<SalesOrder, 'lineItems'>,
   defaultWarehouseId: string | undefined,
+  fulfilledByLine: Map<string, number>,
 ): void {
   for (const line of order.lineItems) {
-    const quantity = line.quantity ?? 0;
-    if (!line.productId || quantity <= 0) continue;
+    const ordered = line.quantity ?? 0;
+    if (!line.productId || ordered <= 0) continue;
+    const remaining = Math.max(0, ordered - (fulfilledByLine.get(line.id) ?? 0));
+    if (remaining <= 0) continue;
     const warehouseId = line.warehouseId ?? defaultWarehouseId;
     if (!warehouseId) continue;
     const key = commitmentKey(line.productId, warehouseId);
-    map.set(key, (map.get(key) ?? 0) + quantity);
+    map.set(key, (map.get(key) ?? 0) + remaining);
   }
 }
 
@@ -70,19 +87,29 @@ export class StockCommitmentService implements StockCommitmentLookup {
   constructor(
     private readonly salesOrderRepo: ISalesOrderRepository,
     private readonly warehouseRepo: IWarehouseRepository,
+    /**
+     * Phase 5B.3: read-only source of the invoices used to net each confirmed
+     * SO line down to its REMAINING commitment. Only `getAll()` is called.
+     * Never posts, never creates a movement — a commitment stays derived.
+     */
+    private readonly invoiceRepo: IInvoiceRepository,
   ) {}
 
   async getCommitmentMap(): Promise<Map<string, number>> {
-    const [orders, warehouses] = await Promise.all([
+    const [orders, warehouses, invoices] = await Promise.all([
       this.salesOrderRepo.getAll(),
       this.warehouseRepo.getAll(),
+      this.invoiceRepo.getAll(),
     ]);
     const defaultWarehouseId = warehouses.find((w) => w.isDefault)?.id;
+    // Σ POSTED invoice-line qty per SO line — drafts excluded (a draft never
+    // releases a commitment).
+    const fulfilledByLine = sumInvoicedBySalesOrderLine(invoices, (inv) => isPostedInvoiceStatus(inv.status));
 
     const map = new Map<string, number>();
     for (const order of orders) {
       if (order.status !== 'confirmed') continue;
-      accumulateOrderCommitments(map, order, defaultWarehouseId);
+      accumulateOrderCommitments(map, order, defaultWarehouseId, fulfilledByLine);
     }
     return map;
   }
@@ -112,10 +139,18 @@ export class StockCommitmentService implements StockCommitmentLookup {
 export function ownCommitmentMap(
   order: Pick<SalesOrder, 'status' | 'lineItems'> | undefined,
   defaultWarehouseId: string | undefined,
+  /**
+   * Phase 5B.3: Σ posted invoice-line qty per SO line
+   * (`sumInvoicedBySalesOrderLine(invoices, isPostedInvoiceStatus)`), so the
+   * "own" contribution nets fulfilled progress exactly the way the global map
+   * does. Omit (or pass an empty map) for the pre-5B.3 whole-quantity
+   * behaviour.
+   */
+  fulfilledByLine: Map<string, number> = new Map(),
 ): Map<string, number> {
   const map = new Map<string, number>();
   if (order?.status !== 'confirmed') return map;
-  accumulateOrderCommitments(map, order, defaultWarehouseId);
+  accumulateOrderCommitments(map, order, defaultWarehouseId, fulfilledByLine);
   return map;
 }
 
@@ -161,4 +196,8 @@ export function getCommittedForProduct(map: Map<string, number>, productId: stri
  * database with no in-memory divergence (unlike a `Mock*Repository`), so this
  * never disagrees with the sales feature's own instance.
  */
-export const stockCommitmentService = new StockCommitmentService(salesOrderRepository, warehouseRepository);
+export const stockCommitmentService = new StockCommitmentService(
+  salesOrderRepository,
+  warehouseRepository,
+  invoiceRepository,
+);

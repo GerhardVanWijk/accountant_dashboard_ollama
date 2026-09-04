@@ -2,6 +2,7 @@ import type { CreditNoteLineItem, Invoice } from '@/types';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
 import { QuoteService } from './quoteService';
 import { SalesOrderService } from './salesOrderService';
+import { RpcSalesOrderDraftInvoiceWriter } from './salesOrderDraftInvoiceWriter';
 import { CreditNoteService } from './creditNoteService';
 import { CustomerReceiptService } from './customerReceiptService';
 import { RealDepositAllocationExecutor } from './depositAllocationExecutor';
@@ -91,7 +92,17 @@ const creditNoteLineProjector = new SupabaseDocumentLineProjector(supabase, {
 });
 
 export const quoteService = new QuoteService(quoteRepository, salesOrderRepository);
-export const salesOrderService = new SalesOrderService(salesOrderRepository, sharedInvoiceRepository);
+export const salesOrderService = new SalesOrderService(
+  salesOrderRepository,
+  sharedInvoiceRepository,
+  undefined,
+  // Phase 5B FINAL: route draft-invoice creation through the atomic
+  // `create_invoice_from_sales_order` RPC (migration 0049) — the DB locks the
+  // Sales Order and re-derives remaining quantities, so a concurrent
+  // create/create can never over-invoice a line. Re-reads the created row
+  // through the SAME shared invoice repository the Invoices page uses.
+  new RpcSalesOrderDraftInvoiceWriter(supabase, sharedInvoiceRepository),
+);
 export const creditNoteService = new CreditNoteService(
   creditNoteRepository,
   periodGuardedInventoryPostingEngine,
