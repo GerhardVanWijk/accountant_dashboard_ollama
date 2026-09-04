@@ -637,12 +637,19 @@ advisors: **0 ERROR**; no new WARN attributable to `0048`/`0049`.
 | Single shared `Supabase{SalesOrder,Invoice}Repository` instance | Phase 7 hardening | multiple stateless instances over the shared client — no correctness impact. |
 | Per-warehouse on-hand in the `PartialInvoicePicker` stock hint | Phase 7 polish | advisory only in a draft-creating modal; final availability is checked at post time. |
 
-## 15. STATUS — PHASE 5B: COMPLETE
+## 15. STATUS — PHASE 5B: COMPLETE + SHIPPED
 
 Design (§§1–12) + 5B.1 + 5B.2 + 5B.3 + 5B.4 all implemented; migrations `0048` + `0049` **APPLIED**;
-the 5B.1 relationship backfill **RUN** (relationship-only, accounting fingerprints unchanged). Gate
-green (**2348 tests / 310 files**). **Uncommitted** in the working tree, awaiting review — no commit,
-push, merge, or Cloudflare deploy. `NORMALIZED_DOCUMENT_LINES_ENABLED` still `false`.
+the 5B.1 relationship backfill **RUN** (relationship-only, accounting fingerprints unchanged).
+
+**Shipped 2026-09-04 (user instruction):** committed `9db70ce` on
+`phase-9b-relationship-design-and-code` → pushed → **merged to `main` `b19dc47`** → pushed to GitHub
+→ **Cloudflare Pages production deploy triggered** (`https://vertex-accounting.pages.dev`). Gate
+re-run on merged `main` = green (**2348 tests / 310 files**, tsc, eslint, build).
+`NORMALIZED_DOCUMENT_LINES_ENABLED` still `false`.
+
+**Outstanding:** human browser / visual QA (Sales Order detail page, partial-invoice picker on
+desktop/laptop/mobile, Close-remaining flow) — no browser tooling in the build environment.
 
 ---
 
