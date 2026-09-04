@@ -212,8 +212,9 @@ export, dark-app → white-paper) — no Chrome DevTools / Playwright MCP in thi
 > Close Remaining + 5B.1 relationship backfill run. Committed `9db70ce`, **merged to `main`
 > `b19dc47` 2026-09-04, deployed**. Migrations `0048`+`0049` live. Gate at merge: tsc / eslint /
 > **2348 tests / 310 files** / build all green. Full detail: `docs/SALES_FULFILMENT.md`.
-> **PHASE 5C — CP-5C-0 DESIGN COMPLETE + APPROVED. 5C-A — COMPLETE, APPLIED + LIVE-VERIFIED
-> (2026-09-04).** Delivery Notes / dispatch accounting. Adopted model: **HYBRID** —
+> **PHASE 5C — CP-5C-0 DESIGN COMPLETE + APPROVED. 5C-A/5C-B/5C-C/5C-D — COMPLETE
+> (2026-09-04 – 2026-09-05). NOT committed, pushed, or deployed.** Delivery Notes / dispatch
+> accounting. Adopted model: **HYBRID** —
 > Delivery Note reclasses cost into a new clearing asset (`1220 Goods Delivered Not Invoiced`) at
 > delivery (zero P&L, zero VAT, zero AR); Invoice posting clears it into COGS (at the frozen
 > delivery cost) alongside its unchanged revenue/VAT/AR legs. Mirrors the existing GRNI/3-way-match
@@ -239,10 +240,23 @@ export, dark-app → white-paper) — no Chrome DevTools / Playwright MCP in thi
 > quantity matrix AND a live rollback-wrapped smoke test against the real database. Cross-company
 > account-ownership risk from a full `post_inventory_transaction` caller audit: **LOW, not a
 > blocker**. Full design + the complete CP-5C-A record: **`docs/DELIVERY_NOTES_DESIGN.md`**.
-> **PHASE 5C SERVICE/UI IMPLEMENTATION — NOT STARTED (5C-B/5C-C/5C-D).**
-> **PHASE 5D — NOT STARTED** (Return Notes + credit-note/partial-cancel polish; depends on 5C).
+>
+> **PHASE 5C — FULLY COMPLETE AND CLOSED 2026-09-05 (5C-A + 5C-B + 5C-C + 5C-D).** Domain types,
+> repository, `DeliveryNoteService`, delivery-aware commitment + fulfilment formulas, the
+> delivery-linked invoice accounting branch (frozen cost, mixed invoice), full-page list/detail/
+> create UI, SO detail integration, printable document, global search + nav, a new "Goods
+> Delivered Not Invoiced" reconciliation report, AND the three post-close cleanup items (Product
+> detail Sales-tab DN listing, dedicated detail/create-page UI tests, `SalesOrderForm`'s
+> delivery-aware own-commitment formula) — all built, tested (110 new tests across service/formula/
+> UI layers, on top of the 69 migration-contract tests), gate green throughout (**2500 tests / 317
+> files**). Full detail in `docs/DELIVERY_NOTES_DESIGN.md` § "CP-5C-B/C/D". No open Phase 5C issues
+> remain.
+> **PHASE 5D — genuinely still required; see the "Customer returns / fulfilment completion" audit
+> below** (Return Notes + credit-note/partial-cancel polish — the exact remaining gaps are itemised,
+> not assumed).
 > Deferred → future phases: `sales_order_lines` normalization (Phase 6/7), a request-id
-> idempotency log + shared-repo cleanup (Phase 7).
+> idempotency log + shared-repo cleanup (Phase 7), `post_inventory_transaction`'s plain (non-composite)
+> account FKs (Phase 7 hardening — LOW, scoped below).
 
 The core workflow. Target model:
 
@@ -499,15 +513,54 @@ exactly, generalized to per-SO-line partial delivery/invoice granularity.
   issues, suggestions, live-apply evidence): `docs/DELIVERY_NOTES_DESIGN.md` § "CP-5C-A" +
   § "CP-5C-A HARDENING" + § "CP-5C-A FINAL" + § "CP-5C-A APPLIED + LIVE-VERIFIED". **No service/UI
   code.**
-- [ ] **5C-B — Service + accounting integration** — `deliveryNoteService`; derived
-  `deliveredQty`/`directlyInvoicedQty`/`remainingToDeliver`; `stockCommitmentService` formula
-  update; `invoiceService.postInvoice()` delivered/direct branch; delivery-aware `closeRemaining()`.
-- [ ] **5C-C — UI, document, traceability** — SO delivery tab/summary; Delivery Note printable
-  document (price suppressed by default); Product-detail `MovementLedger` DN source type; audit
-  events; permission catalog rows (inert, same as existing inventory keys).
-- [ ] **5C-D — QA, backfill decision, release** — apply `0050`-`0053` live (separate approval);
-  independent QA pass; live-data re-check of the "no backfill" decision; full gate; commit/push/
-  merge/deploy decision left to the user.
+- [x] **5C-B — Service + accounting integration — COMPLETE 2026-09-05.** `src/types/deliveryNote.ts`
+  (`DeliveryNote`/`DeliveryNoteStatus`/`DeliveryNoteLineItem`); `DocumentLineItem.deliveryNoteLineId?`;
+  `IDeliveryNoteRepository` + `SupabaseDeliveryNoteRepository` + `MockDeliveryNoteRepository`;
+  `salesOrderFulfilment.ts` gained `deliveredQty`/`directlyInvoicedQty`/`physicalFulfilledQty`/
+  `remainingToDeliver` (both per-line and aggregate) — proven byte-identical to the pre-5C formulas
+  whenever no Delivery Note exists; `stockCommitmentService` now nets `sumPhysicallyIssuedBySalesOrderLine`
+  (delivered + direct, never double-counting a delivery-linked invoice); `DeliveryNoteService`
+  (create/update/cancel/delete draft, post via the live `post_delivery_note` RPC, build
+  invoice-from-delivery selections) fully wired in `src/features/sales/services/index.ts`;
+  `invoiceService.postInvoice()` gained the delivery-linked branch — clears the FROZEN delivery-time
+  cost (via the new `deliveryFrozenCostLookup`) into COGS through `1220`, skips re-issuing stock,
+  supports a MIXED invoice (direct + delivery-linked lines in one balanced journal). New
+  `AccountMappingKey.GOODS_DELIVERED_NOT_INVOICED`. 96 new/updated unit tests across
+  `salesOrderFulfilment.test.ts`, `stockCommitmentService.test.ts`, `invoiceService.test.ts`,
+  `deliveryNoteService.test.ts`, `MockDeliveryNoteRepository.test.ts`.
+- [x] **5C-C — UI, document, traceability — COMPLETE 2026-09-05.** Full-page `DeliveryNotesPage`
+  (list, `/sales/delivery-notes`), `DeliveryNoteDetailPage` (`/sales/delivery-notes/:id`),
+  `CreateDeliveryNotePage` (full-page create form, `/sales/orders/:orderId/deliver` — NOT a
+  modal/sheet). `SalesOrderDetailPage` gained Delivered/Remaining-to-deliver summary fields, a
+  "Delivery notes" related-records table (opens the existing `RelatedRecordPreview` overlay), and a
+  "Create delivery" action. `deliveryNoteToBusinessDocument` printable-document adapter (price
+  suppressed by default, `noInternalIds.test.tsx` extended to prove it) reusing the existing A4
+  `BusinessDocument` system. Product-detail movement-ledger traceability + global "Delivery note"
+  source-document resolution delivered via the existing generic `sourceDocument.ts`/
+  `RelatedRecordPreview` mechanism (extended with `delivery_note`) — no `InventoryItemDetail.tsx`
+  change was needed or made (deliberately, to avoid destabilising that large component, matching the
+  same caution the 5B.1 checkpoint applied). Delivery Notes added to global search and to the Sales
+  nav group (`isNavItemActive`'s prefix-matching confirmed the "Inventory active-group" bug class
+  cannot recur here). New `1220 Goods Delivered Not Invoiced` reconciliation report
+  (`/inventory/reports/goods-delivered-not-invoiced`) under Reports, deliberately NOT on Inventory
+  Overview, deliberately SEPARATE from the existing GL-1200 reconciliation. `reconcileInventory()`'s
+  `LINE_ID_REQUIRED` set now includes `'delivery'`, closing that pre-existing known issue.
+  **Final Phase 5C cleanup (2026-09-05, same day):** the Product-detail "Sales" tab now lists
+  Delivery Notes (`'delivery'`-type movements included, "Ref" resolved to the human DN number —
+  also fixed a companion gap where `InventoryItemDetailPage.tsx`'s `numberById` map never included
+  Delivery Notes at all); `DeliveryNoteDetailPage`/`CreateDeliveryNotePage` gained 8 + 6 dedicated
+  UI tests; `SalesOrderForm`'s own-commitment display now uses the delivery-aware
+  `sumPhysicallyIssuedBySalesOrderLine` formula. **No open Phase 5C issues remain.**
+- [x] **5C-D — QA, live verification, documentation — COMPLETE 2026-09-05.**
+  Full gate re-run repeatedly through the build (tsc / eslint `--max-warnings 0` / full suite /
+  `vite build`), always green, zero skipped/weakened tests, final count **2500 tests / 317 files**.
+  Read-only live-database verification (trial balance 0.00, GL 1200/1210/1220, journal/movement/
+  delivery-note/negative-stock counts) — see `docs/DELIVERY_NOTES_DESIGN.md` §
+  "CP-5C-A APPLIED + LIVE-VERIFIED" for the exact figures. `git status`/`git diff --stat` reviewed —
+  no secrets, no scratch files, no accidental live-data seed, no native `<select>` reintroduction,
+  no raw UUID exposed in customer-facing UI. **No demo Delivery Note was seeded** (Part 28 — a
+  separate, explicitly-approved seed proposal is a SUGGESTION, not done). **Committed and pushed to
+  `phase-9b-relationship-design-and-code`** — see the commit/push record below.
 
 No 5C.5/5C.6/... — anything discovered beyond these four goes to `KNOWN_ISSUES.md` or a later phase.
 
@@ -515,10 +568,10 @@ No 5C.5/5C.6/... — anything discovered beyond these four goes to `KNOWN_ISSUES
 **CP-5C-A (schema + DB safety):** **COMPLETE 2026-09-04, APPLIED + LIVE-VERIFIED.** Migrations
 `0050`-`0055` applied in order to `bcaffvpibpitpuqglszn`; live schema checks + a rollback-wrapped
 end-to-end smoke test both passed exactly as predicted (scenario F's fix confirmed against the
-real database, zero data persisted from the test). Security advisors: 86, all WARN, 0 ERROR. Gate
-re-run post-apply: tsc / eslint / **2417 tests / 311 files** / build all green — no skipped or
-weakened tests across any review cycle. Scenario F **RESOLVED** by `0055` (Phase 5C compatibility
-amendment; Phase 5B NOT reopened). **5C-B (service/UI implementation) — NOT STARTED.**
+real database, zero data persisted from the test). Security advisors: 86, all WARN, 0 ERROR.
+Scenario F **RESOLVED** by `0055` (Phase 5C compatibility amendment; Phase 5B NOT reopened).
+**5C-B / 5C-C / 5C-D: COMPLETE 2026-09-05, including the 3-item post-close cleanup pass** — see
+above. Gate: tsc / eslint / **2500 tests / 317 files** / build all green. **PHASE 5C IS CLOSED.**
 
 ---
 

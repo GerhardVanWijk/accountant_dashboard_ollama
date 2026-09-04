@@ -51,6 +51,7 @@ const REPORT_GROUPS: ReportGroup[] = [
     title: 'Control',
     cards: [
       { title: 'Inventory reconciliation', description: 'Full subledger-to-GL reconciliation — every check, every finding, in detail.', href: '/inventory/reports/inventory-reconciliation', icon: ShieldCheckIcon },
+      { title: 'Goods delivered not invoiced', description: 'Posted Delivery Notes not yet fully invoiced, valued at frozen cost — reconciled to GL 1220.', href: '/inventory/reports/goods-delivered-not-invoiced', icon: ShieldCheckIcon },
       { title: 'Stock take variance', description: 'Counted variance across every stock take, valued at the frozen WAC.', href: '/inventory/reports/stock-take-variance', icon: ClipboardCheckIcon },
     ],
   },

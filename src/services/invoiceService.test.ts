@@ -19,6 +19,7 @@ import { InventoryAccountResolverService } from '@/features/inventory/services/i
 import { periodGuardFrom } from '@/features/inventory/services/documentInventoryPosting';
 import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
 import type { AccountingPeriod, DocumentLineItem, ID, Invoice, Product, ProductCategory, Warehouse } from '@/types';
+import type { DeliveryFrozenCostLookup } from '@/features/inventory/services/deliveryFrozenCostLookup';
 
 /** Records every sync() call — the spy used by the Phase 9B projection tests. */
 class SpyLineProjector implements IDocumentLineProjector {
@@ -97,6 +98,8 @@ function setup(
     lineProjector?: IDocumentLineProjector;
     /** Phase 5B.2: the post-commit Sales Order status-sync callback. */
     onInvoicePosted?: (invoice: Invoice) => Promise<void>;
+    /** Phase 5C: deliveryNoteLineId -> frozen cost, for delivery-linked line tests. */
+    deliveryFrozenCost?: Record<string, { unitCost: number; totalCost: number }>;
   } = {},
 ) {
   const accountRepository = new MockAccountRepository(seedAccounts);
@@ -155,6 +158,10 @@ function setup(
   };
 
   const repo = initialInvoices ? new MockInvoiceRepository(initialInvoices) : new MockInvoiceRepository();
+  const frozenCostMap = options.deliveryFrozenCost ?? {};
+  const deliveryFrozenCost: DeliveryFrozenCostLookup = {
+    getFrozenCost: async (deliveryNoteLineId: string) => frozenCostMap[deliveryNoteLineId],
+  };
   const service = new InvoiceService(
     repo,
     engine,
@@ -165,6 +172,7 @@ function setup(
     options.lineProjector,
     auditLog,
     options.onInvoicePosted,
+    deliveryFrozenCost,
   );
 
   const getJE = (id: string | undefined) => store.journalEntries.find((e) => e.id === id);
@@ -550,6 +558,128 @@ describe('InvoiceService', () => {
       expect(sales[0].quantityDelta).toBe(-5);
       expect(sales[0].warehouseId).toBe(DEFAULT_WH);
       expect(store.products.get('prod_1')!.quantityOnHand).toBe(9_995); // reduced once
+    });
+
+    describe('Phase 5C — delivery-linked lines (docs/DELIVERY_NOTES_DESIGN.md Part 15/16)', () => {
+      it('clears the FROZEN delivery cost into COGS via 1220 — no new stock movement, no re-issue at current WAC', async () => {
+        const { service, store, getJE } = setup([], {
+          costPrice: { prod_1: 3350 }, // current WAC has since moved (the worked example's R3,350)
+          deliveryFrozenCost: { dnl_1: { unitCost: 3200, totalCost: 12800 } }, // frozen at delivery time, R3,200 x 4
+        });
+        const draft = await service.createInvoice({
+          invoiceNumber: 'INV-2026-DN-1',
+          customerId: 'cust_test',
+          issueDate: '2026-09-05T00:00:00.000Z',
+          dueDate: '2026-10-05T00:00:00.000Z',
+          lineItems: [
+            { id: 'li_1', productId: 'prod_1', description: 'Printer', quantity: 4, unitPrice: 5750, taxAmount: 3450, lineTotal: 23000, deliveryNoteLineId: 'dnl_1' },
+          ],
+          subtotal: 23000,
+          taxTotal: 3450,
+          total: 26450,
+          amountPaid: 0,
+          currency: 'ZAR',
+          status: 'draft',
+        });
+
+        const updated = await service.postInvoice(draft.id);
+        const entry = getJE(updated.journalEntryId)!;
+
+        // normal revenue/AR/VAT legs, unchanged
+        expect(entry.lines.find((l) => l.accountId === 'acc_1100')?.debit).toBeCloseTo(26450);
+        expect(entry.lines.find((l) => l.accountId === 'acc_4000')?.credit).toBeCloseTo(23000);
+        expect(entry.lines.find((l) => l.accountId === 'acc_2100')?.credit).toBeCloseTo(3450);
+
+        // COGS cleared at the FROZEN 12,800 — NOT 4 x current WAC (3,350 x 4 = 13,400)
+        expect(entry.lines.find((l) => l.accountId === 'acc_5000')?.debit).toBeCloseTo(12800);
+        expect(entry.lines.find((l) => l.accountId === 'acc_1220')?.credit).toBeCloseTo(12800);
+        expect(entry.lines.reduce((s, l) => s + l.debit, 0)).toBeCloseTo(entry.lines.reduce((s, l) => s + l.credit, 0));
+
+        // no new stock movement — the physical departure already happened at delivery
+        expect(store.movements.filter((m) => m.type === 'sale')).toHaveLength(0);
+        expect(store.products.get('prod_1')!.quantityOnHand).toBe(10_000); // unchanged
+      });
+
+      it('mixed invoice: a direct line and a delivery-linked line coexist, each on its own accounting path, ONE balanced journal', async () => {
+        const { service, store, getJE } = setup([], {
+          costPrice: { prod_1: 40 },
+          deliveryFrozenCost: { dnl_1: { unitCost: 35, totalCost: 70 } }, // 2 units frozen at 35 each
+        });
+        const draft = await service.createInvoice({
+          invoiceNumber: 'INV-2026-DN-MIX',
+          customerId: 'cust_test',
+          issueDate: '2026-09-05T00:00:00.000Z',
+          dueDate: '2026-10-05T00:00:00.000Z',
+          lineItems: [
+            { id: 'li_direct', productId: 'prod_1', description: 'Direct', quantity: 3, unitPrice: 100, taxAmount: 45, lineTotal: 300 },
+            { id: 'li_dn', productId: 'prod_1', description: 'From delivery', quantity: 2, unitPrice: 100, taxAmount: 30, lineTotal: 200, deliveryNoteLineId: 'dnl_1' },
+          ],
+          subtotal: 500,
+          taxTotal: 75,
+          total: 575,
+          amountPaid: 0,
+          currency: 'ZAR',
+          status: 'draft',
+        });
+
+        const updated = await service.postInvoice(draft.id);
+        const entry = getJE(updated.journalEntryId)!;
+
+        // direct line: issues stock at CURRENT WAC (40), one movement
+        expect(store.movements.filter((m) => m.type === 'sale')).toHaveLength(1);
+        expect(store.movements.find((m) => m.type === 'sale')?.quantityDelta).toBe(-3);
+        expect(entry.lines.find((l) => l.accountId === 'acc_1200')?.credit).toBe(120); // 3 x 40
+
+        // delivery-linked line: clears the frozen 70 via 1220, no second movement
+        expect(entry.lines.find((l) => l.accountId === 'acc_1220')?.credit).toBeCloseTo(70);
+
+        // combined COGS = 120 (direct, engine-computed) + 70 (delivery-linked, frozen) = 190
+        expect(entry.lines.find((l) => l.accountId === 'acc_5000')?.debit).toBeCloseTo(190);
+        // balanced: total debit (AR 575 + COGS 190) = total credit (revenue 500 + VAT 75 + inventory 120 + 1220 70)
+        expect(entry.lines.reduce((s, l) => s + l.debit, 0)).toBeCloseTo(entry.lines.reduce((s, l) => s + l.credit, 0));
+        expect(entry.lines.reduce((s, l) => s + l.debit, 0)).toBeCloseTo(765);
+      });
+
+      it('throws (and does not post) when the frozen cost evidence is missing — never falls back to current WAC', async () => {
+        const { service, repo } = setup([], { costPrice: { prod_1: 40 } }); // no deliveryFrozenCost entry for dnl_missing
+        const draft = await service.createInvoice({
+          invoiceNumber: 'INV-2026-DN-MISSING',
+          customerId: 'cust_test',
+          issueDate: '2026-09-05T00:00:00.000Z',
+          dueDate: '2026-10-05T00:00:00.000Z',
+          lineItems: [
+            { id: 'li_1', productId: 'prod_1', description: 'From delivery', quantity: 2, unitPrice: 100, taxAmount: 30, lineTotal: 200, deliveryNoteLineId: 'dnl_missing' },
+          ],
+          subtotal: 200,
+          taxTotal: 30,
+          total: 230,
+          amountPaid: 0,
+          currency: 'ZAR',
+          status: 'draft',
+        });
+        await expect(service.postInvoice(draft.id)).rejects.toThrow(/frozen cost evidence could not be found/i);
+        const unchanged = await repo.getById(draft.id);
+        expect(unchanged?.status).toBe('draft');
+      });
+
+      it('a legacy invoice line with no deliveryNoteLineId key at all follows the unchanged direct path', async () => {
+        const { service, store } = setup([], { costPrice: { prod_1: 40 } });
+        const draft = await service.createInvoice({
+          invoiceNumber: 'INV-2026-DN-LEGACY',
+          customerId: 'cust_test',
+          issueDate: '2026-09-05T00:00:00.000Z',
+          dueDate: '2026-10-05T00:00:00.000Z',
+          lineItems: [{ id: 'li_1', productId: 'prod_1', description: 'Widget', quantity: 1, unitPrice: 100, taxAmount: 15, lineTotal: 100 }],
+          subtotal: 100,
+          taxTotal: 15,
+          total: 115,
+          amountPaid: 0,
+          currency: 'ZAR',
+          status: 'draft',
+        });
+        await service.postInvoice(draft.id);
+        expect(store.movements.filter((m) => m.type === 'sale')).toHaveLength(1);
+      });
     });
 
     it("uses a line item's explicit warehouseId for the stock movement", async () => {

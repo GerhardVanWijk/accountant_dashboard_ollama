@@ -38,6 +38,9 @@ import { InvoiceDetailPage } from '@/features/sales/pages/InvoiceDetailPage';
 import { QuoteDetailPage } from '@/features/sales/pages/QuoteDetailPage';
 import { CreditNotesPage } from '@/features/sales/pages/CreditNotesPage';
 import { CreditNoteDetailPage } from '@/features/sales/pages/CreditNoteDetailPage';
+import { DeliveryNotesPage } from '@/features/sales/pages/DeliveryNotesPage';
+import { DeliveryNoteDetailPage } from '@/features/sales/pages/DeliveryNoteDetailPage';
+import { CreateDeliveryNotePage } from '@/features/sales/pages/CreateDeliveryNotePage';
 import { CustomerReceiptsPage } from '@/features/sales/pages/CustomerReceiptsPage';
 import { CustomerReceiptDetailPage } from '@/features/sales/pages/CustomerReceiptDetailPage';
 import { VendorsPage } from '@/features/purchases/pages/VendorsPage';
@@ -69,6 +72,7 @@ import { OpeningStockBatchesPage } from '@/features/inventory/pages/OpeningStock
 import { OpeningStockBatchDetailPage } from '@/features/inventory/pages/OpeningStockBatchDetailPage';
 import { InventoryOperationsPage } from '@/features/inventory/pages/InventoryOperationsPage';
 import { InventoryReportsHubPage } from '@/features/inventory/pages/reports/InventoryReportsHubPage';
+import { GoodsDeliveredNotInvoicedReportPage } from '@/features/inventory/pages/reports/GoodsDeliveredNotInvoicedReportPage';
 import { StockOnHandReportPage } from '@/features/inventory/pages/reports/StockOnHandReportPage';
 import { InventoryValuationReportPage } from '@/features/inventory/pages/reports/InventoryValuationReportPage';
 import { LowStockReportPage } from '@/features/inventory/pages/reports/LowStockReportPage';
@@ -195,6 +199,9 @@ export const routes: RouteObject[] = [
           { path: 'sales/quotes/:quoteId', element: <QuoteDetailPage /> },
           { path: 'sales/orders', element: <SalesOrdersPage /> },
           { path: 'sales/orders/:orderId', element: <SalesOrderDetailPage /> },
+          { path: 'sales/orders/:orderId/deliver', element: <CreateDeliveryNotePage /> },
+          { path: 'sales/delivery-notes', element: <DeliveryNotesPage /> },
+          { path: 'sales/delivery-notes/:deliveryNoteId', element: <DeliveryNoteDetailPage /> },
           { path: 'sales/invoices', element: <PermissionRoute feature="invoicing" action="read"><InvoicesPage /></PermissionRoute> },
           { path: 'sales/invoices/:invoiceId', element: <PermissionRoute feature="invoicing" action="read"><InvoiceDetailPage /></PermissionRoute> },
           { path: 'sales/credit-notes', element: <CreditNotesPage /> },
@@ -239,6 +246,7 @@ export const routes: RouteObject[] = [
           { path: 'inventory/reports/transfers', element: <PermissionRoute feature="inventory" action="read"><TransferReportPage /></PermissionRoute> },
           { path: 'inventory/reports/stock-take-variance', element: <PermissionRoute feature="inventory" action="read"><StockTakeVarianceReportPage /></PermissionRoute> },
           { path: 'inventory/reports/inventory-reconciliation', element: <PermissionRoute feature="inventory" action="read"><InventoryReconciliationReportPage /></PermissionRoute> },
+          { path: 'inventory/reports/goods-delivered-not-invoiced', element: <PermissionRoute feature="inventory" action="read"><GoodsDeliveredNotInvoicedReportPage /></PermissionRoute> },
           { path: 'inventory/reports/category-analysis', element: <PermissionRoute feature="inventory" action="read"><CategoryAnalysisReportPage /></PermissionRoute> },
           { path: 'inventory/reports/warehouse-analysis', element: <PermissionRoute feature="inventory" action="read"><WarehouseAnalysisReportPage /></PermissionRoute> },
           { path: 'inventory/reports/supplier-analysis', element: <PermissionRoute feature="inventory" action="read"><SupplierAnalysisReportPage /></PermissionRoute> },

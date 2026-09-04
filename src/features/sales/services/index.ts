@@ -6,10 +6,12 @@ import { RpcSalesOrderDraftInvoiceWriter } from './salesOrderDraftInvoiceWriter'
 import { CreditNoteService } from './creditNoteService';
 import { CustomerReceiptService } from './customerReceiptService';
 import { RealDepositAllocationExecutor } from './depositAllocationExecutor';
+import { DeliveryNoteService, RpcDeliveryNotePoster } from './deliveryNoteService';
 import { SupabaseQuoteRepository } from '@/repositories/SupabaseQuoteRepository';
 import { SupabaseSalesOrderRepository } from '@/repositories/SupabaseSalesOrderRepository';
 import { SupabaseCreditNoteRepository } from '@/repositories/SupabaseCreditNoteRepository';
 import { SupabaseCustomerReceiptRepository } from '@/repositories/SupabaseCustomerReceiptRepository';
+import { SupabaseDeliveryNoteRepository } from '@/repositories/SupabaseDeliveryNoteRepository';
 import { journalEntryService, accountMappingService } from '@/features/accounting/services';
 import { invoiceService } from '@/services';
 import {
@@ -25,15 +27,18 @@ export type { CreateQuoteDTO } from './quoteService';
 export type { CreateSalesOrderDTO } from './salesOrderService';
 export type { CreateCreditNoteDTO } from './creditNoteService';
 export type { CreateCustomerReceiptDTO } from './customerReceiptService';
+export type { CreateDeliveryNoteDTO, UpdateDeliveryNoteDTO, CreateDeliveryNoteLineDTO } from './deliveryNoteService';
 export { QuoteService } from './quoteService';
 export { SalesOrderService } from './salesOrderService';
 export { CreditNoteService } from './creditNoteService';
 export { CustomerReceiptService } from './customerReceiptService';
+export { DeliveryNoteService } from './deliveryNoteService';
 
 const quoteRepository = new SupabaseQuoteRepository(supabase);
 const salesOrderRepository = new SupabaseSalesOrderRepository(supabase);
 const creditNoteRepository = new SupabaseCreditNoteRepository(supabase);
 const customerReceiptRepository = new SupabaseCustomerReceiptRepository(supabase);
+const deliveryNoteRepository = new SupabaseDeliveryNoteRepository(supabase);
 
 /**
  * SalesOrderService.convertToInvoice() writes new invoices straight through
@@ -121,4 +126,20 @@ export const customerReceiptService = new CustomerReceiptService(
   // Increment 4A: applying a deposit to an invoice runs entirely inside the
   // atomic `apply_customer_deposit` RPC (migration 0046).
   new RealDepositAllocationExecutor(supabase),
+);
+
+/**
+ * Phase 5C. Posting always runs through the atomic `post_delivery_note` RPC
+ * (migration 0054, live) — `RpcDeliveryNotePoster` calls it directly; this
+ * service never builds a `stock_movements`/`journal_entries` row itself.
+ */
+export const deliveryNoteService = new DeliveryNoteService(
+  deliveryNoteRepository,
+  salesOrderRepository,
+  sharedInvoiceRepository,
+  accountMappingService,
+  inventoryAccountResolver,
+  productService,
+  warehouseService,
+  new RpcDeliveryNotePoster(supabase),
 );

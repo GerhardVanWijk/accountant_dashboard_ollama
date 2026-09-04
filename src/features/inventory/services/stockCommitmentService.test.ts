@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DocumentLineItem, Invoice, SalesOrder, Warehouse } from '@/types';
+import type { DeliveryNote, DeliveryNoteLineItem, DocumentLineItem, Invoice, SalesOrder, Warehouse } from '@/types';
 import type { ISalesOrderRepository } from '@/repositories/ISalesOrderRepository';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
+import type { IDeliveryNoteRepository } from '@/repositories/IDeliveryNoteRepository';
 import type { IWarehouseRepository } from '../repositories/IWarehouseRepository';
 import {
   commitmentKey,
@@ -56,15 +57,52 @@ const WAREHOUSES: Warehouse[] = [
   { id: 'wh_of', name: 'Overflow', code: 'OF', isDefault: false, status: 'active', createdAt: '', updatedAt: '' },
 ];
 
-function setup(orders: SalesOrder[], warehouses: Warehouse[] = WAREHOUSES, invoices: Invoice[] = []) {
+function dnLine(overrides: Partial<DeliveryNoteLineItem> = {}): DeliveryNoteLineItem {
+  return {
+    id: `dnl_${Math.random().toString(36).slice(2, 8)}`,
+    salesOrderLineId: 'sol-1',
+    productId: 'p1',
+    description: '',
+    quantity: 1,
+    unitPrice: 0,
+    taxAmount: 0,
+    lineTotal: 0,
+    ...overrides,
+  };
+}
+
+function deliveryNote(overrides: Partial<DeliveryNote> = {}): DeliveryNote {
+  return {
+    id: `dn_${Math.random().toString(36).slice(2, 8)}`,
+    deliveryNoteNumber: 'DN-1',
+    salesOrderId: 'so_1',
+    customerId: 'cust_1',
+    warehouseId: 'wh_main',
+    deliveryDate: '2026-09-05',
+    status: 'posted',
+    lineItems: [],
+    createdAt: '',
+    updatedAt: '',
+    ...overrides,
+  };
+}
+
+function setup(
+  orders: SalesOrder[],
+  warehouses: Warehouse[] = WAREHOUSES,
+  invoices: Invoice[] = [],
+  deliveryNotes: DeliveryNote[] = [],
+) {
   const salesOrderGetAll = vi.fn(async () => orders);
   const warehouseGetAll = vi.fn(async () => warehouses);
   const invoiceGetAll = vi.fn(async () => invoices);
+  const deliveryNoteGetAll = vi.fn(async () => deliveryNotes);
   const salesOrderRepo = { getAll: salesOrderGetAll } as unknown as ISalesOrderRepository;
   const warehouseRepo = { getAll: warehouseGetAll } as unknown as IWarehouseRepository;
   const invoiceRepo = { getAll: invoiceGetAll } as unknown as IInvoiceRepository;
-  const service = new StockCommitmentService(salesOrderRepo, warehouseRepo, invoiceRepo);
-  return { service, salesOrderGetAll, warehouseGetAll, invoiceGetAll };
+  const deliveryNoteRepo = { getAll: deliveryNoteGetAll } as unknown as IDeliveryNoteRepository;
+  const service = new StockCommitmentService(salesOrderRepo, warehouseRepo, invoiceRepo, deliveryNoteRepo);
+  return { service, salesOrderGetAll, warehouseGetAll, invoiceGetAll, deliveryNoteGetAll };
 }
 
 describe('StockCommitmentService.getCommitmentMap', () => {
@@ -234,5 +272,57 @@ describe('StockCommitmentService.getCommitmentMap — Phase 5B.3 remaining commi
     });
     const map = await setup([so], WAREHOUSES, [inv]).service.getCommitmentMap();
     expect(map.has(commitmentKey('p1', 'wh_main'))).toBe(false);
+  });
+});
+
+describe('StockCommitmentService.getCommitmentMap — Phase 5C delivery-aware commitment', () => {
+  it('a POSTED Delivery Note reduces commitment exactly like a posted invoice (ordered 10, delivered 6 -> committed 4)', async () => {
+    const so = order({ lineItems: [line({ id: 'sol-1', productId: 'p1', warehouseId: 'wh_main', quantity: 10 })] });
+    const dn = deliveryNote({ salesOrderId: so.id, warehouseId: 'wh_main', lineItems: [dnLine({ salesOrderLineId: 'sol-1', productId: 'p1', quantity: 6 })] });
+    const map = await setup([so], WAREHOUSES, [], [dn]).service.getCommitmentMap();
+    expect(map.get(commitmentKey('p1', 'wh_main'))).toBe(4);
+  });
+
+  it('a DRAFT Delivery Note does NOT reduce commitment', async () => {
+    const so = order({ lineItems: [line({ id: 'sol-1', productId: 'p1', warehouseId: 'wh_main', quantity: 10 })] });
+    const dn = deliveryNote({ salesOrderId: so.id, warehouseId: 'wh_main', status: 'draft', lineItems: [dnLine({ salesOrderLineId: 'sol-1', productId: 'p1', quantity: 6 })] });
+    const map = await setup([so], WAREHOUSES, [], [dn]).service.getCommitmentMap();
+    expect(map.get(commitmentKey('p1', 'wh_main'))).toBe(10);
+  });
+
+  it('a delivery-linked posted invoice does NOT reduce commitment a second time (double-subtraction guard)', async () => {
+    const so = order({ lineItems: [line({ id: 'sol-1', productId: 'p1', warehouseId: 'wh_main', quantity: 10 })] });
+    const dn = deliveryNote({ salesOrderId: so.id, warehouseId: 'wh_main', lineItems: [dnLine({ id: 'dnl-1', salesOrderLineId: 'sol-1', productId: 'p1', quantity: 7 })] });
+    const invoiceFromDn = invoice({
+      salesOrderId: so.id,
+      status: 'sent',
+      lineItems: [line({ salesOrderLineId: 'sol-1', productId: 'p1', warehouseId: 'wh_main', quantity: 4, deliveryNoteLineId: 'dnl-1' })],
+    });
+    const map = await setup([so], WAREHOUSES, [invoiceFromDn], [dn]).service.getCommitmentMap();
+    // 7 delivered releases the commitment; the 4-unit invoice-from-DN must NOT release it AGAIN (would wrongly go to -1, floored/miscounted)
+    expect(map.get(commitmentKey('p1', 'wh_main'))).toBe(3);
+  });
+
+  it('delivered + direct together net correctly (ordered 10, delivered 4, direct 3 -> committed 3)', async () => {
+    const so = order({ lineItems: [line({ id: 'sol-1', productId: 'p1', warehouseId: 'wh_main', quantity: 10 })] });
+    const dn = deliveryNote({ salesOrderId: so.id, warehouseId: 'wh_main', lineItems: [dnLine({ salesOrderLineId: 'sol-1', productId: 'p1', quantity: 4 })] });
+    const directInv = invoice({
+      salesOrderId: so.id,
+      status: 'sent',
+      lineItems: [line({ salesOrderLineId: 'sol-1', productId: 'p1', warehouseId: 'wh_main', quantity: 3 })],
+    });
+    const map = await setup([so], WAREHOUSES, [directInv], [dn]).service.getCommitmentMap();
+    expect(map.get(commitmentKey('p1', 'wh_main'))).toBe(3);
+  });
+
+  it('with NO Delivery Notes at all, the formula reduces exactly to the Phase 5B.3 rule (regression proof)', async () => {
+    const so = order({ lineItems: [line({ id: 'sol-1', productId: 'p1', warehouseId: 'wh_main', quantity: 10 })] });
+    const inv = invoice({
+      salesOrderId: so.id,
+      status: 'sent',
+      lineItems: [line({ salesOrderLineId: 'sol-1', productId: 'p1', warehouseId: 'wh_main', quantity: 4 })],
+    });
+    const withDeliveryNoteRepo = await setup([so], WAREHOUSES, [inv], []).service.getCommitmentMap();
+    expect(withDeliveryNoteRepo.get(commitmentKey('p1', 'wh_main'))).toBe(6); // identical to the Phase 5B.3 test above
   });
 });

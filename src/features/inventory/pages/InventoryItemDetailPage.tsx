@@ -33,6 +33,7 @@ import { useStockTransfers } from '../hooks/useStockTransfers';
 import { useStockTakes } from '../hooks/useStockTakes';
 import { useSupplierReturns } from '../hooks/useSupplierReturns';
 import { useOpeningStockBatches } from '../hooks/useOpeningStockBatches';
+import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
 import { InventoryItemDetail, type MovementAccounting } from '../components/InventoryItemDetail';
 import { ProductFormModal } from '../components/ProductFormModal';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
@@ -46,6 +47,7 @@ const POSTING_KEY_SUFFIX: Partial<Record<StockMovementSourceType, string>> = {
   stock_take: 'post',
   supplier_return: 'post',
   opening_stock_batch: 'post',
+  delivery_note: 'post',
 };
 
 /** The inventory-side contra account + a one-line relationship note, keyed by movement type. */
@@ -77,6 +79,10 @@ const MOVEMENT_ACCOUNTING: Record<
   stock_take: { contra: '5050 Inventory Adjustments', relationship: 'Net count variance posted to Inventory Adjustments.' },
   correction: { contra: '5050 Inventory Adjustments', relationship: 'Correcting movement.' },
   opening: { contra: '3950 Opening Balance Equity', relationship: 'Opening stock brought in against Opening Balance Equity.' },
+  delivery: {
+    contra: '1220 Goods Delivered Not Invoiced',
+    relationship: 'Stock out at frozen WAC; the offsetting debit is 1220, cleared to COGS when the linked invoice posts. No revenue, VAT or AR at this point.',
+  },
 };
 
 /**
@@ -115,6 +121,7 @@ export function InventoryItemDetailPage() {
   const { supplierReturns } = useSupplierReturns();
   const { batches } = useOpeningStockBatches();
   const { entries: journalEntries } = useJournalEntries();
+  const { deliveryNotes } = useDeliveryNotes();
 
   const canUpdate = useCanAccess('inventory', 'update');
   const [editing, setEditing] = useState(false);
@@ -135,8 +142,9 @@ export function InventoryItemDetailPage() {
     for (const s of stockTakes) map.set(s.id, s.stockTakeNumber);
     for (const r of supplierReturns) map.set(r.id, r.returnNumber);
     for (const batch of batches) map.set(batch.id, batch.batchNumber);
+    for (const dn of deliveryNotes) map.set(dn.id, dn.deliveryNoteNumber);
     return map;
-  }, [invoices, bills, creditNotes, quotes, salesOrders, purchaseOrders, adjustments, transfers, stockTakes, supplierReturns, batches]);
+  }, [invoices, bills, creditNotes, quotes, salesOrders, purchaseOrders, adjustments, transfers, stockTakes, supplierReturns, batches, deliveryNotes]);
 
   const journalEntryIdBySource = useMemo(() => {
     const map = new Map<string, string>();

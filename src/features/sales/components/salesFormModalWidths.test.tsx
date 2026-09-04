@@ -7,6 +7,7 @@ import { SalesOrderFormModal } from './SalesOrderFormModal';
 
 vi.mock('@/features/tax/hooks/useTaxRates', () => ({ useTaxRates: () => ({ taxRates: [] }) }));
 vi.mock('@/features/sales/hooks/useInvoices', () => ({ useInvoices: () => ({ invoices: [], loading: false, error: null, refetch: vi.fn() }) }));
+vi.mock('@/features/sales/hooks/useDeliveryNotes', () => ({ useDeliveryNotes: () => ({ deliveryNotes: [], isLoading: false, loading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('@/features/inventory/hooks/useProducts', () => ({ useProducts: () => ({ products: [] }) }));
 vi.mock('@/features/inventory/hooks/useWarehouses', () => ({ useWarehouses: () => ({ warehouses: [] }) }));
 vi.mock('@/features/inventory/hooks/useStockBalances', () => ({ useStockBalances: () => ({ balances: [], loading: false, error: null, refetch: vi.fn() }) }));

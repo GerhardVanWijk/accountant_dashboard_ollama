@@ -19,7 +19,8 @@ import {
   ownCommitmentMap,
 } from '@/features/inventory/services/stockCommitmentService';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
-import { isPostedInvoiceStatus, sumInvoicedBySalesOrderLine } from '@/features/sales/utils/salesOrderFulfilment';
+import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
+import { sumPhysicallyIssuedBySalesOrderLine } from '@/features/sales/utils/salesOrderFulfilment';
 
 export interface SalesOrderFormProps {
   customers: Customer[];
@@ -51,6 +52,7 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
   const { balances } = useStockBalances();
   const { commitments } = useStockCommitments();
   const { invoices } = useInvoices();
+  const { deliveryNotes } = useDeliveryNotes();
 
   /**
    * Derived stock commitment (Phase 5A) — units of a product committed to
@@ -67,11 +69,12 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
    * product detail / reports are untouched.
    */
   const defaultWarehouseId = warehouses.find((w) => w.isDefault)?.id;
-  // Phase 5B.3: net the persisted order's own posted-invoice progress so the
-  // "own" contribution matches what the global commitment map now counts.
+  // Phase 5C: net the persisted order's own physical-departure progress
+  // (delivered + directly invoiced), matching what the global commitment map
+  // (`StockCommitmentService`) now counts — same formula, same source data.
   const fulfilledByLine = useMemo(
-    () => sumInvoicedBySalesOrderLine(invoices, (inv) => isPostedInvoiceStatus(inv.status)),
-    [invoices],
+    () => sumPhysicallyIssuedBySalesOrderLine(invoices, deliveryNotes),
+    [invoices, deliveryNotes],
   );
   const ownCommitments = useMemo(
     () => ownCommitmentMap(salesOrder, defaultWarehouseId, fulfilledByLine),

@@ -11,6 +11,7 @@ import { SupabaseOpeningStockBatchRepository } from './SupabaseOpeningStockBatch
 import { SupabaseSupplierReturnRepository } from './SupabaseSupplierReturnRepository';
 import { SupabaseSalesOrderRepository } from '@/repositories/SupabaseSalesOrderRepository';
 import { SupabaseInvoiceRepository } from '@/repositories/SupabaseInvoiceRepository';
+import { SupabaseDeliveryNoteRepository } from '@/repositories/SupabaseDeliveryNoteRepository';
 import { supabase } from '@/config/supabase';
 
 /**
@@ -66,3 +67,12 @@ export const salesOrderRepository = new SupabaseSalesOrderRepository(supabase);
  * instance over the shared client, no in-memory divergence.
  */
 export const invoiceRepository = new SupabaseInvoiceRepository(supabase);
+
+/**
+ * Read-only, used by `stockCommitmentService` (Phase 5C) to also net posted
+ * Delivery Note quantity out of a confirmed Sales Order line's commitment —
+ * a physical departure via a Delivery Note releases the reservation exactly
+ * like a posted invoice already did (`sumPhysicallyIssuedBySalesOrderLine`).
+ * Same safety note as `salesOrderRepository`/`invoiceRepository` above.
+ */
+export const deliveryNoteRepository = new SupabaseDeliveryNoteRepository(supabase);

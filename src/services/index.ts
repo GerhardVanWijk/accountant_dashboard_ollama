@@ -10,6 +10,7 @@ import {
 } from '@/features/inventory/services/inventoryPostingEngineInstance';
 import { productService } from '@/features/inventory/services/productService';
 import { warehouseService } from '@/features/inventory/services/warehouseService';
+import { RealDeliveryFrozenCostLookup } from '@/features/inventory/services/deliveryFrozenCostLookup';
 import { supabase } from '@/config/supabase';
 import { SupabaseDocumentLineProjector } from '@/repositories/SupabaseDocumentLineProjector';
 
@@ -69,4 +70,8 @@ export const invoiceService = new InvoiceService(
   invoiceLineProjector,
   undefined,
   syncSalesOrderStatusAfterPost,
+  // Phase 5C: reads the frozen cost a Delivery Note line's own stock_movements
+  // row carries, so a delivery-linked invoice line clears 1220 → COGS at
+  // exactly the delivery-time WAC, never today's (docs/DELIVERY_NOTES_DESIGN.md Part 15).
+  new RealDeliveryFrozenCostLookup(supabase),
 );

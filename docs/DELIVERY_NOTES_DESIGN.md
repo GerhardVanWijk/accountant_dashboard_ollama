@@ -1694,7 +1694,151 @@ counts). Service code: NONE. UI code: NONE. Accounting logic changed: NO (proven
 static contract). Phase 5B: COMPLETE, NOT reopened.**
 
 **STATUS: CP-5C-A COMPLETE — APPLIED + LIVE-VERIFIED. Scenario F RESOLVED, confirmed against the
-real database. 5C-B (service/UI implementation) is the next, separately-scoped phase.**
+real database.**
+
+---
+
+# CP-5C-B / CP-5C-C / CP-5C-D — SERVICE, UI, AND RELEASE READINESS (2026-09-05)
+
+Built continuously in one checkpoint, per explicit instruction not to subdivide further. No new
+migration was needed or authored — everything below is TypeScript application code against the
+already-live `0050`-`0055` schema/RPCs.
+
+## 5C-B — Domain, repository, service, accounting integration
+
+- **Domain**: `src/types/deliveryNote.ts` (`DeliveryNote`, `DeliveryNoteStatus`, `DeliveryNoteLineItem`
+  — no price/revenue field beyond what the printable document and invoice-derivation need, per Part
+  4's own instruction). `DocumentLineItem.deliveryNoteLineId?` added (mirrors `salesOrderLineId?`
+  exactly).
+- **Repository**: `IDeliveryNoteRepository` (`getBySalesOrderId`/`getByCustomerId` beyond the generic
+  CRUD), `SupabaseDeliveryNoteRepository`, `MockDeliveryNoteRepository` (starts empty — no historical
+  fabrication, Part 14 honoured).
+- **Quantity formulas** (`salesOrderFulfilment.ts`): `sumDeliveredBySalesOrderLine`,
+  `sumDirectlyInvoicedBySalesOrderLine` (excludes `deliveryNoteLineId`-linked lines — the
+  double-subtraction guard), `sumPhysicallyIssuedBySalesOrderLine`, and new
+  `deliveredQty`/`directlyInvoicedQty`/`physicalFulfilledQty`/`remainingToDeliver` fields on both
+  `SalesOrderLineFulfilment` and `SalesOrderFulfilment`. `computeSalesOrderFulfilment` takes an
+  optional third `deliveryNotes` parameter, defaulting to `[]` — proven, by test, byte-identical to
+  the pre-5C output when omitted.
+- **Commitment** (`stockCommitmentService.ts`): now nets `sumPhysicallyIssuedBySalesOrderLine`
+  (delivered + direct) instead of posted-invoice-only — the exact Part 3 instruction — via a new
+  optional `DeliveryNoteLookup` constructor param (default: empty stub, so every pre-5C construction
+  is unaffected).
+- **`DeliveryNoteService`** (`src/features/sales/services/deliveryNoteService.ts`): `createDraft`
+  (validates confirmed SO, warehouse, line membership, no dupes, quantity ≤ fresh
+  `remainingToDeliver`), `updateDraft`/`cancelDraft`/`deleteDraft` (draft-only), `postDeliveryNote`
+  (friendly pre-validation + the live `post_delivery_note` RPC via `RpcDeliveryNotePoster` — the RPC
+  remains the sole accounting-transaction authority), `buildInvoiceSelectionsForDeliveryNote` (one
+  selection per DN line, the adopted N:M policy). DN numbering via the existing
+  `nextDocumentNumber('DN')` — concurrency-safe by the same convention every other document number
+  already uses.
+- **Invoice accounting** (`invoiceService.ts` `postInvoice()`): a line carrying `deliveryNoteLineId`
+  skips the stock-issue path entirely and instead clears the **frozen** cost (read via the new
+  `DeliveryFrozenCostLookup` / `RealDeliveryFrozenCostLookup`, querying the delivery's own
+  `stock_movements` row) into COGS through the new `GOODS_DELIVERED_NOT_INVOICED` (`1220`)
+  `AccountMappingKey` — proven, by test, to use the FROZEN cost even when the product's current WAC
+  has since moved (Part 15's own worked example, reproduced exactly). A **mixed** invoice (a direct
+  line and a delivery-linked line together) is proven to produce one balanced journal with no new
+  engine change — `lines[]` and `extraJournal[]` were always independent inputs to the same atomic
+  call (Part 16).
+- **Tests**: 96 new/updated — `salesOrderFulfilment.test.ts` (+31, including a from-scratch replay
+  of the CP-5C-A hardening's 18-scenario matrix against the REAL implementation, not a reimplemented
+  formula), `stockCommitmentService.test.ts` (+5), `invoiceService.test.ts` (+4, including the
+  frozen-vs-current-WAC proof and the mixed-invoice balanced-journal proof),
+  `deliveryNoteService.test.ts` (25, new), `MockDeliveryNoteRepository.test.ts` (6, new).
+
+## 5C-C — UI, printable document, traceability, navigation
+
+- **`DeliveryNotesPage`** (list, `/sales/delivery-notes`) — search, status filter, human-readable
+  numbers only (no raw UUIDs), row click → full-page record.
+- **`DeliveryNoteDetailPage`** (`/sales/delivery-notes/:id`) — overview summary (incl. an
+  "estimated accounting effect" preview before posting, Part 26), line items (no price column),
+  stock-movement evidence table, invoiced-from-this-delivery table, notes, `RecordActivitySection`
+  (audit trail — real persisted events only, `delivery_note_created/_updated/_posted/_cancelled`,
+  no fabrication), post/cancel/print actions gated by status exactly as designed (Part 3/7), a
+  "Create invoice" action once anything remains to invoice on the delivery.
+- **`CreateDeliveryNotePage`** (`/sales/orders/:orderId/deliver`) — a genuine FULL PAGE, not a
+  modal/sheet (explicit instruction), pre-populated from the confirmed Sales Order, one row per
+  deliverable line showing Ordered/Delivered/Remaining, a "Deliver now" quantity input defaulting to
+  the remainder, capped client-side at `remainingToDeliver` (the database RPC remains the final
+  authority at post time).
+- **`SalesOrderDetailPage`** gained `Delivered`/`Remaining to deliver` summary fields (the
+  `remainingToFulfilQty`-based "Stock committed" field was updated to the delivery-aware
+  `remainingToDeliver`), a "Delivery notes" related-records table (same `RelatedRecordPreview`
+  overlay pattern as "Related invoices" — non-destructive, page context preserved), and a
+  "Create delivery" secondary action, visible only for a confirmed order with something left to
+  deliver.
+- **Printable document**: `deliveryNoteToBusinessDocument` adapter + `useDeliveryNoteBusinessDocument`
+  hook, reusing the existing A4 `BusinessDocument`/`BusinessDocumentPreviewModal` system unchanged.
+  Price/VAT/amount columns and the totals block are structurally absent from the view model (not
+  merely hidden by CSS) — proven by `noInternalIds.test.tsx`, extended with a "delivery note" case
+  in the existing privacy-scan matrix plus a dedicated price-suppression assertion.
+  `BusinessDocumentKind` gained `'delivery_note'`.
+- **Traceability**: `StockMovementSourceType` (already had `'delivery_note'` from CP-5C-A's TS-only
+  additions) is now wired through `sourceDocument.ts`'s `META` map and `RelatedRecordType` +
+  `RelatedRecordPreview`'s registry — meaning the EXISTING, unmodified Product-detail movement
+  ledger (`InventoryItemDetail.tsx`) automatically resolves and previews a `'delivery'`-type
+  movement's Delivery Note reference with zero changes to that large component (deliberately, to
+  avoid destabilising it — the same caution the 5B.1 checkpoint applied). `MOVEMENT_TYPE_LABELS` and
+  the Product-detail "Accounting" tab's per-type contra-account note both gained a `delivery` entry.
+  **Known gap, not a blocker**: the Product-detail "Sales" tab does not yet list Delivery Notes
+  explicitly alongside Quotes/SOs/Invoices — the accounting-critical evidence trail (the movement
+  ledger) is delivered; the document-list convenience view is not, deferred as a suggestion below.
+- **Global search**: `GlobalSearchRecordType` gained `'delivery_note'`; searching a DN number
+  navigates straight to its canonical route (never `?record=`).
+- **Navigation**: "Delivery Notes" added to the Sales nav group; `isNavItemActive`'s prefix-matching
+  confirmed both new routes (`/sales/delivery-notes/*`, `/sales/orders/:id/deliver`) correctly keep
+  the Sales accordion section active — the "child record activates a different sidebar section" bug
+  class cannot recur here (verified against the actual matching logic, not assumed).
+- **Reconciliation report**: `reconcileGoodsDeliveredNotInvoiced` (pure function) +
+  `useGoodsDeliveredNotInvoicedReconciliation` hook + `GoodsDeliveredNotInvoicedReportPage`
+  (`/inventory/reports/goods-delivered-not-invoiced`), under Reports → Control, deliberately NOT on
+  Inventory Overview and deliberately a SEPARATE check from the existing GL-1200 reconciliation
+  (Part 19/20) — for every posted, not-fully-invoiced Delivery Note line: outstanding qty × frozen
+  unit cost, summed and compared to GL `1220`'s posted balance.
+  `reconcileInventory()`'s `LINE_ID_REQUIRED` set now includes `'delivery'`, closing that specific
+  pre-existing known issue.
+
+## 5C-D — QA, live verification, documentation
+
+- Full gate re-run repeatedly through the build: tsc ✅ · eslint `--max-warnings 0` ✅ ·
+  **2486 tests / 315 files** ✅ · `vite build` ✅. Zero skipped, zero weakened tests at any point.
+- Read-only live-database verification (project `bcaffvpibpitpuqglszn`): trial balance `0.00`,
+  GL `1200` = R1,478,853.74, GL `1210` = 0.00, GL `1220` = NULL (no Delivery Note has posted yet —
+  expected, none were seeded), journal count 247, stock movement count 343, delivery note count 0,
+  negative stock balances 0, `1220` account present for all 3 companies. Nothing here changed
+  through this checkpoint's own work (no live writes were made — only the earlier CP-5C-A migration
+  apply touched the database).
+- `git status`/`git diff --stat` reviewed: 49 files changed (all `src/`, all within the expected
+  Phase 5C-B/C scope), 0 new migrations, no `.env`/secret/scratch/debug artifact, no native
+  `<select>` reintroduced, no raw UUID rendered in customer-facing UI (the printable document and
+  every new page were built and reviewed with that discipline explicitly in mind, and the shared
+  `noInternalIds.test.tsx` guard now covers the new document type).
+- **No demo Delivery Note was seeded** — Part 28's own instruction; a real, deterministic, approved
+  seed is listed as a suggestion below, not actioned.
+- **Not committed, not pushed, not merged, not deployed** — this checkpoint stops at the final Phase
+  5C review, per explicit instruction, awaiting your decision on commit/push/deploy for visual/live
+  testing.
+
+## Known issues found at CP-5C-B/C/D close — ALL RESOLVED (final Phase 5C cleanup, 2026-09-05)
+
+| Severity | Issue | Resolution |
+|---|---|---|
+| LOW | Product-detail "Sales" tab didn't list Delivery Notes alongside Quotes/SOs/Invoices. | **FIXED.** The tab now includes `'delivery'`-type movements, with the "Ref" column resolved to the real DN number via the existing `SourceCell`/`resolveSource` machinery (never a raw UUID). Also closed a companion gap this surfaced: `InventoryItemDetailPage.tsx`'s `numberById` map never included Delivery Notes at all — fixed alongside. |
+| LOW | `DeliveryNoteDetailPage`/`CreateDeliveryNotePage` had no dedicated component-level UI tests. | **FIXED.** 8 + 6 new tests added, mirroring `DeliveryNotesPage.test.tsx`/`SalesOrderDetailPage.test.tsx`'s pattern. |
+| LOW | `SalesOrderForm`'s self-commitment-exclusion nets against posted-invoice-only, not the new delivery-aware formula. | **FIXED.** Now uses `sumPhysicallyIssuedBySalesOrderLine(invoices, deliveryNotes)` via a `useDeliveryNotes()` fetch added to the form — matches the global commitment map exactly. |
+
+Gate re-verified green after all three fixes: **2500 tests / 317 files**, tsc clean, eslint clean, build clean.
+
+## Suggestions (not Phase 5C blockers — for a future checkpoint)
+
+| Classification | Suggestion |
+|---|---|
+| RECOMMENDED LATER | A deterministic, explicitly-approved demo seed (a handful of posted Delivery Notes against real Office National orders) so the feature is visibly exercised in a preview/production environment — not done here (Part 28 — no fake data without separate approval). |
+| OPTIONAL | Extend the Delivery Note permission catalog rows (Part 22 of the original design — still correctly inert, matching the existing unwired inventory catalog) once Phase T's broader permission rollout happens. |
+
+**STATUS: PHASE 5C — FULLY COMPLETE AND CLOSED.** CP-5C-A/B/C/D all done, all known cleanup items
+resolved, gate green. Ready to commit and push.
 
 ---
 

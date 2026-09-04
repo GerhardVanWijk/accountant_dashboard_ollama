@@ -26,7 +26,9 @@ import { useSalesOrders } from '@/features/sales/hooks/useSalesOrders';
 import { useSalesOrderMutations } from '@/features/sales/hooks/useSalesOrderMutations';
 import { useQuotes } from '@/features/sales/hooks/useQuotes';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
+import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
 import { useCustomerMap } from '@/features/sales/hooks/useCustomerMap';
+import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 import { PartialInvoicePicker } from '@/features/sales/components/PartialInvoicePicker';
 import {
   canCloseRemaining,
@@ -93,6 +95,8 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
   const { customers: customerMap } = useCustomerMap();
   const { quotes } = useQuotes();
   const { invoices, refetch: refetchInvoices } = useInvoices();
+  const { deliveryNotes } = useDeliveryNotes();
+  const { warehouses } = useWarehouses();
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -103,12 +107,18 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
   const [pickerBusy, setPickerBusy] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState<{ id: string; number: string } | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [deliveryNotePreviewId, setDeliveryNotePreviewId] = useState<string | null>(null);
   const { viewModel, loading: docLoading, error: docError } = useBusinessDocument({ kind: 'sales_order', record: order });
 
   const fulfilment = useMemo(
-    () => (order ? computeSalesOrderFulfilment(order, invoices) : undefined),
-    [order, invoices],
+    () => (order ? computeSalesOrderFulfilment(order, invoices, deliveryNotes) : undefined),
+    [order, invoices, deliveryNotes],
   );
+  const linkedDeliveryNotes = useMemo(
+    () => (order ? deliveryNotes.filter((dn) => dn.salesOrderId === order.id).sort((a, b) => b.deliveryDate.localeCompare(a.deliveryDate)) : []),
+    [order, deliveryNotes],
+  );
+  const warehouseByIdMap = useMemo(() => new Map(warehouses.map((w) => [w.id, w])), [warehouses]);
   const fulfilmentByLine = useMemo(() => {
     const map = new Map<string, SalesOrderLineFulfilment>();
     fulfilment?.lines.forEach((l) => map.set(l.salesOrderLineId, l));
@@ -198,6 +208,11 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
     fulfilment.remainingToInvoiceQty > 0;
   const canDelete = order?.status === 'pending';
   const convertLabel = someInvoiced ? 'Invoice remaining' : 'Create invoice';
+  // Phase 5C, Part 10: an eligible confirmed order with something left to
+  // physically deliver gets a "Create delivery" action alongside invoicing —
+  // the two are independent (Part 13: invoicing without a prior delivery
+  // remains fully supported, unrestricted).
+  const canDeliver = order != null && order.status === 'confirmed' && Boolean(fulfilment && fulfilment.remainingToDeliver > 1e-6);
   const abandonValue = fulfilment
     ? order!.lineItems.reduce((sum, l) => {
         const f = fulfilmentByLine.get(l.id);
@@ -243,6 +258,7 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
                     : undefined
                 }
                 secondary={[
+                  ...(canDeliver ? [{ label: 'Create delivery', onClick: () => navigate(`/sales/orders/${order.id}/deliver`) }] : []),
                   { label: 'Print / PDF', icon: PrinterIcon, onClick: () => setPreviewOpen(true) },
                   {
                     label: 'Duplicate',
@@ -327,16 +343,17 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
                     value={<StatusBadge status={displayFulfilmentStatus(order, fulfilment)} />}
                   />
                   <RecordField label="Ordered" value={<span className="tabular-nums">{fmtQty(fulfilment.orderedQty)}</span>} />
+                  <RecordField label="Delivered" value={<span className="tabular-nums">{fmtQty(fulfilment.deliveredQty)}</span>} />
+                  <RecordField label="Remaining to deliver" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToDeliver)}</span>} />
                   <RecordField label="Invoiced (posted)" value={<span className="tabular-nums">{fmtQty(fulfilment.postedFulfilledQty)}</span>} />
                   {fulfilment.draftInvoicedQty > 0 && (
                     <RecordField label="In draft invoices" value={<span className="tabular-nums">{fmtQty(fulfilment.draftInvoicedQty)}</span>} />
                   )}
                   <RecordField label="Remaining to invoice" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToInvoiceQty)}</span>} />
-                  <RecordField label="Remaining to fulfil" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToFulfilQty)}</span>} />
-                  {order.status === 'confirmed' && fulfilment.remainingToFulfilQty > 0 && (
+                  {order.status === 'confirmed' && fulfilment.remainingToDeliver > 0 && (
                     <RecordField
                       label="Stock committed"
-                      value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToFulfilQty)} unit(s) reserved</span>}
+                      value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToDeliver)} unit(s) reserved</span>}
                     />
                   )}
                   {order.status === 'closed' && (
@@ -366,6 +383,43 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
               ]}
             />
           </RecordPageSection>
+
+          {linkedDeliveryNotes.length > 0 && (
+            <RecordPageSection title="Delivery notes">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs tracking-wide text-muted-foreground uppercase">
+                      <th className="py-2 pr-3 font-medium">DN number</th>
+                      <th className="py-2 pr-3 font-medium">Date</th>
+                      <th className="py-2 pr-3 font-medium">Warehouse</th>
+                      <th className="py-2 pr-3 text-right font-medium">Quantity</th>
+                      <th className="py-2 text-left font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {linkedDeliveryNotes.map((dn) => (
+                      <tr key={dn.id} className="border-b border-border/60 last:border-0">
+                        <td className="py-2 pr-3">
+                          <button
+                            type="button"
+                            className="font-medium text-brand hover:underline"
+                            onClick={() => setDeliveryNotePreviewId(dn.id)}
+                          >
+                            {dn.deliveryNoteNumber}
+                          </button>
+                        </td>
+                        <td className="py-2 pr-3 text-muted-foreground">{formatDate(dn.deliveryDate)}</td>
+                        <td className="py-2 pr-3 text-muted-foreground">{warehouseByIdMap.get(dn.warehouseId)?.name ?? '—'}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{fmtQty(dn.lineItems.reduce((s, l) => s + l.quantity, 0))}</td>
+                        <td className="py-2"><StatusBadge status={dn.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </RecordPageSection>
+          )}
 
           {linkedInvoices.length > 0 && (
             <RecordPageSection title="Related invoices">
@@ -481,6 +535,18 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
               linkedInvoices.find((i) => i.id === invoicePreviewId)?.invoiceNumber
                 ? `Invoice ${linkedInvoices.find((i) => i.id === invoicePreviewId)?.invoiceNumber}`
                 : 'Invoice'
+            }
+          />
+
+          <RelatedRecordPreview
+            open={deliveryNotePreviewId != null}
+            onClose={() => setDeliveryNotePreviewId(null)}
+            type="delivery_note"
+            id={deliveryNotePreviewId ?? undefined}
+            title={
+              linkedDeliveryNotes.find((d) => d.id === deliveryNotePreviewId)?.deliveryNoteNumber
+                ? `Delivery note ${linkedDeliveryNotes.find((d) => d.id === deliveryNotePreviewId)?.deliveryNoteNumber}`
+                : 'Delivery note'
             }
           />
         </>

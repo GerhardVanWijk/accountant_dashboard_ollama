@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DocumentLineItem, Invoice, SalesOrder } from '@/types';
+import type { DeliveryNote, DeliveryNoteLineItem, DocumentLineItem, Invoice, SalesOrder } from '@/types';
 import {
   buildInvoiceFromSelections,
   canCloseRemaining,
@@ -10,9 +10,13 @@ import {
   invoiceableSalesOrderLines,
   isFullyInvoiced,
   isFullyPostedInvoiced,
+  isPostedDeliveryNoteStatus,
   isPostedInvoiceStatus,
   isValidSelectionQuantity,
+  sumDeliveredBySalesOrderLine,
+  sumDirectlyInvoicedBySalesOrderLine,
   sumInvoicedBySalesOrderLine,
+  sumPhysicallyIssuedBySalesOrderLine,
 } from './salesOrderFulfilment';
 
 function soLine(overrides: Partial<DocumentLineItem> = {}): DocumentLineItem {
@@ -359,5 +363,182 @@ describe('buildInvoiceFromSelections', () => {
     const built = buildInvoiceFromSelections(so(), [], [{ salesOrderLineId: 'L3', quantity: 1 }]);
     expect(built.parts[0].source.productId).toBeUndefined();
     expect(built.total).toBeCloseTo(575, 2);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 5C — Delivery Notes (docs/DELIVERY_NOTES_DESIGN.md Part 8). These
+// mirror the CP-5C-A hardening's 18-scenario formal proof
+// (deliveryNotesMigrations.test.ts), but exercise the ACTUAL TypeScript
+// implementation `computeSalesOrderFulfilment` uses in the app, not a
+// reimplemented formula — closing the gap between "proven on paper" and
+// "proven in the real code path".
+// ────────────────────────────────────────────────────────────────────────────
+
+function dnLine(overrides: Partial<DeliveryNoteLineItem> = {}): DeliveryNoteLineItem {
+  return {
+    id: `dnl_${Math.random().toString(36).slice(2, 8)}`,
+    salesOrderLineId: 'L1',
+    productId: 'p1',
+    description: 'Item',
+    quantity: 1,
+    unitPrice: 100,
+    taxAmount: 15,
+    lineTotal: 100,
+    ...overrides,
+  };
+}
+
+function deliveryNote(lineItems: DeliveryNoteLineItem[], overrides: Partial<DeliveryNote> = {}): DeliveryNote {
+  return {
+    id: `dn_${Math.random().toString(36).slice(2, 8)}`,
+    deliveryNoteNumber: 'DN-1',
+    salesOrderId: 'so_1',
+    customerId: 'cust_1',
+    warehouseId: 'wh_1',
+    deliveryDate: '2026-09-05',
+    status: 'posted',
+    lineItems,
+    createdAt: '',
+    updatedAt: '',
+    ...overrides,
+  };
+}
+
+describe('isPostedDeliveryNoteStatus', () => {
+  it('true only for posted', () => {
+    expect(isPostedDeliveryNoteStatus('posted')).toBe(true);
+    expect(isPostedDeliveryNoteStatus('draft')).toBe(false);
+    expect(isPostedDeliveryNoteStatus('cancelled')).toBe(false);
+  });
+});
+
+describe('sumDeliveredBySalesOrderLine', () => {
+  it('sums posted DN line qty per SO line; drafts/cancelled excluded by the predicate', () => {
+    const dns = [
+      deliveryNote([dnLine({ salesOrderLineId: 'L1', quantity: 4 })], { status: 'posted' }),
+      deliveryNote([dnLine({ salesOrderLineId: 'L1', quantity: 3 })], { status: 'posted' }),
+      deliveryNote([dnLine({ salesOrderLineId: 'L1', quantity: 99 })], { status: 'draft' }),
+    ];
+    const map = sumDeliveredBySalesOrderLine(dns, (dn) => isPostedDeliveryNoteStatus(dn.status));
+    expect(map.get('L1')).toBe(7);
+  });
+});
+
+describe('sumDirectlyInvoicedBySalesOrderLine', () => {
+  it('excludes any invoice line carrying deliveryNoteLineId — the double-subtraction guard', () => {
+    const invoices = [
+      invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 4 })]),
+      invoice([soLine({ id: 'i2', salesOrderLineId: 'L1', quantity: 6, deliveryNoteLineId: 'dnl_1' })]),
+    ];
+    const map = sumDirectlyInvoicedBySalesOrderLine(invoices, (i) => isPostedInvoiceStatus(i.status));
+    expect(map.get('L1')).toBe(4); // the delivery-linked 6 is excluded
+  });
+
+  it('a legacy (pre-5C) invoice line with no deliveryNoteLineId key at all counts as direct', () => {
+    const invoices = [invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 4 })])];
+    const map = sumDirectlyInvoicedBySalesOrderLine(invoices, (i) => isPostedInvoiceStatus(i.status));
+    expect(map.get('L1')).toBe(4);
+  });
+});
+
+describe('sumPhysicallyIssuedBySalesOrderLine', () => {
+  it('= deliveredQty + directlyInvoicedQty, never double-counting a delivery-linked invoice', () => {
+    const dns = [deliveryNote([dnLine({ salesOrderLineId: 'L1', quantity: 7 })])];
+    const invoices = [
+      invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 4, deliveryNoteLineId: 'dnl_x' })]), // invoicing the delivery — must NOT add again
+      invoice([soLine({ id: 'i2', salesOrderLineId: 'L1', quantity: 3 })]), // direct
+    ];
+    const map = sumPhysicallyIssuedBySalesOrderLine(invoices, dns);
+    expect(map.get('L1')).toBe(10); // 7 delivered + 3 direct, NOT 7 + 4 + 3
+  });
+
+  it('reduces to plain posted-invoice qty when no Delivery Note has ever been posted', () => {
+    const invoices = [invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 6 })])];
+    const withNoDn = sumPhysicallyIssuedBySalesOrderLine(invoices, []);
+    const legacy = sumInvoicedBySalesOrderLine(invoices, (i) => isPostedInvoiceStatus(i.status));
+    expect(withNoDn.get('L1')).toBe(legacy.get('L1'));
+  });
+});
+
+describe('computeSalesOrderFulfilment — Phase 5C delivery-aware fields', () => {
+  function so10() {
+    return order([soLine({ id: 'L1', productId: 'p1', quantity: 10, unitPrice: 100, lineTotal: 1000, taxAmount: 150 })]);
+  }
+
+  it('1. ordered 10, delivered 0, direct 0 → remainingToDeliver 10', () => {
+    const f = computeSalesOrderFulfilment(so10(), [], []);
+    expect(f.lines[0].remainingToDeliver).toBe(10);
+  });
+
+  it('2/3. ordered 10, delivered 6 → remainingToDeliver 4 (allow 4, would reject 10)', () => {
+    const dns = [deliveryNote([dnLine({ salesOrderLineId: 'L1', quantity: 6 })])];
+    const f = computeSalesOrderFulfilment(so10(), [], dns);
+    expect(f.lines[0].deliveredQty).toBe(6);
+    expect(f.lines[0].remainingToDeliver).toBe(4);
+  });
+
+  it('5. ordered 10, delivered 6, direct 4 → remainingToDeliver 0', () => {
+    const dns = [deliveryNote([dnLine({ salesOrderLineId: 'L1', quantity: 6 })])];
+    const invoices = [invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 4 })])];
+    const f = computeSalesOrderFulfilment(so10(), invoices, dns);
+    expect(f.lines[0].remainingToDeliver).toBe(0);
+  });
+
+  it('8. ordered 10, DN 4, invoice-from-DN 4 (posted) → remainingToDeliver 6, remainingToInvoiceQty 6', () => {
+    const dns = [deliveryNote([dnLine({ id: 'dnl_1', salesOrderLineId: 'L1', quantity: 4 })])];
+    const invoices = [invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 4, deliveryNoteLineId: 'dnl_1' })])];
+    const f = computeSalesOrderFulfilment(so10(), invoices, dns);
+    expect(f.lines[0].remainingToDeliver).toBe(6);
+    expect(f.lines[0].remainingToInvoiceQty).toBe(6);
+    // (they coincide numerically here — scenario 9 below proves they are
+    // independently derived and CAN diverge; remainingToInvoiceQty is never
+    // computed FROM remainingToDeliver or vice versa)
+  });
+
+  it('9. ordered 10, DN 7, invoice-from-DN 4 → remainingToDeliver 3, remainingToInvoiceQty 6', () => {
+    const dns = [deliveryNote([dnLine({ id: 'dnl_1', salesOrderLineId: 'L1', quantity: 7 })])];
+    const invoices = [invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 4, deliveryNoteLineId: 'dnl_1' })])];
+    const f = computeSalesOrderFulfilment(so10(), invoices, dns);
+    expect(f.lines[0].remainingToDeliver).toBe(3);
+    expect(f.lines[0].remainingToInvoiceQty).toBe(6);
+  });
+
+  it("10/11. ordered 10, direct invoice 4 (posted) → remainingToDeliver 6 — legacy invoices (no deliveryNoteLineId key) behave IDENTICALLY", () => {
+    const invoices = [invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 4 })])];
+    const f = computeSalesOrderFulfilment(so10(), invoices, []);
+    expect(f.lines[0].remainingToDeliver).toBe(6);
+    expect(f.lines[0].remainingToInvoiceQty).toBe(6);
+  });
+
+  it('12. a draft invoice never counts as physical fulfilment', () => {
+    const invoices = [invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 6 })], { status: 'draft' })];
+    const f = computeSalesOrderFulfilment(so10(), invoices, []);
+    expect(f.lines[0].deliveredQty).toBe(0);
+    expect(f.lines[0].directlyInvoicedQty).toBe(0);
+    expect(f.lines[0].remainingToDeliver).toBe(10);
+  });
+
+  it('13. a draft Delivery Note never counts as physical fulfilment', () => {
+    const dns = [deliveryNote([dnLine({ salesOrderLineId: 'L1', quantity: 6 })], { status: 'draft' })];
+    const f = computeSalesOrderFulfilment(so10(), [], dns);
+    expect(f.lines[0].deliveredQty).toBe(0);
+    expect(f.lines[0].remainingToDeliver).toBe(10);
+  });
+
+  it('backward compatibility: computeSalesOrderFulfilment(order, invoices) with NO third argument is byte-identical to passing []', () => {
+    const invoices = [invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 4 })])];
+    const withDefault = computeSalesOrderFulfilment(so10(), invoices);
+    const withEmpty = computeSalesOrderFulfilment(so10(), invoices, []);
+    expect(withDefault).toEqual(withEmpty);
+  });
+
+  it('18. a delivered-and-invoiced quantity is never double counted at the aggregate level either', () => {
+    const dns = [deliveryNote([dnLine({ id: 'dnl_1', salesOrderLineId: 'L1', quantity: 7 })])];
+    const invoices = [invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 4, deliveryNoteLineId: 'dnl_1' })])];
+    const f = computeSalesOrderFulfilment(so10(), invoices, dns);
+    expect(f.physicalFulfilledQty).toBe(7); // NOT 7 + 4 = 11
+    expect(f.deliveredQty).toBe(7);
+    expect(f.directlyInvoicedQty).toBe(0);
   });
 });

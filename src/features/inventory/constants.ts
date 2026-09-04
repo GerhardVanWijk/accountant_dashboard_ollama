@@ -14,6 +14,7 @@ export const MOVEMENT_TYPE_LABELS: Record<StockMovement['type'], string> = {
   stock_gain: 'Stock gain',
   stock_take: 'Stock take',
   correction: 'Correction',
+  delivery: 'Delivery',
 };
 
 /**

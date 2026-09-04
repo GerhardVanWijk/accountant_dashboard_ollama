@@ -57,6 +57,19 @@ export const seedAccounts: Account[] = [
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
+    id: 'acc_1220',
+    code: '1220',
+    name: 'Goods Delivered Not Invoiced',
+    type: 'asset',
+    subType: 'current_asset',
+    normalBalance: 'debit',
+    isActive: true,
+    description:
+      'Phase 5C: cost of goods physically dispatched via a posted Delivery Note but not yet invoiced. Sales-side structural mirror of 2050 GRNI.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
     id: 'acc_1500',
     code: '1500',
     name: 'Fixed Assets',

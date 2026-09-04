@@ -533,7 +533,7 @@ export function InventoryItemDetail({
     [productBalances],
   );
 
-  const salesMovements = productMovements.filter((m) => m.type === 'sale' || m.type === 'sales_return');
+  const salesMovements = productMovements.filter((m) => m.type === 'sale' || m.type === 'sales_return' || m.type === 'delivery');
   const purchaseMovements = productMovements.filter((m) => m.type === 'goods_received' || m.type === 'purchase_return');
   const unitsSold = salesMovements.reduce((s, m) => s + Math.abs(Math.min(m.quantityDelta, 0)), 0);
 
@@ -668,7 +668,9 @@ export function InventoryItemDetail({
                   <td className="px-3 py-2 whitespace-nowrap">{formatDate(m.movementDate ?? m.createdAt)}</td>
                   <td className="px-3 py-2">{MOVEMENT_TYPE_LABELS[m.type]}</td>
                   <td className="figure px-3 py-2 text-right tabular-nums">{m.quantityDelta}</td>
-                  <td className="px-3 py-2 text-right text-xs text-muted-foreground">{m.reference ?? '—'}</td>
+                  <td className="px-3 py-2 text-right text-xs">
+                    <SourceCell movement={m} src={ledgerHelpers?.resolveSource?.(m)} onOpenPreview={ledgerHelpers?.onOpenPreview} />
+                  </td>
                 </tr>
               ))}
             </SubTable>

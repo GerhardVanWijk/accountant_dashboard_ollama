@@ -21,8 +21,14 @@ each section.
 > **the CRITICAL over-issue gap between Delivery Notes and `create_invoice_from_sales_order`**
 > (resolved via `0055`, applied and confirmed live — Phase 5B itself is NOT reopened). The
 > `post_inventory_transaction` caller-ownership gap (LOW risk, not a blocker) and the
-> unwired-permissions finding remain open, targeted at Phase 7. No TypeScript service/UI code exists
-> for Delivery Notes yet — 5C-B is next.
+> unwired-permissions finding remain open, targeted at Phase 7.
+>
+> **Roadmap note (2026-09-05):** CP-5C-B / CP-5C-C / CP-5C-D (service, UI, reconciliation report,
+> release readiness) are **COMPLETE**, and the three LOW cleanup items found at that checkpoint
+> (Product-detail Sales tab, `DeliveryNoteDetailPage`/`CreateDeliveryNotePage` dedicated tests,
+> `SalesOrderForm`'s own-commitment display nuance) are now **ALL RESOLVED** as final Phase 5C
+> cleanup — see `docs/DELIVERY_NOTES_DESIGN.md` § "CP-5C-B/C/D" and the entries below. **Phase 5C is
+> CLOSED.** No open issues remain from Phase 5C.
 
 ### Deployment candidate (branch `phase-9b-relationship-design-and-code`, 2026-09-03) — known non-blocking items
 The record-detail full-page migration (increments 1 + 2) is committed + pushed to the branch and
@@ -198,7 +204,8 @@ existing drafts) rejects it once it would exceed the ordered quantity.
   then resolved only on the user's explicit instruction that this is a "Phase 5C compatibility
   amendment," per CP-5C-0's own "do not reopen Phase 5B without explicit authorization" rule.
 - **Done:** `0050`-`0055` applied together as a single reviewed changeset (2026-09-04). Not yet
-  committed/pushed to git at the time of apply. 5C-B (service/UI implementation) is the next phase.
+  committed/pushed to git at the time of apply. 5C-B/C/D (service/UI implementation) are now
+  COMPLETE, 2026-09-05 — see `docs/DELIVERY_NOTES_DESIGN.md` § "CP-5C-B/C/D".
 
 ### CP-5C-0 (Delivery Notes design audit): a Delivery Note permission proposal would be inert, same as the existing inventory catalog rows
 - **Area:** `usePermission()` / `(feature, action)` catalog. **Severity:** LOW / INFO. **Status:** confirmed finding, not new — reconfirmed while auditing for 5C. **Deployment blocker:** no.
@@ -210,18 +217,38 @@ existing drafts) rejects it once it would exceed the ordered quantity.
 - **Recommended fix:** none needed for 5C itself; wiring `usePermission()` into real document
   actions is its own cross-cutting Phase T follow-up, out of scope for Delivery Notes specifically.
 
-### CP-5C-A HARDENING: `reconcileInventory()`'s movement-evidence check doesn't yet list `'delivery'` as requiring a source line id
-- **Area:** `src/features/inventory/services/reconcileInventory.ts` (`LINE_ID_REQUIRED` set). **Severity:** INFO. **Status:** open, noticed while verifying account 1220 stays isolated from GL 1200 reconciliation. **Deployment blocker:** no.
+### ~~CP-5C-A HARDENING: `reconcileInventory()`'s movement-evidence check doesn't yet list `'delivery'` as requiring a source line id~~ — RESOLVED (CP-5C-D, 2026-09-05)
+- **Area:** `src/features/inventory/services/reconcileInventory.ts` (`LINE_ID_REQUIRED` set). **Severity:** was INFO. **Status:** FIXED. **Deployment blocker:** no.
 - **Observed:** the function's movement-evidence-completeness check has a `LINE_ID_REQUIRED` set of
   movement types that must carry `source_document_line_id` when structurally linked — `'delivery'`
-  (the new type authored in 0051, not applied) isn't in it yet. Harmless today (0050-0054 create no
-  `stock_movements` rows — nothing has been applied), but once 5C-B starts producing real
-  `type='delivery'` movements, they'd fall into the looser "document-generated, no line-id
-  requirement" bucket instead of the stricter one every other document-sourced movement type gets.
-- **Recommended fix:** add `'delivery'` to `LINE_ID_REQUIRED` as part of 5C-B or 5C-D. Confirmed
-  (separately, and unaffected by this) that `reconcileInventory()` resolves ONLY `INVENTORY` (1200)
-  and `INVENTORY_IN_TRANSIT` (1210) for its GL-tie checks — `1220` is structurally excluded from
-  that reconciliation regardless of this gap.
+  wasn't in it.
+- **Fix:** added `'delivery'` to `LINE_ID_REQUIRED`. Confirmed (separately, and unaffected by this)
+  that `reconcileInventory()` resolves ONLY `INVENTORY` (1200) and `INVENTORY_IN_TRANSIT` (1210) for
+  its GL-tie checks — `1220` remains structurally excluded from that reconciliation, by design (it
+  has its own dedicated "Goods Delivered Not Invoiced" report instead — see the Phase 5C-B/C/D entry
+  below).
+
+### ~~Phase 5C-B/C/D (2026-09-05): three LOW, non-blocking gaps disclosed at checkpoint close~~ — ALL THREE RESOLVED (final Phase 5C cleanup, 2026-09-05)
+- **Product detail "Sales" tab.** `InventoryItemDetail.tsx`'s Sales tab now includes `'delivery'`-type
+  movements alongside `sale`/`sales_return`, and its "Ref" column resolves to the real Delivery Note
+  number (via the same `SourceCell`/`resolveSource` machinery the Transactions tab already used) —
+  no raw UUID. Fixed a companion gap found while wiring this: `InventoryItemDetailPage.tsx`'s
+  `numberById` map (used to resolve every movement's source to a human document number) never
+  included Delivery Notes at all, so a delivery movement's source would previously have shown no
+  number anywhere in the product detail page, not just the Sales tab. Both fixed together.
+- **`DeliveryNoteDetailPage`/`CreateDeliveryNotePage` dedicated tests.** Added — 8 tests
+  (`DeliveryNoteDetailPage.test.tsx`: full-page render, no raw UUID, related-SO link, draft vs
+  posted vs fully-invoiced action-set correctness, print action, not-found state) + 6 tests
+  (`CreateDeliveryNotePage.test.tsx`: full-page render with correct default quantity, fully-delivered
+  empty state, non-confirmed-order block, unknown-order not-found, missing-warehouse validation,
+  Cancel navigation).
+- **`SalesOrderForm` own-commitment display.** Now computes `fulfilledByLine` via
+  `sumPhysicallyIssuedBySalesOrderLine(invoices, deliveryNotes)` (a `useDeliveryNotes()` fetch added
+  to the form) instead of the narrower posted-invoice-only formula — matches the global commitment
+  map exactly. Test mocks (`SalesOrderForm.commitments.test.tsx`, `salesFormModalWidths.test.tsx`)
+  updated accordingly.
+
+All three closed with **no schema change**, gate green throughout (2500 tests / 317 files).
 
 ### Phase 5B.2: `PartialInvoicePicker` uses company-wide product on-hand for its stock hint
 - **Area:** `src/features/sales/components/PartialInvoicePicker.tsx`. **Severity:** LOW. **Status:** open, new. **Deployment blocker:** no.

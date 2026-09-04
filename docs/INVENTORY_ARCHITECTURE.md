@@ -1074,7 +1074,20 @@ Worked example — onHand 20, SO-A (being edited) commits 5, SO-B (elsewhere) co
 product + warehouse: `globalCommitted = 12`, `ownCommitted = 5`, `externalCommitted = 7`,
 `editorAvailable = 20 − 7 = 13`. Ordering 5 on SO-A raises no warning; SO-B's 7 still counts.
 
-## Forward pointer — Phase 5C (Delivery Notes, CP-5C-0 design approved + CP-5C-A APPLIED + LIVE-VERIFIED 2026-09-04, not implemented in the app)
+## Phase 5C (Delivery Notes) — CP-5C-A applied + live-verified 2026-09-04; CP-5C-B/C/D COMPLETE 2026-09-05
+
+**STATUS UPDATE (2026-09-05):** the service layer, UI, and reconciliation report described as
+"pointer only" below are now implemented and tested — see `docs/DELIVERY_NOTES_DESIGN.md`
+§ "CP-5C-B/C/D". In particular: `StockCommitmentService` now nets the generalized
+`commitmentQty` formula below for real (via `sumPhysicallyIssuedBySalesOrderLine`, fed by a live
+`DeliveryNoteRepository`); a Delivery Note posts `DR 1220 / CR 1200` at current WAC through the new
+`post_delivery_note` RPC; a subsequent invoice for delivery-linked quantity clears the FROZEN cost
+`DR COGS / CR 1220`; and a dedicated "Goods Delivered Not Invoiced" reconciliation report compares
+outstanding delivered-not-invoiced value to GL `1220`. Nothing below in this historical section was
+inaccurate — it is now backed by a real implementation rather than a design intent. **Not
+committed, pushed, or deployed** as of this checkpoint.
+
+### Original design pointer (superseded by the implementation above, kept for history)
 
 **CP-5C-A final update (2026-09-04):** the complete migration set `0050`-`0055` is now LIVE on
 `bcaffvpibpitpuqglszn` — `0050` a company-safe composite-key prerequisite on `sales_orders`/

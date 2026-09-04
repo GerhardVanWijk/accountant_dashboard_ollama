@@ -170,11 +170,12 @@ This is a correctly designed, already-implemented 3-way match guard
 (`docs/LEDGER_ARCHITECTURE.md`). Same gap class as sales: no FK, no
 SQL-queryable per-supplier/product purchase table.
 
-**Sales-side mirror (Phase 5C design, 2026-09-04, NOT implemented):** `docs/DELIVERY_NOTES_DESIGN.md`
-proposes the exact structural mirror of this GRNI pattern for Delivery Notes → Invoices — a new
+**Sales-side mirror (Phase 5C, design 2026-09-04, implemented 2026-09-05):** `docs/DELIVERY_NOTES_DESIGN.md`
+applies the exact structural mirror of this GRNI pattern to Delivery Notes → Invoices — a new
 clearing **asset** `1220 Goods Delivered Not Invoiced` (GRNI is a liability; this is an asset, since
 it holds unexpensed cost of goods that already left, not an amount owed) reclassified at delivery
-and cleared into COGS at invoice time. See Q6 above for the sales-chain-specific detail.
+and cleared into COGS at invoice time. See Q6 above for the sales-chain-specific detail and its
+2026-09-05 implementation status.
 
 **CP-5C-A hardening finding (2026-09-04, not this document's own subject but worth recording
 here):** while proving the Delivery Note RPC's account-ownership safety, a full audit of every
@@ -779,10 +780,23 @@ remaining-check, closing the over-issue gap found during hardening (scenario F) 
 formal 18-scenario quantity matrix, all four concurrency races, full company isolation, AND a live
 rollback-wrapped smoke test against the real database. See the design doc's "CP-5C-A APPLIED +
 LIVE-VERIFIED" section for the exact DDL/RPC contract, the live evidence, and the full
-`post_inventory_transaction` caller audit (cross-company account risk: LOW, not a blocker). Nothing
-in the TypeScript application layer of this Q6 section changes until 5C-B (service layer)
-is implemented — invoicing without a prior Delivery Note remains fully supported, unrestricted,
-exactly as described above.
+`post_inventory_transaction` caller audit (cross-company account risk: LOW, not a blocker).
+
+**STATUS UPDATE (2026-09-05): CP-5C-B/C/D COMPLETE.** The HYBRID posting described above is now
+implemented exactly as designed: `DeliveryNoteService.postDeliveryNote()` calls the live
+`post_delivery_note` RPC (`DR 1220 / CR 1200` at current WAC); `InvoiceService.postInvoice()` now
+detects a `deliveryNoteLineId` on an invoice line, looks up the FROZEN unit cost from that
+delivery's own `stock_movements` row (via `DeliveryFrozenCostLookup`), and clears it with
+`DR COGS / CR 1220` — proven, by test, to use the frozen figure even when the product's current WAC
+has since moved. A **mixed** invoice (a direct line issuing stock at current WAC alongside a
+delivery-linked line clearing frozen `1220`) produces one balanced journal with zero change to the
+underlying `post_inventory_transaction` engine — the pre-existing `lines[]`/`extraJournal[]` split
+was already sufficient. Invoicing without a prior Delivery Note remains fully supported,
+unrestricted, exactly as described above (unaffected, zero-behaviour-change for that path). A new
+"Goods Delivered Not Invoiced" reconciliation report values every posted, not-fully-invoiced
+Delivery Note line at its frozen cost and compares the total to GL `1220`'s balance. See
+`docs/DELIVERY_NOTES_DESIGN.md` § "CP-5C-B/C/D" for full detail. **Not committed, pushed, or
+deployed** as of this checkpoint.
 
 ## Q7. Duplicate / copy — NOT SUPPORTED
 No `duplicate` / `clone` method on `quoteService`, `salesOrderService`, `purchaseOrderService`,

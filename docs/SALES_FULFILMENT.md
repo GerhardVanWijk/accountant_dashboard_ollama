@@ -1,21 +1,29 @@
 # SALES FULFILMENT — Partial Sales Order Delivery & Invoicing
 
-# ═══════  PHASE 5B: COMPLETE + SHIPPED (NOT REOPENED)  ·  PHASE 5C-A: APPLIED + LIVE-VERIFIED  ═══════
+# ═══════  PHASE 5B: COMPLETE + SHIPPED (NOT REOPENED)  ·  PHASE 5C: COMPLETE (NOT DEPLOYED)  ═══════
 
 **Phase 5C (Delivery Notes) design audit is done and approved — see `docs/DELIVERY_NOTES_DESIGN.md`
-for the full 29-part design, journal examples, and the adopted HYBRID accounting model. CP-5C-A
-(2026-09-04, three review cycles) authored the complete `0050`-`0055` changeset — a new
-company-safe composite-key prerequisite, the enum value, `delivery_notes` table with ALL composite
-FKs, `1220` account seed, atomic `post_delivery_note` RPC, and `0055` (a **Phase 5C compatibility
-amendment** to `create_invoice_from_sales_order` — see this file's §13/§16 for exactly what stays
-unchanged in Phase 5B) — **ALL SIX APPLIED to `bcaffvpibpitpuqglszn` 2026-09-04 and LIVE-VERIFIED**,
-NOT committed to git yet. The scenario-F over-issue gap between Delivery Notes and the existing
-invoice RPC is RESOLVED, proven both by `0055`'s contract (69 migration-contract tests, including
-a formal 18-scenario quantity-matrix proof) AND by a live rollback-wrapped smoke test against the
-real database — **Phase 5B itself is NOT reopened**, its worked example and invariants below are
-unchanged and fully
-preserved. No service/UI code exists yet. This file's §14 "Deferred" row for delivery notes is
-superseded by the design doc, kept below only as a pointer.**
+for the full design, journal examples, and the adopted HYBRID accounting model. CP-5C-A
+(2026-09-04, three review cycles) authored, then applied + live-verified, the complete `0050`-`0055`
+changeset — a new company-safe composite-key prerequisite, the enum value, `delivery_notes` table
+with ALL composite FKs, `1220` account seed, atomic `post_delivery_note` RPC, and `0055` (a
+**Phase 5C compatibility amendment** to `create_invoice_from_sales_order` — see this file's §13/§16
+for exactly what stays unchanged in Phase 5B). The scenario-F over-issue gap between Delivery Notes
+and the existing invoice RPC is RESOLVED, proven both by `0055`'s contract (69 migration-contract
+tests, including a formal 18-scenario quantity-matrix proof) AND by a live rollback-wrapped smoke
+test against the real database — **Phase 5B itself is NOT reopened**, its worked example and
+invariants below are unchanged and fully preserved.
+
+**STATUS UPDATE (2026-09-05): CP-5C-B/C/D — service layer, UI, and reconciliation reporting are now
+COMPLETE** — see `docs/DELIVERY_NOTES_DESIGN.md` § "CP-5C-B/C/D" for full detail. In particular,
+`computeSalesOrderFulfilment()` (§9 below) now takes a real `deliveryNotes` array and produces real
+`deliveredQty`/`directlyInvoicedQty`/`physicalFulfilledQty`/`remainingToDeliver` values (no longer
+formulas that "reduce to 0 pre-5C" — that reduction is now only what happens when a company has
+posted zero Delivery Notes, which remains true on production today since none has been seeded).
+This file's §14 "Deferred" row for delivery notes is superseded by the design doc; the formulas
+and worked examples throughout this document remain accurate and are now backed by a real
+implementation. **No git commit, push, or production deploy has happened for this work yet** —
+it sits on `phase-9b-relationship-design-and-code`, gate-green, awaiting explicit instruction.**
 
 **CP-5B-0 design** (§§1–12) + **5B.1–5B.4 implementation** (§13) + **deferred work** (§14) · branch
 `phase-9b-relationship-design-and-code` · **UNCOMMITTED (working tree).**

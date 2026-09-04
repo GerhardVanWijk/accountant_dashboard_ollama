@@ -76,6 +76,20 @@ export interface DocumentLineItem {
    */
   salesOrderLineId?: ID;
   /**
+   * Invoice lines only (Phase 5C): the `id` of the `DeliveryNoteLineItem`
+   * this invoice line clears. Set once, either by
+   * `create_invoice_from_sales_order`'s delivery-linked selection path
+   * (migration 0055) or its TypeScript caller, never edited afterwards.
+   * When present, `invoiceService.postInvoice()` does NOT issue stock again
+   * for this line (the physical departure already happened at Delivery
+   * Note posting) — instead it clears the FROZEN delivery-time cost from
+   * `1220 Goods Delivered Not Invoiced` into COGS. Absent on every line
+   * that represents direct fulfilment (today's unchanged behaviour) and on
+   * every line of every other document type. See
+   * docs/DELIVERY_NOTES_DESIGN.md.
+   */
+  deliveryNoteLineId?: ID;
+  /**
    * Bill lines only: flags this line as a fixed asset to be capitalized
    * to the Asset Register instead of expensed/inventoried — see
    * FixedAssetLineDetails' doc comment (src/types/fixedAsset.ts) and
