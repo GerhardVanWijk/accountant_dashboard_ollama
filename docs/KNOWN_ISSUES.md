@@ -7,6 +7,59 @@ each section.
 
 ## Open
 
+### 2026-09-05 — Whole-project completion audit findings
+
+A broad, read-only audit (code + live database) was run across the entire app after closing Phase
+5C, to establish exactly what remains before Vertex can be called complete. Full detail and the
+resulting finite roadmap: `docs/CURRENT_TASKS.md` § "PROJECT STATE". Summary of NEW findings this
+audit surfaced (issues already tracked elsewhere are not repeated here):
+
+- **MEDIUM — no fine-grained UI permission enforcement.** `usePermission()` / the `(feature, action)`
+  catalog (migration `0030`) exists but is called nowhere in Sales/Purchases/Inventory feature UI —
+  only route-level `PermissionRoute` gating exists (~15 routes). RLS still enforces company
+  isolation regardless; this is an authorization-*granularity* gap, not a tenant-isolation hole.
+- **MEDIUM — Phase 5D's real scope, precisely identified.** Credit Notes already fully support
+  returning INVOICED goods (COGS/VAT/AR/stock all reverse correctly, over-return and double-credit
+  are both guarded, live-tested). The genuine gap is a **Return Note** mechanism for goods that were
+  *delivered but not yet invoiced* — Credit Notes structurally cannot cover this (there is no
+  invoice to credit against). This is the actual, scoped Phase 5D, not "polish the existing path."
+- **LOW — a live data anomaly.** `invoices` row `INV-2026-0001` (id `974ebb56-…`), company "Office
+  National Demo", zero value, status `sent`, no `journal_entry_id`, created `2026-09-04 13:29:33Z`
+  against the real `SO-2026-0004` — this timestamp falls exactly inside the CP-5C-A live
+  rollback-wrapped smoke test window, meaning the rollback did not fully undo every write (an
+  `inventory_transaction_log` row with posting key `invoice:974ebb56-…:post` also exists from the
+  same test). Zero accounting effect (no GL/journal impact — the value is 0.00), but it is real,
+  human-numbered test residue in production data. **Not deleted during this read-only audit** — a
+  one-row `delete from invoices where id = '974ebb56-7939-4d5a-8e5a-697e1474d49c'` is the
+  recommended cleanup, pending explicit approval (it is genuinely a live-data delete, so it gets the
+  same authorization treatment as any other production data change).
+- **LOW — `CreditNoteForm` never sets `originalInvoiceLineId`.** The field, its validation guard,
+  and its DB composite FK (migration `0041`) all exist and work — but no UI path ever populates it
+  (`CreditNoteForm` uses a generic line editor, not a "credit this specific invoice line" picker), so
+  only the coarser whole-invoice/per-product double-credit guard ever fires for a real user.
+- **LOW — a return posts at current WAC, not historical cost.** A Credit Note return
+  (`reason: 'return'`) re-costs the returned stock at the product's CURRENT weighted-average cost —
+  documented in `creditNoteService.ts`'s own comment as a deliberate simplification, not an unknown
+  defect. The RPC already supports a `unitCostOverride` (migration `0032`); the service just never
+  populates it with the original sale's cost for a return.
+- **LOW — global search coverage.** Only Products/Customers/Suppliers/Delivery Notes are indexed;
+  Invoices/Bills/Quotes/Sales Orders/Purchase Orders/Credit Notes are not searchable by number.
+- **INFO — finite security hardening scope, not urgent.** `post_inventory_transaction`'s account FKs
+  (`journal_lines.account_id`; `products.sales_account_id`/`inventory_account_id`/`cogs_account_id`/
+  `purchase_account_id`; `product_categories.revenue_account_id`/`cogs_account_id`/
+  `inventory_account_id`/`adjustment_account_id`; `category_account_mappings`' 3 account columns;
+  `accounts.parent_account_id`; 3 `fixed_assets` GL columns) are plain FKs to `accounts(id)`, not the
+  composite `accounts(company_id, id)` pattern `opening_stock_batches` already uses. A live read-only
+  query (2026-09-05) confirmed **zero actual cross-company violations exist today** — this is a
+  structural gap, not an active exploit. Finite scope: ~7 tables / ~18 columns, one migration.
+
+**FIXED this audit (found and closed immediately, no schema change, in the affected code already
+being touched):** `InventoryItemDetail.tsx`'s `resolveParty()` resolved a `credit_note`-sourced
+movement's customer by looking up `sourceDocumentId` in the INVOICE map — but a credit note's own id
+is what's stored there, not its invoice's, so the customer column silently showed nothing for every
+credit-note-caused stock movement. Fixed by adding a `creditNotes` prop and resolving via the credit
+note's own `customerId`.
+
 > **Roadmap note (2026-09-03):** several open items below are now scheduled — see the
 > **POST-4A ROADMAP** in `docs/CURRENT_TASKS.md`:
 > "no formal print layout" → **Phase 4B**; "no stock reservation / commitment" → **Phase 5A**;

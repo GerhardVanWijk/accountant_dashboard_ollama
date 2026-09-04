@@ -254,6 +254,7 @@ export function InventoryItemDetailPage() {
             taxRatesPending={taxRatesLoading || Boolean(taxRatesError)}
             invoices={invoices}
             bills={bills}
+            creditNotes={creditNotes}
             customers={customers}
             ledgerHelpers={ledgerHelpers}
           />

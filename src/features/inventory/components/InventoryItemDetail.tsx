@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import type { RelatedRecordType, ResolvedSourceDocument } from '@/components/app/record-page';
 import type {
   Bill,
+  CreditNote,
   Invoice,
   Product,
   ProductCategory,
@@ -45,6 +46,8 @@ export interface InventoryItemDetailProps {
   taxRatesPending?: boolean;
   invoices?: Invoice[];
   bills?: Bill[];
+  /** Resolves a `credit_note`-sourced movement's customer (its OWN `customerId`, never an invoice lookup — a credit note's `sourceDocumentId` is its own id, not its invoice's). */
+  creditNotes?: CreditNote[];
   customers?: { id: string; name: string }[];
   /**
    * Derived stock-commitment map (Phase 5A), keyed by
@@ -481,6 +484,7 @@ export function InventoryItemDetail({
   taxRatesPending,
   invoices = [],
   bills = [],
+  creditNotes = [],
   customers = [],
   commitments,
   ledgerHelpers = {},
@@ -492,14 +496,21 @@ export function InventoryItemDetail({
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c.name])), [customers]);
   const invoiceById = useMemo(() => new Map(invoices.map((i) => [i.id, i])), [invoices]);
   const billById = useMemo(() => new Map(bills.map((b) => [b.id, b])), [bills]);
+  const creditNoteById = useMemo(() => new Map(creditNotes.map((c) => [c.id, c])), [creditNotes]);
   const category = product.categoryId ? categories.find((c) => c.id === product.categoryId) : undefined;
 
   const warehouseName = (id: string) => warehouseById.get(id)?.name ?? id;
 
   function resolveParty(m: StockMovement): string | undefined {
-    if (m.sourceDocumentType === 'invoice' || m.sourceDocumentType === 'credit_note') {
+    if (m.sourceDocumentType === 'invoice') {
       const inv = m.sourceDocumentId ? invoiceById.get(m.sourceDocumentId) : undefined;
       return inv ? customerById.get(inv.customerId) : undefined;
+    }
+    if (m.sourceDocumentType === 'credit_note') {
+      // A credit-note-sourced movement's `sourceDocumentId` is the credit
+      // note's OWN id, never an invoice id — resolve via its own customerId.
+      const cn = m.sourceDocumentId ? creditNoteById.get(m.sourceDocumentId) : undefined;
+      return cn ? customerById.get(cn.customerId) : undefined;
     }
     if (m.sourceDocumentType === 'bill') {
       const bill = m.sourceDocumentId ? billById.get(m.sourceDocumentId) : undefined;
