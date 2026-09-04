@@ -393,7 +393,15 @@ Full detail: **`docs/SALES_FULFILMENT.md`**. Final model:
 
 **Gate:** tsc ✅ · eslint `--max-warnings 0` ✅ · **2348 tests / 310 files** ✅ · build ✅. Security
 advisors 0 ERROR. `NORMALIZED_DOCUMENT_LINES_ENABLED` still `false`.
-**Not committed / pushed / merged / deployed** — awaiting review.
+
+**SHIPPED 2026-09-04 (user instruction).** Phase 5B committed `9db70ce` on
+`phase-9b-relationship-design-and-code`, pushed; **merged to `main` `b19dc47`**
+("Merge phase-9b: Phase 5A stock commitment + Phase 5B partial Sales Order fulfilment"), pushed to
+GitHub → **Cloudflare Pages production auto-deploy triggered** (`https://vertex-accounting.pages.dev`).
+Gate re-run on the merged `main` = green (same 2348 / 310). Migrations 0048 + 0049 were already live;
+this deploy brings the code that uses them. **Outstanding:** human browser / visual QA of the Sales
+Order detail page, the partial-invoice picker (desktop/laptop/mobile) and the Close-remaining flow
+— no browser tooling in the build environment (same override as the Phase 4B deploy).
 
 **Deferred → later phases (NOT reopened as 5B):** `sales_order_lines` normalization (was "5B.5" →
 Phase 6/7 with the 9B flag review); delivery notes (**5C**); credit-note ↔ remaining + per-line
