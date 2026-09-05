@@ -7,6 +7,48 @@ each section.
 
 ## Open
 
+### 2026-09-05 (later same day) — Major completion run: what got fixed, what's genuinely left
+
+Following the completion audit below, a large implementation run closed most of the findings it
+raised. Full detail: `docs/CURRENT_TASKS.md` § "PROJECT STATE", `docs/RETURN_NOTES_DESIGN.md`.
+
+**CLOSED this run:** the leaked `INV-2026-0001` smoke-test artifact (deleted, re-verified isolated
+first); Return Notes (Phase 5D, migrations 0056-0058); Credit Note original-invoice-line picker +
+historical cost basis; account reference company-safety hardening (migration 0059, 18 columns / 8
+tables, live-verified zero cross-company violations both before and after); global search coverage
+(now indexes Invoices/Bills/Quotes/Sales Orders/Purchase Orders/Credit Notes/Return Notes/Journal
+Entries); Journal Entry full-page migration (the last sheet-backed transaction record); Forecasting
+/ Budget vs Actual (migration 0060 — previously entirely absent).
+
+**CORRECTED finding (the earlier claim below was stale/wrong):** `usePermission()`/`useCanAccess()`
+is NOT "called nowhere in Sales/Purchases/Inventory feature UI" — live code shows it's already wired
+into 36+ files across Inventory, Invoicing, Customer Management, Supplier Management, Payroll,
+Reports, GL, and User Management (create/update/delete/import/export actions). The GENUINE gap,
+confirmed live: the permission catalog itself has no `purchasing` feature and no feature for any
+non-Invoice Sales document (Quotes/Sales Orders/Delivery Notes/Return Notes/Credit Notes/Receipts) —
+only 9 features exist at all: `customer_management`, `dashboard`, `gl`, `inventory`, `invoicing`,
+`payroll`, `reports`, `supplier_management`, `user_management`.
+
+**NOT done, deliberately — a real STOP, not an oversight:** extending the permission catalog to
+Purchasing/non-Invoice-Sales was NOT attempted this run. Reason: `user_roles` has 0 live assignments
+today, but `profiles.role` DOES have 4 real `viewer`-role accounts live. Quotes/Sales
+Orders/Delivery Notes/Return Notes/Credit Notes/Receipts/Purchase Orders/Bills/Payments currently
+have NO route-level gate at all — any authenticated user, including those 4 viewer accounts, can use
+every action on those pages today. Inventing a default role→permission matrix for two new feature
+areas (should `viewer` be able to create a Purchase Order? a Quote?) is a genuine business-policy
+decision this audit has no basis to make — guessing wrong either locks out real accounts with no
+admin-assignable recovery path (since assigning roles itself requires reaching a page these
+same permissions might gate) or ships gating that does nothing. This is exactly the "insufficient
+role data to safely infer access defaults" case documented as a valid stop condition. Needs an
+explicit product decision, then a migration + UI wiring pass mirroring the already-proven
+Inventory/Invoicing pattern exactly.
+
+**NOT flipped, deliberately:** `NORMALIZED_DOCUMENT_LINES_ENABLED` stays `false`. The 2026-09-05
+readiness audit found live parity perfect and the dual-write path provably non-blocking (see
+`docs/CURRENT_TASKS.md`), but no live smoke test of an actual create/update through the running app
+with the flag flipped has been run — static analysis alone shouldn't be the last word before a
+production flag flip.
+
 ### 2026-09-05 — Whole-project completion audit findings
 
 A broad, read-only audit (code + live database) was run across the entire app after closing Phase

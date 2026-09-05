@@ -4,81 +4,80 @@
 > appended to. It shows actual progress, not planned progress. Everything below the next `---` is
 > historical detail, kept for the record but NOT the place to look for "what's true right now."**
 
-## PROJECT STATE (2026-09-05)
+## PROJECT STATE (2026-09-05, post-completion-run)
 
 **COMPLETED (major phases):** Phases 0-8 + 9A (inventory core, migrations 0021-0036) · Phase 9B
-(normalized doc-line tables, migrations 0037-0042, flag off) · Increment 3 (movement-ledger
-traceability) · Increment 4A (Customer Deposits, migrations 0045/0045b/0046, **applied + live**) ·
+(normalized doc-line tables, migrations 0037-0042, flag off — **merged to main**) · Increment 3
+(movement-ledger traceability) · Increment 4A (Customer Deposits, migrations 0045/0045b/0046) ·
 Phase 4B/4B-2 (A4 business documents + company profile, migration 0047) · Record-detail full-page
 migration (all transaction/master records) · Phase 5A (stock commitments) · Phase 5B (partial
-Sales-Order invoicing, migrations 0048/0049) · **Phase 5C (Delivery Notes / dispatch accounting,
-migrations 0050-0055) — FULLY COMPLETE AND CLOSED 2026-09-05**, including its own post-close
-cleanup pass (Product-detail Sales-tab DN listing, dedicated detail/create-page UI tests,
-`SalesOrderForm`'s delivery-aware own-commitment formula). No open Phase 5C issues remain.
+Sales-Order invoicing, migrations 0048/0049) · Phase 5C (Delivery Notes / dispatch accounting,
+migrations 0050-0055) · **Phase 5D — Return Notes (delivered-but-not-invoiced returns, migrations
+0056-0058)** · **Journal Entry full-page migration** (the last sheet-backed transaction record) ·
+**Account reference company-safety hardening** (migration 0059, 18 columns / 8 tables) ·
+**Global search completion** (Invoices/Bills/Quotes/Sales Orders/Purchase Orders/Credit
+Notes/Return Notes/Journal Entries all now searchable by number) · **Credit Note original-line
+traceability + historical cost basis** · **Forecasting / Budget vs Actual** (migration 0060,
+previously entirely absent — see docs/RETURN_NOTES_DESIGN.md and the Forecasting section below).
 
-**ACTIVE:** none — Phase 5C just closed; no phase is currently "in progress."
+**ACTIVE:** none — the 2026-09-05 completion run just closed; no phase is currently "in progress."
+Working branch: `completion-run-2026-09-05` (off `main` `a713dd2`), **not yet merged to `main`** —
+see DEPLOYMENT STATE.
 
-**NEXT (see the FINITE ROADMAP below for full detail):**
-1. Customer returns / fulfilment-reversal completion (the real Phase 5D scope, precisely scoped by
-   a 2026-09-05 audit of what Credit Notes already do vs. the genuine gap — a Return Note mechanism
-   for delivered-but-not-yet-invoiced goods).
-2. Reporting & financial-advisor capability (Budget/Forecast — currently entirely absent; see
-   KNOWN ISSUES).
-3. Accounting-relationship / security / permissions hardening (finite, scoped list below).
-4. Whole-app UX + print/export + human browser QA + final release.
+**NEXT (see KNOWN ISSUES below for the finite remaining list):**
+1. Permissions catalog gap: Purchasing (POs/Bills/Payments) and non-Invoice Sales documents
+   (Quotes/Sales Orders/Delivery Notes/Return Notes/Credit Notes/Receipts) have NO permission-catalog
+   features defined at all yet — needs a deliberate migration + default role→permission matrix
+   decision (a genuine product-policy call, not something to infer — see KNOWN ISSUES).
+2. Whole-app human browser QA (never run in this build environment — no browser tooling).
+3. Longer-term: Phase 6 (backorders, picking/packing, price lists, approval workflows), Phase 7
+   polish items, re-delivering previously-returned stock against the same SO line (a narrower,
+   documented follow-on to Return Notes).
 
-**DEFERRED (genuinely outside current scope):** `sales_order_lines` normalization (Phase 6/7); a
-request-id idempotency log + shared-repo cleanup (Phase 7); FIFO stock lots
-(`MockStockLotRepository` — every seeded product is weighted-average, so this has never been
-exercised in anger); multi-company switcher; Supabase-Storage-backed company logo (currently a
-base64 data URL, a deliberate choice); an in-app notifications backend (topbar bell is an honest
-`comingSoon` stub, no fake data).
+**DEFERRED (genuinely outside current scope):** `sales_order_lines` normalization; a request-id
+idempotency log + shared-repo cleanup; FIFO stock lots (`MockStockLotRepository` — every seeded
+product is weighted-average, unexercised); multi-company switcher; Supabase-Storage-backed company
+logo; an in-app notifications backend; Budget/Forecast named-scenario version history (current
+design is "one current figure per account/month/plan-type", not a full history).
 
 **KNOWN ISSUES (see `docs/KNOWN_ISSUES.md` for full detail; summary here):**
 | Severity | Issue | Blocker |
 |---|---|---|
-| MEDIUM | Fine-grained UI permission enforcement (`usePermission()`) exists as scaffolding (migration `0030`) but is called nowhere in Sales/Purchases/Inventory feature UI — only route-level gating exists. | No (RLS still enforces company isolation) |
-| MEDIUM | No Return Note mechanism for goods delivered-but-not-invoiced — Credit Notes structurally cannot cover this case (Phase 5D's real scope). | No (Credit Notes fully cover the invoiced-goods-return case) |
-| LOW | A live data anomaly found by the 2026-09-05 read-only audit: `invoices` row `INV-2026-0001` (id `974ebb56-…`), zero-value, status `sent`, no journal — a leaked artifact from the 2026-09-04 CP-5C-A live smoke test that should have rolled back fully. Zero accounting effect (no GL impact, no journal exists), but it is a real, human-numbered document sitting in production data. | No — recommend deleting this one row, pending explicit approval; NOT deleted during this read-only audit. |
-| LOW | Global search indexes only Products/Customers/Suppliers/Delivery Notes — Invoices/Bills/Quotes/Sales Orders/Purchase Orders/Credit Notes are not searchable by number. | No |
-| LOW | Journal Entry detail is still sheet-backed (`?record=`), the one document type not yet migrated to a full-page record. | No |
-| LOW | `post_inventory_transaction`'s account FKs (`journal_lines.account_id`, `products.*_account_id`, `product_categories.*_account_id`, `accounts.parent_account_id`, `category_account_mappings.*_account_id`, 3 `fixed_assets` GL columns) are plain (non-composite) FKs to `accounts(id)`, not `accounts(company_id, id)` — a live read-only audit (2026-09-05) found **zero actual cross-company violations today**; the gap is structural, not exploited. Finite remediation scope: ~7 tables / ~18 columns. | No — requires already-authenticated access plus an already-known foreign UUID; RLS still confines every write to the caller's own company. |
-| LOW | `CreditNoteLineItem.originalInvoiceLineId` exists at the type/service/DB layer (real composite FK, migration `0041`) but no UI ever sets it — `CreditNoteForm` has no "credit this specific invoice line" picker, so only the coarser whole-invoice/per-product double-credit guard fires in practice. | No |
-| LOW | A return (Credit Note with `reason: 'return'`) posts stock back in at the product's CURRENT weighted-average cost, not the original sale's historical/frozen cost — a documented, deliberate simplification, not an unknown bug. | No |
-| LOW/INFO | `MockStockLotRepository` / FIFO — in-memory only, unexercised (every seeded product uses WAC). | No |
+| MEDIUM | Permissions catalog has NO features for Purchasing or non-Invoice Sales documents (verified live: only `customer_management`/`dashboard`/`gl`/`inventory`/`invoicing`/`payroll`/`reports`/`supplier_management`/`user_management` exist). Inventory/Invoicing/Customer/Supplier Management/Payroll/Reports/GL/Users already have real `useCanAccess`-gated create/edit/delete actions wired in (36+ files) — this **corrects** the earlier "called nowhere" claim, which was stale. | No (RLS still enforces company isolation; today only admin/superuser can reach the already-gated modules' write actions in practice, since `user_roles` has 0 live assignments) |
+| MEDIUM | Re-delivering previously-returned-and-not-yet-invoiced stock against the SAME Sales Order line is not yet netted into `remainingToDeliver` — a Return Note correctly guards against over-return/double-return/returning invoiced quantity, but doesn't yet feed back into "how much of this SO line can be delivered again." Documented scope boundary in `docs/RETURN_NOTES_DESIGN.md`. | No |
+| LOW | `NORMALIZED_DOCUMENT_LINES_ENABLED` readiness audited 2026-09-05: live parity is PERFECT (0 row/field mismatches, 0 orphans, 0 invalid FKs across all 4 normalized tables), the dual-write path is provably non-blocking (`projectDocumentLinesBestEffort` catches and logs, never throws to the caller), and dedicated tests already cover the enabled-flag write path. Flag remains `false` pending one live smoke test of an actual create/update through the running app with the flag flipped — the one gap this audit could not close with static analysis alone. | No |
+| LOW | A stock return via Credit Note now uses the ORIGINAL sale's frozen cost when `originalInvoiceLineId` evidence exists (fixed 2026-09-05); falls back to current WAC only for older/unlinked records — an honest, no-longer-silent limitation. | No |
+| LOW | `MockStockLotRepository` / FIFO — in-memory only, unexercised (every seeded product uses WAC). | No |
+| LOW | Journal Entry's `source` field has no reverse FK to its originating document id (`journal_entries.source_id` — deferred by the original Phase 9B design) — the new `JournalEntryDetailPage` shows the source as a text label, not a clickable link back to the document. | No |
 
-**DEPLOYMENT STATE:** Local commit `c75d3e9` on `phase-9b-relationship-design-and-code`
-("feat: complete delivery note fulfilment workflow") is **NOT pushed** — `git push` failed with a
-GitHub permission error (`Permission to GerhardVanWijk/accountant_dashboard_ollama.git denied to
-GerhardSLC` — a credential/identity mismatch on this machine, not something fixable from inside the
-app or this session). **No preview deploy could be triggered this run as a result.** Production
-`main` / `https://vertex-accounting.pages.dev` is untouched and still reflects the last merge
-(`6a51a46`, 2026-09-03). Resolving the push credential is the single blocking step before a preview
-build can happen.
+**DEPLOYMENT STATE:** All work is on branch `completion-run-2026-09-05` (off `main` `a713dd2`),
+pushed to `origin`. **Not merged to `main`, no production deploy triggered this run** — per this
+run's own Part 17 guidance, substantial new functionality (Return Notes, Forecasting, the account
+FK hardening) stays on its branch for human review before hitting production, rather than merging
+blindly. `main` / `https://vertex-accounting.pages.dev` is untouched, still reflects `a713dd2`.
 
-**LATEST MIGRATION:** `0055_delivery_aware_create_invoice_from_sales_order` — applied + live-verified
-2026-09-04 on Supabase project `bcaffvpibpitpuqglszn`. Full migration list: `0000`-`0043`, `0045`-`0055`
-(`0044` was a one-off September-2026 data seed applied directly via SQL, not a tracked schema
-migration — no gap in the actual schema history) — all applied, confirmed via `list_migrations`
-2026-09-05.
+**LATEST MIGRATION:** `0060_financial_plan_lines` — applied + live-verified 2026-09-05 on Supabase
+project `bcaffvpibpitpuqglszn`. Full migration list: `0000`-`0043`, `0045`-`0060` (`0044` was a
+one-off September-2026 data seed applied directly via SQL, not a tracked schema migration) — all
+applied, confirmed via `list_migrations` 2026-09-05. This run added `0056` (return_note stock
+movement type), `0057` (return_notes table), `0058` (post_return_note RPC), `0059` (account
+reference company-safety — 18 new composite FKs), `0060` (financial_plan_lines).
 
-**LATEST TEST COUNT:** **2500 tests / 317 files**, all passing. tsc clean, eslint (`--max-warnings 0`)
+**LATEST TEST COUNT:** **2632 tests / 328 files**, all passing. tsc clean, eslint (`--max-warnings 0`)
 clean, `vite build` clean (only the pre-existing, unrelated ">500kB chunk" warning).
 
-**DATABASE HEALTH (read-only, live, 2026-09-05):** Trial balance difference **0.00**. GL 1200
-(Inventory) R1,478,853.74; GL 1210 (In Transit) 0.00; GL 1220 (Goods Delivered Not Invoiced) NULL
-(no Delivery Note posted yet — correct, none seeded); AR 1100 R302,919.04; AP 2000 R869,571.21
-(credit); VAT Output R155,710.20 (credit); VAT Input R228,083.07 (debit); Customer Deposits 2600
-R4,250.00 (credit); COGS 5000 R0.03 (rounding, immaterial). Counts: 247 journal entries / 928
-journal lines / 343 stock movements / 84 invoices / 44 bills / 5 sales orders / 0 delivery notes /
-8 credit notes / 4 quotes / 4 purchase orders. Zero negative stock balances. Zero orphaned
-normalized document lines (invoice/bill/credit-note/PO lines all resolve to a real parent). Zero
-unbalanced journals. Zero cross-company account-FK violations detected. Zero posted bills missing a
-journal; **one** non-draft invoice (`INV-2026-0001`, zero value) missing a journal — see KNOWN
-ISSUES above, this is the leaked smoke-test artifact, not a systemic gap. Security advisors: 86
-WARN / 0 ERROR (unchanged from the pre-5C baseline; the large majority are one generic
-"anonymous sign-ins allowed" notice repeated per table, a project-level Supabase setting, not a
-per-feature defect).
+**DATABASE HEALTH (read-only, live, 2026-09-05, post-completion-run):** Trial balance difference
+**0.00**. GL 1200 (Inventory) R1,478,853.74 (ties physical valuation exactly). GL 1210 (In Transit)
+0.00. GL 1220 (Goods Delivered Not Invoiced) 0.00. AR 1100 R302,919.04. AP 2000 R869,571.21 (credit).
+VAT Output (2100) R155,710.20 (credit). VAT Input (2110) R228,083.07 (debit). Customer Deposits 2600
+R4,250.00 (credit). Total Revenue (all revenue-type accounts) R1,016,252.82. COGS (50xx) R637,599.96.
+Counts: 247 journal entries / 928 journal lines / 343 stock movements / 83 invoices (the leaked
+`INV-2026-0001` smoke-test artifact was deleted this run, re-verified isolated first) / 1 delivery
+note / 0 return notes / 0 financial plan lines (correctly empty — no auto-created planning data).
+Zero negative stock balances. Zero unbalanced journals. Zero orphaned normalized document lines.
+Zero cross-company account-FK violations — re-verified AFTER migration 0059 added 18 new composite
+FK constraints. Security advisors: 86 WARN / 0 ERROR (unchanged — the large majority are one generic
+"anonymous sign-ins allowed" notice repeated per table, a project-level Supabase setting).
 
 ---
 
