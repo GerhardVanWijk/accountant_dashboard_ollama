@@ -76,6 +76,10 @@ describe('RpcSalesOrderDraftInvoiceWriter', () => {
       p_selections: [{ salesOrderLineId: 'L1', quantity: 3 }], // stripped to just the two keys
       p_created_by: 'user-9',
       p_issue_date: null,
+      // NORMALIZED_DOCUMENT_LINES_ENABLED is false, so the RPC's own
+      // invoice_lines projection (migration 0062) stays off, mirroring the
+      // TS projector.
+      p_project_lines: false,
     });
     expect(invoice.id).toBe('inv_new');
   });
