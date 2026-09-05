@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { MarketingSeo } from '../seo/MarketingSeoHead';
 import { SiteFooter } from './SiteFooter';
 import { SiteHeader } from './SiteHeader';
 
@@ -13,6 +14,7 @@ import { SiteHeader } from './SiteHeader';
 export function MarketingPageShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-svh flex-col bg-background">
+      <MarketingSeo />
       <SiteHeader />
       <main className="flex flex-1 flex-col">{children}</main>
       <SiteFooter />

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Public marketing pages only. Kept in sync with
+     src/features/marketing/seo/marketingSeo.ts (PUBLIC_CANONICAL_PATHS) —
+     see src/features/marketing/seo/sitemap.test.ts. No authenticated /
+     application routes belong here. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://vertex-accounting.pages.dev/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/demo</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/product/invoicing</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/product/banking</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/product/tax</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/product/expenses</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/product/payroll</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/product/reporting</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/company/about</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/company/contact</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/resources/help</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/resources/vat-guide</loc><changefreq>yearly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/legal/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/legal/popia</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/legal/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://vertex-accounting.pages.dev/legal/security</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+</urlset>

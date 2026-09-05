@@ -1,3 +1,4 @@
+import { MarketingSeo } from '../seo/MarketingSeoHead';
 import { Comparison } from '../components/Comparison';
 import { Faq } from '../components/Faq';
 import { Features } from '../components/Features';
@@ -31,6 +32,7 @@ import { StatsBand } from '../components/StatsBand';
 export function HomePage() {
   return (
     <div className="flex min-h-svh flex-col bg-background">
+      <MarketingSeo />
       <SiteHeader />
       <main className="flex flex-1 flex-col">
         <Hero />

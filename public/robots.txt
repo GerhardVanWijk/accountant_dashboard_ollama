@@ -1,0 +1,34 @@
+# Vertex Accounting — https://vertex-accounting.pages.dev
+# robots.txt is a crawler courtesy, NOT access control. Every private route
+# below is additionally protected by Supabase auth + row-level security and
+# an X-Robots-Tag: noindex response header (see public/_headers).
+
+User-agent: *
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /onboarding
+Disallow: /companies
+Disallow: /financial-periods
+Disallow: /help
+Disallow: /settings
+Disallow: /admin/
+Disallow: /accounting/
+Disallow: /sales/
+Disallow: /purchases/
+Disallow: /banking/
+Disallow: /inventory/
+Disallow: /assets/register
+Disallow: /assets/depreciation
+Disallow: /assets/disposals
+Disallow: /assets/tax-register
+Disallow: /payroll/
+Disallow: /tax/
+Disallow: /reports/
+Disallow: /compliance/
+Disallow: /related-parties/
+Disallow: /foreign-exchange/
+Disallow: /leases/
+
+Sitemap: https://vertex-accounting.pages.dev/sitemap.xml

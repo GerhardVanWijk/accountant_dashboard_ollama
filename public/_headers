@@ -1,0 +1,71 @@
+# Cloudflare Pages headers — Vertex Accounting
+# Applied at the edge to every response. Tested against the real app's
+# origins (Supabase REST + realtime, Google Fonts, base64 data-URI logos).
+# See docs/SECURITY.md. Paystack checkout origins are added in Block 5 when
+# the integration lands.
+
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(self), usb=(), interest-cohort=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  Cross-Origin-Opener-Policy: same-origin
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; frame-src 'none'; form-action 'self'; script-src 'self' 'sha256-nV8bnbLJtYK3WlWBIL5n5wHvWkQnQx0pxh+n5d3d+wA='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://bcaffvpibpitpuqglszn.supabase.co wss://bcaffvpibpitpuqglszn.supabase.co; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests
+
+# ── Private application routes: keep out of every search index ──────────
+# noindex is NOT access control — Supabase RLS + auth remain the boundary.
+/login
+  X-Robots-Tag: noindex, nofollow
+/signup
+  X-Robots-Tag: noindex, nofollow
+/forgot-password
+  X-Robots-Tag: noindex, nofollow
+/reset-password
+  X-Robots-Tag: noindex, nofollow
+/onboarding
+  X-Robots-Tag: noindex, nofollow
+/companies
+  X-Robots-Tag: noindex, nofollow
+/financial-periods
+  X-Robots-Tag: noindex, nofollow
+/help
+  X-Robots-Tag: noindex, nofollow
+/settings
+  X-Robots-Tag: noindex, nofollow
+/settings/*
+  X-Robots-Tag: noindex, nofollow
+/admin/*
+  X-Robots-Tag: noindex, nofollow
+/accounting/*
+  X-Robots-Tag: noindex, nofollow
+/sales/*
+  X-Robots-Tag: noindex, nofollow
+/purchases/*
+  X-Robots-Tag: noindex, nofollow
+/banking/*
+  X-Robots-Tag: noindex, nofollow
+/inventory/*
+  X-Robots-Tag: noindex, nofollow
+/assets/register
+  X-Robots-Tag: noindex, nofollow
+/assets/depreciation
+  X-Robots-Tag: noindex, nofollow
+/assets/disposals
+  X-Robots-Tag: noindex, nofollow
+/assets/tax-register
+  X-Robots-Tag: noindex, nofollow
+/payroll/*
+  X-Robots-Tag: noindex, nofollow
+/tax/*
+  X-Robots-Tag: noindex, nofollow
+/reports/*
+  X-Robots-Tag: noindex, nofollow
+/compliance/*
+  X-Robots-Tag: noindex, nofollow
+/related-parties/*
+  X-Robots-Tag: noindex, nofollow
+/foreign-exchange/*
+  X-Robots-Tag: noindex, nofollow
+/leases/*
+  X-Robots-Tag: noindex, nofollow

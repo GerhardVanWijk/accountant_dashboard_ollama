@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router-dom';
+import { Seo } from '@/lib/seo/Seo';
 import { PermissionsLoader } from '@/features/auth/components/PermissionsLoader';
 import { AppSidebar } from '@/components/app/app-sidebar';
 import { AppTopbar } from '@/components/app/app-topbar';
@@ -20,6 +21,7 @@ import { Toaster } from '@/components/ui/shadcn/sonner';
 export function AppLayout() {
   return (
     <div className="app-shell">
+      <Seo noindex />
       <PermissionsLoader />
       <SidebarProvider>
         <AppSidebar />

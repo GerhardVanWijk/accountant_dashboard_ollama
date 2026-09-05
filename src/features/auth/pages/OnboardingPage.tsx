@@ -11,6 +11,7 @@ import { FormSection } from '@/components/app/form';
 import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect } from '@/components/app/combobox';
 import { Wordmark } from '@/components/app/wordmark';
+import { Seo } from '@/lib/seo/Seo';
 import { supabase } from '@/config/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import type { SALegalEntityType } from '@/types';
@@ -150,6 +151,7 @@ export function OnboardingPage() {
 
   return (
     <div className="flex min-h-svh flex-col bg-background">
+      <Seo noindex />
       <header className="flex items-center justify-between gap-4 border-b border-border px-6 py-4 sm:px-10">
         <Wordmark />
         <button type="button" onClick={logout} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
