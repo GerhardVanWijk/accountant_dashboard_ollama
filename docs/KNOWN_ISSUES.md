@@ -7,6 +7,68 @@ each section.
 
 ## Open
 
+### 2026-09-05 (FINAL CORE HARDENING run) — normalized lines ACTIVATED, app-wide permission catalog, migrations 0063 + 0064
+
+Branch `hardening-2026-09-05` (off `main` `f7ec377`). `main` untouched. Gate: **2739 tests / 332 files**,
+tsc / eslint (`--max-warnings 0`) / build clean. Live accounting byte-identical to the pre-run baseline
+(TB 0.00, GL 1200 = physical inventory R1,478,853.74, 247 JE / 928 lines / 343 movements, 0 negative /
+0 unbalanced / 0 cross-company / 0 normalized-line orphans). Security advisors: 88 WARN / 0 ERROR
+(unchanged — 0063 is a data UPDATE, 0064 is catalog INSERTs, neither adds a function or touches RLS).
+
+**RESOLVED / DONE this run:**
+- **Normalized document lines ACTIVATED** — `NORMALIZED_DOCUMENT_LINES_ENABLED = true`. Controlled
+  procedure: flag-off-window scan (only INV-1068/1072/1074 touched since the seed, by the 5B.1
+  `salesOrderLineId` jsonb backfill — a non-projected field, parity already fine); read-only SQL parity
+  sweep replicating `DocumentLineParityChecker`; migration **`0063`** NULLed 58 seed-written stray
+  `warehouse_id` values (invoice 40 / bill 10 / PO 7 / CN 1 — the jsonb line has no `warehouseId`,
+  0042's backfill and the live projector both write NULL there); re-swept → 340/340 MATCH, 0
+  orphans/dupes/count-mismatches/cross-company; rollback-wrapped live forward-write smoke test of
+  `create_invoice_from_sales_order(p_project_lines := true)` → exact field-for-field parity, 0 persisted;
+  flipped the flag + updated 3 tests. Only the WRITE side is gated; no reader consults the normalized
+  tables yet; jsonb `line_items` stays authoritative. Full detail: `docs/PHASE_9B_DESIGN.md` § 4c.
+  Rollback: flip to `false` (dual-write stops, no data loss); 0063 reversible — re-set `warehouse_id =
+  '692a3d01-9835-4340-b5ab-44fe96067490'` on the 58 seed line ids matching
+  `5eed0000-0000-4000-8000-(31|71|61|41)%` (full list in 0063's `raise notice`).
+- **App-wide permission catalog** — migration **`0064`** added 9 features (`sales_documents`,
+  `fulfilment`, `purchasing`, `banking`, `assets`, `tax`, `compliance`, `financial_periods`, `audit`),
+  38 permission rows, 86 system-role grants, under the brief's APPROVED policy. `permissionRouteMap.ts`
+  + `router.tsx` `<PermissionRoute action="read">` on every previously-ungated Sales/Purchasing/Banking/
+  Assets/Tax/Compliance/Periods/Audit route. `useCanAccess()` action gates on the primary create/record
+  controls of Quotes / Sales Orders / Credit Notes / Customer Receipts / Purchase Orders / Bills /
+  Supplier Payments, plus the Financial-Periods close/lock/reopen controls + a "can't lock the period
+  covering today" self-lockout guard. Tests: `permissionCatalogHardening.test.ts` (36),
+  `FinancialPeriodsPage.test.tsx` (gate + self-lockout). **No lockout:** `user_roles` = 0, only
+  functional users are admin + superuser (bypass `useCanAccess`), the 4 viewer profiles have
+  `company_id = NULL`; 0064 writes zero `user_roles` / zero `profiles` rows. **RLS unchanged.**
+  Full grid + rationale: `docs/PERMISSIONS.md` § "Ungated areas — CLOSED 2026-09-05".
+- **FIFO gate** — re-confirmed: `FIFO_VALUATION_ENABLED = false` unchanged, 0 live products on `fifo`,
+  `ProductForm`/`ProductService` gate still enforced (tests green in the full suite). No `SupabaseStockLotRepository` built (post-v1).
+
+**STILL OPEN / DEFERRED (POST-V1, non-blocking):**
+- **Exhaustive per-button action gating.** Banking / Assets / Tax / Compliance pages and the document
+  *detail* pages (post / reverse / void / issue buttons) are NOT yet individually `useCanAccess()`-gated.
+  The route-level `:read` gate already fully blocks every role lacking read on those features; the
+  residual is a role with `:read` but not full mutation (chiefly `finance_manager`, a trusted senior
+  role) still seeing a mutation button that then hits RLS — defense-in-depth, not a hole. Folds into the
+  human-QA UI-polish pass.
+- **jsonb `line_items` warehouse enrichment.** All 40 divergent invoice lines 0063 nulled DO have a
+  posted, immutable `stock_movements` row confirming "Main Distribution Centre". Enriching the
+  authoritative jsonb from those movements (instead of nulling the projection) is a defensible
+  data-quality improvement — deliberately NOT taken here because it mutates the authoritative source
+  during a controlled non-destructive activation. Needs its own explicit decision.
+- **Normalized-line reader migration.** Nothing reads `*_lines` as authoritative yet. Switching
+  reports / search / traceability to join the normalized tables instead of re-parsing jsonb is separate
+  future work (explicitly out of Phase 9B scope).
+- **Human browser QA** — still required (no browser tooling here). Now also a role-based click-through of
+  the permission gates + a create/edit smoke of each document type with the normalized flag on.
+  Checklist: `docs/CURRENT_TASKS.md` § P1.
+
+**Database writes this run:** `apply_migration` × 2 — `0063` (one `do $$` block, 58-row UPDATE across
+the 4 `*_lines` tables, guarded by an exact-count assertion) and `0064` (INSERT into `permissions` +
+`role_permissions`, `on conflict do nothing`, guarded by 38/86 count assertions). One rollback-wrapped
+`execute_sql` transaction for the forward-write smoke test (0 rows persisted, re-verified: invoices 83,
+invoice_lines 240). No other live writes.
+
 ### 2026-09-05 (Block A + B run) — 0061/0062 applied live, FIFO gated, normalized-lines blocker resolved
 
 Branch `hardening-2026-09-05` (off `main` `f7ec377`). `main` untouched pending human browser QA. Full
@@ -33,12 +95,9 @@ detail: `docs/CURRENT_TASKS.md` §§ P0–P4. Gate: **2701 tests / 331 files**, 
   Classification: **READY FOR CONTROLLED ACTIVATION**. Flag still `false` — the flip is its own
   dedicated change (backfill flag-off-window docs → `DocumentLineParityChecker` live → flip → monitor).
 
-**STILL OPEN / STOPPED:**
-- **Permissions rollout (P2)** — STOPPED for product approval, nothing applied. Live: 6 system roles,
-  9 permission features, `user_roles` = 0 assignments, `profiles.role` = viewer ×4 / admin ×1 /
-  superuser ×1. Proposed feature-catalog extension + role→action grid is in `docs/PERMISSIONS.md`
-  § "PROPOSED (NOT APPLIED)". Acting on it without sign-off risks locking the 4 viewer accounts out of
-  now-gated pages with no fine-grained grant to restore access.
+**STILL OPEN / STOPPED (at the time of that run — now superseded by the FINAL CORE HARDENING run above):**
+- ~~**Permissions rollout (P2)** — STOPPED for product approval.~~ **RESOLVED** — approved by the
+  FINAL CORE HARDENING BLOCK brief and applied via migration `0064` (see the run above).
 - **Human browser QA** — still required (no browser tooling here). Checklist: `docs/CURRENT_TASKS.md` §P1.
 
 **Database writes this run:** two `apply_migration` DDL calls only (`0061`, `0062` — function

@@ -1,13 +1,20 @@
 # Vertex Accounting — CURRENT TASKS
 
 **Authoritative project status**  
-**Date:** 2026-09-05 (Block A + Block B run)  
-**Branch:** work on `hardening-2026-09-05` (off `main` `f7ec377`); `main` untouched pending review  
-**Gate:** 2701 tests / 331 files PASS · TypeScript PASS · ESLint PASS · Build PASS  
-**Live accounting:** Trial Balance difference `R0.00` — byte-identical to pre-run baseline (0061/0062 are pure DDL)  
-**Latest applied migration:** `0062_sales_order_invoice_rpc_projects_lines` (0061 + 0062 both APPLIED + LIVE-VERIFIED this run)  
-**Normalized document line flag:** `NORMALIZED_DOCUMENT_LINES_ENABLED = false` (NOT flipped — see P3)  
-**FIFO flag:** `FIFO_VALUATION_ENABLED = false` (new — FIFO gated out of new/edit product flows)
+**Date:** 2026-09-05 (FINAL CORE HARDENING run)  
+**Branch:** work on `hardening-2026-09-05` (off `main` `f7ec377`); `main` untouched pending human QA  
+**Gate:** 2739 tests / 332 files PASS · TypeScript PASS · ESLint (`--max-warnings 0`) PASS · Build PASS  
+**Live accounting:** Trial Balance difference `R0.00` — byte-identical to pre-run baseline. GL 1200 `R1,478,853.74` = physical inventory valuation exactly. 247 JE / 928 lines / 0 unbalanced / 343 stock movements / 0 negative / 0 cross-company.  
+**Latest applied migrations:** `0063_normalized_line_warehouse_parity_correction` + `0064_core_permission_catalog_extension` — both APPLIED + LIVE-VERIFIED this run (data / catalog only, zero DDL on business tables)  
+**Normalized document line flag:** `NORMALIZED_DOCUMENT_LINES_ENABLED = true` — **ACTIVATED this run** (parity 340/340 clean, forward smoke test passed — see P3)  
+**FIFO flag:** `FIFO_VALUATION_ENABLED = false` — unchanged; 0 live products on FIFO; gate re-confirmed unreachable  
+**Permission catalog:** 18 features (9 M11 + 9 new via 0064); route gates on every Sales/Purchasing/Banking/Assets/Tax/Compliance/Periods/Audit route; representative action gates; `user_roles` still 0 → no lockout (admin/superuser bypass)
+
+## STATUS THIS RUN — read first
+
+- **CORE COMPLETE:** normalized document lines activated · app-wide permission catalog + route enforcement + representative action enforcement + Financial-Periods self-lockout guard · FIFO gate re-confirmed · final accounting gate green · live accounting byte-identical to baseline.
+- **HUMAN QA REQUIRED:** browser QA of the branch (§P1) — now also a role-based click-through of the new permission gates (viewer / stock_controller / sales_manager / finance_manager / accountant / admin). No browser tooling in this environment.
+- **POST-V1:** exhaustive per-button action gating on banking/assets/tax/compliance + document detail pages (post/reverse/void) · jsonb `line_items` warehouse enrichment from posted movements · normalized-line reader migration · Accounting Settings (Block C) · FIFO persistence · multi-currency.
 
 ---
 
@@ -19,7 +26,7 @@ The full system audit covered **128 routes across 17 feature domains**. The majo
 
 Current maturity is approximately **90%+ of the intended core product**. Remaining work is concentrated in production correctness, permissions, normalized-line activation, a small amount of accounting/settings hardening, browser QA, and optional post-v1 enhancements.
 
-**Block A + B progress (2026-09-05):** migration `0061` APPLIED + live-verified (3 worked scenarios, rollback-wrapped) — the UI and the DB RPCs now use the SAME return-aware fulfilment formula; FIFO GATED out of new/edit product flows at both the UI and the service layer; the normalized-lines SO→invoice RPC blocker RESOLVED via migration `0062` (opt-in atomic `invoice_lines` projection, gated by the same flag), with forward-write parity proven live (direct + delivery-linked, exact field-for-field). Permissions: STOPPED for product approval — proposed matrix below (§P2). Browser QA: still REQUIRED (no browser tooling in this environment). `main` unchanged; all code on `hardening-2026-09-05` pending review, all migrations live.
+**FINAL CORE HARDENING progress (2026-09-05):** builds on the earlier Block A/B run (0061 return-aware fulfilment, FIFO gate, 0062 SO→invoice projection — all live). This run: (1) **normalized document lines ACTIVATED** — migration `0063` corrected 58 seed-written stray `warehouse_id` values, live parity swept 340/340 clean, rollback-wrapped forward-write smoke test passed, `NORMALIZED_DOCUMENT_LINES_ENABLED` flipped to `true`; (2) **app-wide permission catalog** — migration `0064` added 9 features / 38 permissions / 86 role grants under the brief's APPROVED policy, with `<PermissionRoute>` route gates on every Sales/Purchasing/Banking/Assets/Tax/Compliance/Periods/Audit route, representative `useCanAccess()` action gates, and a Financial-Periods self-lockout guard; no `user_roles` write (no lockout — admin/superuser bypass); (3) **FIFO gate re-confirmed** unreachable; (4) **final gate green** (2739/332, tsc/eslint/build); (5) **live accounting byte-identical** to baseline (TB 0.00, GL 1200 = physical inventory R1,478,853.74). Browser QA + role-based click-through: still REQUIRED (no browser tooling here). `main` unchanged at `f7ec377`; all code on `hardening-2026-09-05`, all migrations live, NO production deploy.
 
 Do **not** reopen completed phases unless a verified regression requires it.
 
@@ -186,14 +193,23 @@ Priority QA areas:
 - Global Search for Invoice/Bill/Quote/SO/PO/DN/RN/CN/JE.
 - Desktop/tablet/mobile layouts.
 - Print output for Invoice, Delivery Note, Return Note and Forecasting report.
+- **Permission gates (new — migration 0064):** sign in as (or assign a test user) each of `viewer`, `stock_controller`, `sales_manager`, `finance_manager`, `accountant`, `admin`. Confirm: viewer sees read-only everywhere and no create/post buttons; stock_controller can post a Delivery/Return Note but has no "New credit note" / "Record payment" / period-close; sales_manager works Quotes→SO→CN but cannot open Banking/Tax; finance_manager can open everything but sees no mutation buttons; accountant has the full operational set but not Users & Roles; admin/superuser unaffected. Direct-URL navigation to a gated route the role lacks shows Access Denied, not the page.
+- **Normalized-line flag (now `true`):** create + edit one Invoice, Bill, PO and Credit Note through the running app and confirm the document renders, prints, and appears in search exactly as before (jsonb stays authoritative; the normalized rows are a silent dual-write).
 
 Record all visual defects into one consolidated batch. Do not create one phase per visual issue.
 
 ---
 
-### P2 — APPLICATION-WIDE PERMISSIONS ROLLOUT
+### P2 — APPLICATION-WIDE PERMISSIONS ROLLOUT ✅ CORE DONE (2026-09-05)
 
-**Status:** STOPPED FOR PRODUCT APPROVAL (this run). Nothing applied — no migration, no `role_permissions` row, no `usePermission()` call site added.  
+**Status:** APPROVED (FINAL CORE HARDENING brief) + APPLIED. Migration `0064_core_permission_catalog_extension` live: 9 new features (`sales_documents`, `fulfilment`, `purchasing`, `banking`, `assets`, `tax`, `compliance`, `financial_periods`, `audit`), 38 permission rows, 86 role grants. `permissionRouteMap.ts` + `router.tsx` `<PermissionRoute action="read">` on every previously-ungated core route. Action gates on the primary create/record controls of Quotes/SO/CN/Receipts/PO/Bills/Payments + Financial-Periods manage/self-lockout. Tests: `permissionCatalogHardening.test.ts` (36) + FinancialPeriodsPage gate tests.  
+**No lockout:** `user_roles` = 0, only functional users are admin+superuser (bypass), 4 viewer profiles have no company. Migration writes zero `user_roles` / zero `profiles` changes. See `docs/PERMISSIONS.md` § "Ungated areas — CLOSED".  
+**RLS / tenant isolation:** UNCHANGED. 0064 is catalog data only — no policy, no `ALTER TABLE`. RLS keyed off `profiles.role` stays the only DB boundary.  
+**Remaining (POST-V1):** exhaustive per-button gating on banking/assets/tax/compliance + detail-page post/reverse/void controls — route `:read` gates already block every role lacking read; residual is a read-only role seeing a mutation button that then hits RLS (defense-in-depth). Continues with human QA.
+
+_(original problem statement retained below for the record.)_
+
+**Was:** STOPPED FOR PRODUCT APPROVAL.  
 **Severity:** MEDIUM  
 **RLS / tenant isolation:** existing company RLS remains separate and must not be weakened.
 
@@ -247,10 +263,16 @@ Every grant mirrors the role's EXISTING shape (e.g. `sales_manager` already has 
 
 ---
 
-### P3 — NORMALIZED DOCUMENT LINES: BLOCKER FIXED · **READY FOR CONTROLLED ACTIVATION** (flag still off)
+### P3 — NORMALIZED DOCUMENT LINES: ✅ ACTIVATED (2026-09-05)
 
-**Status:** the SO→Invoice RPC blocker is RESOLVED (migration `0062`, APPLIED). Forward parity proven live.  
-**Flag:** `NORMALIZED_DOCUMENT_LINES_ENABLED = false` — **NOT flipped this run** (no dedicated approved activation instruction; the flip is its own controlled change — see below).
+**Status:** `NORMALIZED_DOCUMENT_LINES_ENABLED = true` on branch `hardening-2026-09-05`. Controlled activation procedure executed in full — flag-off-window scan (nothing needing re-backfill), read-only parity sweep (found + corrected 58 seed-written stray `warehouse_id` values via migration `0063`), re-verified 340/340 lines MATCH with zero orphans/dupes/count-mismatches/cross-company, rollback-wrapped live forward-write smoke test of `create_invoice_from_sales_order(p_project_lines := true)` (exact field-for-field parity, 0 persisted), then flipped. Full detail: `docs/PHASE_9B_DESIGN.md` § 4c.  
+**What the flag gates:** the WRITE side only (`SupabaseDocumentLineProjector` dual-write + the RPC's `p_project_lines`). NO reader consults the normalized tables yet, so jsonb `line_items` stays authoritative and every report/search/print path is unchanged.  
+**Rollback (no data loss):** flip back to `false` — dual-write stops, jsonb untouched, any normalized rows written while `true` are inert. Migration 0063 independently reversible (re-set `warehouse_id` on 58 seed line ids — list in the migration's `raise notice` + `docs/KNOWN_ISSUES.md`). `line_items` NOT dropped this release or next.  
+**Deferred:** enriching jsonb `line_items[].warehouseId` from the posted `stock_movements` (which confirm the warehouse) instead of nulling the projection — an explicit data-quality call, not taken here. Normalized-line reader migration (reports/search read `*_lines` instead of jsonb) is separate future work.
+
+_(original state retained below for the record.)_
+
+**Was:** SO→Invoice RPC blocker RESOLVED (migration `0062`), forward parity proven live, flag still off.
 
 #### What was done
 
@@ -443,15 +465,16 @@ npm run build
 
 **Definition of DONE:** no known production correctness bug ✅; unsupported valuation method cannot be selected ✅; current live features visually verified ⏳.
 
-### BLOCK B — Permissions + normalized-line activation
+### BLOCK B — Permissions + normalized-line activation ✅ CORE DONE (2026-09-05)
 
-- ⏳ Approve permission matrix — PROPOSED, awaiting product sign-off (§P2 / `docs/PERMISSIONS.md`).
-- ⏳ Complete app-wide permission catalog and enforcement — blocked on the approval above.
+- ✅ Permission matrix APPROVED (FINAL CORE HARDENING brief) + APPLIED (migration 0064).
+- ✅ App-wide permission catalog + route enforcement + representative action enforcement + Financial-Periods self-lockout guard + no-lockout transition (zero `user_roles` writes).
 - ✅ Fix `create_invoice_from_sales_order` normalized projection (migration 0062).
 - ✅ Forward-write parity testing (live, rollback-wrapped — direct + delivery-linked, exact).
-- ⏳ Controlled normalized-line flag activation — READY; a separate dedicated change (backfill → parity-check → flip → monitor).
+- ✅ Controlled normalized-line flag activation — migration 0063 parity correction, 340/340 clean, forward smoke test, flag flipped.
+- ⏳ POST-V1: exhaustive per-button action gating on banking/assets/tax/compliance + detail pages.
 
-**Definition of DONE:** explicit permissions across sensitive modules ⏳ and normalized relational document lines are safe as runtime source ✅ (ready to activate).
+**Definition of DONE:** explicit permissions across sensitive modules ✅ and normalized relational document lines active as a dual-write with a documented rollback ✅.
 
 ### BLOCK C — Accounting product hardening
 
@@ -477,11 +500,9 @@ npm run build
 
 ## 8. NEXT
 
-P0 (migration 0061), P3 (normalized-lines RPC blocker → migration 0062) and P4 (FIFO gate) are **DONE**. What remains:
+P0 (0061), P2 (permission catalog → 0064), P3 (normalized lines → 0062/0063 + flag flip) and P4 (FIFO gate) are all **DONE**. What remains before merge:
 
-1. **Human browser QA** of the branch against production behaviour (§P1 checklist) — then batch-fix any visual defects. This is the only Block A item left.
-2. **Approve the permissions matrix** (§P2 / `docs/PERMISSIONS.md`). On approval: one additive `permissions` migration + `<PermissionRoute>` / `useCanAccess()` gating + role-grant seed + tests.
-3. **Flip `NORMALIZED_DOCUMENT_LINES_ENABLED`** as its own controlled change (backfill any flag-off-window documents → run `DocumentLineParityChecker` live → flip → monitor).
-4. Merge `hardening-2026-09-05` → `main` once (1) is done.
+1. **Human browser QA** of the branch (§P1 checklist) — now including a role-based click-through of the new permission gates (viewer / stock_controller / sales_manager / finance_manager / accountant / admin), and confirming existing documents still render/print/search identically after the normalized-line flag flip. Then batch-fix any visual defects.
+2. **Merge `hardening-2026-09-05` → `main`** once (1) passes. (Do NOT merge before human QA. Do NOT force-push. Do NOT manually deploy.)
 
-Then Block C (Accounting Settings, shared reversal/correction pattern) as one block. Do not add unrelated new features until the above are resolved.
+Then Block C (real Accounting Settings, shared reversal/correction pattern) as one block, and the POST-V1 items listed in "STATUS THIS RUN". Do not add unrelated new features until the above are resolved.

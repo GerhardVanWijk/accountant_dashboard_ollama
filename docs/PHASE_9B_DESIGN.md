@@ -102,7 +102,8 @@ every conflict because nothing reads the normalized tables yet.
    **DONE — applied 2026-09-01.**
 3. Separate, reviewed one-line commit: flip
    `NORMALIZED_DOCUMENT_LINES_ENABLED` to `true` in
-   `src/config/featureFlags.ts`.
+   `src/config/featureFlags.ts`. **DONE — activated 2026-09-05 on branch
+   `hardening-2026-09-05` (FINAL CORE HARDENING run). See §4c.**
 4. Only after step 3 do new/edited documents start populating the normalized
    tables going forward. Report-layer work to actually query them is
    explicitly **NOT part of Phase 9B** (see §15's "Do not change Phase-8
@@ -133,6 +134,53 @@ Contract + parity tests: `src/repositories/salesOrderInvoiceProjectionMigration.
 - Run `DocumentLineParityChecker` against the live DB (privileged client) → expect zero findings.
 - Flip the flag in its own commit; deploy; monitor a period reading `invoice_lines`.
 - JSONB `line_items` stays authoritative and is NOT removed in the same release.
+
+### 4c. The step-3 activation — DONE 2026-09-05 (FINAL CORE HARDENING run)
+
+Branch `hardening-2026-09-05`. Executed exactly as §4b, all read-only-first:
+
+1. **Flag-off-window scan** — the newest live `created_at` across
+   `invoices`/`bills`/`purchase_orders`/`credit_notes` is still `2026-09-02 20:59:58`
+   (the seed). 3 invoices (`INV-1068/1072/1074`) carry a later `updated_at`
+   (`2026-09-04 11:54:05`) from the 5B.1 `salesOrderLineId` jsonb backfill — a field the
+   normalized tables do not project, so line count and every projected field were already in
+   parity. **No 0042-style re-backfill was needed.**
+2. **Parity sweep** — a read-only SQL replica of `DocumentLineParityChecker`'s field-by-field
+   comparison (`get_my_company_id()` makes the TS checker's anon client unusable from an
+   MCP/service context) across all 4 line tables: 340 lines. One class of divergence —
+   **58 rows with a non-NULL `warehouse_id` the authoritative jsonb line lacks** (invoice 40 /
+   bill 10 / PO 7 / CN 1), all pointing at "Main Distribution Centre", all written by the
+   2026-09-02 seed's direct (non-projector) normalized-row insert. 0 orphans / 0 duplicates /
+   0 line-count mismatches / 0 cross-company.
+3. **Migration `0063_normalized_line_warehouse_parity_correction`** — NULLs exactly those 58
+   `warehouse_id` values so the projection equals a fresh re-projection of the authoritative
+   jsonb (`SupabaseDocumentLineProjector` writes `line.warehouseId ?? null`, reading only the
+   jsonb line). jsonb untouched; nothing reads the normalized tables at apply time; zero
+   accounting impact. **Rollback:** re-set `warehouse_id =
+   '692a3d01-9835-4340-b5ab-44fe96067490'` on the 58 line ids (all seed ids matching
+   `5eed0000-0000-4000-8000-(31|71|61|41)%`). The full id list is in migration 0063's own
+   `raise notice` and in `docs/KNOWN_ISSUES.md`. (All 40 divergent invoice lines DO have a
+   posted `stock_movements` row confirming that warehouse — enriching the jsonb from those
+   movements instead of nulling the projection is a deferred, explicit data-quality call.)
+4. **Re-ran the parity sweep → 340/340 MATCH, zero findings.**
+5. **Forward-write smoke test** (rollback-wrapped, `set local role authenticated` + jwt claims
+   for the admin, `begin … rollback`): `create_invoice_from_sales_order(SO-2026-test1,
+   [{salesOrderLineId, quantity:1}], …, p_project_lines := true)` → the projected `invoice_lines`
+   row matched the authoritative jsonb `line_items` line field-for-field (id, description,
+   quantity, unit_price, tax_amount, line_total, product_id, warehouse_id, tax_rate_id,
+   company_id, line_number), 0 orphans; the transaction rolled back with 0 persisted rows
+   (`invoices` still 83, `invoice_lines` still 240). The TS-projector paths (standalone
+   Invoice / Bill / PO / Credit Note create+update) are covered by
+   `SupabaseDocumentLineProjector.test.ts` with the flag mocked `true` and by the now-clean
+   live parity; a running-app browser exercise of each is folded into human QA.
+6. **Flipped `NORMALIZED_DOCUMENT_LINES_ENABLED = true`.** Updated the 3 tests that asserted
+   the old `false` value. Full gate green (2739 tests / 332 files, tsc / eslint / build).
+
+**Rollback of the activation itself:** flip `NORMALIZED_DOCUMENT_LINES_ENABLED` back to
+`false` — the dual-write stops, the authoritative jsonb `line_items` was never touched, and any
+normalized rows written while `true` are inert (no reader). No data loss. Migration 0063 is
+independently reversible per step 3 above. `line_items` is NOT dropped in this or the next
+release.
 
 ## 5. Forward invoice evidence (already true before this phase, reconfirmed)
 

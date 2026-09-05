@@ -145,30 +145,108 @@ Reusable v0-styled state — icon, heading, description, a way back to the
 dashboard. Never surfaces the underlying `feature`/`action` key to the
 user.
 
-## Ungated areas (real gap, not an oversight)
+## Ungated areas — CLOSED 2026-09-05 (migration 0064)
 
-These routes/modules have **no route-level or action-level gate** because
-no matching permission exists in `public.permissions`: Companies,
-Financial Periods, Sales (Quotes/Orders/Credit Notes/Receipts), Purchases
-(Vendors detail actions beyond the list — Bills/Orders/Payments/Aging),
-Banking (all three pages), Assets (all four pages), Tax (all eight pages),
-Compliance (all three pages), Related Parties, Foreign Exchange, Leases,
-the Access Log (`/admin/audit`) and business Audit Trail
-(`/admin/audit-trail`), Settings, Help. Anyone who can sign in and reach
-the app shell (i.e., has a company) can open these — same as before M11.
-Closing this gap requires deciding on and seeding new permission rows
-(a schema/data change), which was explicitly out of scope for M11 without
-a separate STOP-and-report; it's the natural next step for a future
-security phase, alongside deciding whether the fine-grained catalog should
-grow to cover them or whether `Profile.role` alone should keep governing
-those areas.
+The M11 gap below is **closed**. Migration `0064_core_permission_catalog_extension`
+(FINAL CORE HARDENING run, branch `hardening-2026-09-05`, APPLIED live) added nine
+new features to `public.permissions` — `sales_documents`, `fulfilment`,
+`purchasing`, `banking`, `assets`, `tax`, `compliance`, `financial_periods`,
+`audit` — 38 permission rows, 86 system-role grants (see "APPLIED grid" below).
+`src/features/auth/permissionRouteMap.ts` + `src/app/router.tsx` now
+`<PermissionRoute action="read">`-gate every route in Sales (Quotes / Orders /
+Credit Notes / Receipts / Delivery Notes / Return Notes), Purchases (Orders /
+Bills / Payments / Aging), Banking, Assets, Tax, Compliance (incl. Related
+Parties / FX / Leases), Financial Periods, and the two audit screens.
+Action-level `useCanAccess()` gates cover the primary create/record controls on
+Quotes / Sales Orders / Credit Notes / Customer Receipts / Purchase Orders /
+Bills / Supplier Payments, and the close/lock/reopen controls + a
+"can't lock the current period" self-lockout guard on Financial Periods.
 
-## PROPOSED (NOT APPLIED) — Block B permission-catalog extension (2026-09-05)
+**Still deliberately ungated** (no matching permission — per "Do not create
+permissions merely because a route exists"): `/companies` (company profile,
+admin-oriented), `/settings` + `/settings/accounting` (link-hub; the real model
+is Block C), `/help`, `/admin/superuser` (RouteGuard confines it to superusers).
 
-**Status: awaiting product sign-off. No migration, no `role_permissions` row, no
-`usePermission()` / `<PermissionRoute>` call site has been added.** This section is the
-"concise approval matrix with exact existing role names and every proposed feature/action
-grant" the Block A→B brief's decision rule calls for.
+**RLS unchanged.** Migration 0064 is additive catalog data only — no policy, no
+`ALTER TABLE`, no `user_roles` write, no `profiles` change. Supabase RLS keyed
+off `profiles.role` remains the only database security boundary and tenant
+isolation is untouched.
+
+### No-lockout (verified read-only against live data, 2026-09-05)
+
+- `public.user_roles` has **0** assignments.
+- The only profile that passes `RouteGuard` (signed in AND has a company) is
+  **1 `admin`**; the 4 `viewer`-role profiles have `company_id = NULL` and never
+  reach the gated app shell. 1 `superuser`.
+- `admin` / `superuser` bypass `useCanAccess()` unconditionally.
+- => Adding these gates locks **nobody** out today. Migration 0064 writes zero
+  `user_roles` rows and zero `profiles` changes.
+- **Administrator transition guidance:** before assigning any real user a
+  non-admin `profiles.role`, assign them one of the 6 fine-grained system roles
+  (each keeps broad `:read` via the grid below). A non-admin user with no
+  fine-grained role assignment sees nothing gated — that is the M11 fail-closed
+  behaviour, now extended to these nine features, not a regression.
+
+### APPLIED grid (migration 0064; admin/superuser always ✔ via bypass)
+
+| Feature : action | viewer | employee | sales_manager | stock_controller | finance_manager | accountant |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| `sales_documents:read` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| `sales_documents:create` / `:update` / `:delete` | | | ✔ | | | ✔ |
+| `sales_documents:post` *(confirm SO / issue CN / record receipt)* | | | ✔ | | | ✔ |
+| `sales_documents:export` | ✔ | | ✔ | | ✔ | ✔ |
+| `fulfilment:read` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| `fulfilment:create` / `:update` / `:post` / `:cancel` *(Delivery + Return Notes)* | | | ✔ | ✔ | | ✔ |
+| `purchasing:read` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| `purchasing:create` / `:update` / `:delete` | | | | ✔ | | ✔ |
+| `purchasing:post` *(confirm PO / post Bill / record Payment)* | | | | | | ✔ |
+| `purchasing:export` | ✔ | | | ✔ | ✔ | ✔ |
+| `purchasing:import` | | | | ✔ | | ✔ |
+| `banking:read` | ✔ | | | | ✔ | ✔ |
+| `banking:create` / `:update` / `:delete` / `:post` / `:reconcile` | | | | | | ✔ |
+| `assets:read` | ✔ | | | | ✔ | ✔ |
+| `assets:create` / `:update` / `:delete` / `:post` | | | | | | ✔ |
+| `tax:read` | ✔ | | | | ✔ | ✔ |
+| `tax:create` / `:update` / `:post` | | | | | | ✔ |
+| `compliance:read` | ✔ | | | | ✔ | ✔ |
+| `compliance:update` | | | | | | ✔ |
+| `financial_periods:read` | ✔ | | | | ✔ | ✔ |
+| `financial_periods:manage` *(open / soft-close / close / lock / reopen)* | | | | | | ✔ |
+| `audit:read` | | | | | ✔ | ✔ |
+
+Every grant mirrors the shape the role already holds on an analogous existing
+feature (e.g. `sales_manager` full `invoicing` → full `sales_documents`;
+`stock_controller` owns `inventory` → owns `fulfilment` + `purchasing` CRUD but
+**not** `purchasing:post` = accounting and **not** `sales_documents:post` = no
+CN issue; `finance_manager` = read + export everywhere; `viewer` reads
+everything, matching its all-`:read` grant; `accountant` = near-full, **excluding
+user/security administration** which stays `user_management`).
+
+Tests: `src/features/auth/permissionCatalogHardening.test.ts` (36 — migration
+contract, the full role→action grid vs the approved policy, and
+direct-URL-navigation `permissionForPath` coverage for every new gated route)
+plus the Financial-Periods self-lockout / manage-gate tests in
+`src/features/accounting/pages/FinancialPeriodsPage.test.tsx`.
+
+### Not done this run (tracked in docs/CURRENT_TASKS.md)
+
+Exhaustive per-button action gating on **every** page of banking / assets / tax /
+compliance / the document detail pages (post / reverse / void buttons). The
+route-level `:read` gates already fully block every role that lacks read on
+those features; the residual exposure is a role with `:read` but not full
+mutation (chiefly `finance_manager`, a trusted senior role) still seeing a
+mutation button, which then hits RLS — defense-in-depth, not a hole. Continues
+as a UI-polish pass alongside human browser QA.
+
+## APPLIED — core permission-catalog extension (migration 0064, 2026-09-05)
+
+**Status: APPROVED (FINAL CORE HARDENING BLOCK brief) + APPLIED. Migration
+`0064_core_permission_catalog_extension` is live; route + action gates are wired;
+tests are green.** The APPLIED grid and the no-lockout analysis are in
+"Ungated areas — CLOSED 2026-09-05" above. The section below is retained as the
+original proposal record (the approved policy renamed `financial_periods:post` →
+`:manage`, and split Delivery/Return Notes into their own `fulfilment` feature so
+`stock_controller` can post them without gaining Credit-Note issue).
 
 ### Live state this was built from
 
