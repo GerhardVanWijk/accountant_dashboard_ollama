@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { accountMappingService, journalEntryService } from '@/features/accounting/services';
 import { productService } from '../services/productService';
 import { stockService } from '../services/stockService';
-import { deliveryNoteService } from '@/features/sales/services';
+import { deliveryNoteService, returnNoteService } from '@/features/sales/services';
 import { invoiceService } from '@/services';
 import {
   reconcileGoodsDeliveredNotInvoiced,
@@ -26,15 +26,16 @@ export function useGoodsDeliveredNotInvoicedReconciliation(): UseGoodsDeliveredN
     setLoading(true);
     setError(null);
     try {
-      const [deliveryNotes, invoices, products, stockMovements] = await Promise.all([
+      const [deliveryNotes, invoices, products, stockMovements, returnNotes] = await Promise.all([
         deliveryNoteService.listDeliveryNotes(),
         invoiceService.getInvoices(),
         productService.getProducts(),
         stockService.getMovements(),
+        returnNoteService.listReturnNotes(),
       ]);
       setResult(
         await reconcileGoodsDeliveredNotInvoiced(
-          { deliveryNotes, invoices, products, stockMovements },
+          { deliveryNotes, invoices, products, stockMovements, returnNotes },
           accountMappingService,
           journalEntryService,
         ),

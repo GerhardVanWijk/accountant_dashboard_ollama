@@ -25,6 +25,7 @@ import { warehouseService } from '@/features/inventory/services/warehouseService
 import { supabase } from '@/config/supabase';
 import { SupabaseDocumentLineProjector } from '@/repositories/SupabaseDocumentLineProjector';
 import { RealInvoiceFrozenCostLookup } from '@/features/inventory/services/invoiceFrozenCostLookup';
+import { auditLogService } from '@/services/auditLogService';
 
 export type { CreateQuoteDTO } from './quoteService';
 export type { CreateSalesOrderDTO } from './salesOrderService';
@@ -152,6 +153,11 @@ export const deliveryNoteService = new DeliveryNoteService(
   productService,
   warehouseService,
   new RpcDeliveryNotePoster(supabase),
+  auditLogService,
+  // Completion-run stabilization (Part 1): nets posted Return Notes into
+  // every remaining-to-deliver pre-check, matching the atomic
+  // `post_delivery_note` RPC's own re-derivation (migration 0061).
+  returnNoteRepository,
 );
 
 /**

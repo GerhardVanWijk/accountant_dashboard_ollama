@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DeliveryNote, DeliveryNoteLineItem, DocumentLineItem, Invoice, SalesOrder, Warehouse } from '@/types';
+import type { DeliveryNote, DeliveryNoteLineItem, DocumentLineItem, Invoice, ReturnNote, ReturnNoteLineItem, SalesOrder, Warehouse } from '@/types';
 import type { ISalesOrderRepository } from '@/repositories/ISalesOrderRepository';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
 import type { IDeliveryNoteRepository } from '@/repositories/IDeliveryNoteRepository';
+import type { IReturnNoteRepository } from '@/repositories/IReturnNoteRepository';
 import type { IWarehouseRepository } from '../repositories/IWarehouseRepository';
 import {
   commitmentKey,
@@ -87,22 +88,58 @@ function deliveryNote(overrides: Partial<DeliveryNote> = {}): DeliveryNote {
   };
 }
 
+function returnNoteLine(overrides: Partial<ReturnNoteLineItem> = {}): ReturnNoteLineItem {
+  return {
+    id: `rnl_${Math.random().toString(36).slice(2, 8)}`,
+    deliveryNoteLineId: 'dnl-1',
+    salesOrderLineId: 'sol-1',
+    productId: 'p1',
+    description: '',
+    quantity: 1,
+    unitCost: 0,
+    unitPrice: 0,
+    taxAmount: 0,
+    lineTotal: 0,
+    ...overrides,
+  };
+}
+
+function returnNote(overrides: Partial<ReturnNote> = {}): ReturnNote {
+  return {
+    id: `rn_${Math.random().toString(36).slice(2, 8)}`,
+    returnNoteNumber: 'RN-1',
+    deliveryNoteId: 'dn_1',
+    salesOrderId: 'so_1',
+    customerId: 'cust_1',
+    warehouseId: 'wh_main',
+    returnDate: '2026-09-05',
+    status: 'posted',
+    lineItems: [],
+    createdAt: '',
+    updatedAt: '',
+    ...overrides,
+  };
+}
+
 function setup(
   orders: SalesOrder[],
   warehouses: Warehouse[] = WAREHOUSES,
   invoices: Invoice[] = [],
   deliveryNotes: DeliveryNote[] = [],
+  returnNotes: ReturnNote[] = [],
 ) {
   const salesOrderGetAll = vi.fn(async () => orders);
   const warehouseGetAll = vi.fn(async () => warehouses);
   const invoiceGetAll = vi.fn(async () => invoices);
   const deliveryNoteGetAll = vi.fn(async () => deliveryNotes);
+  const returnNoteGetAll = vi.fn(async () => returnNotes);
   const salesOrderRepo = { getAll: salesOrderGetAll } as unknown as ISalesOrderRepository;
   const warehouseRepo = { getAll: warehouseGetAll } as unknown as IWarehouseRepository;
   const invoiceRepo = { getAll: invoiceGetAll } as unknown as IInvoiceRepository;
   const deliveryNoteRepo = { getAll: deliveryNoteGetAll } as unknown as IDeliveryNoteRepository;
-  const service = new StockCommitmentService(salesOrderRepo, warehouseRepo, invoiceRepo, deliveryNoteRepo);
-  return { service, salesOrderGetAll, warehouseGetAll, invoiceGetAll, deliveryNoteGetAll };
+  const returnNoteRepo = { getAll: returnNoteGetAll } as unknown as IReturnNoteRepository;
+  const service = new StockCommitmentService(salesOrderRepo, warehouseRepo, invoiceRepo, deliveryNoteRepo, returnNoteRepo);
+  return { service, salesOrderGetAll, warehouseGetAll, invoiceGetAll, deliveryNoteGetAll, returnNoteGetAll };
 }
 
 describe('StockCommitmentService.getCommitmentMap', () => {
@@ -324,5 +361,39 @@ describe('StockCommitmentService.getCommitmentMap — Phase 5C delivery-aware co
     });
     const withDeliveryNoteRepo = await setup([so], WAREHOUSES, [inv], []).service.getCommitmentMap();
     expect(withDeliveryNoteRepo.get(commitmentKey('p1', 'wh_main'))).toBe(6); // identical to the Phase 5B.3 test above
+  });
+});
+
+describe('StockCommitmentService.getCommitmentMap — Phase 5D Return Note netting (completion-run stabilization)', () => {
+  it('a POSTED Return Note frees up commitment again (ordered 10, delivered 6, returned 2 -> committed 6, not 4)', async () => {
+    const so = order({ lineItems: [line({ id: 'sol-1', productId: 'p1', warehouseId: 'wh_main', quantity: 10 })] });
+    const dn = deliveryNote({ salesOrderId: so.id, warehouseId: 'wh_main', lineItems: [dnLine({ id: 'dnl-1', salesOrderLineId: 'sol-1', productId: 'p1', quantity: 6 })] });
+    const rn = returnNote({ salesOrderId: so.id, lineItems: [returnNoteLine({ deliveryNoteLineId: 'dnl-1', salesOrderLineId: 'sol-1', productId: 'p1', quantity: 2 })] });
+    const map = await setup([so], WAREHOUSES, [], [dn], [rn]).service.getCommitmentMap();
+    expect(map.get(commitmentKey('p1', 'wh_main'))).toBe(6);
+  });
+
+  it('re-delivering the returned stock (a second Delivery Note) drives commitment back to 0 (the brief\'s own worked example)', async () => {
+    const so = order({ lineItems: [line({ id: 'sol-1', productId: 'p1', warehouseId: 'wh_main', quantity: 10 })] });
+    const dn1 = deliveryNote({ salesOrderId: so.id, warehouseId: 'wh_main', lineItems: [dnLine({ id: 'dnl-1', salesOrderLineId: 'sol-1', productId: 'p1', quantity: 6 })] });
+    const dn2 = deliveryNote({ salesOrderId: so.id, warehouseId: 'wh_main', lineItems: [dnLine({ id: 'dnl-2', salesOrderLineId: 'sol-1', productId: 'p1', quantity: 6 })] });
+    const rn = returnNote({ salesOrderId: so.id, lineItems: [returnNoteLine({ deliveryNoteLineId: 'dnl-1', salesOrderLineId: 'sol-1', productId: 'p1', quantity: 2 })] });
+    const map = await setup([so], WAREHOUSES, [], [dn1, dn2], [rn]).service.getCommitmentMap();
+    expect(map.has(commitmentKey('p1', 'wh_main'))).toBe(false); // fully committed-out (10 ordered, 10 net physically issued)
+  });
+
+  it('a DRAFT Return Note does NOT free up commitment', async () => {
+    const so = order({ lineItems: [line({ id: 'sol-1', productId: 'p1', warehouseId: 'wh_main', quantity: 10 })] });
+    const dn = deliveryNote({ salesOrderId: so.id, warehouseId: 'wh_main', lineItems: [dnLine({ id: 'dnl-1', salesOrderLineId: 'sol-1', productId: 'p1', quantity: 6 })] });
+    const rn = returnNote({ salesOrderId: so.id, status: 'draft', lineItems: [returnNoteLine({ deliveryNoteLineId: 'dnl-1', salesOrderLineId: 'sol-1', productId: 'p1', quantity: 2 })] });
+    const map = await setup([so], WAREHOUSES, [], [dn], [rn]).service.getCommitmentMap();
+    expect(map.get(commitmentKey('p1', 'wh_main'))).toBe(4);
+  });
+
+  it('with NO Return Notes at all, the formula reduces exactly to the Phase 5C rule (regression proof)', async () => {
+    const so = order({ lineItems: [line({ id: 'sol-1', productId: 'p1', warehouseId: 'wh_main', quantity: 10 })] });
+    const dn = deliveryNote({ salesOrderId: so.id, warehouseId: 'wh_main', lineItems: [dnLine({ salesOrderLineId: 'sol-1', productId: 'p1', quantity: 6 })] });
+    const map = await setup([so], WAREHOUSES, [], [dn], []).service.getCommitmentMap();
+    expect(map.get(commitmentKey('p1', 'wh_main'))).toBe(4); // identical to the Phase 5C test above
   });
 });

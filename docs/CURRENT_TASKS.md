@@ -4,7 +4,22 @@
 > appended to. It shows actual progress, not planned progress. Everything below the next `---` is
 > historical detail, kept for the record but NOT the place to look for "what's true right now."**
 
-## PROJECT STATE (2026-09-05, post-completion-run)
+## PROJECT STATE (2026-09-05, post-stabilization-run)
+
+> **2026-09-05 STABILIZATION RUN (same day, after the completion run below).** Branch
+> `completion-run-2026-09-05` unchanged. Scope: (1) fixed Return Note ↔ Sales Order fulfilment
+> netting — one authoritative physical-fulfilment formula now applied in `salesOrderFulfilment.ts`
+> AND authored (not yet applied) into `post_delivery_note`/`create_invoice_from_sales_order` via
+> migration `0061`; (2) re-proved Return Note accounting + fixed the GDN-I report to net returns;
+> (3) re-audited normalized-document-lines readiness and found a NEW, more precise blocker (below);
+> (4) produced a proposed (unapplied) permissions decision matrix; (5) reviewed + fixed a Forecasting
+> precision bug; (6) produced a human browser QA checklist. **No live DB write was made or attempted
+> to succeed this run** — migration `0061` is authored and fully tested (migration-contract +
+> formal quantity-matrix proof) but its `apply_migration` call was blocked by this session's own
+> permission gate (a live schema/function change), so it sits on the branch pending explicit
+> approval to apply. Full detail: this section below + git history.
+
+
 
 **COMPLETED (major phases):** Phases 0-8 + 9A (inventory core, migrations 0021-0036) · Phase 9B
 (normalized doc-line tables, migrations 0037-0042, flag off — **merged to main**) · Increment 3
@@ -43,12 +58,13 @@ design is "one current figure per account/month/plan-type", not a full history).
 **KNOWN ISSUES (see `docs/KNOWN_ISSUES.md` for full detail; summary here):**
 | Severity | Issue | Blocker |
 |---|---|---|
-| MEDIUM | Permissions catalog has NO features for Purchasing or non-Invoice Sales documents (verified live: only `customer_management`/`dashboard`/`gl`/`inventory`/`invoicing`/`payroll`/`reports`/`supplier_management`/`user_management` exist). Inventory/Invoicing/Customer/Supplier Management/Payroll/Reports/GL/Users already have real `useCanAccess`-gated create/edit/delete actions wired in (36+ files) — this **corrects** the earlier "called nowhere" claim, which was stale. | No (RLS still enforces company isolation; today only admin/superuser can reach the already-gated modules' write actions in practice, since `user_roles` has 0 live assignments) |
-| MEDIUM | Re-delivering previously-returned-and-not-yet-invoiced stock against the SAME Sales Order line is not yet netted into `remainingToDeliver` — a Return Note correctly guards against over-return/double-return/returning invoiced quantity, but doesn't yet feed back into "how much of this SO line can be delivered again." Documented scope boundary in `docs/RETURN_NOTES_DESIGN.md`. | No |
-| LOW | `NORMALIZED_DOCUMENT_LINES_ENABLED` readiness audited 2026-09-05: live parity is PERFECT (0 row/field mismatches, 0 orphans, 0 invalid FKs across all 4 normalized tables), the dual-write path is provably non-blocking (`projectDocumentLinesBestEffort` catches and logs, never throws to the caller), and dedicated tests already cover the enabled-flag write path. Flag remains `false` pending one live smoke test of an actual create/update through the running app with the flag flipped — the one gap this audit could not close with static analysis alone. | No |
+| MEDIUM | Permissions catalog has NO features for Purchasing or non-Invoice Sales documents (verified live: only `customer_management`/`dashboard`/`gl`/`inventory`/`invoicing`/`payroll`/`reports`/`supplier_management`/`user_management` exist). Inventory/Invoicing/Customer/Supplier Management/Payroll/Reports/GL/Users already have real `useCanAccess`-gated create/edit/delete actions wired in (36+ files) — this **corrects** the earlier "called nowhere" claim, which was stale. A **PROPOSED** (unapplied) role→action decision matrix was produced 2026-09-05 stabilization run — see this file's PERMISSIONS DECISION MATRIX section — pending explicit product approval. | No (RLS still enforces company isolation; today only admin/superuser can reach the already-gated modules' write actions in practice, since `user_roles` has 0 live assignments) |
+| MEDIUM → code fix DONE, DB fix AUTHORED NOT APPLIED | Re-delivering previously-returned-and-not-yet-invoiced stock against the SAME Sales Order line: `salesOrderFulfilment.ts`'s `computeSalesOrderFulfilment`/`sumPhysicallyIssuedBySalesOrderLine` now net posted Return Note quantity out of `deliveredQty` before it offsets commitment/remaining-to-deliver, threaded through `StockCommitmentService`, `SalesOrderForm`, `SalesOrderDetailPage`, `CreateDeliveryNotePage`, and `DeliveryNoteService`'s own pre-checks (2026-09-05 stabilization run). The DB-level guards (`post_delivery_note`, `create_invoice_from_sales_order`) that ultimately GATE a real re-delivery still run the pre-0061 formula — migration `0061_return_note_aware_fulfilment_rpcs` fixes both, is fully tested (17 migration-contract + formal-proof tests, `src/repositories/returnNoteAwareFulfilmentRpcs.test.ts`), but was **NOT applied live** (this session's own `apply_migration` call was blocked by the permission classifier — a live schema/function change gets the same authorization treatment as any other). Until `0061` is applied, the RPCs will reject a valid re-delivery of previously-returned stock even though the TS read-model now shows it as available. | Yes, for the DB-level fix only (needs an explicit approval to run `apply_migration` for `0061`) — the TS-level read-model fix is unblocked and shipped on the branch |
+| LOW → re-audited, blocker sharpened | `NORMALIZED_DOCUMENT_LINES_ENABLED` re-audited 2026-09-05 (stabilization run): static parity is still perfect across all 4 tables (0 mismatched docs, 0 orphans, 0 duplicate ids, 0 company mismatches on `invoice_lines`/`bill_lines`/`purchase_order_lines`/`credit_note_lines`) — but this is now known to be because **zero documents of any of these 4 types have been created or edited live since the 2026-09-02 seed** (verified: the newest `invoices.created_at` in the live DB is `2026-09-02 20:59:58`), not because the dual-write path has been exercised. A genuine NEW structural gap was found: `create_invoice_from_sales_order` (the RPC every Sales-Order-derived invoice — partial invoicing, delivery-linked invoicing, Phase 5B/5C/5D — is created through) inserts directly into `invoices` via SQL and is **never routed through `invoiceService.createInvoice()`**, so it **permanently bypasses `invoiceLineProjector` regardless of the flag** (confirmed by code: `RpcSalesOrderDraftInvoiceWriter.write()` only calls `getById` after the RPC insert, never `.create()`). Flipping the flag today would leave every SO-derived invoice's `invoice_lines` permanently empty. | No live-data blocker, but this IS a real pre-flip code blocker — needs either an in-RPC `invoice_lines` insert or a post-RPC TS-side projector call before the flag can safely go live for the sales-fulfilment feature set |
 | LOW | A stock return via Credit Note now uses the ORIGINAL sale's frozen cost when `originalInvoiceLineId` evidence exists (fixed 2026-09-05); falls back to current WAC only for older/unlinked records — an honest, no-longer-silent limitation. | No |
 | LOW | `MockStockLotRepository` / FIFO — in-memory only, unexercised (every seeded product uses WAC). | No |
 | LOW | Journal Entry's `source` field has no reverse FK to its originating document id (`journal_entries.source_id` — deferred by the original Phase 9B design) — the new `JournalEntryDetailPage` shows the source as a text label, not a clickable link back to the document. | No |
+| LOW, fixed 2026-09-05 | Forecasting: `FinancialPlanService.upsertPlanLine` didn't round `amount` to money precision (`financial_plan_lines.amount` is a plain unscoped `numeric` column) — a user-typed value like `100.999` or client-side float drift (`0.1+0.2`) would have been stored and summed verbatim. Fixed with a `round2` guard in the service (the single write path); 11 new tests in the previously test-less `financialPlanService.test.ts`. | No |
 
 **DEPLOYMENT STATE:** All work is on branch `completion-run-2026-09-05` (off `main` `a713dd2`),
 pushed to `origin`. **Not merged to `main`, no production deploy triggered this run** — per this
@@ -56,28 +72,171 @@ run's own Part 17 guidance, substantial new functionality (Return Notes, Forecas
 FK hardening) stays on its branch for human review before hitting production, rather than merging
 blindly. `main` / `https://vertex-accounting.pages.dev` is untouched, still reflects `a713dd2`.
 
-**LATEST MIGRATION:** `0060_financial_plan_lines` — applied + live-verified 2026-09-05 on Supabase
-project `bcaffvpibpitpuqglszn`. Full migration list: `0000`-`0043`, `0045`-`0060` (`0044` was a
-one-off September-2026 data seed applied directly via SQL, not a tracked schema migration) — all
-applied, confirmed via `list_migrations` 2026-09-05. This run added `0056` (return_note stock
-movement type), `0057` (return_notes table), `0058` (post_return_note RPC), `0059` (account
-reference company-safety — 18 new composite FKs), `0060` (financial_plan_lines).
+**LATEST APPLIED MIGRATION:** `0060_financial_plan_lines` — applied + live-verified 2026-09-05 on
+Supabase project `bcaffvpibpitpuqglszn` (re-confirmed via `list_migrations` during the stabilization
+run — still the newest applied migration). Full applied list: `0000`-`0043`, `0045`-`0060` (`0044`
+was a one-off September-2026 data seed applied directly via SQL, not a tracked schema migration).
+**`0061_return_note_aware_fulfilment_rpcs` is AUTHORED + fully tested but NOT applied** (see the
+KNOWN ISSUES row above) — the file exists on the branch at
+`supabase/migrations/20260905090050__0061_return_note_aware_fulfilment_rpcs.sql`, live DB functions
+still run the pre-0061 (0054/0055) bodies.
 
-**LATEST TEST COUNT:** **2632 tests / 328 files**, all passing. tsc clean, eslint (`--max-warnings 0`)
-clean, `vite build` clean (only the pre-existing, unrelated ">500kB chunk" warning).
+**LATEST TEST COUNT:** **2680 tests / 330 files**, all passing (was 2632/328 before this
+stabilization run — **+48 tests / +2 files**: `financialPlanService.test.ts` new,
+`returnNoteAwareFulfilmentRpcs.test.ts` new, plus additions to `salesOrderFulfilment.test.ts`,
+`stockCommitmentService.test.ts`, `reconcileGoodsDeliveredNotInvoiced.test.ts`). tsc clean, eslint
+(`--max-warnings 0`) clean, `vite build` clean (only the pre-existing, unrelated ">500kB chunk"
+warning).
 
-**DATABASE HEALTH (read-only, live, 2026-09-05, post-completion-run):** Trial balance difference
-**0.00**. GL 1200 (Inventory) R1,478,853.74 (ties physical valuation exactly). GL 1210 (In Transit)
-0.00. GL 1220 (Goods Delivered Not Invoiced) 0.00. AR 1100 R302,919.04. AP 2000 R869,571.21 (credit).
-VAT Output (2100) R155,710.20 (credit). VAT Input (2110) R228,083.07 (debit). Customer Deposits 2600
-R4,250.00 (credit). Total Revenue (all revenue-type accounts) R1,016,252.82. COGS (50xx) R637,599.96.
-Counts: 247 journal entries / 928 journal lines / 343 stock movements / 83 invoices (the leaked
-`INV-2026-0001` smoke-test artifact was deleted this run, re-verified isolated first) / 1 delivery
-note / 0 return notes / 0 financial plan lines (correctly empty — no auto-created planning data).
-Zero negative stock balances. Zero unbalanced journals. Zero orphaned normalized document lines.
-Zero cross-company account-FK violations — re-verified AFTER migration 0059 added 18 new composite
-FK constraints. Security advisors: 86 WARN / 0 ERROR (unchanged — the large majority are one generic
-"anonymous sign-ins allowed" notice repeated per table, a project-level Supabase setting).
+**DATABASE HEALTH (read-only, live, re-verified 2026-09-05 stabilization run — BYTE-IDENTICAL to the
+completion run's own figures, confirming zero live writes happened during this run):** Trial balance
+difference **0.00**. GL 1200 (Inventory) R1,478,853.74 (ties physical valuation exactly). GL 1210 (In
+Transit) 0.00. GL 1220 (Goods Delivered Not Invoiced) 0.00. AR 1100 R302,919.04. AP 2000 R869,571.21
+(credit). VAT Output (2100) R155,710.20 (credit). VAT Input (2110) R228,083.07 (debit). Customer
+Deposits 2600 R4,250.00 (credit). Total Revenue (all revenue-type accounts) R1,016,252.82. COGS
+(50xx) R637,599.96. Counts: 247 journal entries / 928 journal lines / 343 stock movements / 83
+invoices / 0 return notes / 0 financial plan lines (correctly empty — no auto-created planning or
+Return Note demo data was created this run either). Zero negative stock balances. Zero unbalanced
+journals. Zero orphaned/duplicate/cross-company-mismatched normalized document lines (re-checked with
+new field-level queries this run — see the NORMALIZED LINES known-issue row above for the real
+remaining blocker). Zero cross-company account-FK violations. Security advisors: 88 WARN / 0 ERROR
+(the +2 vs the completion run's 86 is the same generic per-table "anonymous sign-ins allowed" notice,
+now also covering `financial_plan_lines` — a project-level Supabase setting, not a new finding).
+
+## PERMISSIONS DECISION MATRIX — PROPOSED, NOT APPLIED (2026-09-05 stabilization run)
+
+Smallest concrete decision the product owner needs to approve/edit before a permissions migration +
+UI wiring pass extends the existing `(feature, action)` catalog (migration `0010`, `usePermission()`)
+to Purchasing and non-Invoice Sales documents — mirroring the already-shipped
+Inventory/Invoicing/Customer/Supplier-Management pattern exactly. **Nothing here is applied**: no
+migration, no `role_permissions` row, no `usePermission()` call site. Existing system roles only —
+`accountant` / `stock_controller` / `sales_manager` / `finance_manager` / `employee` / `viewer`
+(migration `0010`); `admin`/`superuser` (the coarser `profiles.role`) always have full access and are
+omitted from the table below.
+
+Proposed two new catalog features: **`purchasing`** (Purchase Orders, Bills, Supplier Payments) and
+**`sales_documents`** (Quotes, Sales Orders, Delivery Notes, Return Notes, Credit Notes, Receipts —
+i.e. every Sales document that isn't a posted Invoice, which stays under the existing `invoicing`
+feature). Proposed actions, same verb set the brief asked for:
+
+| Action | Meaning |
+|---|---|
+| VIEW | list/open the document (`read`) |
+| CREATE | start a new draft |
+| EDIT DRAFT | change a draft's lines/party/terms (`update`, draft-only — mirrors every existing document service's own draft/posted boundary) |
+| DELETE DRAFT | remove a draft (`delete`, draft-only) |
+| POST/CONFIRM | the accounting/commercial-effect transition (`confirmed` for a Sales Order, `posted` for a Delivery/Return Note, "record payment" for a Supplier Payment) |
+| CANCEL | abandon a draft or reverse a not-yet-effective document |
+| EXPORT | CSV/Excel/PDF export (`export`) |
+| IMPORT | bulk create (no bulk-import UI exists anywhere in the app today for ANY document type — proposed as a placeholder for future parity with `export`, safe to omit from the first migration) |
+| RETURN/REVERSE | Return Note (against a Delivery Note) / Credit Note (against an Invoice, already under `invoicing`) / a Bill's own credit note equivalent — proposed only where the document type actually has a reversal mechanism |
+
+**Proposed default matrix** (● = granted, — = not granted; IMPORT column omitted — no role would
+sensibly get it before the feature itself exists):
+
+| Role | VIEW | CREATE | EDIT DRAFT | DELETE DRAFT | POST/CONFIRM | CANCEL | EXPORT | RETURN/REVERSE |
+|---|---|---|---|---|---|---|---|---|
+| **accountant** (purchasing) | ● | ● | ● | ● | ● | ● | ● | ● |
+| **accountant** (sales_documents) | ● | ● | ● | ● | ● | ● | ● | ● |
+| **stock_controller** (purchasing) | ● | ● | ● | — | — | — | — | — |
+| **stock_controller** (sales_documents) | ● | — | — | — | ● *(Delivery/Return Note post only)* | — | — | ● *(Return Note only)* |
+| **sales_manager** (purchasing) | ● | — | — | — | — | — | — | — |
+| **sales_manager** (sales_documents) | ● | ● | ● | ● | ● | ● | ● | ● |
+| **finance_manager** (purchasing) | ● | — | — | — | — | — | ● | — |
+| **finance_manager** (sales_documents) | ● | — | — | — | — | — | ● | — |
+| **employee** (purchasing) | ● | — | — | — | — | — | — | — |
+| **employee** (sales_documents) | ● | — | — | — | — | — | — | — |
+| **viewer** (purchasing) | ● | — | — | — | — | — | — | — |
+| **viewer** (sales_documents) | ● | — | — | — | — | — | — | — |
+
+**Rationale, briefly:** mirrors each role's existing granted-feature shape (`accountant` already gets
+full CRUD+export on `invoicing`/`inventory`/`customer_management`/`supplier_management`; `sales_manager`
+already gets full CRUD on `invoicing`/`customer_management`, so its non-invoice sales documents get
+the same shape; `stock_controller` already only touches `inventory`, so it gets purchasing
+create/edit — POs affect stock — but not POST (an accounting/commitment effect) or CANCEL, and gets
+POST/RETURN only on the two documents that are literally physical stock movements it already owns
+conceptually — Delivery Notes and Return Notes — not Sales Orders/Quotes/Credit Notes, which stay
+commercial documents outside its existing `inventory`-only scope; `finance_manager` is read+export
+everywhere, matching its existing `reports`/`gl` read-only shape; `employee`/`viewer` get VIEW only,
+matching their existing read-only defaults). **These are proposals, not commitments** — in particular
+whether `stock_controller` should be able to POST a Delivery Note (a genuine "ships the goods" action)
+is a real product-policy call the brief flagged as needing an explicit decision, not an inference.
+
+**Why this still isn't applied:** unchanged from the completion run's own finding — `user_roles` has
+0 live assignments and 4 real `viewer`-role `profiles.role` accounts exist with no gate at all on
+these document types today; a wrong default risks locking out a real account with no
+admin-assignable recovery path until the role-assignment UI itself is exercised.
+
+## HUMAN BROWSER QA CHECKLIST (2026-09-05 stabilization run)
+
+No browser tooling exists in this build environment — every item below needs an actual human click-
+through against the deployed branch preview (or a local `npm run dev`) before any merge to `main`.
+
+**A. Sales Order** (`/sales/orders/:id`)
+- Confirm a `pending` order → commitment appears in Inventory register / product Stock tab.
+- "Delivered" / "Returned (uninvoiced)" / "Remaining to deliver" fields render correctly once a
+  Delivery Note and/or Return Note exist for the order (the new fields this run added).
+- "Create delivery" action → lands on `/sales/orders/:id/deliver`.
+- Partial invoice picker (`Convert to invoice` on a partly-delivered order) shows correct remaining
+  quantities per line.
+
+**B. Delivery Note** (`/sales/delivery-notes`, `/sales/orders/:id/deliver`, `/sales/delivery-notes/:id`)
+- Create a draft, edit its quantities, post it → GL 1220 increases, GL 1200 decreases by the same
+  amount, zero VAT/AR/revenue lines in the resulting journal entry.
+- Print/PDF renders the A4 document correctly.
+- "Create invoice" from a posted Delivery Note pre-fills the remaining invoiceable quantity per line.
+
+**C. Return Note** (`/sales/returns` if listed under Sales nav, or via the Delivery Note detail page)
+- Create a return against a posted, uninvoiced Delivery Note line; partial-quantity return.
+- Post it → GL 1200 increases, GL 1220 decreases by the SAME frozen delivery-time cost (check the
+  unit cost shown matches the original delivery, not today's product cost).
+- Print renders correctly.
+- Stock on hand increases by the returned quantity, at the frozen cost (verify Inventory register).
+- **Known limitation to verify by hand:** attempting to re-deliver the returned quantity against the
+  same Sales Order line will currently be REJECTED by the live RPC (migration `0061` not yet
+  applied) even though the Sales Order detail page's own "Remaining to deliver" figure now correctly
+  shows it as available — a visible UI/DB mismatch until `0061` is applied. Worth confirming this
+  exact symptom by hand before deciding whether to apply `0061` now or hold it for the next window.
+
+**D. Credit Note** (`/sales/credit-notes/new` or via an Invoice's "Issue credit note" action)
+- The "original invoice line" picker appears and constrains quantity to what that specific line has
+  not already been credited.
+- A return-reason credit note against a line with `originalInvoiceLineId` evidence shows the
+  ORIGINAL sale's frozen cost, not today's WAC (compare against the product's current cost price).
+
+**E. Inventory**
+- Item detail Stock tab: On hand / Committed / Available look correct for a product with an open
+  Sales Order, a posted Delivery Note, and a posted Return Note all in play together.
+- Movement ledger: a `delivery` movement resolves to its Delivery Note number (not a raw UUID); a
+  `return_note` movement resolves to its Return Note number.
+- "Goods delivered not invoiced" report (`/inventory/reports/goods-delivered-not-invoiced`): new
+  "Returned" column shows correctly, and the outstanding total ties to GL 1220.
+
+**F. Journal Entry** (`/accounting/journals/:id`)
+- Full-page record renders; "source" shows the correct originating module/document as plain text
+  (no clickable link yet — known, documented limitation).
+
+**G. Global Search**
+- Search by number for: an Invoice, a Bill, a Quote, a Sales Order, a Purchase Order, a Delivery
+  Note, a Return Note, a Credit Note, and a Journal Entry — each should resolve to its detail page.
+
+**H. Forecasting** (`/reports/forecasting`)
+- Create a Budget line and a Forecast line for the same account/month via the quick-entry form;
+  confirm the saved amount displays with exactly 2 decimal places even if you type e.g. `100.999`
+  (the rounding fix this run added).
+- Toggle 6-month / 12-month range, toggle "Variance vs Budget" / "Variance vs Forecast".
+- Charts (trend + top variances) render; drill into an account row → monthly trend + variance-cause
+  evidence panel.
+- Print/Export produces the account-level table with company header.
+
+**I. Mobile/responsive** — highest-risk pages to check on a ~375-430px viewport: `SalesOrderForm` /
+`SalesOrderFormModal` (many stacked fields + the line editor), `PartialInvoicePicker` (a large modal),
+`CreateDeliveryNotePage` (a wide table with an inline quantity input per row), the Forecasting page
+(three-column figure grid + charts), and any `BusinessDocument` A4 preview modal.
+
+**J. Print** — Invoice, Delivery Note, Return Note, and the Forecasting report: check pagination,
+the browser's own header/footer chrome with "Headers and footers" on/off, and dark-app → white-paper
+rendering.
 
 ---
 

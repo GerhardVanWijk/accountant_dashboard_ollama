@@ -1,4 +1,4 @@
-import type { DeliveryNote, DocumentLineItem, ID, Invoice, SalesOrder } from '@/types';
+import type { DeliveryNote, DocumentLineItem, ID, Invoice, ReturnNote, SalesOrder } from '@/types';
 
 /**
  * Derived Sales Order fulfilment / invoicing quantities (Phase 5B.1 / 5B.3).
@@ -94,6 +94,33 @@ export function isPostedDeliveryNoteStatus(status: DeliveryNote['status']): bool
   return status === 'posted';
 }
 
+/** A Return Note counts as physical evidence once `posted` — a `draft`/`cancelled` one never reversed stock (mirrors `isPostedDeliveryNoteStatus`). */
+export function isPostedReturnNoteStatus(status: ReturnNote['status']): boolean {
+  return status === 'posted';
+}
+
+/**
+ * Sum a Return Note's line quantities grouped by the Sales Order line the
+ * underlying delivery fulfilled (`ReturnNoteLineItem.salesOrderLineId`,
+ * carried through from the Delivery Note line it reverses), across return
+ * notes matching `predicate`. Mirrors `sumDeliveredBySalesOrderLine` exactly
+ * — a Return Note is Delivery Note evidence run in reverse (Part 1 of the
+ * completion-run stabilization brief).
+ */
+export function sumReturnedBySalesOrderLine(
+  returnNotes: readonly ReturnNote[],
+  predicate: (rn: ReturnNote) => boolean,
+): Map<ID, number> {
+  const map = new Map<ID, number>();
+  for (const rn of returnNotes) {
+    if (!predicate(rn)) continue;
+    for (const line of rn.lineItems) {
+      map.set(line.salesOrderLineId, roundQty((map.get(line.salesOrderLineId) ?? 0) + (line.quantity ?? 0)));
+    }
+  }
+  return map;
+}
+
 /**
  * Sum invoice-line quantities grouped by Sales Order line, across invoices
  * matching `predicate`, EXCLUDING any line that carries `deliveryNoteLineId`
@@ -120,23 +147,33 @@ export function sumDirectlyInvoicedBySalesOrderLine(
 }
 
 /**
- * Σ `deliveredQty + directlyInvoicedQty` per Sales Order line, across EVERY
- * order (SO line ids are globally unique UUIDs, so one combined map serves
- * every order — same convention `stockCommitmentService`'s pre-5C
- * `sumInvoicedBySalesOrderLine` call already used). This IS the "physical
- * departure" total the Phase 5C commitment formula (Part 3) subtracts from
- * `orderedQty`: `committedQty = max(0, orderedQty − physicalFulfilledQty)`.
- * Reduces to the pre-5C `Σ posted invoice-line qty` exactly when no
- * Delivery Note has ever been posted (deliveredQty empty ⇒ every invoice
- * line lacks `deliveryNoteLineId` ⇒ `sumDirectlyInvoicedBySalesOrderLine`
- * degenerates to `sumInvoicedBySalesOrderLine`) — proven in
- * `stockCommitmentService.test.ts`.
+ * Σ `netDeliveredQty + directlyInvoicedQty` per Sales Order line, across
+ * EVERY order (SO line ids are globally unique UUIDs, so one combined map
+ * serves every order — same convention `stockCommitmentService`'s pre-5C
+ * `sumInvoicedBySalesOrderLine` call already used). `netDeliveredQty =
+ * max(0, deliveredQty − returnedUninvoicedQty)` (Part 1 of the
+ * completion-run stabilization brief — a posted Return Note hands
+ * delivered-but-uninvoiced stock back, so it must free up commitment /
+ * remaining-to-deliver exactly the way it freed up physical stock). This IS
+ * the "physical departure" total the Phase 5C commitment formula (Part 3)
+ * subtracts from `orderedQty`: `committedQty = max(0, orderedQty −
+ * physicalFulfilledQty)`. Reduces to the pre-5D `deliveredQty +
+ * directlyInvoicedQty` exactly when no Return Note has ever been posted
+ * (returnedQty empty), and further to the pre-5C `Σ posted invoice-line
+ * qty` exactly when no Delivery Note has ever been posted either — proven
+ * in `stockCommitmentService.test.ts` / `salesOrderFulfilment.test.ts`.
  */
 export function sumPhysicallyIssuedBySalesOrderLine(
   invoices: readonly Invoice[],
   deliveryNotes: readonly DeliveryNote[],
+  returnNotes: readonly ReturnNote[] = [],
 ): Map<ID, number> {
-  const map = sumDeliveredBySalesOrderLine(deliveryNotes, (dn) => isPostedDeliveryNoteStatus(dn.status));
+  const delivered = sumDeliveredBySalesOrderLine(deliveryNotes, (dn) => isPostedDeliveryNoteStatus(dn.status));
+  const returned = sumReturnedBySalesOrderLine(returnNotes, (rn) => isPostedReturnNoteStatus(rn.status));
+  const map = new Map<ID, number>();
+  for (const [key, qty] of delivered) {
+    map.set(key, Math.max(0, roundQty(qty - (returned.get(key) ?? 0))));
+  }
   const directlyInvoiced = sumDirectlyInvoicedBySalesOrderLine(invoices, (i) => isPostedInvoiceStatus(i.status));
   for (const [key, qty] of directlyInvoiced) {
     map.set(key, roundQty((map.get(key) ?? 0) + qty));
@@ -171,17 +208,28 @@ export interface SalesOrderLineFulfilment {
    */
   deliveredQty: number;
   /**
+   * Phase 5D (completion-run stabilization, Part 1) — Σ POSTED Return Note
+   * line qty tracing back to this SO line. A Return Note only ever exists
+   * against delivered-but-not-yet-invoiced goods, so this can never exceed
+   * `deliveredQty`. `0` for every SO that has never had a Return Note
+   * posted against it.
+   */
+  returnedQty: number;
+  /** `max(0, deliveredQty − returnedQty)` — physically-departed stock still out with the customer, uninvoiced. */
+  netDeliveredQty: number;
+  /**
    * Σ POSTED invoice-line qty linked to this SO line carrying NO
    * `deliveryNoteLineId` — the "direct fulfilment" path, unrestricted by
    * delivery status (Part 13). Reduces to `postedFulfilledQty` when
    * `deliveredQty` is 0 for every line (proven below).
    */
   directlyInvoicedQty: number;
-  /** `deliveredQty + directlyInvoicedQty` — the true physical-departure total, never double-counting a delivered-then-invoiced quantity. */
+  /** `netDeliveredQty + directlyInvoicedQty` — the true physical-departure total, never double-counting a delivered-then-invoiced quantity, and never counting stock that has since come back uninvoiced. */
   physicalFulfilledQty: number;
   /**
    * `max(0, orderedQty − physicalFulfilledQty)` — the NEW commitment-driving
-   * formula (Part 3/8). Reduces byte-identically to the pre-5C
+   * formula (Part 3/8, netted for Return Notes at Part 1 of the
+   * completion-run stabilization). Reduces byte-identically to the pre-5C
    * `remainingToFulfilQty` whenever `deliveredQty` is 0 — proven by
    * `deliveryNotesMigrations.test.ts`'s formal quantity-matrix proof and by
    * `salesOrderFulfilment.test.ts`.
@@ -198,9 +246,13 @@ export interface SalesOrderFulfilment {
   remainingToInvoiceQty: number;
   /** Phase 5C aggregate — see `SalesOrderLineFulfilment.deliveredQty`. */
   deliveredQty: number;
+  /** Phase 5D aggregate — see `SalesOrderLineFulfilment.returnedQty`. */
+  returnedQty: number;
+  /** Phase 5D aggregate — see `SalesOrderLineFulfilment.netDeliveredQty`. */
+  netDeliveredQty: number;
   /** Phase 5C aggregate — see `SalesOrderLineFulfilment.directlyInvoicedQty`. */
   directlyInvoicedQty: number;
-  /** Phase 5C aggregate — `deliveredQty + directlyInvoicedQty`. */
+  /** Phase 5C/5D aggregate — `netDeliveredQty + directlyInvoicedQty`. */
   physicalFulfilledQty: number;
   /** Phase 5C aggregate — Σ per-line `remainingToDeliver` (summed per-line, not `orderedQty − physicalFulfilledQty`, so an over-delivered line can't mask a still-open line — same discipline as `remainingToFulfilQty`). */
   remainingToDeliver: number;
@@ -246,6 +298,14 @@ export function computeSalesOrderFulfilment(
    * identical (proven in `salesOrderFulfilment.test.ts`).
    */
   deliveryNotes: readonly DeliveryNote[] = [],
+  /**
+   * Phase 5D (completion-run stabilization, Part 1) — posted Return Note
+   * evidence. Optional, defaults to `[]` so every pre-5D call site (and
+   * every existing test) is byte-unchanged: with no Return Notes,
+   * `returnedQty` is 0 for every line and `netDeliveredQty` collapses to
+   * `deliveredQty` exactly.
+   */
+  returnNotes: readonly ReturnNote[] = [],
 ): SalesOrderFulfilment {
   const linked = invoices.filter((inv) => inv.salesOrderId === order.id && inv.status !== 'void');
   const postedByLine = sumInvoicedBySalesOrderLine(linked, (i) => isPostedInvoiceStatus(i.status));
@@ -253,6 +313,8 @@ export function computeSalesOrderFulfilment(
 
   const linkedDeliveryNotes = deliveryNotes.filter((dn) => dn.salesOrderId === order.id);
   const deliveredByLine = sumDeliveredBySalesOrderLine(linkedDeliveryNotes, (dn) => isPostedDeliveryNoteStatus(dn.status));
+  const linkedReturnNotes = returnNotes.filter((rn) => rn.salesOrderId === order.id);
+  const returnedByLine = sumReturnedBySalesOrderLine(linkedReturnNotes, (rn) => isPostedReturnNoteStatus(rn.status));
   const directlyInvoicedByLine = sumDirectlyInvoicedBySalesOrderLine(linked, (i) => isPostedInvoiceStatus(i.status));
 
   const lines: SalesOrderLineFulfilment[] = order.lineItems.map((l) => {
@@ -260,8 +322,10 @@ export function computeSalesOrderFulfilment(
     const postedFulfilledQty = postedByLine.get(l.id) ?? 0;
     const draftInvoicedQty = draftByLine.get(l.id) ?? 0;
     const deliveredQty = deliveredByLine.get(l.id) ?? 0;
+    const returnedQty = returnedByLine.get(l.id) ?? 0;
+    const netDeliveredQty = Math.max(0, roundQty(deliveredQty - returnedQty));
     const directlyInvoicedQty = directlyInvoicedByLine.get(l.id) ?? 0;
-    const physicalFulfilledQty = roundQty(deliveredQty + directlyInvoicedQty);
+    const physicalFulfilledQty = roundQty(netDeliveredQty + directlyInvoicedQty);
     return {
       salesOrderLineId: l.id,
       productId: l.productId,
@@ -274,6 +338,8 @@ export function computeSalesOrderFulfilment(
       remainingToInvoiceQty: Math.max(0, roundQty(orderedQty - postedFulfilledQty - draftInvoicedQty)),
       overFulfilled: postedFulfilledQty > orderedQty + EPSILON,
       deliveredQty,
+      returnedQty,
+      netDeliveredQty,
       directlyInvoicedQty,
       physicalFulfilledQty,
       remainingToDeliver: Math.max(0, roundQty(orderedQty - physicalFulfilledQty)),
@@ -284,6 +350,8 @@ export function computeSalesOrderFulfilment(
   const postedFulfilledQty = roundQty(lines.reduce((s, l) => s + l.postedFulfilledQty, 0));
   const draftInvoicedQty = roundQty(lines.reduce((s, l) => s + l.draftInvoicedQty, 0));
   const deliveredQty = roundQty(lines.reduce((s, l) => s + l.deliveredQty, 0));
+  const returnedQty = roundQty(lines.reduce((s, l) => s + l.returnedQty, 0));
+  const netDeliveredQty = roundQty(lines.reduce((s, l) => s + l.netDeliveredQty, 0));
   const directlyInvoicedQty = roundQty(lines.reduce((s, l) => s + l.directlyInvoicedQty, 0));
   const legacyLinkedInvoiceIds = linked
     .filter((inv) => inv.lineItems.length > 0 && inv.lineItems.every((l) => !l.salesOrderLineId))
@@ -299,8 +367,10 @@ export function computeSalesOrderFulfilment(
     remainingToFulfilQty: roundQty(lines.reduce((s, l) => s + l.remainingToFulfilQty, 0)),
     remainingToInvoiceQty: roundQty(lines.reduce((s, l) => s + l.remainingToInvoiceQty, 0)),
     deliveredQty,
+    returnedQty,
+    netDeliveredQty,
     directlyInvoicedQty,
-    physicalFulfilledQty: roundQty(deliveredQty + directlyInvoicedQty),
+    physicalFulfilledQty: roundQty(netDeliveredQty + directlyInvoicedQty),
     remainingToDeliver: roundQty(lines.reduce((s, l) => s + l.remainingToDeliver, 0)),
     fulfilmentStatus: classifyFulfilment(postedFulfilledQty, orderedQty),
     invoicingStatus: classifyInvoicing(postedFulfilledQty, orderedQty),

@@ -27,6 +27,7 @@ import { useSalesOrderMutations } from '@/features/sales/hooks/useSalesOrderMuta
 import { useQuotes } from '@/features/sales/hooks/useQuotes';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
+import { useReturnNotes } from '@/features/sales/hooks/useReturnNotes';
 import { useCustomerMap } from '@/features/sales/hooks/useCustomerMap';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 import { PartialInvoicePicker } from '@/features/sales/components/PartialInvoicePicker';
@@ -96,6 +97,7 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
   const { quotes } = useQuotes();
   const { invoices, refetch: refetchInvoices } = useInvoices();
   const { deliveryNotes } = useDeliveryNotes();
+  const { returnNotes } = useReturnNotes();
   const { warehouses } = useWarehouses();
 
   const [actionError, setActionError] = useState<string | null>(null);
@@ -111,8 +113,8 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
   const { viewModel, loading: docLoading, error: docError } = useBusinessDocument({ kind: 'sales_order', record: order });
 
   const fulfilment = useMemo(
-    () => (order ? computeSalesOrderFulfilment(order, invoices, deliveryNotes) : undefined),
-    [order, invoices, deliveryNotes],
+    () => (order ? computeSalesOrderFulfilment(order, invoices, deliveryNotes, returnNotes) : undefined),
+    [order, invoices, deliveryNotes, returnNotes],
   );
   const linkedDeliveryNotes = useMemo(
     () => (order ? deliveryNotes.filter((dn) => dn.salesOrderId === order.id).sort((a, b) => b.deliveryDate.localeCompare(a.deliveryDate)) : []),
@@ -344,6 +346,9 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
                   />
                   <RecordField label="Ordered" value={<span className="tabular-nums">{fmtQty(fulfilment.orderedQty)}</span>} />
                   <RecordField label="Delivered" value={<span className="tabular-nums">{fmtQty(fulfilment.deliveredQty)}</span>} />
+                  {fulfilment.returnedQty > 0 && (
+                    <RecordField label="Returned (uninvoiced)" value={<span className="tabular-nums">{fmtQty(fulfilment.returnedQty)}</span>} />
+                  )}
                   <RecordField label="Remaining to deliver" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToDeliver)}</span>} />
                   <RecordField label="Invoiced (posted)" value={<span className="tabular-nums">{fmtQty(fulfilment.postedFulfilledQty)}</span>} />
                   {fulfilment.draftInvoicedQty > 0 && (

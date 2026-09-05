@@ -3,6 +3,7 @@ import type { DeliveryNote, DeliveryNoteLineItem, ID, SalesOrder } from '@/types
 import type { IDeliveryNoteRepository } from '@/repositories/IDeliveryNoteRepository';
 import type { ISalesOrderRepository } from '@/repositories/ISalesOrderRepository';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
+import type { IReturnNoteRepository } from '@/repositories/IReturnNoteRepository';
 import type { AccountMapper } from '@/features/accounting/services';
 import type { InventoryAccountResolver } from '@/features/inventory/services/inventoryAccountResolver';
 import type { DocumentProductLookup, DocumentWarehouseResolver } from '@/features/inventory/services/documentInventoryPosting';
@@ -13,6 +14,9 @@ import { computeSalesOrderFulfilment, round2, type SalesOrderInvoiceSelection } 
 
 const SYSTEM_USER_ID: ID = 'system';
 const EPSILON = 1e-6;
+
+/** Narrow read surface this service needs from IReturnNoteRepository — keeps the default stub trivial (mirrors `stockCommitmentService`'s own `ReturnNoteLookup`). */
+type ReturnNoteLookup = Pick<IReturnNoteRepository, 'getAll'>;
 
 function roundQty(n: number): number {
   return Math.round((n + Number.EPSILON) * 1000) / 1000;
@@ -160,6 +164,16 @@ export class DeliveryNoteService {
     private readonly warehouses: DocumentWarehouseResolver,
     private readonly poster: DeliveryNotePoster = new LocalDeliveryNotePoster(),
     private readonly auditLog: AuditLogService = auditLogService,
+    /**
+     * Completion-run stabilization (Part 1) — read-only source of POSTED
+     * Return Note evidence, netted into every `remainingToDeliver`
+     * pre-check this service runs, so the friendly client-side error and
+     * the atomic `post_delivery_note` RPC's own re-derivation (migration
+     * 0061) never disagree. Optional, defaults to an empty-returning stub
+     * so every pre-5D construction of this class (every existing test) is
+     * byte-unchanged.
+     */
+    private readonly returnNoteRepository: ReturnNoteLookup = { getAll: async () => [] },
   ) {}
 
   async listDeliveryNotes(): Promise<DeliveryNote[]> {
@@ -186,11 +200,12 @@ export class DeliveryNoteService {
    */
   async getFulfilmentForSalesOrder(salesOrderId: ID) {
     const order = await this.requireSalesOrder(salesOrderId);
-    const [invoices, deliveryNotes] = await Promise.all([
+    const [invoices, deliveryNotes, returnNotes] = await Promise.all([
       this.invoiceRepository.getAll(),
       this.repository.getAll(),
+      this.returnNoteRepository.getAll(),
     ]);
-    return computeSalesOrderFulfilment(order, invoices, deliveryNotes);
+    return computeSalesOrderFulfilment(order, invoices, deliveryNotes, returnNotes);
   }
 
   /**
@@ -222,11 +237,12 @@ export class DeliveryNoteService {
       throw new Error('Select at least one line to deliver.');
     }
 
-    const [invoices, deliveryNotes] = await Promise.all([
+    const [invoices, deliveryNotes, returnNotes] = await Promise.all([
       this.invoiceRepository.getAll(),
       this.repository.getAll(),
+      this.returnNoteRepository.getAll(),
     ]);
-    const fulfilment = computeSalesOrderFulfilment(order, invoices, deliveryNotes);
+    const fulfilment = computeSalesOrderFulfilment(order, invoices, deliveryNotes, returnNotes);
     const fulfilmentByLine = new Map(fulfilment.lines.map((l) => [l.salesOrderLineId, l]));
     const soLineById = new Map(order.lineItems.map((l) => [l.id, l]));
 
@@ -335,11 +351,12 @@ export class DeliveryNoteService {
     if (patch.lines) {
       const order = await this.requireSalesOrder(dn.salesOrderId);
       const soLineById = new Map(order.lineItems.map((l) => [l.id, l]));
-      const [invoices, deliveryNotes] = await Promise.all([
+      const [invoices, deliveryNotes, returnNotes] = await Promise.all([
         this.invoiceRepository.getAll(),
         this.repository.getAll(),
+        this.returnNoteRepository.getAll(),
       ]);
-      const fulfilment = computeSalesOrderFulfilment(order, invoices, deliveryNotes.filter((d) => d.id !== id));
+      const fulfilment = computeSalesOrderFulfilment(order, invoices, deliveryNotes.filter((d) => d.id !== id), returnNotes);
       const fulfilmentByLine = new Map(fulfilment.lines.map((l) => [l.salesOrderLineId, l]));
       const seen = new Set<ID>();
       lineItems = patch.lines.map((sel) => {
@@ -450,11 +467,12 @@ export class DeliveryNoteService {
       throw new Error(`Cannot post delivery note "${dn.deliveryNoteNumber}": sales order "${order.orderNumber}" is closed — its remainder was abandoned.`);
     }
 
-    const [invoices, deliveryNotes] = await Promise.all([
+    const [invoices, deliveryNotes, returnNotes] = await Promise.all([
       this.invoiceRepository.getAll(),
       this.repository.getAll(),
+      this.returnNoteRepository.getAll(),
     ]);
-    const fulfilment = computeSalesOrderFulfilment(order, invoices, deliveryNotes.filter((d) => d.id !== dn.id));
+    const fulfilment = computeSalesOrderFulfilment(order, invoices, deliveryNotes.filter((d) => d.id !== dn.id), returnNotes);
     const fulfilmentByLine = new Map(fulfilment.lines.map((l) => [l.salesOrderLineId, l]));
 
     const contraAccountId = await this.accounts.getAccountId('GOODS_DELIVERED_NOT_INVOICED');
@@ -514,7 +532,10 @@ export class DeliveryNoteService {
     if (dn.status !== 'posted') {
       throw new Error(`Cannot invoice delivery note "${dn.deliveryNoteNumber}": only a posted delivery note has real physical evidence to invoice (current status: ${dn.status}).`);
     }
-    const invoices = await this.invoiceRepository.getAll();
+    const [invoices, returnNotes] = await Promise.all([
+      this.invoiceRepository.getAll(),
+      this.returnNoteRepository.getAll(),
+    ]);
     const linked = invoices.filter((inv) => inv.salesOrderId === dn.salesOrderId && inv.status !== 'void');
 
     const selections: SalesOrderInvoiceSelection[] = [];
@@ -522,7 +543,16 @@ export class DeliveryNoteService {
       const takenForThisLine = linked.reduce((sum, inv) => {
         return sum + inv.lineItems.filter((l) => l.deliveryNoteLineId === line.id).reduce((s, l) => s + (l.quantity ?? 0), 0);
       }, 0);
-      const remaining = roundQty(line.quantity - takenForThisLine);
+      // Completion-run stabilization (Part 1): a unit of THIS delivery-note
+      // line that has already been POSTED-returned went back to stock
+      // uninvoiced — it is no longer this delivery's to bill. Mirrors
+      // migration 0061's `create_invoice_from_sales_order` delivery-linked
+      // branch fix exactly, so this friendly pre-check never disagrees with
+      // the atomic RPC that has the final say.
+      const returnedForThisLine = returnNotes
+        .filter((rn) => rn.status === 'posted')
+        .reduce((sum, rn) => sum + rn.lineItems.filter((l) => l.deliveryNoteLineId === line.id).reduce((s, l) => s + (l.quantity ?? 0), 0), 0);
+      const remaining = roundQty(line.quantity - takenForThisLine - returnedForThisLine);
       if (remaining <= EPSILON) continue;
       const requested = requestedQuantities?.get(line.id) ?? remaining;
       if (requested <= EPSILON) continue;

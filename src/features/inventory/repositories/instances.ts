@@ -12,6 +12,7 @@ import { SupabaseSupplierReturnRepository } from './SupabaseSupplierReturnReposi
 import { SupabaseSalesOrderRepository } from '@/repositories/SupabaseSalesOrderRepository';
 import { SupabaseInvoiceRepository } from '@/repositories/SupabaseInvoiceRepository';
 import { SupabaseDeliveryNoteRepository } from '@/repositories/SupabaseDeliveryNoteRepository';
+import { SupabaseReturnNoteRepository } from '@/repositories/SupabaseReturnNoteRepository';
 import { supabase } from '@/config/supabase';
 
 /**
@@ -76,3 +77,14 @@ export const invoiceRepository = new SupabaseInvoiceRepository(supabase);
  * Same safety note as `salesOrderRepository`/`invoiceRepository` above.
  */
 export const deliveryNoteRepository = new SupabaseDeliveryNoteRepository(supabase);
+
+/**
+ * Read-only, used by `stockCommitmentService` (Phase 5D / completion-run
+ * stabilization) to net posted Return Note quantity back OUT of delivered
+ * quantity before it nets against `orderedQty` — a Return Note hands
+ * delivered-but-uninvoiced stock back, so it must free up commitment /
+ * remaining-to-deliver exactly the way it freed up physical stock
+ * (`sumPhysicallyIssuedBySalesOrderLine`). Same safety note as
+ * `deliveryNoteRepository` above.
+ */
+export const returnNoteRepository = new SupabaseReturnNoteRepository(supabase);

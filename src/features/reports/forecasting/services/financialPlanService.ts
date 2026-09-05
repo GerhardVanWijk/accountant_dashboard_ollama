@@ -1,6 +1,11 @@
 import type { FinancialPlanLine, FinancialPlanType, ID } from '@/types';
 import type { IFinancialPlanRepository } from '@/repositories/IFinancialPlanRepository';
 
+/** rounds money to 2dp — `financial_plan_lines.amount` is a plain `numeric` column with no scale, so this is the only guard against float drift / over-precise user input. */
+function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 export interface UpsertPlanLineDTO {
   planType: FinancialPlanType;
   accountId: ID;
@@ -48,11 +53,12 @@ export class FinancialPlanService {
     if (!Number.isFinite(dto.amount)) {
       throw new Error('Amount must be a number.');
     }
+    const amount = round2(dto.amount);
     const existing = (await this.repository.getByPlanTypeAndYear(dto.planType, dto.periodYear)).find(
       (l) => l.accountId === dto.accountId && l.periodMonth === dto.periodMonth,
     );
     if (existing) {
-      return this.repository.update(existing.id, { amount: dto.amount, notes: dto.notes });
+      return this.repository.update(existing.id, { amount, notes: dto.notes });
     }
     return this.repository.create({
       id: '',
@@ -60,7 +66,7 @@ export class FinancialPlanService {
       accountId: dto.accountId,
       periodYear: dto.periodYear,
       periodMonth: dto.periodMonth,
-      amount: dto.amount,
+      amount,
       notes: dto.notes,
       createdAt: '',
       updatedAt: '',

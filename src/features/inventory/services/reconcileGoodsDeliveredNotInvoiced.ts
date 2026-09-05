@@ -1,16 +1,19 @@
 import type { AccountMapper } from '@/features/accounting/services/accountMappingService';
-import type { DeliveryNote, Invoice, Product, StockMovement } from '@/types';
+import type { DeliveryNote, Invoice, Product, ReturnNote, StockMovement } from '@/types';
 
 /**
  * Phase 5C (docs/DELIVERY_NOTES_DESIGN.md Part 20) — "Goods Delivered Not
  * Invoiced" reconciliation: for every POSTED Delivery Note line, how much
- * of its delivered quantity has NOT yet been invoiced, valued at the
- * FROZEN cost `post_delivery_note` recorded on its own `stock_movements`
- * row — summed, this must equal GL 1220's posted balance. Deliberately a
- * SEPARATE reconciliation from `reconcileInventory()` (GL 1200 vs physical
- * stock valuation) — 1220 holds cost of goods ALREADY DELIVERED, not stock
- * still on hand, so mixing the two checks would be accounting-incorrect
- * (Part 19/20's own explicit instruction).
+ * of its delivered quantity has NOT yet been invoiced OR RETURNED (Phase 5D
+ * / completion-run stabilization Part 2 — a posted Return Note reverses
+ * exactly this line's own frozen-cost entry out of GL 1220, `DR 1200 / CR
+ * 1220`, so its quantity must stop counting as "outstanding" here too),
+ * valued at the FROZEN cost `post_delivery_note` recorded on its own
+ * `stock_movements` row — summed, this must equal GL 1220's posted balance.
+ * Deliberately a SEPARATE reconciliation from `reconcileInventory()` (GL
+ * 1200 vs physical stock valuation) — 1220 holds cost of goods ALREADY
+ * DELIVERED, not stock still on hand, so mixing the two checks would be
+ * accounting-incorrect (Part 19/20's own explicit instruction).
  */
 
 export interface DeliveryLineReconciliationRow {
@@ -22,6 +25,8 @@ export interface DeliveryLineReconciliationRow {
   productName: string;
   deliveredQty: number;
   invoicedQty: number;
+  /** Σ POSTED Return Note line qty against this exact delivery-note line (Phase 5D). `0` unless a return has been posted. */
+  returnedQty: number;
   outstandingQty: number;
   frozenUnitCost: number;
   outstandingCost: number;
@@ -48,6 +53,8 @@ export async function reconcileGoodsDeliveredNotInvoiced(
     invoices: readonly Invoice[];
     products: readonly Product[];
     stockMovements: readonly StockMovement[];
+    /** Phase 5D — optional, defaults to `[]` so every pre-5D caller is byte-unchanged (returnedQty stays 0 for every row). */
+    returnNotes?: readonly ReturnNote[];
   },
   accounts: AccountMapper,
   journalEntryService: ControlAccountLedger,
@@ -71,13 +78,25 @@ export async function reconcileGoodsDeliveredNotInvoiced(
     }
   }
 
+  const returnedByDeliveryLineId = new Map<string, number>();
+  for (const rn of input.returnNotes ?? []) {
+    if (rn.status !== 'posted') continue;
+    for (const line of rn.lineItems) {
+      returnedByDeliveryLineId.set(
+        line.deliveryNoteLineId,
+        (returnedByDeliveryLineId.get(line.deliveryNoteLineId) ?? 0) + (line.quantity ?? 0),
+      );
+    }
+  }
+
   const rows: DeliveryLineReconciliationRow[] = [];
   for (const dn of input.deliveryNotes) {
     if (dn.status !== 'posted') continue;
     for (const line of dn.lineItems) {
       const deliveredQty = line.quantity;
       const invoicedQty = invoicedByDeliveryLineId.get(line.id) ?? 0;
-      const outstandingQty = Math.max(0, deliveredQty - invoicedQty);
+      const returnedQty = returnedByDeliveryLineId.get(line.id) ?? 0;
+      const outstandingQty = Math.max(0, deliveredQty - invoicedQty - returnedQty);
       if (outstandingQty <= 1e-6) continue;
       const movement = movementByDeliveryLineId.get(line.id);
       const frozenUnitCost = movement?.unitCost ?? 0;
@@ -90,6 +109,7 @@ export async function reconcileGoodsDeliveredNotInvoiced(
         productName: productById.get(line.productId)?.name ?? line.productId,
         deliveredQty,
         invoicedQty,
+        returnedQty,
         outstandingQty,
         frozenUnitCost,
         outstandingCost: Math.round(outstandingQty * frozenUnitCost * 100) / 100,
