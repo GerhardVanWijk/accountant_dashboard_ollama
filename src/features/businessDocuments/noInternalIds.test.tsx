@@ -6,7 +6,35 @@ import { salesOrderToBusinessDocument } from './adapters/salesOrderToBusinessDoc
 import { invoiceToBusinessDocument } from './adapters/invoiceToBusinessDocument';
 import { creditNoteToBusinessDocument } from './adapters/creditNoteToBusinessDocument';
 import { purchaseOrderToBusinessDocument } from './adapters/purchaseOrderToBusinessDocument';
+import { deliveryNoteToBusinessDocument } from './adapters/deliveryNoteToBusinessDocument';
 import * as fx from './adapters/__fixtures__';
+import type { DeliveryNote } from '@/types';
+
+/** Phase 5C — stuffed with real-looking UUIDs, same convention as every other fixture here. */
+const deliveryNote: DeliveryNote = {
+  id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+  createdAt: '2026-09-05T00:00:00.000Z',
+  updatedAt: '2026-09-05T00:00:00.000Z',
+  deliveryNoteNumber: 'DN-2026-0001',
+  salesOrderId: fx.UUID.salesOrder,
+  customerId: fx.UUID.customer,
+  warehouseId: '12121212-1212-4212-8212-121212121212',
+  deliveryDate: '2026-09-05T00:00:00.000Z',
+  status: 'posted',
+  journalEntryId: fx.UUID.journal,
+  lineItems: [
+    {
+      id: 'line-should-never-print',
+      salesOrderLineId: fx.UUID.line1,
+      productId: fx.UUID.product,
+      description: 'Printer',
+      quantity: 4,
+      unitPrice: 5750,
+      taxAmount: 862.5,
+      lineTotal: 23000,
+    },
+  ],
+};
 
 afterEach(cleanup);
 
@@ -32,6 +60,17 @@ const cases = [
     () => creditNoteToBusinessDocument(fx.creditNote, fx.ctx({ originalInvoiceNumber: 'INV-2026-1072' })),
   ],
   ['purchase order', () => purchaseOrderToBusinessDocument(fx.purchaseOrder, fx.ctx())],
+  [
+    'delivery note',
+    () =>
+      deliveryNoteToBusinessDocument(deliveryNote, {
+        company: fx.company,
+        customer: fx.customer,
+        warehouse: { id: deliveryNote.warehouseId, name: 'Main Warehouse', code: 'MAIN', isDefault: true, status: 'active', createdAt: '', updatedAt: '' },
+        products: new Map([[fx.product.id, fx.product]]),
+        salesOrderNumber: 'SO-2026-0004',
+      }),
+  ],
 ] as const;
 
 describe('business document — no internal identifiers on paper', () => {
@@ -58,6 +97,22 @@ describe('business document — no internal identifiers on paper', () => {
       ).toBeInTheDocument();
     });
   }
+});
+
+describe('delivery note (Phase 5C) — price suppressed by default', () => {
+  it('never renders unit price, VAT or line-total figures — a Delivery Note is dispatch evidence, not a priced document', () => {
+    const vm = deliveryNoteToBusinessDocument(deliveryNote, {
+      company: fx.company,
+      customer: fx.customer,
+      products: new Map([[fx.product.id, fx.product]]),
+    });
+    expect(vm.columns).not.toContain('unitPrice');
+    expect(vm.columns).not.toContain('vat');
+    expect(vm.columns).not.toContain('amount');
+    expect(vm.totals).toEqual([]);
+    const { container } = render(<BusinessDocument viewModel={vm} />);
+    expect(container.textContent ?? '').not.toMatch(/5[,.]?750/); // the line's unitPrice never appears
+  });
 });
 
 describe('company document profile (Phase 4B-2) — the new FK + logo never leak', () => {

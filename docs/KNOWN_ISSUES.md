@@ -7,11 +7,81 @@ each section.
 
 ## Open
 
+### 2026-09-05 — Whole-project completion audit findings
+
+A broad, read-only audit (code + live database) was run across the entire app after closing Phase
+5C, to establish exactly what remains before Vertex can be called complete. Full detail and the
+resulting finite roadmap: `docs/CURRENT_TASKS.md` § "PROJECT STATE". Summary of NEW findings this
+audit surfaced (issues already tracked elsewhere are not repeated here):
+
+- **MEDIUM — no fine-grained UI permission enforcement.** `usePermission()` / the `(feature, action)`
+  catalog (migration `0030`) exists but is called nowhere in Sales/Purchases/Inventory feature UI —
+  only route-level `PermissionRoute` gating exists (~15 routes). RLS still enforces company
+  isolation regardless; this is an authorization-*granularity* gap, not a tenant-isolation hole.
+- **MEDIUM — Phase 5D's real scope, precisely identified.** Credit Notes already fully support
+  returning INVOICED goods (COGS/VAT/AR/stock all reverse correctly, over-return and double-credit
+  are both guarded, live-tested). The genuine gap is a **Return Note** mechanism for goods that were
+  *delivered but not yet invoiced* — Credit Notes structurally cannot cover this (there is no
+  invoice to credit against). This is the actual, scoped Phase 5D, not "polish the existing path."
+- **LOW — a live data anomaly.** `invoices` row `INV-2026-0001` (id `974ebb56-…`), company "Office
+  National Demo", zero value, status `sent`, no `journal_entry_id`, created `2026-09-04 13:29:33Z`
+  against the real `SO-2026-0004` — this timestamp falls exactly inside the CP-5C-A live
+  rollback-wrapped smoke test window, meaning the rollback did not fully undo every write (an
+  `inventory_transaction_log` row with posting key `invoice:974ebb56-…:post` also exists from the
+  same test). Zero accounting effect (no GL/journal impact — the value is 0.00), but it is real,
+  human-numbered test residue in production data. **Not deleted during this read-only audit** — a
+  one-row `delete from invoices where id = '974ebb56-7939-4d5a-8e5a-697e1474d49c'` is the
+  recommended cleanup, pending explicit approval (it is genuinely a live-data delete, so it gets the
+  same authorization treatment as any other production data change).
+- **LOW — `CreditNoteForm` never sets `originalInvoiceLineId`.** The field, its validation guard,
+  and its DB composite FK (migration `0041`) all exist and work — but no UI path ever populates it
+  (`CreditNoteForm` uses a generic line editor, not a "credit this specific invoice line" picker), so
+  only the coarser whole-invoice/per-product double-credit guard ever fires for a real user.
+- **LOW — a return posts at current WAC, not historical cost.** A Credit Note return
+  (`reason: 'return'`) re-costs the returned stock at the product's CURRENT weighted-average cost —
+  documented in `creditNoteService.ts`'s own comment as a deliberate simplification, not an unknown
+  defect. The RPC already supports a `unitCostOverride` (migration `0032`); the service just never
+  populates it with the original sale's cost for a return.
+- **LOW — global search coverage.** Only Products/Customers/Suppliers/Delivery Notes are indexed;
+  Invoices/Bills/Quotes/Sales Orders/Purchase Orders/Credit Notes are not searchable by number.
+- **INFO — finite security hardening scope, not urgent.** `post_inventory_transaction`'s account FKs
+  (`journal_lines.account_id`; `products.sales_account_id`/`inventory_account_id`/`cogs_account_id`/
+  `purchase_account_id`; `product_categories.revenue_account_id`/`cogs_account_id`/
+  `inventory_account_id`/`adjustment_account_id`; `category_account_mappings`' 3 account columns;
+  `accounts.parent_account_id`; 3 `fixed_assets` GL columns) are plain FKs to `accounts(id)`, not the
+  composite `accounts(company_id, id)` pattern `opening_stock_batches` already uses. A live read-only
+  query (2026-09-05) confirmed **zero actual cross-company violations exist today** — this is a
+  structural gap, not an active exploit. Finite scope: ~7 tables / ~18 columns, one migration.
+
+**FIXED this audit (found and closed immediately, no schema change, in the affected code already
+being touched):** `InventoryItemDetail.tsx`'s `resolveParty()` resolved a `credit_note`-sourced
+movement's customer by looking up `sourceDocumentId` in the INVOICE map — but a credit note's own id
+is what's stored there, not its invoice's, so the customer column silently showed nothing for every
+credit-note-caused stock movement. Fixed by adding a `creditNotes` prop and resolving via the credit
+note's own `customerId`.
+
 > **Roadmap note (2026-09-03):** several open items below are now scheduled — see the
 > **POST-4A ROADMAP** in `docs/CURRENT_TASKS.md`:
 > "no formal print layout" → **Phase 4B**; "no stock reservation / commitment" → **Phase 5A**;
 > "partial Sales-Order invoicing" → **Phase 5B/5D**; `MockStockLotRepository`/FIFO → **Phase 7E**;
 > `recordReceipt` non-atomicity → **Phase 7F**; deposit unallocation/refund UI → **Phase 7I**.
+>
+> **Roadmap note (2026-09-04):** Phase 5C (Delivery Notes) design APPROVED, CP-5C-A schema/RPC
+> AUTHORED, HARDENED, FINALIZED, and **APPLIED + LIVE-VERIFIED** (complete `0050`-`0055` changeset,
+> live on `bcaffvpibpitpuqglszn`) — see `docs/DELIVERY_NOTES_DESIGN.md`. All CP-5C-0/CP-5C-A
+> findings below are RESOLVED, by decision, by an applied migration, or both: the
+> invoice-spans-multiple-deliveries question, the `sales_orders`/`customers` composite key, and
+> **the CRITICAL over-issue gap between Delivery Notes and `create_invoice_from_sales_order`**
+> (resolved via `0055`, applied and confirmed live — Phase 5B itself is NOT reopened). The
+> `post_inventory_transaction` caller-ownership gap (LOW risk, not a blocker) and the
+> unwired-permissions finding remain open, targeted at Phase 7.
+>
+> **Roadmap note (2026-09-05):** CP-5C-B / CP-5C-C / CP-5C-D (service, UI, reconciliation report,
+> release readiness) are **COMPLETE**, and the three LOW cleanup items found at that checkpoint
+> (Product-detail Sales tab, `DeliveryNoteDetailPage`/`CreateDeliveryNotePage` dedicated tests,
+> `SalesOrderForm`'s own-commitment display nuance) are now **ALL RESOLVED** as final Phase 5C
+> cleanup — see `docs/DELIVERY_NOTES_DESIGN.md` § "CP-5C-B/C/D" and the entries below. **Phase 5C is
+> CLOSED.** No open issues remain from Phase 5C.
 
 ### Deployment candidate (branch `phase-9b-relationship-design-and-code`, 2026-09-03) — known non-blocking items
 The record-detail full-page migration (increments 1 + 2) is committed + pushed to the branch and
@@ -90,6 +160,148 @@ in one commit. `RpcSalesOrderDraftInvoiceWriter` routes the production path thro
 the in-transaction remaining check. Residual (LOW, → Phase 7): no client request-id idempotency
 log, so a lost-response retry *can* create a second draft — but the remaining cap (which counts
 existing drafts) rejects it once it would exceed the ordered quantity.
+
+### ~~CP-5C-0 (Delivery Notes design audit): invoice-line-spans-multiple-delivery-notes has no schema answer yet~~ — RESOLVED BY DECISION (CP-5C-A, 2026-09-04)
+- **Area:** Phase 5C design, `docs/DELIVERY_NOTES_DESIGN.md` Part 9. **Severity:** was MEDIUM.
+  **Status:** decided, not built (nothing implements it yet — 5C-B). **Deployment blocker:** no.
+- **Was:** the relationship model is genuinely many-to-many — one invoice line CAN need to span
+  quantity from two different Delivery Notes (e.g. 2 units from DN-1001 + 2 from DN-1002 in one
+  4-unit invoice line). A single scalar `InvoiceLine.deliveryNoteLineId?` (mirroring
+  `salesOrderLineId?`) cannot represent that on its own.
+- **Decision (explicit, CP-5C-A approval):** enforce **one invoice-line allocation per Delivery
+  Note line** — the 5C-B picker offers one invoice line per contributing DN when an SO line's
+  remaining quantity spans more than one delivery, rather than merging them. `InvoiceLine.
+  deliveryNoteLineId?` stays a plain scalar jsonb field, no join table. This is why `0051`'s
+  `delivery_notes` table needs no normalized child table and `0053`'s RPC needs no
+  allocation-splitting logic. The general solution (`invoice_line_delivery_allocations` join
+  table) remains documented as the correct answer if real invoice-spans-multiple-deliveries
+  volume ever appears — see the SUGGESTIONS entry below. **Not built** — this is a design/schema
+  decision only; 5C-B implements the picker behaviour.
+
+### ~~CP-5C-A (Delivery Notes schema): `sales_orders` / `customers` have no `(company_id, id)` composite key~~ — RESOLVED (CP-5C-A HARDENING, 2026-09-04, authored not applied)
+- **Area:** `supabase/migrations/20260904160010__0050_prereq_sales_order_customer_company_id_id_keys.sql`, `20260904160030__0052_delivery_notes_table.sql`. **Severity:** was LOW. **Status:** fixed in the authored (not-yet-applied) migration set. **Deployment blocker:** no.
+- **Was:** unlike `products`/`warehouses`/`accounts` (migration 0027/0029) and `invoices`/
+  `credit_notes` (migration 0037), `sales_orders` and `customers` had no `unique (company_id, id)`
+  candidate key — so `delivery_notes.sales_order_id`/`customer_id` had to be authored as PLAIN
+  (non-composite) FKs.
+- **Fix:** a new prerequisite migration `0050` (renumbered — was going to be "Phase 7 hardening",
+  brought forward at explicit instruction: "we have repeatedly chosen company-safe composite
+  relationships elsewhere in Vertex... do not knowingly introduce weaker plain FKs merely to add a
+  cleanup migration later"). Re-verified read-only against live data first (0 NULL `company_id`, `id`
+  count = distinct-`id` count on both tables — trivially guaranteed since `id` is already a globally
+  unique `uuid primary key`, so `unique (company_id, id)` can never conflict with existing data on
+  any table, by construction). `delivery_notes` (0052, renumbered) now declares `sales_order_id`,
+  `customer_id` AND `warehouse_id` as composite FKs — no plain FK remains anywhere in the table.
+
+### CP-5C-A HARDENING: `post_inventory_transaction`'s account-ownership gap — full caller audit, root cause identified, precedent for the fix already exists
+- **Area:** `supabase/migrations/20260830162737__0031_inventory_posting_engine.sql` (pre-existing, unchanged — out of scope to modify in 5C-A itself). **Severity:** LOW (not a blocker — see the risk assessment below). **Status:** open, fully audited 2026-09-04. **Deployment blocker:** no.
+- **Root cause, precisely identified:** the engine writes `journal_lines` with whatever
+  `inventory_account_id`/`contra_account_id` it is given, with no company-ownership check of its
+  own. The TERMINAL write path is `journal_lines.account_id uuid not null references
+  public.accounts(id)` — a **plain** FK, from the original ledger migration `0004`. Two further
+  upstream columns share the same gap: `products.inventory_account_id`/`cogs_account_id`/
+  `sales_account_id`/`purchase_account_id` and `product_categories.inventory_account_id`/
+  `cogs_account_id`/`revenue_account_id`/`adjustment_account_id` (migrations 0019/0024/0025) — all
+  plain FKs to `accounts(id)`, no company-match enforcement.
+- **Full audit of every current caller** (`invoiceService.postInvoice()`, `billService.postBill()`,
+  `purchaseOrderService.recordReceipt()`, `creditNoteService.issueCreditNote()`,
+  `stockAdjustmentService`, `stockTransferService`, `stockTakeService`, `supplierReturnService`,
+  `openingStockBatchService`): every one resolves accounts via `AccountMappingService.getAccountId()`
+  (RLS-scoped, always same-company) or `InventoryAccountResolverService.resolveForProduct()` (whose
+  product/category OVERRIDE tiers are the plain-FK columns above — same-company only by UI
+  convention, not by schema). All nine share the identical LOW-severity risk profile: exploiting it
+  requires an attacker to already hold valid credentials in SOME company AND already know a real,
+  foreign `accounts.id` UUID (not enumerable — RLS-protected; not guessable — 122-bit random). Even
+  then, RLS on `journal_lines` INSERT still confines every written row to the attacker's OWN
+  company — no other company's amounts are ever exposed; the worst case is the attacker's own
+  company's reporting referencing a foreign account row (self-inflicted data-integrity issue) plus
+  a minor label (name/code, not amounts) disclosure. **Cross-company account risk assessed: LOW,
+  not a BLOCKER** — this does not let one company read or alter another's actual financial records.
+- **`post_delivery_note` (0054) is the single strictest caller of `post_inventory_transaction` in
+  the codebase today** — the only one that re-validates both supplied account ids belong to the
+  calling company via an explicit `exists(...)` check, closing the "hand-crafted direct RPC call"
+  path for itself (it cannot close the upstream product/category override gap, which lives outside
+  any RPC).
+- **Recommended fix, with an ALREADY-PROVEN-SAFE precedent in this exact codebase:**
+  `opening_stock_batches.offset_account_id` (migration 0029) is ALREADY a composite FK to
+  `accounts(company_id, id)` — `accounts` has carried `unique (company_id, id)` since 0029. The same
+  pattern, simply never extended to `journal_lines.account_id`, `products.*_account_id`, or
+  `product_categories.*_account_id`, would close this for every caller at once. **Target:** Phase 7
+  hardening (verify no existing bad rows first, then swap 3 FK definitions across 2 tables) — NOT a
+  5C-A defect and NOT changed in 5C-A (the instruction was explicit: don't touch the underlying RPC
+  unless absolutely necessary to make the Delivery Note migration itself safe; it wasn't).
+
+### ~~CP-5C-A HARDENING — CRITICAL: `create_invoice_from_sales_order` (0049, live) does not know Delivery Notes exist~~ — RESOLVED + APPLIED + LIVE-VERIFIED (0055, 2026-09-04)
+- **Area:** `supabase/migrations/20260904170010__0055_delivery_aware_create_invoice_from_sales_order.sql` — a `create or replace` upgrade of the same `create_invoice_from_sales_order` function `0049` (Phase 5B) created. **Severity:** was HIGH (same-company inventory-accuracy risk — never a cross-company/security issue). **Status:** RESOLVED — `0055` is APPLIED to project `bcaffvpibpitpuqglszn` (2026-09-04) and the fix was confirmed against the real database via a rollback-wrapped smoke test (a direct 10-unit invoice request after a 6-unit posted delivery was correctly rejected: "only 4.000 remain to invoice directly"). **Deployment blocker:** cleared.
+- **Was, proven with exact numbers:** SO ordered 10 → DN 6 posted → a direct `create_invoice_from_
+  sales_order` request for the full 10 units was **incorrectly allowed** (0049 never looked at
+  `delivery_notes`) → `deliveredQty(6) + directlyInvoicedQty(10) = 16 > ordered(10)` — reached by
+  ordinary sequential usage, not a race condition.
+- **Fix (this is explicitly NOT a Phase 5B reopening — Phase 5B remains COMPLETE):** `0055`
+  `create or replace`s the SAME function (same name, same signature) so its "remaining" check for a
+  **direct** selection now subtracts `deliveredQty` (Σ posted Delivery Note line qty) in addition to
+  its own original `directlyInvoicedQty` (draft+posted, non-DN-linked, unchanged reservation
+  semantics preserving Phase 5B's own invoice/invoice race protection). Also adds an OPTIONAL
+  `deliveryNoteLineId` per selection for the future 5C-B "invoice this delivery" workflow — validated
+  against that specific DN line's own remaining-to-invoice quantity, independent of
+  `remainingToDeliver`, and excluded from `directlyInvoicedQty` (the double-subtraction guard).
+- **Proven, not asserted:** a formally runnable 18-scenario quantity-matrix (`src/repositories/
+  deliveryNotesMigrations.test.ts`, describe "CP-5C-A quantity matrix — formal proof") covers every
+  scenario the hardening brief specified, including all 4 named concurrency races (DN vs direct
+  invoice, existing-DN vs new-DN-vs-invoice, invoice vs invoice, DN vs DN) and an explicit
+  double-count-detection test. `remainingToInvoice` is proven UNCHANGED and never collapsed into
+  `remainingToDeliver` (worked example: ordered 10, delivered 7, invoiced 4 → remaining delivery 3,
+  remaining invoice 6 — both correct, independently). Backward compatibility is proven, not assumed:
+  `deliveredQty ≡ 0` makes `0055`'s formula reduce byte-identically to `0049`'s original.
+- **Not fixed by silently reopening Phase 5B** — flagged explicitly first (this entry, prior state),
+  then resolved only on the user's explicit instruction that this is a "Phase 5C compatibility
+  amendment," per CP-5C-0's own "do not reopen Phase 5B without explicit authorization" rule.
+- **Done:** `0050`-`0055` applied together as a single reviewed changeset (2026-09-04). Not yet
+  committed/pushed to git at the time of apply. 5C-B/C/D (service/UI implementation) are now
+  COMPLETE, 2026-09-05 — see `docs/DELIVERY_NOTES_DESIGN.md` § "CP-5C-B/C/D".
+
+### CP-5C-0 (Delivery Notes design audit): a Delivery Note permission proposal would be inert, same as the existing inventory catalog rows
+- **Area:** `usePermission()` / `(feature, action)` catalog. **Severity:** LOW / INFO. **Status:** confirmed finding, not new — reconfirmed while auditing for 5C. **Deployment blocker:** no.
+- **Observed:** grepped every Sales/Purchases/Inventory feature UI — `usePermission()` is called
+  nowhere. The catalog (migration `0030`, e.g. `inventory:adjust`) exists as scaffolding only.
+  Any `delivery_note:*` permission rows proposed for 5C-C would follow the same shape but be
+  equally inert until Phase T's broader permission rollout — not a parallel system, just honestly
+  not wired to anything yet.
+- **Recommended fix:** none needed for 5C itself; wiring `usePermission()` into real document
+  actions is its own cross-cutting Phase T follow-up, out of scope for Delivery Notes specifically.
+
+### ~~CP-5C-A HARDENING: `reconcileInventory()`'s movement-evidence check doesn't yet list `'delivery'` as requiring a source line id~~ — RESOLVED (CP-5C-D, 2026-09-05)
+- **Area:** `src/features/inventory/services/reconcileInventory.ts` (`LINE_ID_REQUIRED` set). **Severity:** was INFO. **Status:** FIXED. **Deployment blocker:** no.
+- **Observed:** the function's movement-evidence-completeness check has a `LINE_ID_REQUIRED` set of
+  movement types that must carry `source_document_line_id` when structurally linked — `'delivery'`
+  wasn't in it.
+- **Fix:** added `'delivery'` to `LINE_ID_REQUIRED`. Confirmed (separately, and unaffected by this)
+  that `reconcileInventory()` resolves ONLY `INVENTORY` (1200) and `INVENTORY_IN_TRANSIT` (1210) for
+  its GL-tie checks — `1220` remains structurally excluded from that reconciliation, by design (it
+  has its own dedicated "Goods Delivered Not Invoiced" report instead — see the Phase 5C-B/C/D entry
+  below).
+
+### ~~Phase 5C-B/C/D (2026-09-05): three LOW, non-blocking gaps disclosed at checkpoint close~~ — ALL THREE RESOLVED (final Phase 5C cleanup, 2026-09-05)
+- **Product detail "Sales" tab.** `InventoryItemDetail.tsx`'s Sales tab now includes `'delivery'`-type
+  movements alongside `sale`/`sales_return`, and its "Ref" column resolves to the real Delivery Note
+  number (via the same `SourceCell`/`resolveSource` machinery the Transactions tab already used) —
+  no raw UUID. Fixed a companion gap found while wiring this: `InventoryItemDetailPage.tsx`'s
+  `numberById` map (used to resolve every movement's source to a human document number) never
+  included Delivery Notes at all, so a delivery movement's source would previously have shown no
+  number anywhere in the product detail page, not just the Sales tab. Both fixed together.
+- **`DeliveryNoteDetailPage`/`CreateDeliveryNotePage` dedicated tests.** Added — 8 tests
+  (`DeliveryNoteDetailPage.test.tsx`: full-page render, no raw UUID, related-SO link, draft vs
+  posted vs fully-invoiced action-set correctness, print action, not-found state) + 6 tests
+  (`CreateDeliveryNotePage.test.tsx`: full-page render with correct default quantity, fully-delivered
+  empty state, non-confirmed-order block, unknown-order not-found, missing-warehouse validation,
+  Cancel navigation).
+- **`SalesOrderForm` own-commitment display.** Now computes `fulfilledByLine` via
+  `sumPhysicallyIssuedBySalesOrderLine(invoices, deliveryNotes)` (a `useDeliveryNotes()` fetch added
+  to the form) instead of the narrower posted-invoice-only formula — matches the global commitment
+  map exactly. Test mocks (`SalesOrderForm.commitments.test.tsx`, `salesFormModalWidths.test.tsx`)
+  updated accordingly.
+
+All three closed with **no schema change**, gate green throughout (2500 tests / 317 files).
 
 ### Phase 5B.2: `PartialInvoicePicker` uses company-wide product on-hand for its stock hint
 - **Area:** `src/features/sales/components/PartialInvoicePicker.tsx`. **Severity:** LOW. **Status:** open, new. **Deployment blocker:** no.

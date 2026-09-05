@@ -9,6 +9,7 @@ vi.mock('@/features/sales/hooks/useSalesOrderMutations');
 vi.mock('@/features/sales/hooks/useQuotes');
 vi.mock('@/features/sales/hooks/useInvoices');
 vi.mock('@/features/sales/hooks/useCustomerMap');
+vi.mock('@/features/sales/hooks/useDeliveryNotes', () => ({ useDeliveryNotes: () => ({ deliveryNotes: [], isLoading: false, loading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('@/services/auditLogService', () => ({ auditLogService: { getForRecord: vi.fn().mockResolvedValue([]) } }));
 vi.mock('@/features/inventory/hooks/useProducts', () => ({ useProducts: () => ({ products: [], loading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('@/features/inventory/hooks/useWarehouses', () => ({ useWarehouses: () => ({ warehouses: [], loading: false, error: null, refetch: vi.fn() }) }));
@@ -151,7 +152,11 @@ describe('SalesOrderDetailPage', () => {
       expect(screen.getByRole('columnheader', { name: 'Remaining' })).toBeInTheDocument();
       // Overview summary fields
       expect(screen.getByText('Invoiced (posted)').parentElement).toHaveTextContent('4');
-      expect(screen.getByText('Remaining to fulfil').parentElement).toHaveTextContent('6');
+      // Phase 5C: "Remaining to fulfil" was superseded by the delivery-aware
+      // "Remaining to deliver" — numerically identical here since no
+      // Delivery Note exists (proven to reduce byte-identically in
+      // salesOrderFulfilment.test.ts).
+      expect(screen.getByText('Remaining to deliver').parentElement).toHaveTextContent('6');
       // primary action reads "Invoice remaining" when partly invoiced
       expect(screen.getByRole('button', { name: 'Invoice remaining' })).toBeInTheDocument();
     });

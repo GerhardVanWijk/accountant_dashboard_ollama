@@ -39,6 +39,11 @@ export type AuditAction =
   // un-invoiced remainder ("Close remaining"). Not the same as 'cancelled'
   // (which is the whole order, before any invoicing).
   | 'sales_order_closed'
+  // Phase 5C — Delivery Notes (docs/DELIVERY_NOTES_DESIGN.md § "Audit").
+  | 'delivery_note_created'
+  | 'delivery_note_updated'
+  | 'delivery_note_posted'
+  | 'delivery_note_cancelled'
   // Shared Import Framework (Phase 6, docs/IMPORT_EXPORT_ARCHITECTURE.md).
   // One summary row per completed import run (recordType 'ImportBatch',
   // recordId a synthetic `import_<timestamp>` — there is no single existing

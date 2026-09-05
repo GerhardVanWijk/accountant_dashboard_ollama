@@ -39,6 +39,7 @@ export type AccountMappingKey =
   | 'EXPENSE' // Operating Expenses
   | 'CASH_AND_BANK'
   | 'GRNI' // Goods Received Not Invoiced
+  | 'GOODS_DELIVERED_NOT_INVOICED' // 1220 — Phase 5C: cost of goods physically dispatched via a posted Delivery Note, not yet invoiced (sales-side mirror of GRNI)
   | 'FIXED_ASSET'
   | 'ACCUMULATED_DEPRECIATION'
   | 'DEPRECIATION_EXPENSE'
@@ -96,6 +97,7 @@ const ACCOUNT_CODE_BY_KEY: Record<AccountMappingKey, string> = {
   EXPENSE: '5100',
   CASH_AND_BANK: '1000',
   GRNI: '2050',
+  GOODS_DELIVERED_NOT_INVOICED: '1220',
   FIXED_ASSET: '1500',
   ACCUMULATED_DEPRECIATION: '1590',
   DEPRECIATION_EXPENSE: '5200',

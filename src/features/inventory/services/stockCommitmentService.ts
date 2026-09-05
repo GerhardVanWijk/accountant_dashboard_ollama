@@ -1,12 +1,13 @@
 import type { SalesOrder } from '@/types';
 import type { ISalesOrderRepository } from '@/repositories/ISalesOrderRepository';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
-import {
-  isPostedInvoiceStatus,
-  sumInvoicedBySalesOrderLine,
-} from '@/features/sales/utils/salesOrderFulfilment';
+import type { IDeliveryNoteRepository } from '@/repositories/IDeliveryNoteRepository';
+import { sumPhysicallyIssuedBySalesOrderLine } from '@/features/sales/utils/salesOrderFulfilment';
 import type { IWarehouseRepository } from '../repositories/IWarehouseRepository';
-import { invoiceRepository, salesOrderRepository, warehouseRepository } from '../repositories/instances';
+import { invoiceRepository, salesOrderRepository, warehouseRepository, deliveryNoteRepository } from '../repositories/instances';
+
+/** Narrow read surface this service needs from IDeliveryNoteRepository — keeps the default stub trivial. */
+type DeliveryNoteLookup = Pick<IDeliveryNoteRepository, 'getAll'>;
 
 /**
  * Stable per-(product, warehouse) key. Shared by the commitment map, the
@@ -37,13 +38,20 @@ export interface StockCommitmentLookup {
  * (`ownCommitmentMap`) so the two can never disagree on filtering, warehouse
  * fallback, or how much has been fulfilled.
  *
- * Phase 5B.3: the committed quantity for a line is its REMAINING un-fulfilled
- * quantity — `max(0, orderedQty − postedFulfilledQty)` — where
- * `postedFulfilledQty` comes from `fulfilledByLine` (Σ posted invoice-line qty
- * linked to that SO line via `salesOrderLineId`). With an empty map this
- * reduces exactly to the Phase 5A rule (`committed = orderedQty`). A DRAFT
- * invoice is deliberately NOT in `fulfilledByLine` — a draft never releases
- * commitment.
+ * Phase 5C (docs/DELIVERY_NOTES_DESIGN.md Part 3): the committed quantity for
+ * a line is its REMAINING un-issued quantity —
+ * `max(0, orderedQty − physicalFulfilledQty)` — where `fulfilledByLine`
+ * (the param name is unchanged; it now carries `sumPhysicallyIssuedBySalesOrderLine`'s
+ * result, `deliveredQty + directlyInvoicedQty`, not just posted-invoice qty).
+ * With an empty map this reduces exactly to the Phase 5A rule
+ * (`committed = orderedQty`); with no Delivery Notes ever posted it reduces
+ * exactly to the Phase 5B.3 rule (`committed = orderedQty − postedFulfilledQty`)
+ * — proven in `stockCommitmentService.test.ts`. A DRAFT invoice or a DRAFT
+ * Delivery Note is deliberately NOT in this map — neither ever releases
+ * commitment; only a POSTED physical departure does. A delivery-linked
+ * invoice line does NOT reduce commitment a second time (the
+ * double-subtraction guard, `sumDirectlyInvoicedBySalesOrderLine`'s own
+ * `deliveryNoteLineId` exclusion).
  */
 function accumulateOrderCommitments(
   map: Map<string, number>,
@@ -93,18 +101,29 @@ export class StockCommitmentService implements StockCommitmentLookup {
      * Never posts, never creates a movement — a commitment stays derived.
      */
     private readonly invoiceRepo: IInvoiceRepository,
+    /**
+     * Phase 5C: read-only source of POSTED Delivery Note evidence, netted
+     * into the SAME commitment formula alongside directly-invoiced quantity
+     * (`sumPhysicallyIssuedBySalesOrderLine`). Optional, defaults to an
+     * empty-returning stub so every pre-5C construction of this class
+     * (every existing test) is byte-unchanged.
+     */
+    private readonly deliveryNoteRepo: DeliveryNoteLookup = { getAll: async () => [] },
   ) {}
 
   async getCommitmentMap(): Promise<Map<string, number>> {
-    const [orders, warehouses, invoices] = await Promise.all([
+    const [orders, warehouses, invoices, deliveryNotes] = await Promise.all([
       this.salesOrderRepo.getAll(),
       this.warehouseRepo.getAll(),
       this.invoiceRepo.getAll(),
+      this.deliveryNoteRepo.getAll(),
     ]);
     const defaultWarehouseId = warehouses.find((w) => w.isDefault)?.id;
-    // Σ POSTED invoice-line qty per SO line — drafts excluded (a draft never
-    // releases a commitment).
-    const fulfilledByLine = sumInvoicedBySalesOrderLine(invoices, (inv) => isPostedInvoiceStatus(inv.status));
+    // Σ (deliveredQty + directlyInvoicedQty) per SO line — drafts (of either
+    // kind) excluded, a delivery-linked invoice line excluded from the
+    // "directly invoiced" side (already counted via deliveredQty) — see
+    // `sumPhysicallyIssuedBySalesOrderLine`'s own doc comment.
+    const fulfilledByLine = sumPhysicallyIssuedBySalesOrderLine(invoices, deliveryNotes);
 
     const map = new Map<string, number>();
     for (const order of orders) {
@@ -140,11 +159,11 @@ export function ownCommitmentMap(
   order: Pick<SalesOrder, 'status' | 'lineItems'> | undefined,
   defaultWarehouseId: string | undefined,
   /**
-   * Phase 5B.3: Σ posted invoice-line qty per SO line
-   * (`sumInvoicedBySalesOrderLine(invoices, isPostedInvoiceStatus)`), so the
-   * "own" contribution nets fulfilled progress exactly the way the global map
-   * does. Omit (or pass an empty map) for the pre-5B.3 whole-quantity
-   * behaviour.
+   * Phase 5C: Σ (deliveredQty + directlyInvoicedQty) per SO line
+   * (`sumPhysicallyIssuedBySalesOrderLine(invoices, deliveryNotes)`), so the
+   * "own" contribution nets physical-departure progress exactly the way the
+   * global map does. Omit (or pass an empty map) for the pre-5B.3
+   * whole-quantity behaviour.
    */
   fulfilledByLine: Map<string, number> = new Map(),
 ): Map<string, number> {
@@ -200,4 +219,5 @@ export const stockCommitmentService = new StockCommitmentService(
   salesOrderRepository,
   warehouseRepository,
   invoiceRepository,
+  deliveryNoteRepository,
 );

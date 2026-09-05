@@ -1,36 +1,84 @@
-# CURRENT TASKS — Browser-Driven Correction Pass
+# CURRENT TASKS — Vertex Accounting
 
-**Opened:** 2026-08-27
-**Rule:** Do NOT commit or push until the entire pass is complete and validated. Stop for user review.
-**Source:** User's visual inspection of the deployed app ("Vertex Accounting") — 28-point brief.
+> **This top section is the authoritative, concise, CURRENT project state — updated in place, not
+> appended to. It shows actual progress, not planned progress. Everything below the next `---` is
+> historical detail, kept for the record but NOT the place to look for "what's true right now."**
 
-Legend: `[ ]` not started · `[~]` in progress · `[x]` complete
+## PROJECT STATE (2026-09-05)
 
----
+**COMPLETED (major phases):** Phases 0-8 + 9A (inventory core, migrations 0021-0036) · Phase 9B
+(normalized doc-line tables, migrations 0037-0042, flag off) · Increment 3 (movement-ledger
+traceability) · Increment 4A (Customer Deposits, migrations 0045/0045b/0046, **applied + live**) ·
+Phase 4B/4B-2 (A4 business documents + company profile, migration 0047) · Record-detail full-page
+migration (all transaction/master records) · Phase 5A (stock commitments) · Phase 5B (partial
+Sales-Order invoicing, migrations 0048/0049) · **Phase 5C (Delivery Notes / dispatch accounting,
+migrations 0050-0055) — FULLY COMPLETE AND CLOSED 2026-09-05**, including its own post-close
+cleanup pass (Product-detail Sales-tab DN listing, dedicated detail/create-page UI tests,
+`SalesOrderForm`'s delivery-aware own-commitment formula). No open Phase 5C issues remain.
 
-## CURRENT PHASE — Browser QA / deployment candidate (2026-09-03)
+**ACTIVE:** none — Phase 5C just closed; no phase is currently "in progress."
 
-**COMPLETED**
-- Increment 1 — record-page framework, Sales Order + Inventory Product full pages, tax-rate wiring fix, inventory-cluster native-`<select>` sweep.
-- Increment 2 — remaining 12 record types migrated to full pages, 15 detail sheets deleted, app-wide **transaction-form** dropdown sweep, tax-rate regression guard.
-- Increment 3 (**UNCOMMITTED**) — inventory movement ledger: human source-document numbers (no UUIDs) + `RelatedRecordPreview` over-the-page overlay + expandable Movement/Source/Accounting/Technical panel; sales-document workflow **audit** (quote/SO/invoice non-posting rules confirmed, partial-payment confirmed, **customer-deposit accounting gap** + partial-SO-invoicing + stock-commitment absence reported, not changed). See `# RECORD DETAIL — INCREMENT 3` below.
-- Increment 4A (**UNCOMMITTED — STOPPED at Review 4A-4, awaiting apply/commit approval**) — Customer Deposits / Prepayments / Contract Liability. New `2600 Customer Deposits` account + `CUSTOMER_DEPOSIT` mapping key; `recordReceipt()` split posting (AR = applied, 2600 = unapplied); `reconcileCustomerDeposits()` + AR-recon rework + cash-flow "Customer Deposits" line + `reverseJournalEntry()` subledger guard; UI: available-deposit on receipt/customer pages, "Apply deposit" on the invoice page. **Hardening pass (Reviews 4A-3 / 4A-4):** `allocateToInvoice()` runs entirely inside the atomic `apply_customer_deposit` RPC (migration `0046`) — one Postgres transaction; idempotency keyed on a **stable client-generated UUID `allocationId`** (`deposit_allocation_log` UNIQUE `(company_id, allocation_id)`, never on `allocations.length`); locks receipt→invoice (fixed order, deadlock-audited), re-validates against locked rows; DB CHECK constraints on `unallocated_amount` / `amount_paid` (+ `payments`/`bills` mirrors); `ReceiptAllocation` gains a stable `id`; `TS CustomerReceiptService` calls it via a `DepositAllocationExecutor` (Real/Fake split), UI modals generate the id once per open. `0045` ABORTs on a conflicting pre-existing 2600. `0045b` historical script uses `deposit_reclassification_log` (`UNIQUE (company_id, receipt_id)`) for deterministic idempotency. Migrations **`0045` + `0046` authored, NOT applied**; `0045b` (3 Office National receipts, **live R4,250** — the R1,750 in the ON fixture is a 2026-08-28 snapshot, not a business rule) **authored, NOT executed**. Gate: tsc ✅ · eslint `--max-warnings 0` ✅ · **2083 tests / 294 files** ✅ · `vite build` ✅. No DB writes, no migration applied, no corrections posted, no commit/push/deploy. Full detail: `docs/ACCOUNTING_RELATIONSHIPS.md` § "CUSTOMER DEPOSITS / PREPAYMENTS — INCREMENT 4A".
+**NEXT (see the FINITE ROADMAP below for full detail):**
+1. Customer returns / fulfilment-reversal completion (the real Phase 5D scope, precisely scoped by
+   a 2026-09-05 audit of what Credit Notes already do vs. the genuine gap — a Return Note mechanism
+   for delivered-but-not-yet-invoiced goods).
+2. Reporting & financial-advisor capability (Budget/Forecast — currently entirely absent; see
+   KNOWN ISSUES).
+3. Accounting-relationship / security / permissions hardening (finite, scoped list below).
+4. Whole-app UX + print/export + human browser QA + final release.
 
-Gate green on `phase-9b-relationship-design-and-code`: tsc ✅ · eslint `--max-warnings 0` ✅ · **2063 tests / 294 files** ✅ · `vite build` ✅. Increments 1–2 committed `3318e7b` + pushed; **increment 3 is uncommitted, awaiting review**.
+**DEFERRED (genuinely outside current scope):** `sales_order_lines` normalization (Phase 6/7); a
+request-id idempotency log + shared-repo cleanup (Phase 7); FIFO stock lots
+(`MockStockLotRepository` — every seeded product is weighted-average, so this has never been
+exercised in anger); multi-company switcher; Supabase-Storage-backed company logo (currently a
+base64 data URL, a deliberate choice); an in-app notifications backend (topbar bell is an honest
+`comingSoon` stub, no fake data).
 
-**Cloudflare Pages preview deployment** (auto-built from the branch push — production `main` / `https://vertex-accounting.pages.dev` untouched):
-- Branch preview: **https://phase-9b-relationship-design.vertex-accounting.pages.dev**
-- This commit: https://6fb60958.vertex-accounting.pages.dev
+**KNOWN ISSUES (see `docs/KNOWN_ISSUES.md` for full detail; summary here):**
+| Severity | Issue | Blocker |
+|---|---|---|
+| MEDIUM | Fine-grained UI permission enforcement (`usePermission()`) exists as scaffolding (migration `0030`) but is called nowhere in Sales/Purchases/Inventory feature UI — only route-level gating exists. | No (RLS still enforces company isolation) |
+| MEDIUM | No Return Note mechanism for goods delivered-but-not-invoiced — Credit Notes structurally cannot cover this case (Phase 5D's real scope). | No (Credit Notes fully cover the invoiced-goods-return case) |
+| LOW | A live data anomaly found by the 2026-09-05 read-only audit: `invoices` row `INV-2026-0001` (id `974ebb56-…`), zero-value, status `sent`, no journal — a leaked artifact from the 2026-09-04 CP-5C-A live smoke test that should have rolled back fully. Zero accounting effect (no GL impact, no journal exists), but it is a real, human-numbered document sitting in production data. | No — recommend deleting this one row, pending explicit approval; NOT deleted during this read-only audit. |
+| LOW | Global search indexes only Products/Customers/Suppliers/Delivery Notes — Invoices/Bills/Quotes/Sales Orders/Purchase Orders/Credit Notes are not searchable by number. | No |
+| LOW | Journal Entry detail is still sheet-backed (`?record=`), the one document type not yet migrated to a full-page record. | No |
+| LOW | `post_inventory_transaction`'s account FKs (`journal_lines.account_id`, `products.*_account_id`, `product_categories.*_account_id`, `accounts.parent_account_id`, `category_account_mappings.*_account_id`, 3 `fixed_assets` GL columns) are plain (non-composite) FKs to `accounts(id)`, not `accounts(company_id, id)` — a live read-only audit (2026-09-05) found **zero actual cross-company violations today**; the gap is structural, not exploited. Finite remediation scope: ~7 tables / ~18 columns. | No — requires already-authenticated access plus an already-known foreign UUID; RLS still confines every write to the caller's own company. |
+| LOW | `CreditNoteLineItem.originalInvoiceLineId` exists at the type/service/DB layer (real composite FK, migration `0041`) but no UI ever sets it — `CreditNoteForm` has no "credit this specific invoice line" picker, so only the coarser whole-invoice/per-product double-credit guard fires in practice. | No |
+| LOW | A return (Credit Note with `reason: 'return'`) posts stock back in at the product's CURRENT weighted-average cost, not the original sale's historical/frozen cost — a documented, deliberate simplification, not an unknown bug. | No |
+| LOW/INFO | `MockStockLotRepository` / FIFO — in-memory only, unexercised (every seeded product uses WAC). | No |
 
-**BLOCKING FINAL PRODUCTION DEPLOYMENT**
-- Human visual / browser QA of the deployment candidate (never run in this env — no Chrome DevTools / Playwright MCP).
+**DEPLOYMENT STATE:** Local commit `c75d3e9` on `phase-9b-relationship-design-and-code`
+("feat: complete delivery note fulfilment workflow") is **NOT pushed** — `git push` failed with a
+GitHub permission error (`Permission to GerhardVanWijk/accountant_dashboard_ollama.git denied to
+GerhardSLC` — a credential/identity mismatch on this machine, not something fixable from inside the
+app or this session). **No preview deploy could be triggered this run as a result.** Production
+`main` / `https://vertex-accounting.pages.dev` is untouched and still reflects the last merge
+(`6a51a46`, 2026-09-03). Resolving the push credential is the single blocking step before a preview
+build can happen.
 
-**KNOWN NON-BLOCKING ISSUES**
-- `MockStockLotRepository` / FIFO limitation — FIFO stock lots are in-memory only; not exercised (every seeded product is weighted-average). See `docs/KNOWN_ISSUES.md`.
-- ~~Deferred configuration / admin `NativeSelect` sweep (~34 non-transaction forms)~~ — **DONE 2026-09-03** (`### GLOBAL SELECT MIGRATION`); zero native `<select>` app-wide, guard `noNativeSelect.global.test.ts`.
-- Journal Entry detail still sheet-backed (`?record=`) — no full-page `JournalEntryDetailPage` yet.
-- GL Account / Fixed Asset / Lease intentionally retained as sheets this increment (borderline records, per brief §B).
-- Create / edit modal shell width still requires browser confirmation.
+**LATEST MIGRATION:** `0055_delivery_aware_create_invoice_from_sales_order` — applied + live-verified
+2026-09-04 on Supabase project `bcaffvpibpitpuqglszn`. Full migration list: `0000`-`0043`, `0045`-`0055`
+(`0044` was a one-off September-2026 data seed applied directly via SQL, not a tracked schema
+migration — no gap in the actual schema history) — all applied, confirmed via `list_migrations`
+2026-09-05.
+
+**LATEST TEST COUNT:** **2500 tests / 317 files**, all passing. tsc clean, eslint (`--max-warnings 0`)
+clean, `vite build` clean (only the pre-existing, unrelated ">500kB chunk" warning).
+
+**DATABASE HEALTH (read-only, live, 2026-09-05):** Trial balance difference **0.00**. GL 1200
+(Inventory) R1,478,853.74; GL 1210 (In Transit) 0.00; GL 1220 (Goods Delivered Not Invoiced) NULL
+(no Delivery Note posted yet — correct, none seeded); AR 1100 R302,919.04; AP 2000 R869,571.21
+(credit); VAT Output R155,710.20 (credit); VAT Input R228,083.07 (debit); Customer Deposits 2600
+R4,250.00 (credit); COGS 5000 R0.03 (rounding, immaterial). Counts: 247 journal entries / 928
+journal lines / 343 stock movements / 84 invoices / 44 bills / 5 sales orders / 0 delivery notes /
+8 credit notes / 4 quotes / 4 purchase orders. Zero negative stock balances. Zero orphaned
+normalized document lines (invoice/bill/credit-note/PO lines all resolve to a real parent). Zero
+unbalanced journals. Zero cross-company account-FK violations detected. Zero posted bills missing a
+journal; **one** non-draft invoice (`INV-2026-0001`, zero value) missing a journal — see KNOWN
+ISSUES above, this is the leaked smoke-test artifact, not a systemic gap. Security advisors: 86
+WARN / 0 ERROR (unchanged from the pre-5C baseline; the large majority are one generic
+"anonymous sign-ins allowed" notice repeated per table, a project-level Supabase setting, not a
+per-feature defect).
 
 ---
 
@@ -206,17 +254,57 @@ export, dark-app → white-paper) — no Chrome DevTools / Playwright MCP in thi
 
 ## PHASE 5 — Sales fulfilment
 
-> **PHASE 5A: COMPLETE** — stock commitment, committed `4233dc2` + pushed (branch, not merged).
-> **PHASE 5B: COMPLETE (2026-09-04, uncommitted working tree)** — CP-5B-0 design + 5B.1 (line link
-> + derived quantities) + 5B.2 (partial-invoice picker) + 5B.3 (remaining commitment) + 5B.4
-> (atomic `create_invoice_from_sales_order` RPC — migration **0049 APPLIED**; `closed` commercial
-> status — migration **0048 APPLIED**; "Close remaining"; `cancelOrder` tightened; the 5B.1
-> relationship backfill **RUN** — 9 links, relationship-only, all accounting fingerprints
-> unchanged). Gate: tsc / eslint / **2348 tests / 310 files** / build all green.
-> `NORMALIZED_DOCUMENT_LINES_ENABLED` still `false`. **Not committed / pushed / merged / deployed.**
-> Full detail: `docs/SALES_FULFILMENT.md`. Deferred → future phases: `sales_order_lines`
-> normalization (was "5B.5" → Phase 6/7), delivery notes (5C), credit-note/partial-cancel polish
-> (5D), a request-id idempotency log + shared-repo cleanup (Phase 7).
+> **PHASE 5A — COMPLETE.** Stock commitment. Committed `4233dc2`, **merged to `main` `b19dc47`
+> 2026-09-04, deployed** (Cloudflare `https://vertex-accounting.pages.dev`).
+> **PHASE 5B — COMPLETE.** Partial SO fulfilment + multi-invoice + atomic RPC + `closed` status +
+> Close Remaining + 5B.1 relationship backfill run. Committed `9db70ce`, **merged to `main`
+> `b19dc47` 2026-09-04, deployed**. Migrations `0048`+`0049` live. Gate at merge: tsc / eslint /
+> **2348 tests / 310 files** / build all green. Full detail: `docs/SALES_FULFILMENT.md`.
+> **PHASE 5C — CP-5C-0 DESIGN COMPLETE + APPROVED. 5C-A/5C-B/5C-C/5C-D — COMPLETE
+> (2026-09-04 – 2026-09-05). NOT committed, pushed, or deployed.** Delivery Notes / dispatch
+> accounting. Adopted model: **HYBRID** —
+> Delivery Note reclasses cost into a new clearing asset (`1220 Goods Delivered Not Invoiced`) at
+> delivery (zero P&L, zero VAT, zero AR); Invoice posting clears it into COGS (at the frozen
+> delivery cost) alongside its unchanged revenue/VAT/AR legs. Mirrors the existing GRNI/3-way-match
+> pattern from the purchase side. N:M Delivery-Note↔Invoice question resolved: one invoice-line
+> allocation per DN line (no join table). **5C-A final changeset (0050-0055):** `0050` company-safe
+> composite keys on `sales_orders`/`customers`, `0051` enum value, `0052` `delivery_notes` table
+> with ALL THREE FKs composite, `0053` `1220` account seed, `0054` atomic `post_delivery_note` RPC,
+> `0055` **delivery-aware `create_invoice_from_sales_order`** (a Phase 5C compatibility amendment —
+> see below) — + 69 migration-contract tests, including a formally-proven 18-scenario quantity
+> matrix — **ALL SIX APPLIED to project `bcaffvpibpitpuqglszn` 2026-09-04 and LIVE-VERIFIED** via
+> schema checks + a full rollback-wrapped end-to-end smoke test (scenario F's fix confirmed live:
+> a direct 10-unit invoice request after a 6-unit posted delivery was correctly rejected against the
+> real database). Security advisors: 86, all WARN, 0 ERROR.
+>
+> **PHASE 5B = COMPLETE. `0055` is NOT a Phase 5B reopening.** Phase 5B's own worked example,
+> invariants, and shipped behaviour (`docs/SALES_FULFILMENT.md`) are unchanged and fully preserved
+> — proven, not asserted (`deliveredQty ≡ 0` reduces `0055`'s new formula byte-identically to
+> `0049`'s original). `0055` is a **Phase 5C compatibility amendment** to the Phase 5B invoice RPC:
+> Phase 5C introduces a second source of physical fulfilment (posted Delivery Notes) that `0049`
+> had no way to know about when it was authored.
+>
+> **CRITICAL FINDING (scenario F) — RESOLVED**, proven via both a formally-tested 18-scenario
+> quantity matrix AND a live rollback-wrapped smoke test against the real database. Cross-company
+> account-ownership risk from a full `post_inventory_transaction` caller audit: **LOW, not a
+> blocker**. Full design + the complete CP-5C-A record: **`docs/DELIVERY_NOTES_DESIGN.md`**.
+>
+> **PHASE 5C — FULLY COMPLETE AND CLOSED 2026-09-05 (5C-A + 5C-B + 5C-C + 5C-D).** Domain types,
+> repository, `DeliveryNoteService`, delivery-aware commitment + fulfilment formulas, the
+> delivery-linked invoice accounting branch (frozen cost, mixed invoice), full-page list/detail/
+> create UI, SO detail integration, printable document, global search + nav, a new "Goods
+> Delivered Not Invoiced" reconciliation report, AND the three post-close cleanup items (Product
+> detail Sales-tab DN listing, dedicated detail/create-page UI tests, `SalesOrderForm`'s
+> delivery-aware own-commitment formula) — all built, tested (110 new tests across service/formula/
+> UI layers, on top of the 69 migration-contract tests), gate green throughout (**2500 tests / 317
+> files**). Full detail in `docs/DELIVERY_NOTES_DESIGN.md` § "CP-5C-B/C/D". No open Phase 5C issues
+> remain.
+> **PHASE 5D — genuinely still required; see the "Customer returns / fulfilment completion" audit
+> below** (Return Notes + credit-note/partial-cancel polish — the exact remaining gaps are itemised,
+> not assumed).
+> Deferred → future phases: `sales_order_lines` normalization (Phase 6/7), a request-id
+> idempotency log + shared-repo cleanup (Phase 7), `post_inventory_transaction`'s plain (non-composite)
+> account FKs (Phase 7 hardening — LOW, scoped below).
 
 The core workflow. Target model:
 
@@ -410,46 +498,128 @@ shared-repo cleanup + `InvoiceDetailPage`/product-ledger SO hop (**Phase 7**).
 
 ---
 
-### PHASE 5C — Delivery Notes
+### PHASE 5C — Delivery Notes — **CP-5C-0 DESIGN COMPLETE, AWAITING APPROVAL (2026-09-04)**
 
-Only meaningful once 5B exists.
+Full design: **`docs/DELIVERY_NOTES_DESIGN.md`**. Read-only repository audit + read-only live-DB
+check only — **no code, no migration, no DB write, no commit** in CP-5C-0.
 
 ```
-SO-1024 ─┬─ DN-1001  (2 printers)   → stock movement, delivery evidence
-         └─ DN-1002  (2 printers)   → stock movement, delivery evidence
+SO-1024 ─┬─ DN-1001  (4 printers) posted → DR 1220 Goods Delivered Not Invoiced / CR 1200 Inventory
+         └─ DN-1002  (3 printers) posted → DR 1220 / CR 1200
+Invoice for DN-1001's 4 → DR 5000 COGS / CR 1220  (@ the FROZEN delivery-time cost)
+                          DR 1100 AR / CR 4000 Revenue / CR 2100 VAT Output   (unchanged)
 ```
 
-### Open question for CP-5C-0
-**Does delivery move stock, and if so how does it interact with the invoice's inventory posting?**
-Options: (a) delivery posts the `stock_movement` + COGS/Inventory now, invoice posts only
-revenue/AR/VAT later (proper "goods issued on delivery" model — mirrors the purchase side's
-GRNI/3-way match); (b) delivery is evidence only, invoice still posts everything (simpler, keeps
-the engine call unchanged). **Prior: (a)** — it's the accounting-correct model and the codebase
-already has the GRNI precedent — but it's a real engine change and must be designed carefully.
+**Decision (CP-5C-0): HYBRID.** Not literal Model A (direct COGS at delivery — proven to break
+period matching when delivery and invoice straddle a month-end) and not literal Model B
+(evidence-only — balance sheet stays wrong while goods are in transit). A new clearing **asset**
+account, **`1220 Goods Delivered Not Invoiced`**, reclassifies cost at delivery (zero P&L, zero
+VAT, zero AR) and is cleared into COGS at invoice time, at the cost **frozen** on the delivery's
+own `stock_movements` row (never recomputed from a later WAC). Mirrors the existing
+GRNI/3-way-match pattern (`purchaseOrderService.recordReceipt()` / `billService.postBill()`)
+exactly, generalized to per-SO-line partial delivery/invoice granularity.
 
-### Tasks
-- [ ] **5C.0 Investigation + design** — the purchase-side GRNI / 3-way-match code
-  (`purchaseOrderService.recordReceipt` + `billService.postBill`), `docs/LEDGER_ARCHITECTURE.md`,
-  the inventory engine's `costingMode`s. Decide (a) vs (b); if (a), design the sales-side clearing
-  account (e.g. "Goods Delivered Not Invoiced") + the two-step posting.
-- [ ] **5C.1 `DeliveryNote` entity** + `deliveryNoteService` — created from a Sales Order,
-  line quantities ≤ remainingToDeliver; a `DN-####` number; a printable document (reuse 4B's
-  `PrintableDocument`); bumps SO line `deliveredQty` + `fulfilmentStatus`.
-- [ ] **5C.2 Stock effect** — per the CP-5C-0 decision. If (a): migration for the clearing account
-  + engine wiring + the invoice-time clearing leg. If (b): the DN records `stock_movement`s with
-  `source_document_type = 'delivery_note'` and the invoice keeps posting inventory (guard against
-  double-issue).
-- [ ] **5C.3 Invoice-from-delivery** — `createInvoiceFromSalesOrder` (5B.3) can be constrained to
-  delivered-but-not-invoiced quantities; a "create invoice from these delivery notes" flow.
-- [ ] **5C.4 Tests** — DN 2 + DN 2 against SO 4 → `delivered`; invoice can't exceed delivered;
-  no double COGS / double stock issue; trial balance balanced; (a) clearing account nets to zero
-  once invoiced.
-- [ ] **5C.5 Docs** — `SALES_FULFILMENT.md` delivery section; `INVENTORY_ARCHITECTURE.md`;
-  `ACCOUNTING_RELATIONSHIPS.md`; new source-document type in the movement-evidence tables.
+**Key findings (full detail in the design doc):**
+- The inventory posting engine / RPC (`post_inventory_transaction`, migration `0031`) needs
+  **zero logic change** — verified it branches only on `costing_mode`, never `movement_type`.
+  Only a new `stock_movement_type` enum value (`'delivery'`) is needed at the DB level.
+- New commitment formula: `commitmentQty = ordered − (deliveredQty + directlyInvoicedQty)` —
+  proves `committed = ordered − delivered`, not `ordered − invoiced`, and reduces **exactly** to
+  Phase 5B's existing formula when no Delivery Notes are used (zero behaviour change for any
+  existing/future SO that never adopts them).
+- Invoice-before-delivery stays **allowed, unrestricted** — preserves 100% of shipped Phase 5B
+  behaviour as the default/fallback path.
+- No historical backfill — Delivery Notes apply **prospectively only**; every pre-5C invoice
+  remains its own complete legacy fulfilment evidence (no fabrication).
+- Status model: `draft → posted → cancelled` (no separate dispatched/delivered split — one
+  physical-departure event, mirroring `recordReceipt()`'s `sent → received`).
+- Return Notes (physical return of delivered-but-not-yet-invoiced goods) are **out of scope**,
+  deferred to Phase 5D — the clearing-account design is symmetric so this doesn't foreclose it.
 
-**CP-5C-0 (design):** (a) vs (b) with full journal examples; clearing-account proposal; engine-change
-scope. **STOP for approval.**
-**CP-5C:** migrations authored not applied; full gate; live read-only impact scan. **STOP.**
+**Implementation plan (capped at 4 checkpoints — see the design doc Part 29 for full scope):**
+- [x] **5C-A — Schema + DB safety — COMPLETE, APPLIED + LIVE-VERIFIED (2026-09-04).** Three review
+  cycles: CP-5C-A (original, HOLD BEFORE APPLY) → CP-5C-A HARDENING (6-item pass) → CP-5C-A FINAL
+  (scenario-F companion fix) → **applied live + smoke-tested against `bcaffvpibpitpuqglszn`.**
+  Migration set, final: `0050`
+  (company-safe `unique (company_id, id)` on `sales_orders`+`customers`, mirroring `0037`);
+  `0051` (`stock_movement_type` gains `'delivery'`); `0052` (`delivery_note_status` enum +
+  `delivery_notes` table + 5 indexes + RLS — `sales_order_id`/`customer_id`/`warehouse_id` ALL
+  composite FKs); `0053` (`1220 Goods Delivered Not Invoiced` account seed, same ABORT-on-conflict
+  guard as `0045`); `0054` (atomic `post_delivery_note` RPC — locks the DN row then the SO row,
+  re-derives `remainingToDeliver` in-transaction, calls the EXISTING unchanged
+  `post_inventory_transaction` engine directly from SQL, posts `costing_mode: 'issue'` /
+  `movement_type: 'delivery'`, zero VAT/AR/revenue); **`0055` (delivery-aware `create_invoice_from_
+  sales_order` — a Phase 5C compatibility amendment, `create or replace`s the SAME Phase 5B RPC to
+  subtract posted-delivery quantity from its own remaining-check; Phase 5B itself is NOT reopened —
+  proven byte-identical behaviour whenever no Delivery Note exists).** 69 migration-contract tests
+  (`src/repositories/deliveryNotesMigrations.test.ts`, was 29 → 35 → 69), including a formally
+  runnable 18-scenario quantity-matrix proof. **Full `post_inventory_transaction` caller audit
+  performed (9 callers) — cross-company account risk: LOW, not a blocker.** **CRITICAL FINDING
+  (scenario F) — RESOLVED** by `0055`'s contract (double-subtraction guard proven, all 4 concurrency
+  races proven, company isolation proven). Full CP-5C-A record across all three review cycles (exact
+  DDL, locking order, journal examples, quantity matrix, rollback behaviour, invariants, known
+  issues, suggestions, live-apply evidence): `docs/DELIVERY_NOTES_DESIGN.md` § "CP-5C-A" +
+  § "CP-5C-A HARDENING" + § "CP-5C-A FINAL" + § "CP-5C-A APPLIED + LIVE-VERIFIED". **No service/UI
+  code.**
+- [x] **5C-B — Service + accounting integration — COMPLETE 2026-09-05.** `src/types/deliveryNote.ts`
+  (`DeliveryNote`/`DeliveryNoteStatus`/`DeliveryNoteLineItem`); `DocumentLineItem.deliveryNoteLineId?`;
+  `IDeliveryNoteRepository` + `SupabaseDeliveryNoteRepository` + `MockDeliveryNoteRepository`;
+  `salesOrderFulfilment.ts` gained `deliveredQty`/`directlyInvoicedQty`/`physicalFulfilledQty`/
+  `remainingToDeliver` (both per-line and aggregate) — proven byte-identical to the pre-5C formulas
+  whenever no Delivery Note exists; `stockCommitmentService` now nets `sumPhysicallyIssuedBySalesOrderLine`
+  (delivered + direct, never double-counting a delivery-linked invoice); `DeliveryNoteService`
+  (create/update/cancel/delete draft, post via the live `post_delivery_note` RPC, build
+  invoice-from-delivery selections) fully wired in `src/features/sales/services/index.ts`;
+  `invoiceService.postInvoice()` gained the delivery-linked branch — clears the FROZEN delivery-time
+  cost (via the new `deliveryFrozenCostLookup`) into COGS through `1220`, skips re-issuing stock,
+  supports a MIXED invoice (direct + delivery-linked lines in one balanced journal). New
+  `AccountMappingKey.GOODS_DELIVERED_NOT_INVOICED`. 96 new/updated unit tests across
+  `salesOrderFulfilment.test.ts`, `stockCommitmentService.test.ts`, `invoiceService.test.ts`,
+  `deliveryNoteService.test.ts`, `MockDeliveryNoteRepository.test.ts`.
+- [x] **5C-C — UI, document, traceability — COMPLETE 2026-09-05.** Full-page `DeliveryNotesPage`
+  (list, `/sales/delivery-notes`), `DeliveryNoteDetailPage` (`/sales/delivery-notes/:id`),
+  `CreateDeliveryNotePage` (full-page create form, `/sales/orders/:orderId/deliver` — NOT a
+  modal/sheet). `SalesOrderDetailPage` gained Delivered/Remaining-to-deliver summary fields, a
+  "Delivery notes" related-records table (opens the existing `RelatedRecordPreview` overlay), and a
+  "Create delivery" action. `deliveryNoteToBusinessDocument` printable-document adapter (price
+  suppressed by default, `noInternalIds.test.tsx` extended to prove it) reusing the existing A4
+  `BusinessDocument` system. Product-detail movement-ledger traceability + global "Delivery note"
+  source-document resolution delivered via the existing generic `sourceDocument.ts`/
+  `RelatedRecordPreview` mechanism (extended with `delivery_note`) — no `InventoryItemDetail.tsx`
+  change was needed or made (deliberately, to avoid destabilising that large component, matching the
+  same caution the 5B.1 checkpoint applied). Delivery Notes added to global search and to the Sales
+  nav group (`isNavItemActive`'s prefix-matching confirmed the "Inventory active-group" bug class
+  cannot recur here). New `1220 Goods Delivered Not Invoiced` reconciliation report
+  (`/inventory/reports/goods-delivered-not-invoiced`) under Reports, deliberately NOT on Inventory
+  Overview, deliberately SEPARATE from the existing GL-1200 reconciliation. `reconcileInventory()`'s
+  `LINE_ID_REQUIRED` set now includes `'delivery'`, closing that pre-existing known issue.
+  **Final Phase 5C cleanup (2026-09-05, same day):** the Product-detail "Sales" tab now lists
+  Delivery Notes (`'delivery'`-type movements included, "Ref" resolved to the human DN number —
+  also fixed a companion gap where `InventoryItemDetailPage.tsx`'s `numberById` map never included
+  Delivery Notes at all); `DeliveryNoteDetailPage`/`CreateDeliveryNotePage` gained 8 + 6 dedicated
+  UI tests; `SalesOrderForm`'s own-commitment display now uses the delivery-aware
+  `sumPhysicallyIssuedBySalesOrderLine` formula. **No open Phase 5C issues remain.**
+- [x] **5C-D — QA, live verification, documentation — COMPLETE 2026-09-05.**
+  Full gate re-run repeatedly through the build (tsc / eslint `--max-warnings 0` / full suite /
+  `vite build`), always green, zero skipped/weakened tests, final count **2500 tests / 317 files**.
+  Read-only live-database verification (trial balance 0.00, GL 1200/1210/1220, journal/movement/
+  delivery-note/negative-stock counts) — see `docs/DELIVERY_NOTES_DESIGN.md` §
+  "CP-5C-A APPLIED + LIVE-VERIFIED" for the exact figures. `git status`/`git diff --stat` reviewed —
+  no secrets, no scratch files, no accidental live-data seed, no native `<select>` reintroduction,
+  no raw UUID exposed in customer-facing UI. **No demo Delivery Note was seeded** (Part 28 — a
+  separate, explicitly-approved seed proposal is a SUGGESTION, not done). **Committed and pushed to
+  `phase-9b-relationship-design-and-code`** — see the commit/push record below.
+
+No 5C.5/5C.6/... — anything discovered beyond these four goes to `KNOWN_ISSUES.md` or a later phase.
+
+**CP-5C-0 (design):** **DONE 2026-09-04, APPROVED.**
+**CP-5C-A (schema + DB safety):** **COMPLETE 2026-09-04, APPLIED + LIVE-VERIFIED.** Migrations
+`0050`-`0055` applied in order to `bcaffvpibpitpuqglszn`; live schema checks + a rollback-wrapped
+end-to-end smoke test both passed exactly as predicted (scenario F's fix confirmed against the
+real database, zero data persisted from the test). Security advisors: 86, all WARN, 0 ERROR.
+Scenario F **RESOLVED** by `0055` (Phase 5C compatibility amendment; Phase 5B NOT reopened).
+**5C-B / 5C-C / 5C-D: COMPLETE 2026-09-05, including the 3-item post-close cleanup pass** — see
+above. Gate: tsc / eslint / **2500 tests / 317 files** / build all green. **PHASE 5C IS CLOSED.**
 
 ---
 
@@ -541,10 +711,13 @@ Production URL: **https://vertex-accounting.pages.dev** (Cloudflare Pages, auto-
 
 ### Still genuinely open
 
-- **Visual / browser QA** — never run (no Chrome DevTools / Playwright MCP in this env):
-  Correction Pass §27, P3J, Inventory Phase 4–8 UI, **all 12 new increment-2 full-page records** (sales
-  ×4, purchases ×3, inventory ×5), the `EnumSelect` / `SearchableSelect` popups in the sales/purchases
-  transaction forms, and `AccountingPreview` rendering full-width. Needs a human pass on the deploy.
+- **Visual / browser QA** — never run BY THIS AGENT (no Chrome DevTools / Playwright MCP in this
+  env); **the user has since checked the deployed prod directly**. **Confirmed good by the user
+  (2026-09-04): Quote → Sales Order → Invoice**, including the Phase 5B partial-fulfilment path.
+  **Still unconfirmed by a human:** the `PartialInvoicePicker` modal itself (desktop/laptop/mobile),
+  the "Close remaining" flow, Correction Pass §27, P3J, Inventory Phase 4–8 UI, the other
+  increment-2 full-page records (purchases ×3, inventory ×5), the `EnumSelect` / `SearchableSelect`
+  popups in the sales/purchases transaction forms, and `AccountingPreview` rendering full-width.
 - **Live-Postgres inventory-posting E2E** — never run (needs a throwaway Supabase project). The
   September seed created 29 `inventory_transaction_log` rows by **replaying** the posting contracts in
   SQL — the engine itself (`post_inventory_transaction`) still has not run against live data, and the

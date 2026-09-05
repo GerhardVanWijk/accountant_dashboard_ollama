@@ -22,6 +22,7 @@ const REGISTRY: Record<RelatedRecordType, LazyExoticComponent<ComponentType<Reco
   stock_adjustment: lazy(() => import('@/features/inventory/pages/StockAdjustmentDetailPage').then((m) => ({ default: m.StockAdjustmentDetailPage }))),
   stock_take: lazy(() => import('@/features/inventory/pages/StockTakeDetailPage').then((m) => ({ default: m.StockTakeDetailPage }))),
   opening_stock_batch: lazy(() => import('@/features/inventory/pages/OpeningStockBatchDetailPage').then((m) => ({ default: m.OpeningStockBatchDetailPage }))),
+  delivery_note: lazy(() => import('@/features/sales/pages/DeliveryNoteDetailPage').then((m) => ({ default: m.DeliveryNoteDetailPage }))),
 };
 
 /** `true` when a given record type can be shown in the preview overlay. */

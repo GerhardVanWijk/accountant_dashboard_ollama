@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { customerService } from '@/features/customers/services/customerService';
 import { supplierService } from '@/features/suppliers/services/supplierService';
 import { productService } from '@/features/inventory/services/productService';
+import { deliveryNoteService } from '@/features/sales/services';
 
-export type GlobalSearchRecordType = 'product' | 'customer' | 'supplier';
+export type GlobalSearchRecordType = 'product' | 'customer' | 'supplier' | 'delivery_note';
 
 export interface GlobalSearchRecord {
   type: GlobalSearchRecordType;
@@ -49,8 +50,9 @@ export function useGlobalSearchRecords(enabled: boolean): State {
       productService.getProducts().catch(() => []),
       customerService.getCustomers().catch(() => []),
       supplierService.getSuppliers().catch(() => []),
+      deliveryNoteService.listDeliveryNotes().catch(() => []),
     ])
-      .then(([products, customers, suppliers]) => {
+      .then(([products, customers, suppliers, deliveryNotes]) => {
         if (cancelled) return;
         const records: GlobalSearchRecord[] = [
           ...products.map((p) => ({
@@ -76,6 +78,14 @@ export function useGlobalSearchRecords(enabled: boolean): State {
             name: s.name,
             href: `/purchases/vendors?record=${s.id}`,
             keywords: `${s.supplierNumber} ${s.name} supplier vendor`,
+          })),
+          ...deliveryNotes.map((dn) => ({
+            type: 'delivery_note' as const,
+            id: dn.id,
+            code: dn.deliveryNoteNumber,
+            name: dn.status,
+            href: `/sales/delivery-notes/${dn.id}`,
+            keywords: `${dn.deliveryNoteNumber} delivery note ${dn.status}`,
           })),
         ];
         setState({ records, loading: false, error: false });

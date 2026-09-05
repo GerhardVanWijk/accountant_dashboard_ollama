@@ -43,7 +43,13 @@ export interface SalesOrderDraftInvoiceWriter {
 export class LocalSalesOrderDraftInvoiceWriter implements SalesOrderDraftInvoiceWriter {
   constructor(private readonly invoiceRepository: IInvoiceRepository) {}
 
-  async write({ order, existingInvoices, built }: DraftInvoiceWriteInput): Promise<Invoice> {
+  async write({ order, existingInvoices, built, selections }: DraftInvoiceWriteInput): Promise<Invoice> {
+    // Phase 5C: `deliveryNoteLineId` isn't part of `buildInvoiceFromSelections`'
+    // pure validation output (that stays delivery-agnostic) — recovered here
+    // from the original selection so the local/test writer stamps it too.
+    const deliveryLinkBySoLine = new Map(
+      selections.filter((s) => s.deliveryNoteLineId).map((s) => [s.salesOrderLineId, s.deliveryNoteLineId]),
+    );
     const lineItems = built.parts.map((p) => ({
       ...p.source,
       id: newUuid(),
@@ -51,6 +57,9 @@ export class LocalSalesOrderDraftInvoiceWriter implements SalesOrderDraftInvoice
       quantity: p.quantity,
       lineTotal: p.lineTotal,
       taxAmount: p.taxAmount,
+      ...(deliveryLinkBySoLine.has(p.salesOrderLineId)
+        ? { deliveryNoteLineId: deliveryLinkBySoLine.get(p.salesOrderLineId) }
+        : {}),
     }));
 
     const now = new Date();
@@ -94,7 +103,11 @@ export class RpcSalesOrderDraftInvoiceWriter implements SalesOrderDraftInvoiceWr
   async write({ order, selections, createdBy }: DraftInvoiceWriteInput): Promise<Invoice> {
     const { data, error } = await this.client.rpc('create_invoice_from_sales_order', {
       p_sales_order_id: order.id,
-      p_selections: selections.map((s) => ({ salesOrderLineId: s.salesOrderLineId, quantity: s.quantity })),
+      p_selections: selections.map((s) => ({
+        salesOrderLineId: s.salesOrderLineId,
+        quantity: s.quantity,
+        ...(s.deliveryNoteLineId ? { deliveryNoteLineId: s.deliveryNoteLineId } : {}),
+      })),
       p_created_by: createdBy ?? null,
       p_issue_date: null,
     });

@@ -338,6 +338,11 @@ export async function reconcileInventory(
       'stock_gain',
       'stock_take',
       'adjustment',
+      // Phase 5C: a 'delivery' movement always has a real DeliveryNoteLineItem
+      // behind it (post_delivery_note builds one engine line per delivery
+      // note line) — held to the same evidence standard as every other
+      // document-generated movement type.
+      'delivery',
     ]);
     for (const m of stockMovements) {
       const ref = m.reference ?? '';

@@ -1,6 +1,29 @@
 # SALES FULFILMENT — Partial Sales Order Delivery & Invoicing
 
-# ═══════════════  PHASE 5B: COMPLETE  (2026-09-04)  ═══════════════
+# ═══════  PHASE 5B: COMPLETE + SHIPPED (NOT REOPENED)  ·  PHASE 5C: COMPLETE (NOT DEPLOYED)  ═══════
+
+**Phase 5C (Delivery Notes) design audit is done and approved — see `docs/DELIVERY_NOTES_DESIGN.md`
+for the full design, journal examples, and the adopted HYBRID accounting model. CP-5C-A
+(2026-09-04, three review cycles) authored, then applied + live-verified, the complete `0050`-`0055`
+changeset — a new company-safe composite-key prerequisite, the enum value, `delivery_notes` table
+with ALL composite FKs, `1220` account seed, atomic `post_delivery_note` RPC, and `0055` (a
+**Phase 5C compatibility amendment** to `create_invoice_from_sales_order` — see this file's §13/§16
+for exactly what stays unchanged in Phase 5B). The scenario-F over-issue gap between Delivery Notes
+and the existing invoice RPC is RESOLVED, proven both by `0055`'s contract (69 migration-contract
+tests, including a formal 18-scenario quantity-matrix proof) AND by a live rollback-wrapped smoke
+test against the real database — **Phase 5B itself is NOT reopened**, its worked example and
+invariants below are unchanged and fully preserved.
+
+**STATUS UPDATE (2026-09-05): CP-5C-B/C/D — service layer, UI, and reconciliation reporting are now
+COMPLETE** — see `docs/DELIVERY_NOTES_DESIGN.md` § "CP-5C-B/C/D" for full detail. In particular,
+`computeSalesOrderFulfilment()` (§9 below) now takes a real `deliveryNotes` array and produces real
+`deliveredQty`/`directlyInvoicedQty`/`physicalFulfilledQty`/`remainingToDeliver` values (no longer
+formulas that "reduce to 0 pre-5C" — that reduction is now only what happens when a company has
+posted zero Delivery Notes, which remains true on production today since none has been seeded).
+This file's §14 "Deferred" row for delivery notes is superseded by the design doc; the formulas
+and worked examples throughout this document remain accurate and are now backed by a real
+implementation. **No git commit, push, or production deploy has happened for this work yet** —
+it sits on `phase-9b-relationship-design-and-code`, gate-green, awaiting explicit instruction.**
 
 **CP-5B-0 design** (§§1–12) + **5B.1–5B.4 implementation** (§13) + **deferred work** (§14) · branch
 `phase-9b-relationship-design-and-code` · **UNCOMMITTED (working tree).**
@@ -529,7 +552,7 @@ apply, no merge, no deploy without explicit sign-off.
 | **5B.1** | `salesOrderLineId?` on invoice lines; `salesOrderFulfilment.ts` derived selectors; every `invoice.salesOrderId` consumer audited; read-only SO-detail UI. | none | ✅ DONE |
 | **5B.2** | `createInvoiceFromSalesOrder(soId, selections[])`; `PartialInvoicePicker` large modal; service-enforced cap at `remainingToInvoiceQty`; `convertToInvoice` = "invoice all remaining"; status flip → POST time. | none | ✅ DONE |
 | **5B.3** | Commitment formula = `max(0, orderedQty − postedFulfilledQty)`; draft/void release nothing; reduces to the 5A rule; inventory reconciliation unchanged. | none | ✅ DONE |
-| **5B.4** | Atomic `create_invoice_from_sales_order` RPC (**0049 APPLIED**); `closed` commercial status (**0048 APPLIED**) + "Close remaining"; `cancelOrder` tightened; the 5B.1 relationship backfill **RUN** (9 links, relationship-only). | 0048 + 0049 **applied** · backfill **run** | ✅ DONE |
+| **5B.4** | Atomic `create_invoice_from_sales_order` RPC (**0049 APPLIED**); `closed` commercial status (**0048 APPLIED**) + "Close remaining"; `cancelOrder` tightened; the 5B.1 relationship backfill **RUN** (9 links, relationship-only). ⚠️ **CP-5C-A (2026-09-04) found 0049's "remaining" check does not (and, being a Phase-5B-only RPC, could not) account for Delivery Notes — see `docs/DELIVERY_NOTES_DESIGN.md` § "CP-5C-A HARDENING" scenario F. Not a Phase 5B defect (Delivery Notes didn't exist yet). RESOLVED via `0055`, a Phase 5C compatibility amendment (`create or replace function`, same name/signature) — gate-proven AND applied live 2026-09-04. This is explicitly NOT a Phase 5B reopening: `0055` is proven byte-identical to `0049`'s original behaviour whenever no Delivery Note exists (see "CP-5C-A APPLIED + LIVE-VERIFIED").** | 0048 + 0049 **applied**, `0055` upgrade **applied** 2026-09-04 · backfill **run** | ✅ DONE (5B + 0055 upgrade) |
 | **5B.5** | `sales_order_lines` normalized table + `invoice_lines.sales_order_line_id` (flag-gated Phase-9B-style projection). | not authored | **DEFERRED → Phase 6/7** (not needed for the runtime workflow; jsonb is authoritative) |
 | **5B.6** | Full test matrix + docs. | none | ✅ DONE (§14, this doc, `ACCOUNTING_RELATIONSHIPS.md` Q6, `INVENTORY_ARCHITECTURE.md`, `KNOWN_ISSUES.md`) |
 
@@ -628,7 +651,7 @@ advisors: **0 ERROR**; no new WARN attributable to `0048`/`0049`.
 | Item | Where it belongs | Why deferred |
 |---|---|---|
 | `sales_order_lines` normalized table + `invoice_lines.sales_order_line_id` (the old "5B.5") | Phase 6/7, alongside the Phase 9B projection-flag review | jsonb `line_items` is the runtime authority; `salesOrderLineId` in jsonb fully serves 5B. Normalizing SO lines is a Phase-9B expansion, not a fulfilment need. |
-| **Delivery / dispatch notes (Phase 5C)** — split "goods issued" from "invoiced"; `deliveredQty` from real delivery evidence; a "goods delivered not invoiced" clearing account; move the stock-movement/COGS trigger to delivery | Phase 5C | a genuine accounting-engine change; must be designed with full journal examples (CP-5C-0). The field is already named `fulfilledQty` not `deliveredQty` so this lands cleanly. |
+| **Delivery / dispatch notes (Phase 5C)** — split "goods issued" from "invoiced"; `deliveredQty` from real delivery evidence; a "goods delivered not invoiced" clearing account; move the stock-movement/COGS trigger to delivery | Phase 5C | **CP-5C-0 design APPROVED, CP-5C-A schema APPLIED + LIVE-VERIFIED 2026-09-04 — see `docs/DELIVERY_NOTES_DESIGN.md`.** Model: HYBRID (clearing account `1220`, mirrors GRNI), live on `bcaffvpibpitpuqglszn`. **Scenario F RESOLVED: `create_invoice_from_sales_order` (this file's own §13 RPC, below) is upgraded by `0055` (a Phase 5C compatibility amendment, NOT a Phase 5B reopening) to subtract posted-delivery quantity from its own remaining-check — proven via 18 formally-tested scenarios AND a live database smoke test**, see the design doc's "CP-5C-A APPLIED + LIVE-VERIFIED" §. 5C-B (service/accounting) / 5C-C (UI/document) / 5C-D (QA/release) not started. The field is already named `fulfilledQty` not `deliveredQty` so this lands cleanly. |
 | Credit-note ↔ `remainingToInvoiceQty` interaction (does a credited quantity become re-invoiceable?) | Phase 5D | needs the credit-note-line → invoice-line → SO-line chain; a business-rule decision, out of 5B scope. |
 | Per-line partial cancellation (cancel *some* of one SO line's remainder, keep the rest open) | Phase 5D / 6 | `closed` (whole-order remainder) covers the common case; per-line needs a stored `cancelledQty`. |
 | `InvoiceDetailPage` per-line "SO line: ordered N, this invoice M" | Phase 7 polish | the link exists in data (`salesOrderLineId`); the header "Source sales order" already shows the relationship. |
@@ -648,8 +671,11 @@ the 5B.1 relationship backfill **RUN** (relationship-only, accounting fingerprin
 re-run on merged `main` = green (**2348 tests / 310 files**, tsc, eslint, build).
 `NORMALIZED_DOCUMENT_LINES_ENABLED` still `false`.
 
-**Outstanding:** human browser / visual QA (Sales Order detail page, partial-invoice picker on
-desktop/laptop/mobile, Close-remaining flow) — no browser tooling in the build environment.
+**Human browser QA (2026-09-04):** the user checked the deployed prod directly and **confirmed the
+Quote → Sales Order → Invoice flow — "like it very much"**, including the Phase 5B partial-fulfilment
+path. **Still outstanding:** the `PartialInvoicePicker` modal itself (desktop/laptop/mobile) and the
+"Close remaining" flow specifically — no browser tooling in the build environment for this agent to
+verify those directly.
 
 ---
 

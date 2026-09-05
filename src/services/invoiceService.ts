@@ -18,6 +18,10 @@ import {
 } from '@/features/inventory/services/documentInventoryPosting';
 import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
 import { NoopDocumentLineProjector } from '@/repositories/NoopDocumentLineProjector';
+import {
+  noDeliveryFrozenCostLookup,
+  type DeliveryFrozenCostLookup,
+} from '@/features/inventory/services/deliveryFrozenCostLookup';
 import { newUuid } from '@/lib/uuid';
 import { auditLogService, type AuditLogService } from '@/services/auditLogService';
 import {
@@ -108,6 +112,16 @@ export class InvoiceService {
      * never fails or rolls back the (already-committed) invoice posting.
      */
     private readonly onInvoicePosted: (invoice: Invoice) => Promise<void> = async () => {},
+    /**
+     * Phase 5C (docs/DELIVERY_NOTES_DESIGN.md Part 15): reads the FROZEN
+     * cost a Delivery Note line's own `stock_movements` row carries.
+     * Defaults to a lookup that always returns `undefined` so every
+     * existing construction of this service (every test, and any invoice
+     * with no `deliveryNoteLineId` lines — the entire pre-5C fleet) is
+     * byte-unchanged; only the production root (`src/services/index.ts`)
+     * wires the real, Supabase-backed lookup.
+     */
+    private readonly deliveryFrozenCost: DeliveryFrozenCostLookup = noDeliveryFrozenCostLookup,
   ) {}
 
   async getInvoices(): Promise<Invoice[]> {
@@ -314,10 +328,14 @@ export class InvoiceService {
       });
     }
 
-    // --- inventory lines: one per product line (issue at WAC) ---
+    // --- inventory lines: one per DIRECT product line (issue at current WAC) ---
+    // Phase 5C: a line carrying `deliveryNoteLineId` skips this path entirely
+    // — the physical departure already happened when its Delivery Note
+    // posted (DR 1220 / CR 1200, at the frozen cost). Issuing stock again
+    // here would double-count the movement. See the clearing branch below.
     const lines: InventoryTransactionLine[] = [];
     for (const line of invoice.lineItems) {
-      if (!line.productId) continue;
+      if (!line.productId || line.deliveryNoteLineId) continue;
       const product = productById.get(line.productId)!;
       const tracked = Boolean(product.trackInventory);
       const warehouseId = tracked
@@ -334,6 +352,32 @@ export class InvoiceService {
         sourceDocumentLineId: line.id,
         nonStock: !tracked,
       });
+    }
+
+    // --- delivery-linked lines: clear the FROZEN 1220 cost into COGS ---
+    // (docs/DELIVERY_NOTES_DESIGN.md Part 15/16 — "mixed invoice" support:
+    // a direct line and a delivery-linked line can coexist on the SAME
+    // invoice; each follows its own accounting path, both merge into the
+    // ONE balanced journal entry the engine builds — `lines` (above) and
+    // `extraJournal` (below) are already independent inputs to the SAME
+    // atomic call, so no engine change is needed for this mix.)
+    for (const line of invoice.lineItems) {
+      if (!line.productId || !line.deliveryNoteLineId) continue;
+      const product = productById.get(line.productId)!;
+      const frozen = await this.deliveryFrozenCost.getFrozenCost(line.deliveryNoteLineId);
+      if (!frozen) {
+        // "Don't guess" — never fall back to today's WAC (would corrupt
+        // margin exactly the way Part 15's worked example warns against).
+        throw new Error(
+          `${docLabel}: line "${line.description}" is linked to delivery note line "${line.deliveryNoteLineId}" but its frozen cost evidence could not be found — cannot post.`,
+        );
+      }
+      const cogsAccountId = await this.inventoryAccounts.resolveForProduct(product, 'cogs');
+      const clearingAccountId = await this.accounts.getAccountId('GOODS_DELIVERED_NOT_INVOICED');
+      extraJournal.push(
+        { accountId: cogsAccountId, debit: frozen.totalCost, credit: 0, description: `${docLabel} — clears delivered cost` },
+        { accountId: clearingAccountId, debit: 0, credit: frozen.totalCost, description: `${docLabel} — clears delivered cost` },
+      );
     }
 
     const result = await this.engine.applyInventoryTransaction({

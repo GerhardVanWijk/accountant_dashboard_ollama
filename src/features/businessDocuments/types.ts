@@ -24,7 +24,8 @@ export type BusinessDocumentKind =
   | 'tax_invoice'
   | 'invoice'
   | 'credit_note'
-  | 'purchase_order';
+  | 'purchase_order'
+  | 'delivery_note';
 
 export interface BusinessDocumentParty {
   name: string;

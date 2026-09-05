@@ -1074,6 +1074,50 @@ Worked example — onHand 20, SO-A (being edited) commits 5, SO-B (elsewhere) co
 product + warehouse: `globalCommitted = 12`, `ownCommitted = 5`, `externalCommitted = 7`,
 `editorAvailable = 20 − 7 = 13`. Ordering 5 on SO-A raises no warning; SO-B's 7 still counts.
 
+## Phase 5C (Delivery Notes) — CP-5C-A applied + live-verified 2026-09-04; CP-5C-B/C/D COMPLETE 2026-09-05
+
+**STATUS UPDATE (2026-09-05):** the service layer, UI, and reconciliation report described as
+"pointer only" below are now implemented and tested — see `docs/DELIVERY_NOTES_DESIGN.md`
+§ "CP-5C-B/C/D". In particular: `StockCommitmentService` now nets the generalized
+`commitmentQty` formula below for real (via `sumPhysicallyIssuedBySalesOrderLine`, fed by a live
+`DeliveryNoteRepository`); a Delivery Note posts `DR 1220 / CR 1200` at current WAC through the new
+`post_delivery_note` RPC; a subsequent invoice for delivery-linked quantity clears the FROZEN cost
+`DR COGS / CR 1220`; and a dedicated "Goods Delivered Not Invoiced" reconciliation report compares
+outstanding delivered-not-invoiced value to GL `1220`. Nothing below in this historical section was
+inaccurate — it is now backed by a real implementation rather than a design intent. **Not
+committed, pushed, or deployed** as of this checkpoint.
+
+### Original design pointer (superseded by the implementation above, kept for history)
+
+**CP-5C-A final update (2026-09-04):** the complete migration set `0050`-`0055` is now LIVE on
+`bcaffvpibpitpuqglszn` — `0050` a company-safe composite-key prerequisite on `sales_orders`/
+`customers`; `0051` (`stock_movement_type` value `'delivery'`); `0052` (`delivery_notes` table +
+RLS, ALL THREE FKs composite); `0053` (`1220` account seed, live on all 3 companies); `0054`
+(`post_delivery_note` RPC); **`0055`** (a Phase 5C compatibility amendment upgrading
+`create_invoice_from_sales_order` — the existing 5B.4 RPC that already implements this doc's own
+`remainingToDeliver` formula's write-side counterpart — to also subtract posted-delivery quantity,
+closing the over-issue gap found in the hardening pass). See `docs/DELIVERY_NOTES_DESIGN.md`
+§ "CP-5C-A APPLIED + LIVE-VERIFIED" for the exact DDL, the full read-only safety investigation, a
+formally-proven 18-scenario quantity matrix, and the live rollback-wrapped smoke-test evidence.
+`stock_balances.quantity_committed` is unaffected either way; nothing below changes in the
+TypeScript application layer until 5C-B (service layer) is built. **Phase 5B is NOT reopened** —
+`0055` is proven byte-identical to `0049`'s original behaviour whenever no Delivery Note exists.
+
+The 5B.3 formula above (`Committed = Σ max(0, orderedQty − postedFulfilledQty)`) is the formula
+**while no Delivery Note evidence exists**. Phase 5C's design (`docs/DELIVERY_NOTES_DESIGN.md`
+Part 8) generalizes it:
+
+```
+commitmentQty = max(0, orderedQty − (deliveredQty + directlyInvoicedQty))
+```
+
+where `deliveredQty` = Σ posted Delivery Note line quantities, and `directlyInvoicedQty` = posted
+invoice-line quantity for a line with **no** prior Delivery Note (today's only path). This reduces
+**exactly** to the 5B.3 formula above whenever `deliveredQty ≡ 0` (true for every SO today, and for
+any company that never adopts Delivery Notes) — a proven, not assumed, zero-behaviour-change
+guarantee. `stock_balances.quantity_committed` stays 0 in storage either way; nothing here is
+implemented yet — this section is a pointer only.
+
 ## Phase 5B — COMPLETE (2026-09-04, uncommitted; migrations 0048 + 0049 APPLIED)
 
 **DONE (5B.1 + 5B.2 + 5B.3):**

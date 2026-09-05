@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, CornerDownLeft, Loader2, PackageIcon, Search, UsersRound } from 'lucide-react';
+import { Building2, CornerDownLeft, Loader2, PackageCheckIcon, PackageIcon, Search, UsersRound } from 'lucide-react';
 
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -41,6 +41,7 @@ const RECORD_META: Record<
   product: { icon: PackageIcon, label: 'Product', heading: 'Products' },
   customer: { icon: UsersRound, label: 'Customer', heading: 'Customers' },
   supplier: { icon: Building2, label: 'Supplier', heading: 'Suppliers' },
+  delivery_note: { icon: PackageCheckIcon, label: 'Delivery note', heading: 'Delivery notes' },
 };
 
 export function GlobalSearch({ className }: { className?: string }) {
@@ -93,7 +94,7 @@ export function GlobalSearch({ className }: { className?: string }) {
   }, [navGroups]);
 
   const recordsByType = useMemo(() => {
-    return (['product', 'customer', 'supplier'] as GlobalSearchRecordType[]).map((type) => ({
+    return (['product', 'customer', 'supplier', 'delivery_note'] as GlobalSearchRecordType[]).map((type) => ({
       type,
       items: records.filter((r) => r.type === type),
     }));
