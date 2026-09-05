@@ -13,6 +13,7 @@ import { useCustomerReceiptMutations } from '@/features/sales/hooks/useCustomerR
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
 import { receiptAllocationState } from '@/features/sales/utils/receiptAllocationState';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 /**
  * Route target for /sales/receipts (nav label "Payments") — the list only.
@@ -33,6 +34,7 @@ export function CustomerReceiptsPage() {
   const { customers: customerList } = useCustomerList();
   const { invoices, refetch: refetchInvoices } = useInvoices();
   const { recordReceipt, error: mutationError } = useCustomerReceiptMutations({ onSuccess: () => refetch() });
+  const canRecord = useCanAccess('sales_documents', 'post');
 
   const nextReceiptNumber = `RCT-${new Date().getFullYear()}-${String(receipts.length + 1).padStart(4, '0')}`;
 
@@ -54,10 +56,12 @@ export function CustomerReceiptsPage() {
           title="Payments"
           description="Money received from customers, with allocation status against open invoices."
           actions={
-            <Button size="sm" onClick={() => setShowForm(true)}>
-              <Plus data-icon="inline-start" />
-              Record receipt
-            </Button>
+            canRecord ? (
+              <Button size="sm" onClick={() => setShowForm(true)}>
+                <Plus data-icon="inline-start" />
+                Record receipt
+              </Button>
+            ) : undefined
           }
         />
 

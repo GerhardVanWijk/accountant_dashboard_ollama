@@ -9,6 +9,7 @@ import { SalesOrderFormModal } from '@/features/sales/components/SalesOrderFormM
 import { useSalesOrders } from '@/features/sales/hooks/useSalesOrders';
 import { useSalesOrderMutations } from '@/features/sales/hooks/useSalesOrderMutations';
 import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 type FormState = { mode: 'create' } | null;
 
@@ -30,6 +31,7 @@ export function SalesOrdersPage() {
   const { customers: customerMap } = useCustomerMap();
   const { customers: customerList } = useCustomerList();
   const { createSalesOrder } = useSalesOrderMutations({ onSuccess: () => refetch() });
+  const canCreate = useCanAccess('sales_documents', 'create');
 
   const nextOrderNumber = `SO-${new Date().getFullYear()}-${String(salesOrders.length + 1).padStart(4, '0')}`;
 
@@ -46,10 +48,12 @@ export function SalesOrdersPage() {
           title="Sales orders"
           description="Confirmed customer orders — nothing here posts to the GL until converted to an invoice."
           actions={
-            <Button size="sm" onClick={() => setFormState({ mode: 'create' })}>
-              <Plus data-icon="inline-start" />
-              New sales order
-            </Button>
+            canCreate ? (
+              <Button size="sm" onClick={() => setFormState({ mode: 'create' })}>
+                <Plus data-icon="inline-start" />
+                New sales order
+              </Button>
+            ) : undefined
           }
         />
 

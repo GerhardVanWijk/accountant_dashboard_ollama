@@ -12,6 +12,7 @@ import { FinancialPeriodCard } from '../components/FinancialPeriodCard';
 import { ReopenPeriodDialog } from '../components/ReopenPeriodDialog';
 import { findPeriodForDate } from '../utils/periodLookup';
 import { SYSTEM_USER_ID } from '../services';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 /**
  * Financial Periods — route `/financial-periods` (docs/ROUTES.md). First
@@ -33,6 +34,8 @@ export function FinancialPeriodsPage() {
     useFinancialYears();
   const { periods, loading: periodsLoading, error: periodsError, refetch: refetchPeriods, closePeriod, lockPeriod, reopenPeriod } =
     useAccountingPeriods();
+
+  const canManage = useCanAccess('financial_periods', 'manage');
 
   const [busyPeriodId, setBusyPeriodId] = useState<ID | null>(null);
   const [yearBusy, setYearBusy] = useState(false);
@@ -137,7 +140,7 @@ export function FinancialPeriodsPage() {
             title={activeYear.name}
             description={`${formatDate(activeYear.startDate)} – ${formatDate(activeYear.endDate)}`}
             actions={
-              activeYear.status === 'open' ? (
+              activeYear.status === 'open' && canManage ? (
                 <Button variant="outline" size="sm" disabled={yearBusy} onClick={handleCloseFinancialYear}>
                   {yearBusy ? 'Closing…' : 'Close financial year'}
                 </Button>
@@ -164,6 +167,7 @@ export function FinancialPeriodsPage() {
                 key={period.id}
                 period={period}
                 isCurrent={currentPeriod?.id === period.id}
+                canManage={canManage}
                 busy={busyPeriodId === period.id}
                 onClose={() => void runPeriodAction(period, () => closePeriod(period.id, SYSTEM_USER_ID))}
                 onLock={() => void runPeriodAction(period, () => lockPeriod(period.id, SYSTEM_USER_ID))}

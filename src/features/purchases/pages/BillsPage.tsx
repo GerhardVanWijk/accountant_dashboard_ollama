@@ -12,6 +12,7 @@ import { useBillMutations } from '../hooks/useBillMutations';
 import { BillList } from '../components/BillList';
 import { BillFormModal } from '../components/BillFormModal';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 /**
  * Supplier bills — route `/purchases/bills` (nav label "Expenses"), the
@@ -30,6 +31,7 @@ export function BillsPage() {
   const { bills, isLoading, error, refetch } = useBills();
   const { suppliers } = useSuppliers();
   const billMutations = useBillMutations();
+  const canCreate = useCanAccess('purchasing', 'create');
 
   const suppliersMap = useMemo(() => Object.fromEntries(suppliers.map((s) => [s.id, s.name])), [suppliers]);
 
@@ -51,10 +53,12 @@ export function BillsPage() {
           title="Expenses"
           description="Supplier bills captured against the ledger, with VAT and payment state."
           actions={
-            <Button size="sm" onClick={() => setShowCreate(true)}>
-              <Plus data-icon="inline-start" />
-              New bill
-            </Button>
+            canCreate ? (
+              <Button size="sm" onClick={() => setShowCreate(true)}>
+                <Plus data-icon="inline-start" />
+                New bill
+              </Button>
+            ) : undefined
           }
         />
 
