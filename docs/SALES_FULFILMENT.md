@@ -1,5 +1,19 @@
 # SALES FULFILMENT — Partial Sales Order Delivery & Invoicing
 
+> **2026-09-05 (Block A/B):** the ONE authoritative physical-fulfilment formula is now applied at
+> BOTH layers — the TypeScript read-model (`salesOrderFulfilment.ts`) AND the live DB RPCs.
+> Migration **`0061`** (APPLIED + live-verified) rewrites `post_delivery_note` and
+> `create_invoice_from_sales_order` to net posted Return Notes:
+> `netDeliveredQty = deliveredQty − returnedUninvoicedQty`;
+> `physicalFulfilledQty = netDeliveredQty + directlyInvoicedQty`;
+> `remainingToDeliver = commitmentQty = max(0, orderedQty − physicalFulfilledQty)`.
+> A returned unit never reduces `invoicedQty` (a Return Note only ever exists against
+> delivered-but-uninvoiced stock); the return is never double-subtracted. Re-delivering
+> previously-returned stock against the same SO line now works (was rejected by the DB before).
+> Migration **`0062`** (APPLIED) additionally lets `create_invoice_from_sales_order` project
+> `invoice_lines` atomically when `NORMALIZED_DOCUMENT_LINES_ENABLED` is on — see
+> `docs/CURRENT_TASKS.md` §P3.
+
 # ═══════  PHASE 5B: COMPLETE + SHIPPED (NOT REOPENED)  ·  PHASE 5C: COMPLETE (NOT DEPLOYED)  ═══════
 
 **Phase 5C (Delivery Notes) design audit is done and approved — see `docs/DELIVERY_NOTES_DESIGN.md`

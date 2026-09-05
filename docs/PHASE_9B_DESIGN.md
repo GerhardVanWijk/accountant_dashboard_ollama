@@ -99,6 +99,7 @@ every conflict because nothing reads the normalized tables yet.
    over-credit bug, respectively — see §8/§9).
 2. Separate, reviewed step: apply migrations `0037`→`0042` to the target
    database (in order; `0042`'s backfill depends on `0038`/`0041` existing).
+   **DONE — applied 2026-09-01.**
 3. Separate, reviewed one-line commit: flip
    `NORMALIZED_DOCUMENT_LINES_ENABLED` to `true` in
    `src/config/featureFlags.ts`.
@@ -106,6 +107,32 @@ every conflict because nothing reads the normalized tables yet.
    tables going forward. Report-layer work to actually query them is
    explicitly **NOT part of Phase 9B** (see §15's "Do not change Phase-8
    reports yet").
+
+### 4a. The SO→invoice RPC bypass — CLOSED 2026-09-05 (Block B, migration 0062)
+
+`create_invoice_from_sales_order` (the atomic RPC behind partial-Sales-Order invoicing AND
+delivery-linked invoicing) inserts the invoice row in raw SQL — it never runs through
+`InvoiceService.createInvoice()`, so it permanently bypassed `SupabaseDocumentLineProjector`,
+flag on or off. It was the ONLY such bypass (a full writer audit confirmed every other
+create/update path for invoice/bill/PO/credit-note routes through its TS service + the
+flag-gated projector). Migration **`0062`** adds an opt-in `p_project_lines boolean` parameter:
+when true, the RPC does an **atomic** `insert into invoice_lines` from the SAME `v_new_lines`
+array it writes to `line_items` jsonb — no recalculation, `id` preserved, 1-based `line_number`,
+stale FK → NULL (the `0042` backfill's own defensive pattern), inside the same function
+transaction (so there is no "invoice created but lines silently missing" path).
+`RpcSalesOrderDraftInvoiceWriter` passes `NORMALIZED_DOCUMENT_LINES_ENABLED` — the RPC
+dual-write turns on/off with the SAME single flag as the TS projector, keeping step 3 the one
+switch. Forward-write parity proven LIVE (rollback-wrapped) for both direct and delivery-linked
+invoices: `invoice_lines` match `line_items` exactly, field-for-field, no dupes, no orphans.
+Contract + parity tests: `src/repositories/salesOrderInvoiceProjectionMigration.test.ts`.
+
+### 4b. Before the step-3 flip (a fresh checklist as of 2026-09-05)
+
+- Backfill any invoice/bill/PO/credit-note **created or edited during the flag-off window** with
+  a fresh 0042-style pass (today: nothing live since the 2026-09-02 seed — re-check at flip time).
+- Run `DocumentLineParityChecker` against the live DB (privileged client) → expect zero findings.
+- Flip the flag in its own commit; deploy; monitor a period reading `invoice_lines`.
+- JSONB `line_items` stays authoritative and is NOT removed in the same release.
 
 ## 5. Forward invoice evidence (already true before this phase, reconfirmed)
 

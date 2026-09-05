@@ -7,6 +7,47 @@ each section.
 
 ## Open
 
+### 2026-09-05 (Block A + B run) — 0061/0062 applied live, FIFO gated, normalized-lines blocker resolved
+
+Branch `hardening-2026-09-05` (off `main` `f7ec377`). `main` untouched pending human browser QA. Full
+detail: `docs/CURRENT_TASKS.md` §§ P0–P4. Gate: **2701 tests / 331 files**, tsc/eslint/build clean.
+
+**RESOLVED this run:**
+- **Return Note ↔ Sales Order fulfilment (P0 / migration `0061`)** — APPLIED + live-verified. The DB
+  RPCs `post_delivery_note` / `create_invoice_from_sales_order` now run the SAME return-aware formula
+  the UI read-model already used (`netDeliveredQty = deliveredQty − returnedUninvoicedQty`, no
+  double-subtraction). Proven live (rollback-wrapped): re-delivering previously-returned stock now
+  succeeds; over-delivery / over-invoice correctly rejected with the exact remaining figures;
+  delivery-note / return-note journals touch only GL 1200 / 1220. The "MEDIUM — re-delivering
+  previously-returned stock not netted into `remainingToDeliver`" entry below is now CLOSED.
+- **FIFO production trap (P4)** — GATED. `FIFO_VALUATION_ENABLED = false`; `ProductForm` hides the
+  option and `ProductService` rejects a new switch to `fifo` at the service layer. 0 live products on
+  FIFO, so zero behavioural / accounting impact. `MockStockLotRepository` stays wired but is now
+  unreachable through the product forms — the "only Mock repo in prod" finding is de-fanged (still
+  worth a real `SupabaseStockLotRepository` before the flag ever flips).
+- **Normalized-document-lines SO→invoice blocker (P3 / migration `0062`)** — RESOLVED.
+  `create_invoice_from_sales_order` now does an OPT-IN, transaction-atomic `invoice_lines` projection
+  from the SAME `v_new_lines` array it writes to jsonb (no recalculation; stale FK → NULL), gated by
+  the SAME `NORMALIZED_DOCUMENT_LINES_ENABLED` flag as the TS projector. Forward-write parity proven
+  live for both direct and delivery-linked invoices — exact field-for-field, no dupes, no orphans.
+  Classification: **READY FOR CONTROLLED ACTIVATION**. Flag still `false` — the flip is its own
+  dedicated change (backfill flag-off-window docs → `DocumentLineParityChecker` live → flip → monitor).
+
+**STILL OPEN / STOPPED:**
+- **Permissions rollout (P2)** — STOPPED for product approval, nothing applied. Live: 6 system roles,
+  9 permission features, `user_roles` = 0 assignments, `profiles.role` = viewer ×4 / admin ×1 /
+  superuser ×1. Proposed feature-catalog extension + role→action grid is in `docs/PERMISSIONS.md`
+  § "PROPOSED (NOT APPLIED)". Acting on it without sign-off risks locking the 4 viewer accounts out of
+  now-gated pages with no fine-grained grant to restore access.
+- **Human browser QA** — still required (no browser tooling here). Checklist: `docs/CURRENT_TASKS.md` §P1.
+
+**Database writes this run:** two `apply_migration` DDL calls only (`0061`, `0062` — function
+replacement, zero data change). Every live verification was rollback-wrapped; leftover-row counts
+confirmed 0. Live accounting byte-identical to the pre-run baseline (TB 0.00, GL 1200 = physical
+inventory R1,478,853.74, 247 journal entries / 928 lines / 343 movements, 0 negative stock, 0
+unbalanced, 0 orphan/dup normalized lines, 0 cross-company). Security advisors: 88 WARN / 0 ERROR
+(unchanged — 0061/0062 are `security invoker`, add none).
+
 ### 2026-09-05 (final same-day run) — Pre-merge stabilization: Return Note fulfilment fix, normalized-lines blocker sharpened, Forecasting precision bug fixed
 
 Full detail: `docs/CURRENT_TASKS.md` § "PROJECT STATE" (PERMISSIONS DECISION MATRIX and HUMAN
@@ -518,15 +559,12 @@ Reported, **not fixed** (outside the increment's UI-only scope). `grep -rn "= ne
 `MockTaxRateRepository`/`MockInvoiceRepository` strings in the sales/tax barrels are comments and test
 re-exports only. Guarded against a *new* Mock wiring by `taxRateServiceWiring.test.ts`.
 
-### Pre-existing, unrelated to Phase T: `MockSupplierRepository.test.ts`'s accounts-payable delete guard fails, even in isolation
-Found while verifying Phase T (2026-08-23) — `npm test` reported this failing before and
-after every Phase T change, and it fails standalone (`npx vitest run
-src/features/suppliers/repositories/MockSupplierRepository.test.ts`), so it is not a
-test-order flake and not something this session's auth/roles/superuser work touched
-(Suppliers/Bills were never in scope). `service.deleteSupplier('sup_00000004')` resolves
-instead of rejecting when the supplier has linked open bills. Not investigated further —
-out of scope for Phase T; whoever picks up Suppliers/Purchases next should treat this as
-a real regression, not assume it's environmental.
+### ~~Pre-existing, unrelated to Phase T: `MockSupplierRepository.test.ts`'s accounts-payable delete guard fails~~ — RESOLVED (re-verified 2026-09-05)
+Found while verifying Phase T (2026-08-23): `service.deleteSupplier('sup_00000004')` resolved
+instead of rejecting when the supplier had linked open bills. **Re-verified 2026-09-05 (Block A/B
+run):** `npx vitest run src/features/suppliers/repositories/MockSupplierRepository.test.ts` now
+passes — 9/9, standalone and in the full suite. The delete-guard was fixed in a subsequent
+Suppliers/Purchases pass (the entry above was stale). No action needed.
 
 ### Phase T (Multi-Tenant Auth + Role System + Superuser Dashboard) — real, deliberate scope boundaries
 Built 2026-08-23: real Supabase email/password auth (replacing the anonymous-session

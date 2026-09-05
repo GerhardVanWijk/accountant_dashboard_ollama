@@ -34,7 +34,13 @@ The only "entanglement" is a shared navigation group titled *"Assets & Inventory
 5. **No import framework, no Excel support, no export, no printing/document-generation of any kind**
    exist anywhere in the application.
 6. **FIFO is non-functional in the deployed app** — `stock_lots` has no Supabase table; the live
-   wiring is an in-memory mock.
+   wiring is an in-memory mock. **As of 2026-09-05 (Block A/B) FIFO is GATED**: a new
+   `FIFO_VALUATION_ENABLED = false` flag (`src/config/featureFlags.ts`) hides the FIFO option in
+   `ProductForm` and `ProductService.createProduct` / `updateProduct` reject a new switch to
+   `fifo` at the service layer (a product already on `fifo` — none exist live — can still be
+   edited / switched back to WAC). The FIFO lot-walking engine is untouched. Flip the flag only
+   in the same change that ships a real `SupabaseStockLotRepository` + `stock_lots` migration +
+   backfill.
 7. The **GL 1200 = inventory valuation** tie (R1,569,743.20, difference R0.00) holds *only because*
    Phase 21.1 hand-restated WAC in raw SQL. There is no regression test and the drift-generating
    mechanism is unchanged.

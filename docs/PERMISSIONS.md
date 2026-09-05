@@ -163,6 +163,89 @@ security phase, alongside deciding whether the fine-grained catalog should
 grow to cover them or whether `Profile.role` alone should keep governing
 those areas.
 
+## PROPOSED (NOT APPLIED) — Block B permission-catalog extension (2026-09-05)
+
+**Status: awaiting product sign-off. No migration, no `role_permissions` row, no
+`usePermission()` / `<PermissionRoute>` call site has been added.** This section is the
+"concise approval matrix with exact existing role names and every proposed feature/action
+grant" the Block A→B brief's decision rule calls for.
+
+### Live state this was built from
+
+- **6 system roles**, no custom roles: `accountant`, `employee`, `finance_manager`,
+  `sales_manager`, `stock_controller`, `viewer`. `admin` / `superuser` (coarse `profiles.role`)
+  are always full — `useCanAccess()` bypasses them; a UI block would be theatre since RLS
+  already grants them everything.
+- **9 features / 35 permission rows / 71 grants** today (see the M11 list above). The current
+  per-role grant map (for reference — every proposed grant below mirrors the same shape):
+  - `viewer` → `:read` on all 9 features (nothing else).
+  - `employee` → `customer_management:read`, `dashboard:read`, `invoicing:read`, `supplier_management:read`.
+  - `finance_manager` → `dashboard:read`, `gl:read`, `payroll:read`, `reports:read`, `reports:export`.
+  - `sales_manager` → full `invoicing` + full `customer_management` CRUD (+export), `dashboard:read`.
+  - `stock_controller` → full `inventory` (incl. `adjust`/`cost_edit`/`opening_stock`/`stocktake_post`/`account_map`/`import`/`export`), `dashboard:read`.
+  - `accountant` → broad: full `customer_management`/`supplier_management`/`inventory`/`invoicing` CRUD+export, `gl:read`, `reports:read`+`export`, `payroll` create/read/update, `dashboard:read`.
+- `user_roles` = **0 assignments**. `profiles.role` = `viewer` ×4, `admin` ×1, `superuser` ×1.
+  → the 4 viewer accounts currently reach every ungated page; gating a new feature without a
+  matching grant would lock them out with no admin-assignable recovery path. **This is why
+  nothing is applied without approval.**
+
+### Proposed new features + the action vocabulary
+
+New features: `sales_documents` (Quotes / Sales Orders / Delivery Notes / Return Notes /
+Credit Notes / Receipts — everything on the Sales side that is not a posted Invoice, which
+stays under `invoicing`), `purchasing` (POs / Bills / Supplier Payments / Vendor detail
+actions), `banking`, `assets`, `tax`, `compliance` (also covers Related Parties / FX /
+Leases), `financial_periods`, `audit` (the Access Log + business Audit Trail pages).
+
+Actions: the existing `create` / `read` / `update` / `delete` / `export` / `import`, **plus
+one new action `post`** — the accounting/commercial-effect transition (confirm a Sales Order,
+post a Delivery/Return Note, issue a Credit Note, post a Bill, record a Payment, capitalize
+an asset, run depreciation, post a tax computation, open/close/lock a period). `post` mirrors
+the spirit of the existing inventory-specific `stocktake_post`.
+
+### Proposed default grid (✔ = granted; blank = not granted; `admin`/`superuser` always ✔ via bypass)
+
+| Feature : action | `viewer` | `employee` | `sales_manager` | `stock_controller` | `finance_manager` | `accountant` |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| `sales_documents:read` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| `sales_documents:create` / `:update` / `:delete` | | | ✔ | | | ✔ |
+| `sales_documents:post` | | | ✔ | ✔ *(DN / RN only)* | | ✔ |
+| `sales_documents:export` | ✔ | | ✔ | | ✔ | ✔ |
+| `purchasing:read` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| `purchasing:create` / `:update` / `:delete` | | | | ✔ | | ✔ |
+| `purchasing:post` | | | | | | ✔ |
+| `purchasing:export` | ✔ | | | ✔ | ✔ | ✔ |
+| `purchasing:import` | | | | ✔ | | ✔ |
+| `banking:read` | ✔ | | | | ✔ | ✔ |
+| `banking:create` / `:update` / `:delete` / `:reconcile` | | | | | | ✔ |
+| `assets:read` | ✔ | | | | ✔ | ✔ |
+| `assets:create` / `:update` / `:delete` / `:post` | | | | | | ✔ |
+| `tax:read` | ✔ | | | | ✔ | ✔ |
+| `tax:create` / `:update` / `:post` | | | | | | ✔ |
+| `compliance:read` | ✔ | | | | ✔ | ✔ |
+| `compliance:update` | | | | | | ✔ |
+| `financial_periods:read` | ✔ | | | | ✔ | ✔ |
+| `financial_periods:post` *(open / soft-close / close / lock / reopen)* | | | | | | ✔ |
+| `audit:read` | | | | | ✔ | ✔ |
+
+### Rationale (one line each)
+
+- `viewer` reads everything — matches its current all-`:read` grant exactly.
+- `employee` gains only reads on `sales_documents` / `purchasing` — stays the minimal-read role.
+- `sales_manager` gets full `sales_documents` CRUD + post + export — the same shape it already has on `invoicing` — and read-only on `purchasing`.
+- `stock_controller` gets `purchasing` create/update/delete + import/export (POs affect stock, mirrors its `inventory` grant) and `sales_documents:post` **for Delivery / Return Notes only** (physical stock events it conceptually owns) — but NOT purchasing `post` (Bill / Payment = accounting) and NOT Sales Order / Quote / Credit Note CRUD.
+- `finance_manager` = read + export everywhere, plus `audit:read` — mirrors its `reports`/`gl` read-heavy shape.
+- `accountant` = near-full CRUD + post + export on all new features — mirrors its broad current grant.
+- `admin` / `superuser` — full, via the existing `useCanAccess()` bypass.
+
+### One explicit policy question for the approver
+
+Should `stock_controller` be able to **POST a Delivery Note** (a genuine "the goods have shipped" action)? Proposed **yes** (it already owns every physical stock movement). If **no**, drop the `sales_documents:post` ✔ for `stock_controller` and DN/RN posting becomes `accountant`/`admin` only.
+
+### Engineering after approval
+
+One additive `permissions` + `role_permissions` migration (mirroring `0010`/`0030`); `<PermissionRoute feature="…" action="read">` on the list/detail routes; `useCanAccess()` on the create/edit/delete/post/export/import controls (hide, don't disable); a self-lockout guard on `financial_periods`; tests by representative role; and a re-confirm that RLS (Layer 1) is unchanged and remains the real tenant boundary independent of any of this.
+
 ## Admin self-lockout guard (UI-level, M11)
 
 The Users & Roles admin page (`/admin/users`) disables:
