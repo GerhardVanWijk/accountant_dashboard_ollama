@@ -26,6 +26,7 @@ import {
   LandmarkIcon,
   LayoutDashboardIcon,
   LibraryIcon,
+  LineChartIcon,
   ListTreeIcon,
   PackageCheckIcon,
   PackageIcon,
@@ -219,6 +220,7 @@ export const navGroups: NavGroup[] = [
       { title: 'Cash Flow', href: '/reports/cash-flow', icon: FileBarChartIcon },
       { title: 'Customer Aging', href: '/reports/customer-aging', icon: UsersRoundIcon },
       { title: 'Supplier Aging', href: '/reports/supplier-aging', icon: Building2Icon },
+      { title: 'Forecasting', href: '/reports/forecasting', icon: LineChartIcon },
     ],
   },
   {
@@ -298,6 +300,7 @@ export const segmentLabels: Record<string, string> = {
   'cash-flow': 'Cash Flow',
   'customer-aging': 'Customer Aging',
   'supplier-aging': 'Supplier Aging',
+  forecasting: 'Forecasting',
   admin: 'Administration',
   audit: 'Access Log',
   'audit-trail': 'Audit Trail',

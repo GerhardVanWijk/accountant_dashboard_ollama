@@ -108,6 +108,7 @@ import { ProvisionalTaxPage } from '@/features/tax/provisionalTax/pages/Provisio
 import { DeferredTaxPage } from '@/features/tax/deferredTax/pages/DeferredTaxPage';
 import { EclProvisionPage } from '@/features/financialInstruments/pages/EclProvisionPage';
 import { ReportsPage } from '@/features/reports/pages/ReportsPage';
+import { ForecastingPage } from '@/features/reports/forecasting/pages/ForecastingPage';
 import { IncomeStatementPage } from '@/features/reports/financialStatements/pages/IncomeStatementPage';
 import { BalanceSheetPage } from '@/features/reports/financialStatements/pages/BalanceSheetPage';
 import { CashFlowStatementPage } from '@/features/reports/cashFlow/pages/CashFlowStatementPage';
@@ -282,6 +283,7 @@ export const routes: RouteObject[] = [
           { path: 'reports/cash-flow', element: <PermissionRoute feature="reports" action="read"><CashFlowStatementPage /></PermissionRoute> },
           { path: 'reports/customer-aging', element: <PermissionRoute feature="reports" action="read"><CustomerAgingPage /></PermissionRoute> },
           { path: 'reports/supplier-aging', element: <PermissionRoute feature="reports" action="read"><SupplierAgingPage /></PermissionRoute> },
+          { path: 'reports/forecasting', element: <PermissionRoute feature="reports" action="read"><ForecastingPage /></PermissionRoute> },
           { path: 'compliance/dashboard', element: <ComplianceDashboardPage /> },
           { path: 'compliance/public-interest-score', element: <PublicInterestScorePage /> },
           { path: 'compliance/reporting-standards', element: <ReportingStandardsPage /> },
