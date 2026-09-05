@@ -1,0 +1,121 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import type { DeliveryNote, ReturnNote, SalesOrder } from '@/types';
+import { ReturnNoteDetailPage } from './ReturnNoteDetailPage';
+
+vi.mock('@/features/sales/hooks/useReturnNotes');
+vi.mock('@/features/sales/hooks/useReturnNoteMutations');
+vi.mock('@/features/sales/hooks/useDeliveryNotes');
+vi.mock('@/features/sales/hooks/useSalesOrders');
+vi.mock('@/features/sales/hooks/useCustomerMap');
+vi.mock('@/features/inventory/hooks/useWarehouses');
+vi.mock('@/features/inventory/hooks/useProducts');
+vi.mock('@/features/inventory/hooks/useStockMovements');
+vi.mock('@/features/admin/hooks/useCompany');
+vi.mock('@/services/auditLogService', () => ({ auditLogService: { getForRecord: vi.fn().mockResolvedValue([]) } }));
+
+import { useReturnNotes } from '@/features/sales/hooks/useReturnNotes';
+import { useReturnNoteMutations } from '@/features/sales/hooks/useReturnNoteMutations';
+import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
+import { useSalesOrders } from '@/features/sales/hooks/useSalesOrders';
+import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
+import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
+import { useProducts } from '@/features/inventory/hooks/useProducts';
+import { useStockMovements } from '@/features/inventory/hooks/useStockMovements';
+import { useCompany } from '@/features/admin/hooks/useCompany';
+
+const dnFixture: DeliveryNote = {
+  id: 'dn1', createdAt: '', updatedAt: '', deliveryNoteNumber: 'DN-2026-0001', salesOrderId: 'so1',
+  customerId: 'c1', warehouseId: 'wh1', deliveryDate: '2026-09-01', status: 'posted',
+  lineItems: [{ id: 'dnl1', salesOrderLineId: 'sol1', productId: 'p1', description: 'Printer', quantity: 10, unitPrice: 5750, taxAmount: 0, lineTotal: 0 }],
+};
+
+const so: SalesOrder = {
+  id: 'so1', createdAt: '', updatedAt: '', orderNumber: 'SO-2026-0004', customerId: 'c1',
+  orderDate: '2026-09-01', status: 'confirmed', notes: undefined,
+  lineItems: [{ id: 'sol1', productId: 'p1', description: 'Printer', quantity: 10, unitPrice: 5750, taxAmount: 0, lineTotal: 0 }],
+  subtotal: 0, taxTotal: 0, total: 0, currency: 'ZAR',
+} as unknown as SalesOrder;
+
+function rn(o: Partial<ReturnNote> = {}): ReturnNote {
+  return {
+    id: 'rn1', createdAt: '', updatedAt: '', returnNoteNumber: 'RN-2026-0001', deliveryNoteId: 'dn1',
+    salesOrderId: 'so1', customerId: 'c1', warehouseId: 'wh1', returnDate: '2026-09-06', status: 'draft',
+    lineItems: [{ id: 'l1', deliveryNoteLineId: 'dnl1', salesOrderLineId: 'sol1', productId: 'p1', description: 'Printer', quantity: 4, unitCost: 3200, unitPrice: 5750, taxAmount: 0, lineTotal: 0 }],
+    ...o,
+  };
+}
+
+beforeEach(() => {
+  vi.mocked(useReturnNotes).mockReturnValue({ returnNotes: [rn()], isLoading: false, loading: false, error: null, refetch: vi.fn() } as never);
+  vi.mocked(useReturnNoteMutations).mockReturnValue({
+    postReturnNote: vi.fn(), cancelDraft: vi.fn(), deleteDraft: vi.fn(), isLoading: false, error: null,
+  } as never);
+  vi.mocked(useDeliveryNotes).mockReturnValue({ deliveryNotes: [dnFixture], isLoading: false, loading: false, error: null, refetch: vi.fn() } as never);
+  vi.mocked(useSalesOrders).mockReturnValue({ salesOrders: [so], isLoading: false, error: null, refetch: vi.fn() } as never);
+  vi.mocked(useCustomerMap).mockReturnValue({ customers: new Map([['c1', 'FreshMart']]), loading: false, error: null } as never);
+  vi.mocked(useCustomerList).mockReturnValue({ customers: [{ id: 'c1', name: 'FreshMart' }], loading: false, error: null } as never);
+  vi.mocked(useWarehouses).mockReturnValue({ warehouses: [{ id: 'wh1', name: 'Main Warehouse' }], loading: false, error: null } as never);
+  vi.mocked(useProducts).mockReturnValue({ products: [{ id: 'p1', name: 'Printer', costPrice: 3200 }], loading: false, error: null, refetch: vi.fn() } as never);
+  vi.mocked(useStockMovements).mockReturnValue({ movements: [], stockLevels: [], loading: false, error: null, refetch: vi.fn() } as never);
+  vi.mocked(useCompany).mockReturnValue({ company: undefined, loading: false, error: null, refetch: vi.fn() } as never);
+});
+
+afterEach(cleanup);
+
+function renderAt(path = '/sales/return-notes/rn1') {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/sales/return-notes/:returnNoteId" element={<ReturnNoteDetailPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe('ReturnNoteDetailPage', () => {
+  it('renders as a full page with the number, customer and line items; no sheet', () => {
+    const { container } = renderAt();
+    expect(screen.getByRole('heading', { name: 'RN-2026-0001' })).toBeInTheDocument();
+    expect(screen.getByText('Printer')).toBeInTheDocument();
+    expect(container.querySelector('[data-slot="sheet-content"]')).toBeNull();
+  });
+
+  it('never renders the raw UUID for the record — only its human number', () => {
+    renderAt();
+    expect(screen.queryByText('rn1')).not.toBeInTheDocument();
+  });
+
+  it('links the originating delivery note and sales order as related records', () => {
+    renderAt();
+    expect(screen.getAllByRole('link', { name: 'DN-2026-0001' }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByRole('link', { name: 'SO-2026-0004' }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('a draft return note offers Post return, Cancel draft (inline) and Delete draft (overflow)', () => {
+    renderAt();
+    expect(screen.getByRole('button', { name: 'Post return' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel draft' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    expect(screen.getByRole('menuitem', { name: 'Delete draft' })).toBeInTheDocument();
+  });
+
+  it('a posted return note offers no post/cancel/delete action', () => {
+    vi.mocked(useReturnNotes).mockReturnValue({ returnNotes: [rn({ status: 'posted', journalEntryId: 'je1' })], isLoading: false, loading: false, error: null, refetch: vi.fn() } as never);
+    renderAt();
+    expect(screen.queryByRole('button', { name: 'Post return' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel draft' })).not.toBeInTheDocument();
+  });
+
+  it('offers a "Print / PDF" action but never a "Duplicate" one', () => {
+    renderAt();
+    expect(screen.getByRole('button', { name: 'Print / PDF' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Duplicate' })).not.toBeInTheDocument();
+  });
+
+  it('deep-links: an unknown id shows the not-found state', () => {
+    renderAt('/sales/return-notes/nope');
+    expect(screen.getByText(/could not be found/i)).toBeInTheDocument();
+  });
+});

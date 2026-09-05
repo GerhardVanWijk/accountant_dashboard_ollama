@@ -18,6 +18,7 @@ import {
 } from '@/features/inventory/services/documentInventoryPosting';
 import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
 import { NoopDocumentLineProjector } from '@/repositories/NoopDocumentLineProjector';
+import { noInvoiceFrozenCostLookup, type InvoiceFrozenCostLookup } from '@/features/inventory/services/invoiceFrozenCostLookup';
 
 export type CreateCreditNoteDTO = Omit<CreditNote, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -47,9 +48,11 @@ export class CreditNoteService {
      * The ONE atomic inventory posting engine. `issueCreditNote()` hands it
      * the revenue-reversal / VAT / AR lines as `extraJournal`; for a
      * `reason === 'return'` note it also passes one `return_in` line per
-     * product line — the engine computes the COGS reversal from current WAC
-     * (DR Inventory / CR COGS), restores stock, and posts ONE balanced
-     * entry in a single RPC.
+     * product line (DR Inventory / CR COGS) — valued at the ORIGINAL sale's
+     * frozen cost when `originalInvoiceLineId` evidence exists (Part 5,
+     * `invoiceFrozenCost`), falling back to the product's current WAC
+     * otherwise — restores stock, and posts ONE balanced entry in a single
+     * RPC.
      */
     private readonly engine: InventoryTransactionPoster,
     private readonly invoiceService: InvoicePaymentRecorder,
@@ -60,6 +63,14 @@ export class CreditNoteService {
     private readonly warehouses: DocumentWarehouseResolver,
     /** Phase 9B (docs/ACCOUNTING_RELATIONSHIPS.md §17-18) — see InvoiceService's identical parameter for the full rationale. */
     private readonly lineProjector: IDocumentLineProjector = new NoopDocumentLineProjector(),
+    /**
+     * A `reason: 'return'` line carrying `originalInvoiceLineId` reverses
+     * stock at THIS frozen cost (the original sale's own WAC-at-the-time)
+     * instead of today's current WAC, when evidence exists — see
+     * `invoiceFrozenCostLookup.ts`. Defaults to a no-op so every existing
+     * call site keeps compiling and behaving exactly as before.
+     */
+    private readonly invoiceFrozenCost: InvoiceFrozenCostLookup = noInvoiceFrozenCostLookup,
   ) {}
 
   async getCreditNotes(): Promise<CreditNote[]> {
@@ -121,11 +132,17 @@ export class CreditNoteService {
    *        when `reason === 'return'`
    *        (the goods are physically coming back; a pricing_error/discount/
    *        other credit note is a value adjustment with nothing to put back
-   *        on the shelf). Cost is recalculated at the product's CURRENT
-   *        weighted-average cost, the same simplification
-   *        InvoiceService.postInvoice() already makes — not necessarily the
-   *        exact cost the goods left at if the WAC has since moved. Stock
-   *        itself is only restored AFTER this entry posts successfully.
+   *        on the shelf). Cost basis (Part 5, `docs/CURRENT_TASKS.md`): a
+   *        line carrying `originalInvoiceLineId` reverses at the ORIGINAL
+   *        sale's own frozen cost (the `stock_movements` row `postInvoice()`
+   *        wrote at the time of sale) when that evidence exists —
+   *        `invoiceFrozenCostLookup.ts`. A line with no such evidence (no
+   *        link, or an older/unlinked record) falls back to the product's
+   *        CURRENT weighted-average cost, the same simplification
+   *        InvoiceService.postInvoice() itself still makes for its own
+   *        direct-sale lines — a documented, honest limitation for
+   *        unevidenced records, not a fabricated number. Stock itself is
+   *        only restored AFTER this entry posts successfully.
    */
   async issueCreditNote(id: string, postedByUserId?: ID): Promise<CreditNote> {
     const creditNote = await this.requireCreditNote(id);
@@ -283,11 +300,21 @@ export class CreditNoteService {
         const warehouseId = tracked
           ? await requireWarehouseId(this.warehouses, line.warehouseId, docLabel)
           : ((await resolveWarehouseId(this.warehouses, line.warehouseId)) ?? line.warehouseId ?? '');
+        // Part 5 (docs/CURRENT_TASKS.md): when this line carries evidenced
+        // line-level provenance, reverse it at the ORIGINAL sale's frozen
+        // cost, not today's (possibly since-moved) WAC. Falls back to
+        // current WAC — the pre-existing, still-honest behaviour — when no
+        // originalInvoiceLineId is set, or when one is set but no frozen
+        // evidence exists for it (older/unlinked data).
+        const frozen = tracked && line.originalInvoiceLineId
+          ? await this.invoiceFrozenCost.getFrozenCost(line.originalInvoiceLineId)
+          : undefined;
         lines.push({
           productId: product.id,
           warehouseId,
           quantityDelta: line.quantity,
           costingMode: 'return_in',
+          unitCostOverride: frozen?.unitCost,
           movementType: 'sales_return',
           inventoryAccountId: await this.inventoryAccounts.resolveForProduct(product, 'inventory'),
           contraAccountId: await this.inventoryAccounts.resolveForProduct(product, 'cogs'),

@@ -41,6 +41,9 @@ import { CreditNoteDetailPage } from '@/features/sales/pages/CreditNoteDetailPag
 import { DeliveryNotesPage } from '@/features/sales/pages/DeliveryNotesPage';
 import { DeliveryNoteDetailPage } from '@/features/sales/pages/DeliveryNoteDetailPage';
 import { CreateDeliveryNotePage } from '@/features/sales/pages/CreateDeliveryNotePage';
+import { ReturnNotesPage } from '@/features/sales/pages/ReturnNotesPage';
+import { ReturnNoteDetailPage } from '@/features/sales/pages/ReturnNoteDetailPage';
+import { CreateReturnNotePage } from '@/features/sales/pages/CreateReturnNotePage';
 import { CustomerReceiptsPage } from '@/features/sales/pages/CustomerReceiptsPage';
 import { CustomerReceiptDetailPage } from '@/features/sales/pages/CustomerReceiptDetailPage';
 import { VendorsPage } from '@/features/purchases/pages/VendorsPage';
@@ -202,6 +205,9 @@ export const routes: RouteObject[] = [
           { path: 'sales/orders/:orderId/deliver', element: <CreateDeliveryNotePage /> },
           { path: 'sales/delivery-notes', element: <DeliveryNotesPage /> },
           { path: 'sales/delivery-notes/:deliveryNoteId', element: <DeliveryNoteDetailPage /> },
+          { path: 'sales/delivery-notes/:deliveryNoteId/return', element: <CreateReturnNotePage /> },
+          { path: 'sales/return-notes', element: <ReturnNotesPage /> },
+          { path: 'sales/return-notes/:returnNoteId', element: <ReturnNoteDetailPage /> },
           { path: 'sales/invoices', element: <PermissionRoute feature="invoicing" action="read"><InvoicesPage /></PermissionRoute> },
           { path: 'sales/invoices/:invoiceId', element: <PermissionRoute feature="invoicing" action="read"><InvoiceDetailPage /></PermissionRoute> },
           { path: 'sales/credit-notes', element: <CreditNotesPage /> },

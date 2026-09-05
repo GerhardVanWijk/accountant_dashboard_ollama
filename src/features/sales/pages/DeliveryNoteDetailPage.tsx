@@ -21,6 +21,7 @@ import { ConfirmDialog } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
 import { useDeliveryNoteMutations } from '@/features/sales/hooks/useDeliveryNoteMutations';
+import { useReturnNotes } from '@/features/sales/hooks/useReturnNotes';
 import { useSalesOrders } from '@/features/sales/hooks/useSalesOrders';
 import { useCustomerMap } from '@/features/sales/hooks/useCustomerMap';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
@@ -29,6 +30,7 @@ import { useStockMovements } from '@/features/inventory/hooks/useStockMovements'
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { BusinessDocumentPreviewModal } from '@/features/businessDocuments';
 import { useDeliveryNoteBusinessDocument } from '@/features/businessDocuments/hooks/useDeliveryNoteBusinessDocument';
+import { computeReturnableDeliveryNoteLines } from '@/features/sales/services';
 
 type Line = ReturnType<typeof useDeliveryNotes>['deliveryNotes'][number]['lineItems'][number];
 
@@ -61,6 +63,7 @@ export function DeliveryNoteDetailPage({ recordId, embedded }: RecordPageProps =
   const { products } = useProducts();
   const { movements } = useStockMovements();
   const { invoices, refetch: refetchInvoices } = useInvoices();
+  const { returnNotes } = useReturnNotes();
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -128,6 +131,10 @@ export function DeliveryNoteDetailPage({ recordId, embedded }: RecordPageProps =
   const canDelete = dn?.status === 'draft';
   const canInvoice = dn?.status === 'posted' && linkedInvoiceLines.reduce((s, l) => s + l.quantity, 0) < dn.lineItems.reduce((s, l) => s + l.quantity, 0) - 1e-6;
 
+  const relatedReturnNotes = useMemo(() => (dn ? returnNotes.filter((rn) => rn.deliveryNoteId === dn.id) : []), [returnNotes, dn]);
+  const returnableLines = useMemo(() => (dn ? computeReturnableDeliveryNoteLines(dn, invoices, returnNotes) : []), [dn, invoices, returnNotes]);
+  const canReturn = dn?.status === 'posted' && returnableLines.some((l) => l.returnableQty > 1e-6);
+
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!dn) return [];
     const items: RelatedRecordItem[] = [
@@ -172,7 +179,10 @@ export function DeliveryNoteDetailPage({ recordId, embedded }: RecordPageProps =
                       ? { label: 'Create invoice', onClick: () => void handleCreateInvoice() }
                       : undefined
                 }
-                secondary={[{ label: 'Print / PDF', icon: PrinterIcon, onClick: () => setPreviewOpen(true) }]}
+                secondary={[
+                  { label: 'Print / PDF', icon: PrinterIcon, onClick: () => setPreviewOpen(true) },
+                  ...(canReturn ? [{ label: 'Create return', onClick: () => navigate(`/sales/delivery-notes/${dn.id}/return`) }] : []),
+                ]}
                 danger={[
                   ...(canCancel ? [{ label: 'Cancel draft', onClick: () => setConfirmCancel(true) }] : []),
                   ...(canDelete ? [{ label: 'Delete draft', onClick: () => void act(() => deleteDraft(dn.id), () => navigate('/sales/delivery-notes')) }] : []),
@@ -290,6 +300,35 @@ export function DeliveryNoteDetailPage({ recordId, embedded }: RecordPageProps =
                           </button>
                         </td>
                         <td className="py-2 text-right tabular-nums">{fmtQty(l.quantity)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </RecordPageSection>
+          )}
+
+          {relatedReturnNotes.length > 0 && (
+            <RecordPageSection title="Returns from this delivery">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs tracking-wide text-muted-foreground uppercase">
+                      <th className="py-2 pr-3 font-medium">Return note</th>
+                      <th className="py-2 pr-3 font-medium">Status</th>
+                      <th className="py-2 text-right font-medium">Quantity returned</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {relatedReturnNotes.map((rn) => (
+                      <tr key={rn.id} className="border-b border-border/60 last:border-0">
+                        <td className="py-2 pr-3">
+                          <Link className="font-medium text-brand hover:underline" to={`/sales/return-notes/${rn.id}`}>
+                            {rn.returnNoteNumber}
+                          </Link>
+                        </td>
+                        <td className="py-2 pr-3"><StatusBadge status={rn.status} /></td>
+                        <td className="py-2 text-right tabular-nums">{fmtQty(rn.lineItems.reduce((s, l) => s + l.quantity, 0))}</td>
                       </tr>
                     ))}
                   </tbody>
