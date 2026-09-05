@@ -14,9 +14,17 @@ export interface IProfileRepository {
   /** Superuser-only in practice — RLS only returns cross-company rows to a caller whose own role is 'superuser'. */
   getAll(): Promise<Profile[]>;
   updateRole(userId: ID, role: ProfileRole): Promise<void>;
-  updateCompany(userId: ID, companyId: ID | undefined): Promise<void>;
   setActive(userId: ID, isActive: boolean): Promise<void>;
   updateOwnProfile(userId: ID, patch: { firstName?: string; lastName?: string }): Promise<void>;
   /** Admin-only, exact match, via the find_unassigned_profile_by_email RPC (migration 0014) — see its comment for why this isn't a plain SELECT. */
   findUnassignedByEmail(email: string): Promise<Profile | undefined>;
+  /**
+   * Attach an already-signed-up, still-companyless user to a company, via
+   * the add_existing_user_to_company RPC (migration 0065). A plain
+   * `UPDATE profiles SET company_id` cannot do this: the profiles SELECT RLS
+   * hides a `company_id IS NULL` row from a company admin, so the update
+   * silently matches 0 rows. The RPC validates every precondition, is
+   * concurrency-safe, and NEVER reports success on 0 affected rows.
+   */
+  addExistingUserToCompany(userId: ID, companyId: ID): Promise<void>;
 }
