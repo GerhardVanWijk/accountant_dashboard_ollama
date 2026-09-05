@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { selectEnumOptionWithin } from '../../../../tests/helpers/selectEnumOption';
 import { UsersPage } from './UsersPage';
 import { profileService, roleService, userRoleService, permissionService } from '@/features/auth/services';
@@ -146,6 +146,44 @@ describe('UsersPage', () => {
 
     const otherUserSelect = await screen.findByDisplayValue('viewer');
     expect(otherUserSelect).not.toBeDisabled();
+  });
+
+  it('Add User dialog: looks up a pending signup, adds them via the RPC-backed service, closes on success and refreshes', async () => {
+    const pending = makeUser({ id: 'pending_1', firstName: 'Sipho', lastName: 'Ndlovu', email: 'sipho@example.co.za', companyId: undefined, role: 'viewer' });
+    vi.mocked(profileService.findUnassignedByEmail).mockResolvedValue(pending);
+    vi.mocked(profileService.addExistingUserToCompany).mockResolvedValue(undefined);
+    render(<UsersPage />);
+
+    (await screen.findByRole('button', { name: /add user/i })).click();
+    const dialog = await screen.findByRole('dialog', { name: /add an existing user/i });
+    fireEvent.change(within(dialog).getByLabelText(/email address/i), { target: { value: 'sipho@example.co.za' } });
+    within(dialog).getByRole('button', { name: /look up/i }).click();
+
+    (await within(dialog).findByRole('button', { name: /add to company/i })).click();
+
+    // actor arg is passed by the page but ignored by the RPC (auth.uid())
+    await waitFor(() => expect(profileService.addExistingUserToCompany).toHaveBeenCalledWith('user_1', 'pending_1', 'company_1'));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /add an existing user/i })).not.toBeInTheDocument());
+    // the user list is reloaded after a successful add
+    expect(vi.mocked(profileService.getByCompany).mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('Add User dialog: on a controlled RPC error, shows the message and stays open (no silent success)', async () => {
+    const pending = makeUser({ id: 'pending_1', email: 'sipho@example.co.za', companyId: undefined, role: 'viewer' });
+    vi.mocked(profileService.findUnassignedByEmail).mockResolvedValue(pending);
+    vi.mocked(profileService.addExistingUserToCompany).mockRejectedValue(
+      new Error('That person is already a member of a company and cannot be added to another.'),
+    );
+    render(<UsersPage />);
+
+    (await screen.findByRole('button', { name: /add user/i })).click();
+    const dialog = await screen.findByRole('dialog', { name: /add an existing user/i });
+    fireEvent.change(within(dialog).getByLabelText(/email address/i), { target: { value: 'sipho@example.co.za' } });
+    within(dialog).getByRole('button', { name: /look up/i }).click();
+    (await within(dialog).findByRole('button', { name: /add to company/i })).click();
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/already a member of a company/i);
+    expect(screen.getByRole('dialog', { name: /add an existing user/i })).toBeInTheDocument();
   });
 
   it('hides all admin actions for a user without user_management:update (non-admin, no fine-grained grant)', async () => {

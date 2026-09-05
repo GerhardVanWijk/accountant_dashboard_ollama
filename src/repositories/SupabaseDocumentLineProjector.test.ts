@@ -13,8 +13,10 @@ function line(overrides: Partial<DocumentLineItem> = {}): DocumentLineItem {
   };
 }
 
-describe('SupabaseDocumentLineProjector — disabled (default)', () => {
+describe('SupabaseDocumentLineProjector — disabled', () => {
   it('never touches the Supabase client while NORMALIZED_DOCUMENT_LINES_ENABLED is false', async () => {
+    vi.resetModules();
+    vi.doMock('@/config/featureFlags', () => ({ NORMALIZED_DOCUMENT_LINES_ENABLED: false }));
     const { SupabaseDocumentLineProjector } = await import('./SupabaseDocumentLineProjector');
     const client = {
       from: vi.fn(() => {
@@ -29,6 +31,11 @@ describe('SupabaseDocumentLineProjector — disabled (default)', () => {
 
     await expect(projector.sync('doc_1', [line()])).resolves.toBeUndefined();
     expect(client.from).not.toHaveBeenCalled();
+  });
+
+  afterEach(() => {
+    vi.doUnmock('@/config/featureFlags');
+    vi.resetModules();
   });
 });
 

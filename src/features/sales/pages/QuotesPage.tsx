@@ -9,6 +9,7 @@ import { QuoteFormModal } from '@/features/sales/components/QuoteFormModal';
 import { useQuotes } from '@/features/sales/hooks/useQuotes';
 import { useQuoteMutations } from '@/features/sales/hooks/useQuoteMutations';
 import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 type FormState = { mode: 'create' } | null;
 
@@ -29,6 +30,7 @@ export function QuotesPage() {
   const { customers: customerMap } = useCustomerMap();
   const { customers: customerList } = useCustomerList();
   const { createQuote } = useQuoteMutations({ onSuccess: () => refetch() });
+  const canCreate = useCanAccess('sales_documents', 'create');
 
   const nextQuoteNumber = `QUO-${new Date().getFullYear()}-${String(quotes.length + 1).padStart(4, '0')}`;
 
@@ -45,10 +47,12 @@ export function QuotesPage() {
           title="Quotes"
           description="Pre-sale quotes issued to customers — nothing here posts to the GL until converted to a sales order and invoiced."
           actions={
-            <Button size="sm" onClick={() => setFormState({ mode: 'create' })}>
-              <Plus data-icon="inline-start" />
-              New quote
-            </Button>
+            canCreate ? (
+              <Button size="sm" onClick={() => setFormState({ mode: 'create' })}>
+                <Plus data-icon="inline-start" />
+                New quote
+              </Button>
+            ) : undefined
           }
         />
 

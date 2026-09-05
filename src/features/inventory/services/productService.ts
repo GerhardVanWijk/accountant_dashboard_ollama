@@ -18,6 +18,27 @@ import { SupabaseBillRepository } from '@/repositories/SupabaseBillRepository';
 import { SupabasePurchaseOrderRepository } from '@/repositories/SupabasePurchaseOrderRepository';
 import { SupabaseCreditNoteRepository } from '@/repositories/SupabaseCreditNoteRepository';
 import { supabase } from '@/config/supabase';
+import { FIFO_VALUATION_ENABLED } from '@/config/featureFlags';
+
+/**
+ * FIFO stock-lot costing is not yet backed by a persistent repository
+ * (`stockLotRepository` is `MockStockLotRepository` — in-memory only). Until
+ * `FIFO_VALUATION_ENABLED` is flipped alongside a real `stock_lots` layer,
+ * no product may be newly set to `fifo` — a product already on `fifo` (none
+ * exist live) can still be updated in other respects. Enforced here so the
+ * UI gate in `ProductForm` cannot be bypassed by a direct service call.
+ */
+function assertValuationMethodAllowed(
+  next: Product['valuationMethod'],
+  previous?: Product['valuationMethod'],
+): void {
+  if (FIFO_VALUATION_ENABLED) return;
+  if (next === 'fifo' && previous !== 'fifo') {
+    throw new Error(
+      'FIFO valuation is not available yet — it has no persistent cost-lot storage. Use Weighted Average Cost.',
+    );
+  }
+}
 
 /**
  * quantityOnHand is intentionally excluded — it must never be set directly
@@ -77,6 +98,7 @@ export class ProductService {
   }
 
   async createProduct(data: CreateProductDTO): Promise<Product> {
+    assertValuationMethodAllowed(data.valuationMethod);
     const now = new Date().toISOString();
     return this.repository.create({
       ...data,
@@ -88,6 +110,10 @@ export class ProductService {
   }
 
   async updateProduct(id: string, patch: UpdateProductDTO): Promise<Product> {
+    if ('valuationMethod' in patch) {
+      const existing = await this.repository.getById(id);
+      assertValuationMethodAllowed(patch.valuationMethod, existing?.valuationMethod);
+    }
     return this.repository.update(id, patch);
   }
 

@@ -145,35 +145,236 @@ Reusable v0-styled state — icon, heading, description, a way back to the
 dashboard. Never surfaces the underlying `feature`/`action` key to the
 user.
 
-## Ungated areas (real gap, not an oversight)
+## Ungated areas — CLOSED 2026-09-05 (migration 0064)
 
-These routes/modules have **no route-level or action-level gate** because
-no matching permission exists in `public.permissions`: Companies,
-Financial Periods, Sales (Quotes/Orders/Credit Notes/Receipts), Purchases
-(Vendors detail actions beyond the list — Bills/Orders/Payments/Aging),
-Banking (all three pages), Assets (all four pages), Tax (all eight pages),
-Compliance (all three pages), Related Parties, Foreign Exchange, Leases,
-the Access Log (`/admin/audit`) and business Audit Trail
-(`/admin/audit-trail`), Settings, Help. Anyone who can sign in and reach
-the app shell (i.e., has a company) can open these — same as before M11.
-Closing this gap requires deciding on and seeding new permission rows
-(a schema/data change), which was explicitly out of scope for M11 without
-a separate STOP-and-report; it's the natural next step for a future
-security phase, alongside deciding whether the fine-grained catalog should
-grow to cover them or whether `Profile.role` alone should keep governing
-those areas.
+The M11 gap below is **closed**. Migration `0064_core_permission_catalog_extension`
+(FINAL CORE HARDENING run, branch `hardening-2026-09-05`, APPLIED live) added nine
+new features to `public.permissions` — `sales_documents`, `fulfilment`,
+`purchasing`, `banking`, `assets`, `tax`, `compliance`, `financial_periods`,
+`audit` — 38 permission rows, 86 system-role grants (see "APPLIED grid" below).
+`src/features/auth/permissionRouteMap.ts` + `src/app/router.tsx` now
+`<PermissionRoute action="read">`-gate every route in Sales (Quotes / Orders /
+Credit Notes / Receipts / Delivery Notes / Return Notes), Purchases (Orders /
+Bills / Payments / Aging), Banking, Assets, Tax, Compliance (incl. Related
+Parties / FX / Leases), Financial Periods, and the two audit screens.
+Action-level `useCanAccess()` gates cover the primary create/record controls on
+Quotes / Sales Orders / Credit Notes / Customer Receipts / Purchase Orders /
+Bills / Supplier Payments, and the close/lock/reopen controls + a
+"can't lock the current period" self-lockout guard on Financial Periods.
 
-## Admin self-lockout guard (UI-level, M11)
+**Still deliberately ungated** (no matching permission — per "Do not create
+permissions merely because a route exists"): `/companies` (company profile,
+admin-oriented), `/settings` + `/settings/accounting` (link-hub; the real model
+is Block C), `/help`, `/admin/superuser` (RouteGuard confines it to superusers).
+
+**RLS unchanged.** Migration 0064 is additive catalog data only — no policy, no
+`ALTER TABLE`, no `user_roles` write, no `profiles` change. Supabase RLS keyed
+off `profiles.role` remains the only database security boundary and tenant
+isolation is untouched.
+
+### No-lockout (verified read-only against live data, 2026-09-05)
+
+- `public.user_roles` has **0** assignments.
+- The only profile that passes `RouteGuard` (signed in AND has a company) is
+  **1 `admin`**; the 4 `viewer`-role profiles have `company_id = NULL` and never
+  reach the gated app shell. 1 `superuser`.
+- `admin` / `superuser` bypass `useCanAccess()` unconditionally.
+- => Adding these gates locks **nobody** out today. Migration 0064 writes zero
+  `user_roles` rows and zero `profiles` changes.
+- **Administrator transition guidance:** before assigning any real user a
+  non-admin `profiles.role`, assign them one of the 6 fine-grained system roles
+  (each keeps broad `:read` via the grid below). A non-admin user with no
+  fine-grained role assignment sees nothing gated — that is the M11 fail-closed
+  behaviour, now extended to these nine features, not a regression.
+
+### APPLIED grid (migration 0064; admin/superuser always ✔ via bypass)
+
+| Feature : action | viewer | employee | sales_manager | stock_controller | finance_manager | accountant |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| `sales_documents:read` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| `sales_documents:create` / `:update` / `:delete` | | | ✔ | | | ✔ |
+| `sales_documents:post` *(confirm SO / issue CN / record receipt)* | | | ✔ | | | ✔ |
+| `sales_documents:export` | ✔ | | ✔ | | ✔ | ✔ |
+| `fulfilment:read` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| `fulfilment:create` / `:update` / `:post` / `:cancel` *(Delivery + Return Notes)* | | | ✔ | ✔ | | ✔ |
+| `purchasing:read` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| `purchasing:create` / `:update` / `:delete` | | | | ✔ | | ✔ |
+| `purchasing:post` *(confirm PO / post Bill / record Payment)* | | | | | | ✔ |
+| `purchasing:export` | ✔ | | | ✔ | ✔ | ✔ |
+| `purchasing:import` | | | | ✔ | | ✔ |
+| `banking:read` | ✔ | | | | ✔ | ✔ |
+| `banking:create` / `:update` / `:delete` / `:post` / `:reconcile` | | | | | | ✔ |
+| `assets:read` | ✔ | | | | ✔ | ✔ |
+| `assets:create` / `:update` / `:delete` / `:post` | | | | | | ✔ |
+| `tax:read` | ✔ | | | | ✔ | ✔ |
+| `tax:create` / `:update` / `:post` | | | | | | ✔ |
+| `compliance:read` | ✔ | | | | ✔ | ✔ |
+| `compliance:update` | | | | | | ✔ |
+| `financial_periods:read` | ✔ | | | | ✔ | ✔ |
+| `financial_periods:manage` *(open / soft-close / close / lock / reopen)* | | | | | | ✔ |
+| `audit:read` | | | | | ✔ | ✔ |
+
+Every grant mirrors the shape the role already holds on an analogous existing
+feature (e.g. `sales_manager` full `invoicing` → full `sales_documents`;
+`stock_controller` owns `inventory` → owns `fulfilment` + `purchasing` CRUD but
+**not** `purchasing:post` = accounting and **not** `sales_documents:post` = no
+CN issue; `finance_manager` = read + export everywhere; `viewer` reads
+everything, matching its all-`:read` grant; `accountant` = near-full, **excluding
+user/security administration** which stays `user_management`).
+
+Tests: `src/features/auth/permissionCatalogHardening.test.ts` (36 — migration
+contract, the full role→action grid vs the approved policy, and
+direct-URL-navigation `permissionForPath` coverage for every new gated route)
+plus the Financial-Periods self-lockout / manage-gate tests in
+`src/features/accounting/pages/FinancialPeriodsPage.test.tsx`.
+
+### Not done this run (tracked in docs/CURRENT_TASKS.md)
+
+Exhaustive per-button action gating on **every** page of banking / assets / tax /
+compliance / the document detail pages (post / reverse / void buttons). The
+route-level `:read` gates already fully block every role that lacks read on
+those features; the residual exposure is a role with `:read` but not full
+mutation (chiefly `finance_manager`, a trusted senior role) still seeing a
+mutation button, which then hits RLS — defense-in-depth, not a hole. Continues
+as a UI-polish pass alongside human browser QA.
+
+## APPLIED — core permission-catalog extension (migration 0064, 2026-09-05)
+
+**Status: APPROVED (FINAL CORE HARDENING BLOCK brief) + APPLIED. Migration
+`0064_core_permission_catalog_extension` is live; route + action gates are wired;
+tests are green.** The APPLIED grid and the no-lockout analysis are in
+"Ungated areas — CLOSED 2026-09-05" above. The section below is retained as the
+original proposal record (the approved policy renamed `financial_periods:post` →
+`:manage`, and split Delivery/Return Notes into their own `fulfilment` feature so
+`stock_controller` can post them without gaining Credit-Note issue).
+
+### Live state this was built from
+
+- **6 system roles**, no custom roles: `accountant`, `employee`, `finance_manager`,
+  `sales_manager`, `stock_controller`, `viewer`. `admin` / `superuser` (coarse `profiles.role`)
+  are always full — `useCanAccess()` bypasses them; a UI block would be theatre since RLS
+  already grants them everything.
+- **9 features / 35 permission rows / 71 grants** today (see the M11 list above). The current
+  per-role grant map (for reference — every proposed grant below mirrors the same shape):
+  - `viewer` → `:read` on all 9 features (nothing else).
+  - `employee` → `customer_management:read`, `dashboard:read`, `invoicing:read`, `supplier_management:read`.
+  - `finance_manager` → `dashboard:read`, `gl:read`, `payroll:read`, `reports:read`, `reports:export`.
+  - `sales_manager` → full `invoicing` + full `customer_management` CRUD (+export), `dashboard:read`.
+  - `stock_controller` → full `inventory` (incl. `adjust`/`cost_edit`/`opening_stock`/`stocktake_post`/`account_map`/`import`/`export`), `dashboard:read`.
+  - `accountant` → broad: full `customer_management`/`supplier_management`/`inventory`/`invoicing` CRUD+export, `gl:read`, `reports:read`+`export`, `payroll` create/read/update, `dashboard:read`.
+- `user_roles` = **0 assignments**. `profiles.role` = `viewer` ×4, `admin` ×1, `superuser` ×1.
+  → the 4 viewer accounts currently reach every ungated page; gating a new feature without a
+  matching grant would lock them out with no admin-assignable recovery path. **This is why
+  nothing is applied without approval.**
+
+### Proposed new features + the action vocabulary
+
+New features: `sales_documents` (Quotes / Sales Orders / Delivery Notes / Return Notes /
+Credit Notes / Receipts — everything on the Sales side that is not a posted Invoice, which
+stays under `invoicing`), `purchasing` (POs / Bills / Supplier Payments / Vendor detail
+actions), `banking`, `assets`, `tax`, `compliance` (also covers Related Parties / FX /
+Leases), `financial_periods`, `audit` (the Access Log + business Audit Trail pages).
+
+Actions: the existing `create` / `read` / `update` / `delete` / `export` / `import`, **plus
+one new action `post`** — the accounting/commercial-effect transition (confirm a Sales Order,
+post a Delivery/Return Note, issue a Credit Note, post a Bill, record a Payment, capitalize
+an asset, run depreciation, post a tax computation, open/close/lock a period). `post` mirrors
+the spirit of the existing inventory-specific `stocktake_post`.
+
+### Proposed default grid (✔ = granted; blank = not granted; `admin`/`superuser` always ✔ via bypass)
+
+| Feature : action | `viewer` | `employee` | `sales_manager` | `stock_controller` | `finance_manager` | `accountant` |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| `sales_documents:read` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| `sales_documents:create` / `:update` / `:delete` | | | ✔ | | | ✔ |
+| `sales_documents:post` | | | ✔ | ✔ *(DN / RN only)* | | ✔ |
+| `sales_documents:export` | ✔ | | ✔ | | ✔ | ✔ |
+| `purchasing:read` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| `purchasing:create` / `:update` / `:delete` | | | | ✔ | | ✔ |
+| `purchasing:post` | | | | | | ✔ |
+| `purchasing:export` | ✔ | | | ✔ | ✔ | ✔ |
+| `purchasing:import` | | | | ✔ | | ✔ |
+| `banking:read` | ✔ | | | | ✔ | ✔ |
+| `banking:create` / `:update` / `:delete` / `:reconcile` | | | | | | ✔ |
+| `assets:read` | ✔ | | | | ✔ | ✔ |
+| `assets:create` / `:update` / `:delete` / `:post` | | | | | | ✔ |
+| `tax:read` | ✔ | | | | ✔ | ✔ |
+| `tax:create` / `:update` / `:post` | | | | | | ✔ |
+| `compliance:read` | ✔ | | | | ✔ | ✔ |
+| `compliance:update` | | | | | | ✔ |
+| `financial_periods:read` | ✔ | | | | ✔ | ✔ |
+| `financial_periods:post` *(open / soft-close / close / lock / reopen)* | | | | | | ✔ |
+| `audit:read` | | | | | ✔ | ✔ |
+
+### Rationale (one line each)
+
+- `viewer` reads everything — matches its current all-`:read` grant exactly.
+- `employee` gains only reads on `sales_documents` / `purchasing` — stays the minimal-read role.
+- `sales_manager` gets full `sales_documents` CRUD + post + export — the same shape it already has on `invoicing` — and read-only on `purchasing`.
+- `stock_controller` gets `purchasing` create/update/delete + import/export (POs affect stock, mirrors its `inventory` grant) and `sales_documents:post` **for Delivery / Return Notes only** (physical stock events it conceptually owns) — but NOT purchasing `post` (Bill / Payment = accounting) and NOT Sales Order / Quote / Credit Note CRUD.
+- `finance_manager` = read + export everywhere, plus `audit:read` — mirrors its `reports`/`gl` read-heavy shape.
+- `accountant` = near-full CRUD + post + export on all new features — mirrors its broad current grant.
+- `admin` / `superuser` — full, via the existing `useCanAccess()` bypass.
+
+### One explicit policy question for the approver
+
+Should `stock_controller` be able to **POST a Delivery Note** (a genuine "the goods have shipped" action)? Proposed **yes** (it already owns every physical stock movement). If **no**, drop the `sales_documents:post` ✔ for `stock_controller` and DN/RN posting becomes `accountant`/`admin` only.
+
+### Engineering after approval
+
+One additive `permissions` + `role_permissions` migration (mirroring `0010`/`0030`); `<PermissionRoute feature="…" action="read">` on the list/detail routes; `useCanAccess()` on the create/edit/delete/post/export/import controls (hide, don't disable); a self-lockout guard on `financial_periods`; tests by representative role; and a re-confirm that RLS (Layer 1) is unchanged and remains the real tenant boundary independent of any of this.
+
+## Admin self-lockout guard (UI + DB, M11 → 0065)
 
 The Users & Roles admin page (`/admin/users`) disables:
 - the access-level (`ProfileRole`) selector for the signed-in user's own
   row, and
 - the Suspend/Reactivate button for the signed-in user's own row.
 
-This is a UI convenience only — nothing in the backend (RLS,
-`ProfileService.changeRole()`/`setActive()`) currently stops an admin from
-demoting or suspending themselves via a direct call, and no such guard
-was added at the service layer in M11 (that would be a business-logic
-change, out of scope here). If that matters, it should be a deliberate
-service-layer decision in a future phase, not something to infer from a
-UI disable alone.
+**As of migration `0065` (2026-09-05) this is also enforced at the
+database.** `protect_profile_privileged_columns` (the BEFORE UPDATE trigger
+on `profiles`, migrations 0012 / 0016) now, inside its admin branch, raises
+when `old.id = auth.uid()` and the update would either drop the caller's own
+`admin` access level or set their own `is_active = false`. So a direct
+`ProfileService.changeRole()` / `setActive()` call (or any raw client
+`.update()`) can no longer strip the caller's own administrator access —
+`0 rows` is no longer the only thing standing between an admin and
+self-lockout.
+
+Recovery is deliberately preserved: `superuser` and a no-`auth.uid()`
+direct DB connection are both returned early by the trigger (unchanged from
+0016), so a genuinely locked-out admin can always be restored by a
+superuser or by the project owner via SQL. Changing *other* users is
+unaffected — an admin can still demote/suspend anyone else in their company.
+
+## Canonical existing-company onboarding flow (0065)
+
+There is no self-serve "join an existing company" (that would be a
+tenant-isolation bypass — see docs/SUPABASE_MIGRATION_GUIDE.md Phase T).
+The one supported path for a person to join a company that already exists:
+
+1. The person signs up themselves at `/signup` → a `profiles` row is
+   auto-created by the `handle_new_user` trigger with `company_id = NULL`.
+2. A company **admin** opens `/admin/users` → **Add user**, types the
+   person's exact email. `find_unassigned_profile_by_email` (RPC, 0014)
+   returns the single matching unassigned profile.
+3. The admin clicks **Add to company** → the `add_existing_user_to_company`
+   RPC (0065) assigns `company_id` atomically. Before 0065 this step was a
+   silent no-op: the follow-up `UPDATE profiles SET company_id` matched
+   `0 rows` because the profiles SELECT RLS hides a `company_id IS NULL`
+   row from a company admin, and Postgres applies SELECT policies to an
+   UPDATE whose WHERE reads a column. The RPC (SECURITY DEFINER,
+   `authenticated`-only, caller derived from `auth.uid()`, `FOR UPDATE`
+   lock so two companies can't both claim the same signup, controlled
+   error on every failure, **never** treats `0 rows` as success) replaces
+   it. NOT fixed by broadening the SELECT policy — that would leak every
+   pending signup's email to any company admin.
+4. The admin sets the person's **access level** (`ProfileRole`, drives RLS)
+   and optionally assigns one or more **fine-grained roles** (drives
+   `useCanAccess()` UI gating). A company-scoped role assignment now
+   requires (trigger `user_roles_company_integrity`, 0065) that the target
+   user actually belongs to that company and that a custom role belongs to
+   it — so a role can't be assigned to a foreign-company user or to a
+   signup that hasn't been onboarded yet.
+5. The person can now sign in and reach the company app per their
+   permissions.

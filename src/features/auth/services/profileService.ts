@@ -61,18 +61,17 @@ export class ProfileService {
     return this.repository.findUnassignedByEmail(email);
   }
 
-  /** A company admin adds an already-signed-up, still-companyless user to their company. */
-  async addExistingUserToCompany(actorId: ID, targetUserId: ID, companyId: ID): Promise<void> {
-    await this.repository.updateCompany(targetUserId, companyId);
-    await this.auditLog.log({
-      userId: actorId,
-      action: 'edited',
-      module: 'admin',
-      recordType: 'Profile',
-      recordId: targetUserId,
-      newValue: { companyId },
-      reason: 'Added to company',
-    });
+  /**
+   * A company admin adds an already-signed-up, still-companyless user to
+   * their company. Routes through the add_existing_user_to_company RPC
+   * (migration 0065) — which derives the acting admin from auth.uid()
+   * (the `actorId` arg is NOT trusted/forwarded), validates every
+   * precondition, is concurrency-safe, throws a controlled error on any
+   * failure, and writes its own audit row in the same transaction as the
+   * assignment (so no separate client-side audit call here).
+   */
+  async addExistingUserToCompany(_actorId: ID, targetUserId: ID, companyId: ID): Promise<void> {
+    await this.repository.addExistingUserToCompany(targetUserId, companyId);
   }
 
   updateOwnProfile(userId: ID, patch: { firstName?: string; lastName?: string }): Promise<void> {

@@ -12,6 +12,7 @@ import { PurchaseOrderList } from '../components/PurchaseOrderList';
 import { PurchaseOrderFormModal } from '../components/PurchaseOrderFormModal';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 import type { CreatePurchaseOrderDTO } from '../services';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 /**
  * Purchase Orders — route `/purchases/orders`, the list only. A row click
@@ -27,6 +28,7 @@ export function PurchaseOrdersPage() {
   const { purchaseOrders, isLoading, error, refetch } = usePurchaseOrders();
   const { suppliers } = useSuppliers();
   const poMutations = usePurchaseOrderMutations();
+  const canCreate = useCanAccess('purchasing', 'create');
 
   const [showCreate, setShowCreate] = useState(false);
 
@@ -47,10 +49,12 @@ export function PurchaseOrdersPage() {
           title="Purchase Orders"
           description="Orders placed with suppliers, from draft through to a converted bill."
           actions={
-            <Button size="sm" onClick={() => setShowCreate(true)}>
-              <Plus data-icon="inline-start" />
-              New purchase order
-            </Button>
+            canCreate ? (
+              <Button size="sm" onClick={() => setShowCreate(true)}>
+                <Plus data-icon="inline-start" />
+                New purchase order
+              </Button>
+            ) : undefined
           }
         />
 

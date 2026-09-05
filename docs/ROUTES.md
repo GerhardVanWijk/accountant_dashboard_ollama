@@ -1,5 +1,10 @@
 # ROUTE REGISTRY
 
+> **⚠ PARTIALLY STALE (flagged 2026-09-05).** `src/app/router.tsx` is authoritative — it has
+> ~110 authenticated routes; the table below predates several feature areas. Missing rows added
+> in the "Added since this table was written" section at the bottom. When in doubt, read
+> `router.tsx` and `src/lib/app/navigation.ts`.
+
 > **Record-page overlays (2026-09-03, increment 3):** every `*DetailPage` below marked
 > "(record page)" also accepts `{ recordId, embedded }` (`RecordPageProps`) and can be
 > rendered by `<RelatedRecordPreview>` as a large over-the-page overlay — no new route, no
@@ -85,3 +90,21 @@
 | `/reset-password` | `auth` | Set A New Password | *(unauthenticated — Supabase reset-link callback target, no nav entry, M6)* |
 | `/onboarding` | `auth` | Set Up Your Company | *(authenticated, pre-company, no nav entry)* |
 | `/admin/superuser` | `admin` | Superuser Dashboard | *(superuser-only, self-contained layout, no top nav)* |
+
+## Added since this table was written (verified against `src/app/router.tsx`, 2026-09-05)
+
+| Route Endpoint | Feature Domain | Page Title | Navigation Section |
+|---|---|---|---|
+| `/companies` | `admin` | Company profile / document branding | Admin |
+| `/financial-periods` | `accounting` | Financial Periods (open / soft-close / close / lock) | Accounting (via Accounting Settings) |
+| `/accounting/journals/:journalEntryId` | `accounting` | Journal Entry detail (full page — replaces the side-sheet) | — (record page) |
+| `/sales/orders/:orderId/deliver` | `sales` | Create Delivery Note (full-page form) | — |
+| `/sales/delivery-notes` | `sales` | Delivery Notes | Sales |
+| `/sales/delivery-notes/:deliveryNoteId` | `sales` | Delivery Note detail | — (record page) |
+| `/sales/delivery-notes/:deliveryNoteId/return` | `sales` | Create Return Note (full-page form) | — |
+| `/sales/return-notes` | `sales` | Return Notes | Sales |
+| `/sales/return-notes/:returnNoteId` | `sales` | Return Note detail | — (record page) |
+| `/tax/income-tax` · `/tax/capital-gains` · `/tax/dividends` · `/tax/provisional-tax` | `tax` | Income Tax · Capital Gains · Dividends Tax · Provisional Tax | Tax |
+| `/reports/forecasting` | `reports` | Forecasting — Budget vs Forecast vs Actual | Reports |
+| `/inventory/categories` · `/inventory/movements` · `/inventory/adjustments` · `/inventory/transfers` · `/inventory/stock-takes` · `/inventory/supplier-returns` · `/inventory/opening-stock` · `/inventory/operations` | `inventory` | list pages for each inventory transaction type | Inventory |
+| `/inventory/reports` + 15 sub-routes (`stock-on-hand`, `valuation`, `low-stock`, `out-of-stock`, `movements`, `adjustments`, `transfers`, `stock-take-variance`, `inventory-reconciliation`, `goods-delivered-not-invoiced`, `category-analysis`, `warehouse-analysis`, `supplier-analysis`, `margin-analysis`, `slow-moving`) | `inventory` | Inventory Reports hub + individual reports | Inventory / Reports |

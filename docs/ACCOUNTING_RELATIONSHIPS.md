@@ -609,9 +609,31 @@ by transcript — company list + read-only aggregate counts against Office
 National Demo)
 
 ## PHASE 9B IMPLEMENTATION:
-**NOT STARTED**
+**COMPLETE + ACTIVATED (2026-09-05).**
 
-**NO COMMITS. NO PUSHES.**
+Migrations `0037`–`0042` (normalized `invoice_lines` / `bill_lines` / `purchase_order_lines` /
+`credit_note_lines` + exact-only backfill) applied 2026-09-01. `0062` (atomic `invoice_lines`
+projection inside `create_invoice_from_sales_order`, gated by the same flag) applied 2026-09-05.
+`0063` (pre-activation parity correction — NULLed 58 seed-written stray `warehouse_id` values so
+the projection equals a fresh re-projection of the authoritative jsonb) applied 2026-09-05.
+
+`NORMALIZED_DOCUMENT_LINES_ENABLED = true` since 2026-09-05 (branch `hardening-2026-09-05`).
+This activates the **WRITE side only**: `SupabaseDocumentLineProjector` dual-writes each
+document's lines into the normalized table on every create / line-touching update, and the
+SO→invoice RPC projects its lines atomically. **No reader consults the normalized tables** — the
+jsonb `line_items` column remains the single source of truth for every report, search, print and
+posting path. Forward-write parity was proven live (rollback-wrapped) before the flip; a
+read-only SQL sweep replicating `DocumentLineParityChecker` showed 340/340 lines MATCH with zero
+orphans / duplicates / count-mismatches / cross-company rows. Full procedure + rollback:
+`docs/PHASE_9B_DESIGN.md` § 4c.
+
+The §17 forward-write contract (write the normalized row in the same call as the jsonb) is now
+in force for every path: the four TS document services via the flag-gated projector, and
+`create_invoice_from_sales_order` via `p_project_lines`. The reader migration (reports / search /
+traceability join `*_lines` instead of re-parsing jsonb) remains separate future work.
+
+**NO COMMITS. NO PUSHES.** _(historical — superseded; this run commits + pushes to
+`hardening-2026-09-05` only, never `main`.)_
 
 ---
 

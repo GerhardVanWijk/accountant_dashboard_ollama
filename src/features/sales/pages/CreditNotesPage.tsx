@@ -12,6 +12,7 @@ import { useCreditNotes } from '@/features/sales/hooks/useCreditNotes';
 import { useCreditNoteMutations } from '@/features/sales/hooks/useCreditNoteMutations';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { useCustomerMap, useCustomerList } from '@/features/sales/hooks/useCustomerMap';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 /**
  * Route target for /sales/credit-notes — the list only. A row click
@@ -31,6 +32,7 @@ export function CreditNotesPage() {
   const { customers: customerList } = useCustomerList();
   const { invoices } = useInvoices();
   const { createCreditNote, error: mutationError } = useCreditNoteMutations({ onSuccess: () => refetch() });
+  const canCreate = useCanAccess('sales_documents', 'create');
 
   const nextCreditNoteNumber = `CN-${new Date().getFullYear()}-${String(creditNotes.length + 1).padStart(4, '0')}`;
 
@@ -52,10 +54,12 @@ export function CreditNotesPage() {
           title="Credit notes"
           description="Credits raised against issued invoices. Applied notes reduce the customer balance and reverse the output VAT."
           actions={
-            <Button size="sm" onClick={() => setShowForm(true)}>
-              <Plus data-icon="inline-start" />
-              New credit note
-            </Button>
+            canCreate ? (
+              <Button size="sm" onClick={() => setShowForm(true)}>
+                <Plus data-icon="inline-start" />
+                New credit note
+              </Button>
+            ) : undefined
           }
         />
 

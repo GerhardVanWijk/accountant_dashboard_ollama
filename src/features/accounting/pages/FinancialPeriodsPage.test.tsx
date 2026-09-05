@@ -3,6 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { AccountingPeriod, FinancialYear } from '@/types';
 import { FinancialPeriodsPage } from './FinancialPeriodsPage';
 import { accountingPeriodService, financialYearService } from '../services';
+import { useAuthStore } from '@/stores/authStore';
+import { usePermissionStore } from '@/features/auth/stores/permissionStore';
 
 vi.mock('../services', () => ({
   accountingPeriodService: {
@@ -57,6 +59,12 @@ function makePeriod(overrides: Partial<AccountingPeriod> = {}): AccountingPeriod
 describe('FinancialPeriodsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // financial_periods:manage gates the close/lock/reopen controls (migration
+    // 0064). admin bypasses useCanAccess() — the default state for these tests.
+    useAuthStore.setState({
+      profile: { id: 'u1', role: 'admin', companyId: 'c1', isActive: true, createdAt: '', updatedAt: '' },
+    });
+    usePermissionStore.getState().clear();
   });
 
   it('shows a loading state while periods are being fetched', () => {
@@ -117,5 +125,32 @@ describe('FinancialPeriodsPage', () => {
     await waitFor(() =>
       expect(mockedReopenPeriod).toHaveBeenCalledWith('period_current', 'system', 'Correcting a posting error'),
     );
+  });
+
+  it('hides every close/lock/reopen control from a user without financial_periods:manage', async () => {
+    useAuthStore.setState({
+      profile: { id: 'u2', role: 'viewer', companyId: 'c1', isActive: true, createdAt: '', updatedAt: '' },
+    });
+    usePermissionStore.getState().setPermissions('c1', [
+      { id: 'p1', feature: 'financial_periods', action: 'read', createdAt: '' },
+    ]);
+    mockedGetFinancialYears.mockResolvedValue([makeYear()]);
+    mockedGetPeriods.mockResolvedValue([makePeriod({ status: 'closed' })]);
+    render(<FinancialPeriodsPage />);
+
+    await screen.findAllByText('Test Period Alpha');
+    expect(screen.queryByRole('button', { name: /close period/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /lock period/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^reopen$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /close financial year/i })).not.toBeInTheDocument();
+  });
+
+  it('disables locking the period that covers today (self-lockout guard)', async () => {
+    mockedGetFinancialYears.mockResolvedValue([makeYear()]);
+    mockedGetPeriods.mockResolvedValue([makePeriod()]); // makePeriod() is the current, open period
+    render(<FinancialPeriodsPage />);
+
+    await screen.findAllByText('Test Period Alpha');
+    expect(screen.getByRole('button', { name: /lock period/i })).toBeDisabled();
   });
 });

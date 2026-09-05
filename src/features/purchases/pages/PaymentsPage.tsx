@@ -12,6 +12,7 @@ import { PaymentList } from '../components/PaymentList';
 import { PaymentFormModal } from '../components/PaymentFormModal';
 import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 import type { CreatePaymentDTO } from '../services';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 /**
  * Supplier Payments (Accounts Payable) — route `/purchases/payments`, the
@@ -27,6 +28,7 @@ export function PaymentsPage() {
   const { bills, refetch: refetchBills } = useBills();
   const { suppliers } = useSuppliers();
   const { createPayment, isLoading: isSubmittingPayment } = usePaymentMutations();
+  const canRecord = useCanAccess('purchasing', 'post');
 
   const [showCreate, setShowCreate] = useState(false);
 
@@ -49,10 +51,12 @@ export function PaymentsPage() {
           title="Supplier Payments"
           description="Money paid to suppliers, allocated against open bills."
           actions={
-            <Button size="sm" disabled={isSubmittingPayment} onClick={() => setShowCreate(true)}>
-              <Plus data-icon="inline-start" />
-              Record payment
-            </Button>
+            canRecord ? (
+              <Button size="sm" disabled={isSubmittingPayment} onClick={() => setShowCreate(true)}>
+                <Plus data-icon="inline-start" />
+                Record payment
+              </Button>
+            ) : undefined
           }
         />
 

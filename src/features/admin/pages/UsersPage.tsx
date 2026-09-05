@@ -29,12 +29,13 @@ function initialsFor(user: Profile): string {
  * "Add an existing user" — this app's real substitute for an email
  * invitation flow: it has no invite-delivery mechanism, so a colleague
  * signs up themselves first (at /signup), and a company admin adds them
- * here by their exact email (profileService.findUnassignedByEmail /
- * addExistingUserToCompany — both real, both audited). Re-skinned onto
- * v0's Dialog (M10); the honest copy about no email delivery is preserved
- * rather than replaced with v0's own "This is a UI demonstration — no
- * invitation is sent" fake-invite dialog, since this app's version
- * actually works.
+ * here by their exact email. Lookup is find_unassigned_profile_by_email
+ * (RPC, migration 0014); the assignment is the add_existing_user_to_company
+ * RPC (migration 0065) — a SECURITY DEFINER path that validates every
+ * precondition, is concurrency-safe, audits in-transaction, and (unlike the
+ * plain UPDATE it replaced, which RLS silently reduced to a 0-row no-op)
+ * throws a controlled error the dialog surfaces. Re-skinned onto v0's
+ * Dialog (M10); the honest copy about no email delivery is preserved.
  */
 function AddExistingUserDialog({ companyId, actorId, canCreate, onAdded }: { companyId: string; actorId: string; canCreate: boolean; onAdded: () => void }) {
   const [open, setOpen] = useState(false);
@@ -141,7 +142,7 @@ function AddExistingUserDialog({ companyId, actorId, canCreate, onAdded }: { com
   );
 }
 
-/** Assigns one of the company's fine-grained Roles (src/types/role.ts) to a user — userRoleService.assign(), real and previously unwired to any UI (M10). Gated by user_management:update (M11) — role assignment is an access-control change, the same category of action that permission key already covers. */
+/** Assigns one of the company's fine-grained Roles (src/types/role.ts) to a user — userRoleService.assign(), real and previously unwired to any UI (M10). Gated by user_management:update (M11) — role assignment is an access-control change, the same category of action that permission key already covers. The DB additionally enforces (trigger user_roles_company_integrity, migration 0065) that the target user actually belongs to this company and the role is available to it. */
 function AssignRoleDialog({ companyId, actorId, userId, roles, alreadyAssignedRoleIds, canAssign, onAssigned }: { companyId: string; actorId: string; userId: string; roles: Role[]; alreadyAssignedRoleIds: string[]; canAssign: boolean; onAssigned: () => void }) {
   const [open, setOpen] = useState(false);
   const [roleId, setRoleId] = useState('');

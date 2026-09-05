@@ -3,6 +3,7 @@ import type { ID, Invoice, SalesOrder } from '@/types';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
 import { newUuid } from '@/lib/uuid';
 import { documentNumberPrefix, nextDocumentNumber } from '@/features/purchases/utils/nextDocumentNumber';
+import { NORMALIZED_DOCUMENT_LINES_ENABLED } from '@/config/featureFlags';
 import type {
   BuiltInvoiceFromSelections,
   SalesOrderInvoiceSelection,
@@ -110,6 +111,11 @@ export class RpcSalesOrderDraftInvoiceWriter implements SalesOrderDraftInvoiceWr
       })),
       p_created_by: createdBy ?? null,
       p_issue_date: null,
+      // Phase 9B / Block B: the RPC inserts the invoice in raw SQL and never
+      // reaches `SupabaseDocumentLineProjector`, so it does its own atomic
+      // `invoice_lines` projection when — and only when — the same flag that
+      // gates the TS projector is on (migration 0062).
+      p_project_lines: NORMALIZED_DOCUMENT_LINES_ENABLED,
     });
     if (error) {
       throw new Error(error.message.replace(/^create_invoice_from_sales_order:\s*/i, ''));

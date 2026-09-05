@@ -219,8 +219,8 @@ describe('Phase 9B normalized-line migration contract (0037-0042)', () => {
     });
   });
 
-  it('the NORMALIZED_DOCUMENT_LINES feature flag ships OFF', () => {
+  it('the NORMALIZED_DOCUMENT_LINES feature flag is ACTIVATED (2026-09-05, migrations 0037-0042 + 0062 + 0063 live, parity clean)', () => {
     const flag = readFileSync(join(process.cwd(), 'src', 'config', 'featureFlags.ts'), 'utf8');
-    expect(flag).toMatch(/export const NORMALIZED_DOCUMENT_LINES_ENABLED\s*=\s*false\s*;/);
+    expect(flag).toMatch(/export const NORMALIZED_DOCUMENT_LINES_ENABLED\s*=\s*true\s*;/);
   });
 });

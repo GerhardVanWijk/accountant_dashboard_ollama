@@ -55,9 +55,19 @@ export class SupabaseProfileRepository implements IProfileRepository {
     if (error) throw new Error(`SupabaseProfileRepository.updateRole: ${error.message}`);
   }
 
-  async updateCompany(userId: ID, companyId: ID | undefined): Promise<void> {
-    const { error } = await this.client.from('profiles').update({ company_id: companyId ?? null }).eq('id', userId);
-    if (error) throw new Error(`SupabaseProfileRepository.updateCompany: ${error.message}`);
+  /**
+   * Onboards a companyless signup into a company through the
+   * add_existing_user_to_company RPC (migration 0065). The RPC's error
+   * messages are written to be shown to the user verbatim (same intent as
+   * create_company_and_become_admin), so this rethrows the raw DB message
+   * rather than the usual `SupabaseProfileRepository.x:` prefix.
+   */
+  async addExistingUserToCompany(userId: ID, companyId: ID): Promise<void> {
+    const { error } = await this.client.rpc('add_existing_user_to_company', {
+      p_user_id: userId,
+      p_company_id: companyId,
+    });
+    if (error) throw new Error(error.message);
   }
 
   async setActive(userId: ID, isActive: boolean): Promise<void> {

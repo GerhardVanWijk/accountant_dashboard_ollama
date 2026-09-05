@@ -7,6 +7,171 @@ each section.
 
 ## Open
 
+### 2026-09-06 (FINAL USER MANAGEMENT / ONBOARDING SECURITY FIX) — migration 0065
+
+Branch `hardening-2026-09-05` (off `main` `f7ec377`). `main` untouched. Pre-merge correctness/security fix.
+Gate: **2767 tests / 335 files** PASS · tsc PASS · eslint (`--max-warnings 0`) PASS · build PASS.
+Live accounting byte-identical to the pre-run baseline (TB `R0.00`, GL 1200 = physical inventory
+`R1,478,853.74`, 247 JE / 928 lines / 343 movements). Security advisors: **87 WARN / 0 ERROR**
+(was 88 — `protect_profile_privileged_columns` is no longer anon-/authenticated-executable; the one
+new `authenticated_security_definer_function_executable` for the onboarding RPC is the same,
+intentional, locked-down class as `create_company_and_become_admin` / `find_unassigned_profile_by_email`).
+
+**RESOLVED this run:**
+- **"Add an existing user to my company" silently no-ops** — CLOSED. Live-verified 2026-09-05
+  (rollback-wrapped, as the real company admin): `ProfileService.addExistingUserToCompany` looked
+  the user up through `find_unassigned_profile_by_email` (RPC, works) then ran a plain
+  `UPDATE public.profiles SET company_id = <co> WHERE id = <user>` that matched **0 rows and threw
+  no error** — the dialog reported success, nothing happened. Root cause: Postgres applies a
+  table's SELECT policies to an UPDATE whose WHERE reads a column; the target row has
+  `company_id IS NULL`, which `profiles_select_self_or_company` / `_superuser` hide from a company
+  admin, so the row is filtered out before `profiles_update_admin_same_company` (whose USING
+  deliberately includes `company_id IS NULL`) can act. Proven: a temporary admin SELECT policy over
+  `company_id IS NULL` rows made the identical UPDATE succeed (1 row). **Fix (migration `0065`):**
+  new `add_existing_user_to_company(p_user_id, p_company_id)` RPC — SECURITY DEFINER, locked
+  `search_path`, `authenticated`-only, caller derived from `auth.uid()` (never a client arg),
+  validates authenticated / admin-or-superuser / company-exists / admin-scoped-to-own-company /
+  target-exists / target-not-superuser / not-self / target-unassigned, `SELECT … FOR UPDATE` on the
+  target so two companies can't both claim one signup, **never returns success on 0 affected rows**,
+  writes its own `audit_log_entries` row in the same transaction, idempotent on a safe retry
+  (`ALREADY_IN_COMPANY`). `ProfileService` / `SupabaseProfileRepository` now call the RPC and
+  propagate its (deliberately user-facing) error message; the broken `updateCompany` primitive is
+  **removed**, not kept as a fallback. NOT fixed by broadening the profiles SELECT policy (would
+  leak every pending signup's email to any admin).
+- **Admin self-lockout was UI-disable only** — CLOSED at the DB. `docs/PERMISSIONS.md` "Admin
+  self-lockout guard" noted nothing in the backend stopped an admin demoting / suspending
+  themselves (live-confirmed: a direct `UPDATE profiles SET role='viewer' WHERE id=<self>` succeeded).
+  `0065` extends `protect_profile_privileged_columns` (BEFORE UPDATE trigger on `profiles`): inside
+  the admin branch, when `old.id = auth.uid()`, it raises if the update drops the caller's own
+  `admin` role or sets their own `is_active = false`. `superuser` + no-`auth.uid()` direct DB are
+  still returned early → both remain full recovery paths, no account becomes unrecoverable.
+  Changing *other* users is unaffected.
+- **`user_roles` could reference a user in another / no company** — CLOSED. `user_roles_insert_admin`
+  only checked the inserted `company_id` was the caller's; it never checked the target belonged to
+  it. `0065` adds a BEFORE INSERT/UPDATE trigger `user_roles_company_integrity` (SECURITY DEFINER
+  function): the target profile's `company_id` must equal the row's `company_id`, and a custom role
+  must belong to that company. Superuser / no-`auth.uid()` bypass.
+- **Grant regression from migration 0016** — `0016`'s `create or replace` of
+  `protect_profile_privileged_columns` silently re-granted the `anon` + `authenticated` EXECUTE that
+  `0013` had revoked (this project has an `ALTER DEFAULT PRIVILEGES` rule granting EXECUTE on every
+  new public function). `0065` re-applies the revokes for that function and does the same for the
+  two functions it adds.
+
+**Live verification (all rollback-wrapped, 0 rows persisted — re-verified: profiles 6, companies 3,
+user_roles 0, audit_log_entries 4, TB 0.00, GL 1200 R1,478,853.74):** 14 RLS-session scenarios all
+PASS — A unassigned+admin → ASSIGNED; D admin+unassigned → ASSIGNED; idempotent retry →
+ALREADY_IN_COMPANY; B non-admin → rejected; C target already in another company → rejected; E second
+company claims the same user → rejected (loser blocks on the row lock, then sees it assigned); F
+admin self-demote → rejected; F admin self-suspend → rejected; G admin changes a foreign-company
+user's role → RLS 0 rows; G+ admin changes a same-company user's role → 1 row (allowed); H assign
+fine-grained role to a same-company user → 1 row; I assign role to a foreign-company user → rejected;
+J assign role to an un-onboarded signup → rejected; K privilege escalation of an in-company user to
+`superuser` → silently reverted (unchanged).
+
+**Database writes this run:** one `apply_migration` (`0065` — 1 RPC, 1 trigger function replaced, 1
+new trigger + function, grant revokes; **zero** DDL on business tables, **zero** RLS policy changes,
+**zero** data rows). Every live check rollback-wrapped. `main` NOT merged, NOT deployed.
+
+### 2026-09-05 (FINAL CORE HARDENING run) — normalized lines ACTIVATED, app-wide permission catalog, migrations 0063 + 0064
+
+Branch `hardening-2026-09-05` (off `main` `f7ec377`). `main` untouched. Gate: **2739 tests / 332 files**,
+tsc / eslint (`--max-warnings 0`) / build clean. Live accounting byte-identical to the pre-run baseline
+(TB 0.00, GL 1200 = physical inventory R1,478,853.74, 247 JE / 928 lines / 343 movements, 0 negative /
+0 unbalanced / 0 cross-company / 0 normalized-line orphans). Security advisors: 88 WARN / 0 ERROR
+(unchanged — 0063 is a data UPDATE, 0064 is catalog INSERTs, neither adds a function or touches RLS).
+
+**RESOLVED / DONE this run:**
+- **Normalized document lines ACTIVATED** — `NORMALIZED_DOCUMENT_LINES_ENABLED = true`. Controlled
+  procedure: flag-off-window scan (only INV-1068/1072/1074 touched since the seed, by the 5B.1
+  `salesOrderLineId` jsonb backfill — a non-projected field, parity already fine); read-only SQL parity
+  sweep replicating `DocumentLineParityChecker`; migration **`0063`** NULLed 58 seed-written stray
+  `warehouse_id` values (invoice 40 / bill 10 / PO 7 / CN 1 — the jsonb line has no `warehouseId`,
+  0042's backfill and the live projector both write NULL there); re-swept → 340/340 MATCH, 0
+  orphans/dupes/count-mismatches/cross-company; rollback-wrapped live forward-write smoke test of
+  `create_invoice_from_sales_order(p_project_lines := true)` → exact field-for-field parity, 0 persisted;
+  flipped the flag + updated 3 tests. Only the WRITE side is gated; no reader consults the normalized
+  tables yet; jsonb `line_items` stays authoritative. Full detail: `docs/PHASE_9B_DESIGN.md` § 4c.
+  Rollback: flip to `false` (dual-write stops, no data loss); 0063 reversible — re-set `warehouse_id =
+  '692a3d01-9835-4340-b5ab-44fe96067490'` on the 58 seed line ids matching
+  `5eed0000-0000-4000-8000-(31|71|61|41)%` (full list in 0063's `raise notice`).
+- **App-wide permission catalog** — migration **`0064`** added 9 features (`sales_documents`,
+  `fulfilment`, `purchasing`, `banking`, `assets`, `tax`, `compliance`, `financial_periods`, `audit`),
+  38 permission rows, 86 system-role grants, under the brief's APPROVED policy. `permissionRouteMap.ts`
+  + `router.tsx` `<PermissionRoute action="read">` on every previously-ungated Sales/Purchasing/Banking/
+  Assets/Tax/Compliance/Periods/Audit route. `useCanAccess()` action gates on the primary create/record
+  controls of Quotes / Sales Orders / Credit Notes / Customer Receipts / Purchase Orders / Bills /
+  Supplier Payments, plus the Financial-Periods close/lock/reopen controls + a "can't lock the period
+  covering today" self-lockout guard. Tests: `permissionCatalogHardening.test.ts` (36),
+  `FinancialPeriodsPage.test.tsx` (gate + self-lockout). **No lockout:** `user_roles` = 0, only
+  functional users are admin + superuser (bypass `useCanAccess`), the 4 viewer profiles have
+  `company_id = NULL`; 0064 writes zero `user_roles` / zero `profiles` rows. **RLS unchanged.**
+  Full grid + rationale: `docs/PERMISSIONS.md` § "Ungated areas — CLOSED 2026-09-05".
+- **FIFO gate** — re-confirmed: `FIFO_VALUATION_ENABLED = false` unchanged, 0 live products on `fifo`,
+  `ProductForm`/`ProductService` gate still enforced (tests green in the full suite). No `SupabaseStockLotRepository` built (post-v1).
+
+**STILL OPEN / DEFERRED (POST-V1, non-blocking):**
+- **Exhaustive per-button action gating.** Banking / Assets / Tax / Compliance pages and the document
+  *detail* pages (post / reverse / void / issue buttons) are NOT yet individually `useCanAccess()`-gated.
+  The route-level `:read` gate already fully blocks every role lacking read on those features; the
+  residual is a role with `:read` but not full mutation (chiefly `finance_manager`, a trusted senior
+  role) still seeing a mutation button that then hits RLS — defense-in-depth, not a hole. Folds into the
+  human-QA UI-polish pass.
+- **jsonb `line_items` warehouse enrichment.** All 40 divergent invoice lines 0063 nulled DO have a
+  posted, immutable `stock_movements` row confirming "Main Distribution Centre". Enriching the
+  authoritative jsonb from those movements (instead of nulling the projection) is a defensible
+  data-quality improvement — deliberately NOT taken here because it mutates the authoritative source
+  during a controlled non-destructive activation. Needs its own explicit decision.
+- **Normalized-line reader migration.** Nothing reads `*_lines` as authoritative yet. Switching
+  reports / search / traceability to join the normalized tables instead of re-parsing jsonb is separate
+  future work (explicitly out of Phase 9B scope).
+- **Human browser QA** — still required (no browser tooling here). Now also a role-based click-through of
+  the permission gates + a create/edit smoke of each document type with the normalized flag on.
+  Checklist: `docs/CURRENT_TASKS.md` § P1.
+
+**Database writes this run:** `apply_migration` × 2 — `0063` (one `do $$` block, 58-row UPDATE across
+the 4 `*_lines` tables, guarded by an exact-count assertion) and `0064` (INSERT into `permissions` +
+`role_permissions`, `on conflict do nothing`, guarded by 38/86 count assertions). One rollback-wrapped
+`execute_sql` transaction for the forward-write smoke test (0 rows persisted, re-verified: invoices 83,
+invoice_lines 240). No other live writes.
+
+### 2026-09-05 (Block A + B run) — 0061/0062 applied live, FIFO gated, normalized-lines blocker resolved
+
+Branch `hardening-2026-09-05` (off `main` `f7ec377`). `main` untouched pending human browser QA. Full
+detail: `docs/CURRENT_TASKS.md` §§ P0–P4. Gate: **2701 tests / 331 files**, tsc/eslint/build clean.
+
+**RESOLVED this run:**
+- **Return Note ↔ Sales Order fulfilment (P0 / migration `0061`)** — APPLIED + live-verified. The DB
+  RPCs `post_delivery_note` / `create_invoice_from_sales_order` now run the SAME return-aware formula
+  the UI read-model already used (`netDeliveredQty = deliveredQty − returnedUninvoicedQty`, no
+  double-subtraction). Proven live (rollback-wrapped): re-delivering previously-returned stock now
+  succeeds; over-delivery / over-invoice correctly rejected with the exact remaining figures;
+  delivery-note / return-note journals touch only GL 1200 / 1220. The "MEDIUM — re-delivering
+  previously-returned stock not netted into `remainingToDeliver`" entry below is now CLOSED.
+- **FIFO production trap (P4)** — GATED. `FIFO_VALUATION_ENABLED = false`; `ProductForm` hides the
+  option and `ProductService` rejects a new switch to `fifo` at the service layer. 0 live products on
+  FIFO, so zero behavioural / accounting impact. `MockStockLotRepository` stays wired but is now
+  unreachable through the product forms — the "only Mock repo in prod" finding is de-fanged (still
+  worth a real `SupabaseStockLotRepository` before the flag ever flips).
+- **Normalized-document-lines SO→invoice blocker (P3 / migration `0062`)** — RESOLVED.
+  `create_invoice_from_sales_order` now does an OPT-IN, transaction-atomic `invoice_lines` projection
+  from the SAME `v_new_lines` array it writes to jsonb (no recalculation; stale FK → NULL), gated by
+  the SAME `NORMALIZED_DOCUMENT_LINES_ENABLED` flag as the TS projector. Forward-write parity proven
+  live for both direct and delivery-linked invoices — exact field-for-field, no dupes, no orphans.
+  Classification: **READY FOR CONTROLLED ACTIVATION**. Flag still `false` — the flip is its own
+  dedicated change (backfill flag-off-window docs → `DocumentLineParityChecker` live → flip → monitor).
+
+**STILL OPEN / STOPPED (at the time of that run — now superseded by the FINAL CORE HARDENING run above):**
+- ~~**Permissions rollout (P2)** — STOPPED for product approval.~~ **RESOLVED** — approved by the
+  FINAL CORE HARDENING BLOCK brief and applied via migration `0064` (see the run above).
+- **Human browser QA** — still required (no browser tooling here). Checklist: `docs/CURRENT_TASKS.md` §P1.
+
+**Database writes this run:** two `apply_migration` DDL calls only (`0061`, `0062` — function
+replacement, zero data change). Every live verification was rollback-wrapped; leftover-row counts
+confirmed 0. Live accounting byte-identical to the pre-run baseline (TB 0.00, GL 1200 = physical
+inventory R1,478,853.74, 247 journal entries / 928 lines / 343 movements, 0 negative stock, 0
+unbalanced, 0 orphan/dup normalized lines, 0 cross-company). Security advisors: 88 WARN / 0 ERROR
+(unchanged — 0061/0062 are `security invoker`, add none).
+
 ### 2026-09-05 (final same-day run) — Pre-merge stabilization: Return Note fulfilment fix, normalized-lines blocker sharpened, Forecasting precision bug fixed
 
 Full detail: `docs/CURRENT_TASKS.md` § "PROJECT STATE" (PERMISSIONS DECISION MATRIX and HUMAN
@@ -518,15 +683,12 @@ Reported, **not fixed** (outside the increment's UI-only scope). `grep -rn "= ne
 `MockTaxRateRepository`/`MockInvoiceRepository` strings in the sales/tax barrels are comments and test
 re-exports only. Guarded against a *new* Mock wiring by `taxRateServiceWiring.test.ts`.
 
-### Pre-existing, unrelated to Phase T: `MockSupplierRepository.test.ts`'s accounts-payable delete guard fails, even in isolation
-Found while verifying Phase T (2026-08-23) — `npm test` reported this failing before and
-after every Phase T change, and it fails standalone (`npx vitest run
-src/features/suppliers/repositories/MockSupplierRepository.test.ts`), so it is not a
-test-order flake and not something this session's auth/roles/superuser work touched
-(Suppliers/Bills were never in scope). `service.deleteSupplier('sup_00000004')` resolves
-instead of rejecting when the supplier has linked open bills. Not investigated further —
-out of scope for Phase T; whoever picks up Suppliers/Purchases next should treat this as
-a real regression, not assume it's environmental.
+### ~~Pre-existing, unrelated to Phase T: `MockSupplierRepository.test.ts`'s accounts-payable delete guard fails~~ — RESOLVED (re-verified 2026-09-05)
+Found while verifying Phase T (2026-08-23): `service.deleteSupplier('sup_00000004')` resolved
+instead of rejecting when the supplier had linked open bills. **Re-verified 2026-09-05 (Block A/B
+run):** `npx vitest run src/features/suppliers/repositories/MockSupplierRepository.test.ts` now
+passes — 9/9, standalone and in the full suite. The delete-guard was fixed in a subsequent
+Suppliers/Purchases pass (the entry above was stale). No action needed.
 
 ### Phase T (Multi-Tenant Auth + Role System + Superuser Dashboard) — real, deliberate scope boundaries
 Built 2026-08-23: real Supabase email/password auth (replacing the anonymous-session

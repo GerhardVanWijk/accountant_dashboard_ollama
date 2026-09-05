@@ -21,10 +21,16 @@ export interface FinancialPeriodCardProps {
   onLock: () => void;
   onReopen: () => void;
   busy: boolean;
+  /**
+   * `financial_periods:manage` (migration 0064). When false the close/lock/
+   * reopen controls are hidden — a read-only view of period status. Also
+   * gates the "lock the current period" self-lockout guard below.
+   */
+  canManage?: boolean;
 }
 
 /** One accounting period, re-skinned onto v0's card language. Actions map 1:1 to AccountingPeriodService's real transitions — no client-side status logic. */
-export function FinancialPeriodCard({ period, isCurrent, onClose, onLock, onReopen, busy }: FinancialPeriodCardProps) {
+export function FinancialPeriodCard({ period, isCurrent, onClose, onLock, onReopen, busy, canManage = true }: FinancialPeriodCardProps) {
   const meta = periodMeta[period.status];
   const Icon = meta.icon;
 
@@ -59,23 +65,31 @@ export function FinancialPeriodCard({ period, isCurrent, onClose, onLock, onReop
         <span>{meta.note}</span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {period.status === 'open' && (
-          <>
-            <Button variant="outline" size="sm" disabled={busy} onClick={onClose}>
-              Close period
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-2">
+          {period.status === 'open' && (
+            <>
+              <Button variant="outline" size="sm" disabled={busy} onClick={onClose}>
+                Close period
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy || isCurrent}
+                title={isCurrent ? 'The period covering today cannot be locked — close it first, or lock it once it is no longer current.' : undefined}
+                onClick={onLock}
+              >
+                Lock period
+              </Button>
+            </>
+          )}
+          {period.status !== 'open' && (
+            <Button variant="outline" size="sm" disabled={busy} onClick={onReopen}>
+              Reopen
             </Button>
-            <Button variant="outline" size="sm" disabled={busy} onClick={onLock}>
-              Lock period
-            </Button>
-          </>
-        )}
-        {period.status !== 'open' && (
-          <Button variant="outline" size="sm" disabled={busy} onClick={onReopen}>
-            Reopen
-          </Button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </li>
   );
 }
