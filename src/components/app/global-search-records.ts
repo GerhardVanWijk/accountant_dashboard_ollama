@@ -5,6 +5,7 @@ import { productService } from '@/features/inventory/services/productService';
 import { deliveryNoteService, returnNoteService, quoteService, salesOrderService, creditNoteService } from '@/features/sales/services';
 import { invoiceService } from '@/services';
 import { billService, purchaseOrderService } from '@/features/purchases/services';
+import { journalEntryService } from '@/features/accounting/services';
 
 export type GlobalSearchRecordType =
   | 'product'
@@ -17,7 +18,8 @@ export type GlobalSearchRecordType =
   | 'quote'
   | 'sales_order'
   | 'purchase_order'
-  | 'credit_note';
+  | 'credit_note'
+  | 'journal_entry';
 
 export interface GlobalSearchRecord {
   type: GlobalSearchRecordType;
@@ -73,8 +75,9 @@ export function useGlobalSearchRecords(enabled: boolean): State {
       salesOrderService.getSalesOrders().catch(() => []),
       purchaseOrderService.getPurchaseOrders().catch(() => []),
       creditNoteService.getCreditNotes().catch(() => []),
+      journalEntryService.getEntries().catch(() => []),
     ])
-      .then(([products, customers, suppliers, deliveryNotes, returnNotes, invoices, bills, quotes, salesOrders, purchaseOrders, creditNotes]) => {
+      .then(([products, customers, suppliers, deliveryNotes, returnNotes, invoices, bills, quotes, salesOrders, purchaseOrders, creditNotes, journalEntries]) => {
         if (cancelled) return;
         const records: GlobalSearchRecord[] = [
           ...products.map((p) => ({
@@ -164,6 +167,14 @@ export function useGlobalSearchRecords(enabled: boolean): State {
             name: cn.status,
             href: `/sales/credit-notes/${cn.id}`,
             keywords: `${cn.creditNoteNumber} credit note ${cn.status}`,
+          })),
+          ...journalEntries.map((je) => ({
+            type: 'journal_entry' as const,
+            id: je.id,
+            code: je.entryNumber,
+            name: je.memo || je.source,
+            href: `/accounting/journals/${je.id}`,
+            keywords: `${je.entryNumber} journal entry ${je.memo ?? ''} ${je.source}`,
           })),
         ];
         setState({ records, loading: false, error: false });

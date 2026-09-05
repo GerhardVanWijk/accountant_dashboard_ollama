@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
-import type { ID, JournalEntry } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
+import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
 import { useAccounts } from '../hooks/useAccounts';
 import { useAccountingPeriods } from '../hooks/useAccountingPeriods';
@@ -15,48 +15,29 @@ import { JournalEntryFormModal } from '../components/JournalEntryFormModal';
 /**
  * General Journals — manual entry workspace, route `/accounting/journals`
  * (docs/ROUTES.md). Real useJournalEntries()/JournalEntryService data;
- * posting and reversal both go through the same service methods as before
- * the port — this page never decides balance or period-open rules itself.
- * v0's mock journals assume a draft/awaiting-review approval workflow;
- * the real engine posts immediately and only knows draft/posted/reversed,
- * so those summary tiles are replaced with ones the real data supports —
- * see the M3 report.
+ * posting goes through the same service method as before the port — this
+ * page never decides balance or period-open rules itself. A row click
+ * navigates to the full-page record at `/accounting/journals/:journalEntryId`
+ * (`JournalEntryDetailPage`, Part 10) — the lines, audit history and the
+ * Reverse action all live there now; legacy `?record=<id>` deep links (every
+ * other document's "View journal entry" link still uses this form) redirect
+ * there via `useLegacyRecordRedirect`, same mechanism `CreditNotesPage` uses.
+ * v0's mock journals assume a draft/awaiting-review approval workflow; the
+ * real engine posts immediately and only knows draft/posted/reversed, so
+ * those summary tiles are replaced with ones the real data supports — see
+ * the M3 report.
  */
 export function JournalsPage() {
+  useLegacyRecordRedirect('/accounting/journals');
+  const navigate = useNavigate();
   const { accounts } = useAccounts();
   const { periods } = useAccountingPeriods();
-  const { entries, reversedByEntryId, loading, error, refetch, validateLines, postJournalEntry, reverseJournalEntry } =
-    useJournalEntries();
+  const { entries, reversedByEntryId, loading, error, refetch, validateLines, postJournalEntry } = useJournalEntries();
   const [showForm, setShowForm] = useState(false);
-  const [reversingEntryId, setReversingEntryId] = useState<ID | null>(null);
-  const [reverseError, setReverseError] = useState<string | null>(null);
-
-  const [searchParams, setSearchParams] = useSearchParams();
-  const openEntryId = searchParams.get('record');
-  function toggleOpen(id: ID) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (next.get('record') === id) next.delete('record');
-      else next.set('record', id);
-      return next;
-    });
-  }
 
   const posted = entries.filter((e) => e.status === 'posted' && !reversedByEntryId.has(e.id));
   const reversed = entries.filter((e) => reversedByEntryId.has(e.id));
   const postedValue = posted.reduce((sum, e) => sum + e.lines.reduce((s, l) => s + l.debit, 0), 0);
-
-  async function handleReverse(entry: JournalEntry): Promise<void> {
-    setReverseError(null);
-    setReversingEntryId(entry.id);
-    try {
-      await reverseJournalEntry(entry.id);
-    } catch (err) {
-      setReverseError(err instanceof Error ? err.message : 'Could not reverse journal entry.');
-    } finally {
-      setReversingEntryId(null);
-    }
-  }
 
   return (
     <>
@@ -80,12 +61,6 @@ export function JournalsPage() {
         </div>
       </SectionCard>
 
-      {reverseError && (
-        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {reverseError}
-        </p>
-      )}
-
       {loading && (
         <div role="status" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
           <Loader2 className="size-5 animate-spin" aria-hidden="true" />
@@ -105,13 +80,9 @@ export function JournalsPage() {
       {!loading && !error && (
         <JournalsTable
           entries={entries}
-          accounts={accounts}
           periods={periods}
           reversedByEntryId={reversedByEntryId}
-          onReverse={handleReverse}
-          reversingEntryId={reversingEntryId}
-          openId={openEntryId}
-          onToggleOpen={toggleOpen}
+          onRowClick={(entry) => navigate(`/accounting/journals/${entry.id}`)}
         />
       )}
 

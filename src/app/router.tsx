@@ -25,6 +25,7 @@ import { SuperUserDashboardPage } from '@/features/admin/pages/SuperUserDashboar
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { ChartOfAccountsPage } from '@/features/accounting/pages/ChartOfAccountsPage';
 import { JournalsPage } from '@/features/accounting/pages/JournalsPage';
+import { JournalEntryDetailPage } from '@/features/accounting/pages/JournalEntryDetailPage';
 import { LedgerPage } from '@/features/accounting/pages/LedgerPage';
 import { TrialBalancePage } from '@/features/accounting/pages/TrialBalancePage';
 import { FinancialPeriodsPage } from '@/features/accounting/pages/FinancialPeriodsPage';
@@ -194,6 +195,7 @@ export const routes: RouteObject[] = [
           { path: 'companies', element: <CompanyPage /> },
           { path: 'accounting/coa', element: <PermissionRoute feature="gl" action="read"><ChartOfAccountsPage /></PermissionRoute> },
           { path: 'accounting/journals', element: <PermissionRoute feature="gl" action="read"><JournalsPage /></PermissionRoute> },
+          { path: 'accounting/journals/:journalEntryId', element: <PermissionRoute feature="gl" action="read"><JournalEntryDetailPage /></PermissionRoute> },
           { path: 'accounting/ledger', element: <PermissionRoute feature="gl" action="read"><LedgerPage /></PermissionRoute> },
           { path: 'accounting/trial-balance', element: <PermissionRoute feature="gl" action="read"><TrialBalancePage /></PermissionRoute> },
           { path: 'financial-periods', element: <FinancialPeriodsPage /> },

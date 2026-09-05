@@ -13,6 +13,7 @@ import {
   PackageIcon,
   PackageXIcon,
   ReceiptIcon,
+  ScrollTextIcon,
   Search,
   UsersRound,
 } from 'lucide-react';
@@ -64,6 +65,7 @@ const RECORD_META: Record<
   sales_order: { icon: ClipboardListIcon, label: 'Sales order', heading: 'Sales orders' },
   purchase_order: { icon: ClipboardCheckIcon, label: 'Purchase order', heading: 'Purchase orders' },
   credit_note: { icon: ReceiptIcon, label: 'Credit note', heading: 'Credit notes' },
+  journal_entry: { icon: ScrollTextIcon, label: 'Journal entry', heading: 'Journal entries' },
 };
 
 export function GlobalSearch({ className }: { className?: string }) {
@@ -128,6 +130,7 @@ export function GlobalSearch({ className }: { className?: string }) {
       'sales_order',
       'purchase_order',
       'credit_note',
+      'journal_entry',
     ] as GlobalSearchRecordType[]).map((type) => ({
       type,
       items: records.filter((r) => r.type === type),
