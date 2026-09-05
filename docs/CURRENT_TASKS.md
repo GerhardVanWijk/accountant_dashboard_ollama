@@ -1,19 +1,30 @@
 # Vertex Accounting — CURRENT TASKS
 
 **Authoritative project status**  
-**Date:** 2026-09-05 (FINAL CORE HARDENING run)  
+**Date:** 2026-09-06 (FINAL USER MANAGEMENT / ONBOARDING SECURITY FIX — migration 0065)  
 **Branch:** work on `hardening-2026-09-05` (off `main` `f7ec377`); `main` untouched pending human QA  
-**Gate:** 2739 tests / 332 files PASS · TypeScript PASS · ESLint (`--max-warnings 0`) PASS · Build PASS  
+**Gate:** 2767 tests / 335 files PASS · TypeScript PASS · ESLint (`--max-warnings 0`) PASS · Build PASS  
 **Live accounting:** Trial Balance difference `R0.00` — byte-identical to pre-run baseline. GL 1200 `R1,478,853.74` = physical inventory valuation exactly. 247 JE / 928 lines / 0 unbalanced / 343 stock movements / 0 negative / 0 cross-company.  
-**Latest applied migrations:** `0063_normalized_line_warehouse_parity_correction` + `0064_core_permission_catalog_extension` — both APPLIED + LIVE-VERIFIED this run (data / catalog only, zero DDL on business tables)  
-**Normalized document line flag:** `NORMALIZED_DOCUMENT_LINES_ENABLED = true` — **ACTIVATED this run** (parity 340/340 clean, forward smoke test passed — see P3)  
+**Latest applied migrations:** `0065_secure_company_onboarding` — APPLIED + LIVE-VERIFIED 2026-09-06 (1 RPC + 1 replaced trigger fn + 1 new trigger fn/trigger + grant revokes; zero DDL on business tables, zero RLS policy changes, zero data rows). Prior: `0063` + `0064` (2026-09-05).  
+**Normalized document line flag:** `NORMALIZED_DOCUMENT_LINES_ENABLED = true` — ACTIVATED 2026-09-05 (parity 340/340 clean, forward smoke test passed — see P3)  
 **FIFO flag:** `FIFO_VALUATION_ENABLED = false` — unchanged; 0 live products on FIFO; gate re-confirmed unreachable  
-**Permission catalog:** 18 features (9 M11 + 9 new via 0064); route gates on every Sales/Purchasing/Banking/Assets/Tax/Compliance/Periods/Audit route; representative action gates; `user_roles` still 0 → no lockout (admin/superuser bypass)
+**Permission catalog:** 18 features (9 M11 + 9 new via 0064); route gates on every Sales/Purchasing/Banking/Assets/Tax/Compliance/Periods/Audit route; representative action gates; `user_roles` still 0 → no lockout (admin/superuser bypass)  
+**User management (0065):** the admin "Add existing user to company" flow — previously a silent RLS no-op — now runs through the `add_existing_user_to_company` SECURITY DEFINER RPC (validated, concurrency-safe, controlled errors, never 0-row-success). DB-level admin self-lockout protection (can't self-demote / self-suspend; superuser + direct-DB recovery preserved). `user_roles` company-integrity trigger (a company-scoped role can only go to a user actually in that company). Security advisors 88→87 WARN / 0 ERROR.
 
 ## STATUS THIS RUN — read first
 
-- **CORE COMPLETE:** normalized document lines activated · app-wide permission catalog + route enforcement + representative action enforcement + Financial-Periods self-lockout guard · FIFO gate re-confirmed · final accounting gate green · live accounting byte-identical to baseline.
-- **HUMAN QA REQUIRED:** browser QA of the branch (§P1) — now also a role-based click-through of the new permission gates (viewer / stock_controller / sales_manager / finance_manager / accountant / admin). No browser tooling in this environment.
+- **2026-09-06 — USER MANAGEMENT / ONBOARDING SECURITY FIX (migration 0065) DONE.** The admin
+  "Add existing user to company" flow was a silent no-op (RLS filtered the companyless target row
+  out of the plain `UPDATE profiles` before the update policy could act). Fixed with the
+  `add_existing_user_to_company` SECURITY DEFINER RPC (caller from `auth.uid()`, every precondition
+  validated, `FOR UPDATE` concurrency lock, controlled errors, never 0-row-success, in-transaction
+  audit). Also: DB-level admin self-lockout protection in `protect_profile_privileged_columns`
+  (can't self-demote/self-suspend; superuser + direct-DB recovery preserved), and a
+  `user_roles_company_integrity` trigger (company-scoped role → only a user in that company). 14
+  rollback-wrapped RLS scenarios all PASS. Gate: 2767/335 green. Advisors 88→87 WARN / 0 ERROR.
+  Live accounting byte-identical. `main` untouched, not deployed.
+- **CORE COMPLETE (2026-09-05):** normalized document lines activated · app-wide permission catalog + route enforcement + representative action enforcement + Financial-Periods self-lockout guard · FIFO gate re-confirmed · final accounting gate green · live accounting byte-identical to baseline.
+- **HUMAN QA REQUIRED:** browser QA of the branch (§P1) — now also (a) a role-based click-through of the new permission gates (viewer / stock_controller / sales_manager / finance_manager / accountant / admin) and (b) the existing-company onboarding flow: sign up a second account → admin adds it via **Add user** → confirm it appears, then assign an access level + a fine-grained role. No browser tooling in this environment.
 - **POST-V1:** exhaustive per-button action gating on banking/assets/tax/compliance + document detail pages (post/reverse/void) · jsonb `line_items` warehouse enrichment from posted movements · normalized-line reader migration · Accounting Settings (Block C) · FIFO persistence · multi-currency.
 
 ---
@@ -194,6 +205,7 @@ Priority QA areas:
 - Desktop/tablet/mobile layouts.
 - Print output for Invoice, Delivery Note, Return Note and Forecasting report.
 - **Permission gates (new — migration 0064):** sign in as (or assign a test user) each of `viewer`, `stock_controller`, `sales_manager`, `finance_manager`, `accountant`, `admin`. Confirm: viewer sees read-only everywhere and no create/post buttons; stock_controller can post a Delivery/Return Note but has no "New credit note" / "Record payment" / period-close; sales_manager works Quotes→SO→CN but cannot open Banking/Tax; finance_manager can open everything but sees no mutation buttons; accountant has the full operational set but not Users & Roles; admin/superuser unaffected. Direct-URL navigation to a gated route the role lacks shows Access Denied, not the page.
+- **Existing-company onboarding (new — migration 0065):** from a second browser/incognito, sign up a fresh account (`/signup`) and stop at onboarding. As the company admin, `/admin/users` → **Add user** → type that exact email → **Look up** → **Add to company**. Confirm the dialog closes, the user appears in the list, and (before 0065 this silently did nothing) a page refresh still shows them. Then set their access level and assign a fine-grained role. Negative checks: adding an email that isn't a pending signup shows "No unassigned signup"; the admin's own access-level selector + Suspend button stay disabled for their own row.
 - **Normalized-line flag (now `true`):** create + edit one Invoice, Bill, PO and Credit Note through the running app and confirm the document renders, prints, and appears in search exactly as before (jsonb stays authoritative; the normalized rows are a silent dual-write).
 
 Record all visual defects into one consolidated batch. Do not create one phase per visual issue.
@@ -472,6 +484,7 @@ npm run build
 - ✅ Fix `create_invoice_from_sales_order` normalized projection (migration 0062).
 - ✅ Forward-write parity testing (live, rollback-wrapped — direct + delivery-linked, exact).
 - ✅ Controlled normalized-line flag activation — migration 0063 parity correction, 340/340 clean, forward smoke test, flag flipped.
+- ✅ **User management / onboarding security fix (migration 0065, 2026-09-06)** — `add_existing_user_to_company` RPC replaces the silently-no-op plain UPDATE; DB-level admin self-lockout protection; `user_roles` company-integrity trigger; 0016 grant regression on `protect_profile_privileged_columns` re-closed. 14 rollback-wrapped RLS scenarios PASS; advisors 88→87 WARN / 0 ERROR.
 - ⏳ POST-V1: exhaustive per-button action gating on banking/assets/tax/compliance + detail pages.
 
 **Definition of DONE:** explicit permissions across sensitive modules ✅ and normalized relational document lines active as a dual-write with a documented rollback ✅.
@@ -500,9 +513,9 @@ npm run build
 
 ## 8. NEXT
 
-P0 (0061), P2 (permission catalog → 0064), P3 (normalized lines → 0062/0063 + flag flip) and P4 (FIFO gate) are all **DONE**. What remains before merge:
+P0 (0061), P2 (permission catalog → 0064), P3 (normalized lines → 0062/0063 + flag flip), P4 (FIFO gate) and the **user management / onboarding security fix (0065)** are all **DONE**. What remains before merge:
 
-1. **Human browser QA** of the branch (§P1 checklist) — now including a role-based click-through of the new permission gates (viewer / stock_controller / sales_manager / finance_manager / accountant / admin), and confirming existing documents still render/print/search identically after the normalized-line flag flip. Then batch-fix any visual defects.
+1. **Human browser QA** of the branch (§P1 checklist) — role-based click-through of the permission gates (viewer / stock_controller / sales_manager / finance_manager / accountant / admin); the existing-company onboarding flow end to end (§P1 "Existing-company onboarding"); and confirming existing documents still render/print/search identically after the normalized-line flag flip. Then batch-fix any visual defects.
 2. **Merge `hardening-2026-09-05` → `main`** once (1) passes. (Do NOT merge before human QA. Do NOT force-push. Do NOT manually deploy.)
 
 Then Block C (real Accounting Settings, shared reversal/correction pattern) as one block, and the POST-V1 items listed in "STATUS THIS RUN". Do not add unrelated new features until the above are resolved.

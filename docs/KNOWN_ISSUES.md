@@ -7,6 +7,71 @@ each section.
 
 ## Open
 
+### 2026-09-06 (FINAL USER MANAGEMENT / ONBOARDING SECURITY FIX) — migration 0065
+
+Branch `hardening-2026-09-05` (off `main` `f7ec377`). `main` untouched. Pre-merge correctness/security fix.
+Gate: **2767 tests / 335 files** PASS · tsc PASS · eslint (`--max-warnings 0`) PASS · build PASS.
+Live accounting byte-identical to the pre-run baseline (TB `R0.00`, GL 1200 = physical inventory
+`R1,478,853.74`, 247 JE / 928 lines / 343 movements). Security advisors: **87 WARN / 0 ERROR**
+(was 88 — `protect_profile_privileged_columns` is no longer anon-/authenticated-executable; the one
+new `authenticated_security_definer_function_executable` for the onboarding RPC is the same,
+intentional, locked-down class as `create_company_and_become_admin` / `find_unassigned_profile_by_email`).
+
+**RESOLVED this run:**
+- **"Add an existing user to my company" silently no-ops** — CLOSED. Live-verified 2026-09-05
+  (rollback-wrapped, as the real company admin): `ProfileService.addExistingUserToCompany` looked
+  the user up through `find_unassigned_profile_by_email` (RPC, works) then ran a plain
+  `UPDATE public.profiles SET company_id = <co> WHERE id = <user>` that matched **0 rows and threw
+  no error** — the dialog reported success, nothing happened. Root cause: Postgres applies a
+  table's SELECT policies to an UPDATE whose WHERE reads a column; the target row has
+  `company_id IS NULL`, which `profiles_select_self_or_company` / `_superuser` hide from a company
+  admin, so the row is filtered out before `profiles_update_admin_same_company` (whose USING
+  deliberately includes `company_id IS NULL`) can act. Proven: a temporary admin SELECT policy over
+  `company_id IS NULL` rows made the identical UPDATE succeed (1 row). **Fix (migration `0065`):**
+  new `add_existing_user_to_company(p_user_id, p_company_id)` RPC — SECURITY DEFINER, locked
+  `search_path`, `authenticated`-only, caller derived from `auth.uid()` (never a client arg),
+  validates authenticated / admin-or-superuser / company-exists / admin-scoped-to-own-company /
+  target-exists / target-not-superuser / not-self / target-unassigned, `SELECT … FOR UPDATE` on the
+  target so two companies can't both claim one signup, **never returns success on 0 affected rows**,
+  writes its own `audit_log_entries` row in the same transaction, idempotent on a safe retry
+  (`ALREADY_IN_COMPANY`). `ProfileService` / `SupabaseProfileRepository` now call the RPC and
+  propagate its (deliberately user-facing) error message; the broken `updateCompany` primitive is
+  **removed**, not kept as a fallback. NOT fixed by broadening the profiles SELECT policy (would
+  leak every pending signup's email to any admin).
+- **Admin self-lockout was UI-disable only** — CLOSED at the DB. `docs/PERMISSIONS.md` "Admin
+  self-lockout guard" noted nothing in the backend stopped an admin demoting / suspending
+  themselves (live-confirmed: a direct `UPDATE profiles SET role='viewer' WHERE id=<self>` succeeded).
+  `0065` extends `protect_profile_privileged_columns` (BEFORE UPDATE trigger on `profiles`): inside
+  the admin branch, when `old.id = auth.uid()`, it raises if the update drops the caller's own
+  `admin` role or sets their own `is_active = false`. `superuser` + no-`auth.uid()` direct DB are
+  still returned early → both remain full recovery paths, no account becomes unrecoverable.
+  Changing *other* users is unaffected.
+- **`user_roles` could reference a user in another / no company** — CLOSED. `user_roles_insert_admin`
+  only checked the inserted `company_id` was the caller's; it never checked the target belonged to
+  it. `0065` adds a BEFORE INSERT/UPDATE trigger `user_roles_company_integrity` (SECURITY DEFINER
+  function): the target profile's `company_id` must equal the row's `company_id`, and a custom role
+  must belong to that company. Superuser / no-`auth.uid()` bypass.
+- **Grant regression from migration 0016** — `0016`'s `create or replace` of
+  `protect_profile_privileged_columns` silently re-granted the `anon` + `authenticated` EXECUTE that
+  `0013` had revoked (this project has an `ALTER DEFAULT PRIVILEGES` rule granting EXECUTE on every
+  new public function). `0065` re-applies the revokes for that function and does the same for the
+  two functions it adds.
+
+**Live verification (all rollback-wrapped, 0 rows persisted — re-verified: profiles 6, companies 3,
+user_roles 0, audit_log_entries 4, TB 0.00, GL 1200 R1,478,853.74):** 14 RLS-session scenarios all
+PASS — A unassigned+admin → ASSIGNED; D admin+unassigned → ASSIGNED; idempotent retry →
+ALREADY_IN_COMPANY; B non-admin → rejected; C target already in another company → rejected; E second
+company claims the same user → rejected (loser blocks on the row lock, then sees it assigned); F
+admin self-demote → rejected; F admin self-suspend → rejected; G admin changes a foreign-company
+user's role → RLS 0 rows; G+ admin changes a same-company user's role → 1 row (allowed); H assign
+fine-grained role to a same-company user → 1 row; I assign role to a foreign-company user → rejected;
+J assign role to an un-onboarded signup → rejected; K privilege escalation of an in-company user to
+`superuser` → silently reverted (unchanged).
+
+**Database writes this run:** one `apply_migration` (`0065` — 1 RPC, 1 trigger function replaced, 1
+new trigger + function, grant revokes; **zero** DDL on business tables, **zero** RLS policy changes,
+**zero** data rows). Every live check rollback-wrapped. `main` NOT merged, NOT deployed.
+
 ### 2026-09-05 (FINAL CORE HARDENING run) — normalized lines ACTIVATED, app-wide permission catalog, migrations 0063 + 0064
 
 Branch `hardening-2026-09-05` (off `main` `f7ec377`). `main` untouched. Gate: **2739 tests / 332 files**,

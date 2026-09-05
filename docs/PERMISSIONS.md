@@ -324,17 +324,57 @@ Should `stock_controller` be able to **POST a Delivery Note** (a genuine "the go
 
 One additive `permissions` + `role_permissions` migration (mirroring `0010`/`0030`); `<PermissionRoute feature="…" action="read">` on the list/detail routes; `useCanAccess()` on the create/edit/delete/post/export/import controls (hide, don't disable); a self-lockout guard on `financial_periods`; tests by representative role; and a re-confirm that RLS (Layer 1) is unchanged and remains the real tenant boundary independent of any of this.
 
-## Admin self-lockout guard (UI-level, M11)
+## Admin self-lockout guard (UI + DB, M11 → 0065)
 
 The Users & Roles admin page (`/admin/users`) disables:
 - the access-level (`ProfileRole`) selector for the signed-in user's own
   row, and
 - the Suspend/Reactivate button for the signed-in user's own row.
 
-This is a UI convenience only — nothing in the backend (RLS,
-`ProfileService.changeRole()`/`setActive()`) currently stops an admin from
-demoting or suspending themselves via a direct call, and no such guard
-was added at the service layer in M11 (that would be a business-logic
-change, out of scope here). If that matters, it should be a deliberate
-service-layer decision in a future phase, not something to infer from a
-UI disable alone.
+**As of migration `0065` (2026-09-05) this is also enforced at the
+database.** `protect_profile_privileged_columns` (the BEFORE UPDATE trigger
+on `profiles`, migrations 0012 / 0016) now, inside its admin branch, raises
+when `old.id = auth.uid()` and the update would either drop the caller's own
+`admin` access level or set their own `is_active = false`. So a direct
+`ProfileService.changeRole()` / `setActive()` call (or any raw client
+`.update()`) can no longer strip the caller's own administrator access —
+`0 rows` is no longer the only thing standing between an admin and
+self-lockout.
+
+Recovery is deliberately preserved: `superuser` and a no-`auth.uid()`
+direct DB connection are both returned early by the trigger (unchanged from
+0016), so a genuinely locked-out admin can always be restored by a
+superuser or by the project owner via SQL. Changing *other* users is
+unaffected — an admin can still demote/suspend anyone else in their company.
+
+## Canonical existing-company onboarding flow (0065)
+
+There is no self-serve "join an existing company" (that would be a
+tenant-isolation bypass — see docs/SUPABASE_MIGRATION_GUIDE.md Phase T).
+The one supported path for a person to join a company that already exists:
+
+1. The person signs up themselves at `/signup` → a `profiles` row is
+   auto-created by the `handle_new_user` trigger with `company_id = NULL`.
+2. A company **admin** opens `/admin/users` → **Add user**, types the
+   person's exact email. `find_unassigned_profile_by_email` (RPC, 0014)
+   returns the single matching unassigned profile.
+3. The admin clicks **Add to company** → the `add_existing_user_to_company`
+   RPC (0065) assigns `company_id` atomically. Before 0065 this step was a
+   silent no-op: the follow-up `UPDATE profiles SET company_id` matched
+   `0 rows` because the profiles SELECT RLS hides a `company_id IS NULL`
+   row from a company admin, and Postgres applies SELECT policies to an
+   UPDATE whose WHERE reads a column. The RPC (SECURITY DEFINER,
+   `authenticated`-only, caller derived from `auth.uid()`, `FOR UPDATE`
+   lock so two companies can't both claim the same signup, controlled
+   error on every failure, **never** treats `0 rows` as success) replaces
+   it. NOT fixed by broadening the SELECT policy — that would leak every
+   pending signup's email to any company admin.
+4. The admin sets the person's **access level** (`ProfileRole`, drives RLS)
+   and optionally assigns one or more **fine-grained roles** (drives
+   `useCanAccess()` UI gating). A company-scoped role assignment now
+   requires (trigger `user_roles_company_integrity`, 0065) that the target
+   user actually belongs to that company and that a custom role belongs to
+   it — so a role can't be assigned to a foreign-company user or to a
+   signup that hasn't been onboarded yet.
+5. The person can now sign in and reach the company app per their
+   permissions.
