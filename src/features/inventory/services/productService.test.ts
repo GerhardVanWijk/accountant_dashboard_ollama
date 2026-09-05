@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import type { Product, Invoice, StockMovement } from '@/types';
 import { ProductService, type ProductUsageSources } from './productService';
@@ -141,5 +143,70 @@ describe('ProductService.deleteProduct — usage guard', () => {
       }),
     );
     expect(await billsService.hasAccountingHistory('p1')).toBe(true);
+  });
+});
+
+describe('ProductService — FIFO valuation gate (FIFO_VALUATION_ENABLED is false)', () => {
+  function newService(seed: Product[] = []) {
+    return new ProductService(new MockProductRepository(seed), emptySources());
+  }
+
+  it('createProduct rejects valuationMethod: "fifo"', async () => {
+    const service = newService();
+    await expect(
+      service.createProduct({
+        sku: 'X1', name: 'X1', type: 'good', unitPrice: 10, costPrice: 5,
+        trackInventory: true, status: 'active', valuationMethod: 'fifo',
+      } as never),
+    ).rejects.toThrow(/FIFO valuation is not available/i);
+  });
+
+  it('createProduct allows valuationMethod: "weighted_average"', async () => {
+    const service = newService();
+    const created = await service.createProduct({
+      sku: 'X2', name: 'X2', type: 'good', unitPrice: 10, costPrice: 5,
+      trackInventory: true, status: 'active', valuationMethod: 'weighted_average',
+    } as never);
+    expect(created.valuationMethod).toBe('weighted_average');
+  });
+
+  it('createProduct allows an undefined valuationMethod (defaults to weighted-average downstream)', async () => {
+    const service = newService();
+    const created = await service.createProduct({
+      sku: 'X3', name: 'X3', type: 'good', unitPrice: 10, costPrice: 5,
+      trackInventory: true, status: 'active',
+    } as never);
+    expect(created.id).toBeTruthy();
+  });
+
+  it('updateProduct rejects switching a weighted-average product TO "fifo"', async () => {
+    const service = newService([{ ...product('p1'), valuationMethod: 'weighted_average' }]);
+    await expect(service.updateProduct('p1', { valuationMethod: 'fifo' })).rejects.toThrow(
+      /FIFO valuation is not available/i,
+    );
+  });
+
+  it('updateProduct allows editing OTHER fields of a product already on "fifo" (grandfather — none exist live)', async () => {
+    const service = newService([{ ...product('p1'), valuationMethod: 'fifo' }]);
+    const updated = await service.updateProduct('p1', { name: 'renamed' });
+    expect(updated.name).toBe('renamed');
+    expect(updated.valuationMethod).toBe('fifo');
+  });
+
+  it('updateProduct allows a redundant re-set of "fifo" on a product that is already "fifo"', async () => {
+    const service = newService([{ ...product('p1'), valuationMethod: 'fifo' }]);
+    const updated = await service.updateProduct('p1', { valuationMethod: 'fifo' });
+    expect(updated.valuationMethod).toBe('fifo');
+  });
+
+  it('updateProduct allows switching a fifo product BACK to weighted-average', async () => {
+    const service = newService([{ ...product('p1'), valuationMethod: 'fifo' }]);
+    const updated = await service.updateProduct('p1', { valuationMethod: 'weighted_average' });
+    expect(updated.valuationMethod).toBe('weighted_average');
+  });
+
+  it('the FIFO_VALUATION_ENABLED feature flag ships OFF (no persistent stock-lot layer yet)', () => {
+    const flag = readFileSync(join(process.cwd(), 'src', 'config', 'featureFlags.ts'), 'utf8');
+    expect(flag).toMatch(/export const FIFO_VALUATION_ENABLED\s*=\s*false\s*;/);
   });
 });

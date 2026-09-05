@@ -12,6 +12,7 @@ import { EnumSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { UOM_OPTIONS, INVENTORY_CURRENCY } from '../constants';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
+import { FIFO_VALUATION_ENABLED } from '@/config/featureFlags';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
 
 function isNonNegativeNumber(value: string): boolean {
@@ -257,22 +258,29 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
           <Controller
             control={control}
             name="valuationMethod"
-            render={({ field }) => (
-              <EnumSelect
-                id="valuationMethod"
-                value={field.value ?? 'weighted_average'}
-                onValueChange={field.onChange}
-                options={[
-                  { value: 'weighted_average', label: 'Weighted Average Cost' },
-                  { value: 'fifo', label: 'FIFO (First In, First Out)' },
-                ]}
-              />
-            )}
+            render={({ field }) => {
+              // FIFO is only offered while its persistent cost-lot layer
+              // exists (FIFO_VALUATION_ENABLED). A product already on FIFO
+              // keeps the option so its own edit form still works.
+              const showFifo = FIFO_VALUATION_ENABLED || product?.valuationMethod === 'fifo';
+              const options = [
+                { value: 'weighted_average', label: 'Weighted Average Cost' },
+                ...(showFifo ? [{ value: 'fifo', label: 'FIFO (First In, First Out)' }] : []),
+              ];
+              return (
+                <EnumSelect
+                  id="valuationMethod"
+                  value={field.value ?? 'weighted_average'}
+                  onValueChange={field.onChange}
+                  options={options}
+                />
+              );
+            }}
           />
           <FieldDescription>
-            FIFO costs each sale from the oldest stock received first, instead of a blended average. Switching an
-            existing product to FIFO only affects stock received from now on — it has no cost history to draw on
-            until then.
+            {FIFO_VALUATION_ENABLED || product?.valuationMethod === 'fifo'
+              ? 'FIFO costs each sale from the oldest stock received first, instead of a blended average. Switching an existing product to FIFO only affects stock received from now on — it has no cost history to draw on until then.'
+              : 'Weighted Average Cost is the supported valuation method. FIFO is not yet available — it has no persistent cost-lot storage.'}
           </FieldDescription>
         </Field>
       )}
