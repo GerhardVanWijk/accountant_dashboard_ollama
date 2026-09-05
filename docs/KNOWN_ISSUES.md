@@ -70,7 +70,16 @@ J assign role to an un-onboarded signup → rejected; K privilege escalation of 
 
 **Database writes this run:** one `apply_migration` (`0065` — 1 RPC, 1 trigger function replaced, 1
 new trigger + function, grant revokes; **zero** DDL on business tables, **zero** RLS policy changes,
-**zero** data rows). Every live check rollback-wrapped. `main` NOT merged, NOT deployed.
+**zero** data rows). Every live check rollback-wrapped.
+
+**SHIP (2026-09-06, explicit user instruction — "push to cloudflare and github main"):**
+`hardening-2026-09-05` MERGED → `main` `8ec8c11` (`--no-ff`; also carries 0061–0064 + permission
+catalog + FIFO gate, none of which had reached `main` yet) and pushed. Post-merge gate re-run on
+`main`: 2767/335, tsc/eslint/build green. Cloudflare Pages auto-deploys from `main`; production
+`https://vertex-accounting.pages.dev` confirmed serving the merged build (every JS/CSS asset hash
+matches the local `main` build; bundle contains `add_existing_user_to_company`). This was done
+**ahead of** the human browser QA that the branch docs listed as a prerequisite — QA (permission-gate
+click-through + onboarding flow + normalized-line document smoke) is now a post-deploy task.
 
 ### 2026-09-05 (FINAL CORE HARDENING run) — normalized lines ACTIVATED, app-wide permission catalog, migrations 0063 + 0064
 

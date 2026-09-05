@@ -2,7 +2,7 @@
 
 **Authoritative project status**  
 **Date:** 2026-09-06 (FINAL USER MANAGEMENT / ONBOARDING SECURITY FIX — migration 0065)  
-**Branch:** work on `hardening-2026-09-05` (off `main` `f7ec377`); `main` untouched pending human QA  
+**Branch/ship:** `hardening-2026-09-05` **MERGED → `main` `8ec8c11` + PUSHED 2026-09-06** on explicit user instruction, ahead of the human browser QA below. Cloudflare Pages auto-deploy from `main` confirmed live at `https://vertex-accounting.pages.dev` (bundle contains the new code, all asset hashes match the local `main` build). Browser QA is now a **post-deploy** task.  
 **Gate:** 2767 tests / 335 files PASS · TypeScript PASS · ESLint (`--max-warnings 0`) PASS · Build PASS  
 **Live accounting:** Trial Balance difference `R0.00` — byte-identical to pre-run baseline. GL 1200 `R1,478,853.74` = physical inventory valuation exactly. 247 JE / 928 lines / 0 unbalanced / 343 stock movements / 0 negative / 0 cross-company.  
 **Latest applied migrations:** `0065_secure_company_onboarding` — APPLIED + LIVE-VERIFIED 2026-09-06 (1 RPC + 1 replaced trigger fn + 1 new trigger fn/trigger + grant revokes; zero DDL on business tables, zero RLS policy changes, zero data rows). Prior: `0063` + `0064` (2026-09-05).  
@@ -22,7 +22,7 @@
   (can't self-demote/self-suspend; superuser + direct-DB recovery preserved), and a
   `user_roles_company_integrity` trigger (company-scoped role → only a user in that company). 14
   rollback-wrapped RLS scenarios all PASS. Gate: 2767/335 green. Advisors 88→87 WARN / 0 ERROR.
-  Live accounting byte-identical. `main` untouched, not deployed.
+  Live accounting byte-identical. **MERGED → `main` `8ec8c11` + Cloudflare prod deploy (auto, from `main`) 2026-09-06**, on explicit user instruction ahead of browser QA.
 - **CORE COMPLETE (2026-09-05):** normalized document lines activated · app-wide permission catalog + route enforcement + representative action enforcement + Financial-Periods self-lockout guard · FIFO gate re-confirmed · final accounting gate green · live accounting byte-identical to baseline.
 - **HUMAN QA REQUIRED:** browser QA of the branch (§P1) — now also (a) a role-based click-through of the new permission gates (viewer / stock_controller / sales_manager / finance_manager / accountant / admin) and (b) the existing-company onboarding flow: sign up a second account → admin adds it via **Add user** → confirm it appears, then assign an access level + a fine-grained role. No browser tooling in this environment.
 - **POST-V1:** exhaustive per-button action gating on banking/assets/tax/compliance + document detail pages (post/reverse/void) · jsonb `line_items` warehouse enrichment from posted movements · normalized-line reader migration · Accounting Settings (Block C) · FIFO persistence · multi-currency.
@@ -513,9 +513,11 @@ npm run build
 
 ## 8. NEXT
 
-P0 (0061), P2 (permission catalog → 0064), P3 (normalized lines → 0062/0063 + flag flip), P4 (FIFO gate) and the **user management / onboarding security fix (0065)** are all **DONE**. What remains before merge:
+P0 (0061), P2 (permission catalog → 0064), P3 (normalized lines → 0062/0063 + flag flip), P4 (FIFO gate) and the **user management / onboarding security fix (0065)** are all **DONE**, and `hardening-2026-09-05` is **MERGED → `main` `8ec8c11` + deployed to Cloudflare prod** (2026-09-06, on explicit user instruction ahead of QA).
 
-1. **Human browser QA** of the branch (§P1 checklist) — role-based click-through of the permission gates (viewer / stock_controller / sales_manager / finance_manager / accountant / admin); the existing-company onboarding flow end to end (§P1 "Existing-company onboarding"); and confirming existing documents still render/print/search identically after the normalized-line flag flip. Then batch-fix any visual defects.
-2. **Merge `hardening-2026-09-05` → `main`** once (1) passes. (Do NOT merge before human QA. Do NOT force-push. Do NOT manually deploy.)
+What remains — now **post-deploy**:
+
+1. **Human browser QA** against `https://vertex-accounting.pages.dev` (§P1 checklist) — role-based click-through of the permission gates (viewer / stock_controller / sales_manager / finance_manager / accountant / admin); the existing-company onboarding flow end to end (§P1 "Existing-company onboarding"); confirming existing documents still render/print/search identically with the normalized-line flag on. Then batch-fix any visual defects in a follow-up branch.
+2. Block C (real Accounting Settings, shared reversal/correction pattern) + the POST-V1 items.
 
 Then Block C (real Accounting Settings, shared reversal/correction pattern) as one block, and the POST-V1 items listed in "STATUS THIS RUN". Do not add unrelated new features until the above are resolved.
