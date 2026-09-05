@@ -7,6 +7,74 @@ each section.
 
 ## Open
 
+### 2026-09-06 (COMMERCIAL FOUNDATION · BLOCK 1) — first-company creation fixed, migrations 0066 + 0067
+
+Branch `commercial-foundation-2026-09-06` (off `main` `15025ec`). `main` untouched, not deployed.
+Gate: **2788 tests / 336 files** PASS · tsc · eslint (`--max-warnings 0`) · build all green. Live
+accounting byte-identical (TB `R0.00`, GL 1200 `R1,478,853.74`, 247 JE / 343 movements). Security
+advisors **87 WARN / 0 ERROR** (unchanged — `seed_new_company_accounting` + the reworked
+`protect_profile_privileged_columns` are revoked from anon/authenticated; `create_company_and_become_admin`
+stays the same one intentional `authenticated_security_definer` entry it already was).
+
+**THE BUG (release blocker) — CLOSED.** A genuinely new authenticated user → `/onboarding` →
+"Create company" silently failed: `create_company_and_become_admin` (migration 0012, SECURITY
+DEFINER) INSERTed the company then `UPDATE profiles SET company_id=<new>, role='admin'`, which the
+`protect_profile_privileged_columns` BEFORE-UPDATE trigger **silently reverted** — SECURITY DEFINER
+changes the executing role, not the JWT, so inside the trigger `auth.uid()` is the new user and
+`get_my_role()` returns `'viewer'` (not-yet-committed value) → the lockdown branch pins `role` and
+`company_id` back to their old values. RPC returned no error → RouteGuard bounced the user back to
+`/onboarding` forever, one **orphan company per attempt** (3 were present at inspection; all 3 were
+removed externally before this run — 0 orphans now, nothing to clean). Migration 0012's comment
+claiming the RPC "bypasses the self-update trigger by design" was factually wrong. Reproduced live,
+rollback-wrapped. Also: no per-company chart-of-accounts / financial-year / period seeding existed
+anywhere, so a fixed link still yielded an empty, unusable company.
+
+**FIX:**
+- **Migration `0066`** — `protect_profile_privileged_columns` gains ONE strictly-scoped branch
+  honouring a transaction-local GUC `vertex.bootstrap_company_id` (set by the RPC around the profile
+  UPDATE, cleared immediately; a PostgREST/Supabase client cannot set it). `create_company_and_become_admin`
+  is dropped + recreated (11-arg: adds optional registration number / trading name / VAT / contact)
+  as one atomic transaction: validate caller (authenticated, companyless, not superuser, default
+  `viewer` role) → INSERT company → (GUC) link caller as admin → **verify** the link actually took →
+  `seed_new_company_accounting(...)` → audit → return. Any `raise` rolls the whole transaction back:
+  no orphan company, no partial state, never a 0-row "success". New reusable
+  `seed_new_company_accounting(company, fy_end_month, fy_end_day)` seeds the **generic South African
+  CoA** — every `AccountMappingKey` code (`src/features/accounting/services/accountMappingService.ts`)
+  + the generic operating-expense/income accounts from the demo CoA, **minus** Office National's
+  product-category `40x0`/`50x0` accounts — 60 accounts, plus the financial year derived
+  deterministically from the year-end config and 12 calendar-month periods. No customers / suppliers
+  / products / journals / balances / stock / demo data.
+- **Migration `0067`** (corrective follow-up) — 0066's bootstrap branch keyed only on
+  `new.company_id = the GUC`. Adversarial test (rollback-wrapped, GUC deliberately pre-set) showed
+  that *if* the GUC were set it would permit joining ANY company as admin. Hardened: the branch now
+  ALSO requires the target company to have **zero members and zero accounts** (the invariant of a
+  just-inserted, not-yet-linked company). A real existing company always has ≥1 member, so it can
+  never be a bootstrap target. Re-proven.
+
+**Live verification (all rollback-wrapped, 0 rows persisted — re-verified baseline: 1 company, 68
+accounts, TB 0.00, both test signups still companyless):**
+- Happy path (Feb, Jun and Dec year-ends): profile linked as `admin`, company visible under RLS, 60
+  accounts seeded, all 45 `AccountMappingKey` codes present, 1 financial year (`FY2027 (Mar 2026 -
+  Feb 2027)` etc.), 12 monthly periods, `get_my_company_id()` resolves → dashboard would load.
+- Double-submit → second call rejected (`You already belong to a company.`), only one company.
+- Non-authenticated → rejected. Superuser → rejected (`A superuser account cannot own a company.`).
+- Already-in-company → rejected. Mid-transaction failure (bad FY month) → whole transaction rolls
+  back, 0 company rows, profile unchanged.
+- GUC-abuse: join populated (demo) company → blocked + reverted; bootstrap → superuser → blocked +
+  reverted; hijack another user's row → blocked (RLS + `old.id = auth.uid()`); own empty company as
+  admin → allowed (equivalent to the RPC, no privilege gained).
+- 0065 admin self-lockout still fires for the freshly-created admin.
+
+**Frontend:** `/onboarding` rebuilt as a polished multi-section "Create your company" page on the
+Vertex design system (Company details / Registration & tax / Financial setup / Contact), explicit
+double-submit guard, honest error surface (stays on page), refresh-profile-then-navigate on success.
+`OnboardingPage.test.tsx` rewritten (6 tests) + new `companyBootstrapMigration.test.ts` (SQL
+contract, incl. an `AccountMappingKey`-driven "every mapped code is seeded" check).
+
+**Database writes this run:** two `apply_migration` (`0066`, `0067` — function create/replace +
+grant revokes; **zero** DDL on business tables, **zero** RLS policy changes, **zero** data rows).
+Every live check rollback-wrapped. `main` NOT merged, NOT deployed.
+
 ### 2026-09-06 (FINAL USER MANAGEMENT / ONBOARDING SECURITY FIX) — migration 0065
 
 Branch `hardening-2026-09-05` (off `main` `f7ec377`). `main` untouched. Pre-merge correctness/security fix.
