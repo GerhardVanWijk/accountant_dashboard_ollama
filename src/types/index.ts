@@ -49,3 +49,5 @@ export * from './lease';
 export * from './accessAudit';
 export * from './reconciliationIssue';
 export * from './deliveryNote';
+export * from './returnNote';
+export * from './financialPlan';

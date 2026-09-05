@@ -7,11 +7,13 @@ import { CreditNoteService } from './creditNoteService';
 import { CustomerReceiptService } from './customerReceiptService';
 import { RealDepositAllocationExecutor } from './depositAllocationExecutor';
 import { DeliveryNoteService, RpcDeliveryNotePoster } from './deliveryNoteService';
+import { ReturnNoteService, RpcReturnNotePoster } from './returnNoteService';
 import { SupabaseQuoteRepository } from '@/repositories/SupabaseQuoteRepository';
 import { SupabaseSalesOrderRepository } from '@/repositories/SupabaseSalesOrderRepository';
 import { SupabaseCreditNoteRepository } from '@/repositories/SupabaseCreditNoteRepository';
 import { SupabaseCustomerReceiptRepository } from '@/repositories/SupabaseCustomerReceiptRepository';
 import { SupabaseDeliveryNoteRepository } from '@/repositories/SupabaseDeliveryNoteRepository';
+import { SupabaseReturnNoteRepository } from '@/repositories/SupabaseReturnNoteRepository';
 import { journalEntryService, accountMappingService } from '@/features/accounting/services';
 import { invoiceService } from '@/services';
 import {
@@ -22,23 +24,28 @@ import { productService } from '@/features/inventory/services/productService';
 import { warehouseService } from '@/features/inventory/services/warehouseService';
 import { supabase } from '@/config/supabase';
 import { SupabaseDocumentLineProjector } from '@/repositories/SupabaseDocumentLineProjector';
+import { RealInvoiceFrozenCostLookup } from '@/features/inventory/services/invoiceFrozenCostLookup';
+import { auditLogService } from '@/services/auditLogService';
 
 export type { CreateQuoteDTO } from './quoteService';
 export type { CreateSalesOrderDTO } from './salesOrderService';
 export type { CreateCreditNoteDTO } from './creditNoteService';
 export type { CreateCustomerReceiptDTO } from './customerReceiptService';
 export type { CreateDeliveryNoteDTO, UpdateDeliveryNoteDTO, CreateDeliveryNoteLineDTO } from './deliveryNoteService';
+export type { CreateReturnNoteDTO, UpdateReturnNoteDTO, CreateReturnNoteLineDTO, ReturnableDeliveryNoteLine } from './returnNoteService';
 export { QuoteService } from './quoteService';
 export { SalesOrderService } from './salesOrderService';
 export { CreditNoteService } from './creditNoteService';
 export { CustomerReceiptService } from './customerReceiptService';
 export { DeliveryNoteService } from './deliveryNoteService';
+export { ReturnNoteService, computeReturnableDeliveryNoteLines } from './returnNoteService';
 
 const quoteRepository = new SupabaseQuoteRepository(supabase);
 const salesOrderRepository = new SupabaseSalesOrderRepository(supabase);
 const creditNoteRepository = new SupabaseCreditNoteRepository(supabase);
 const customerReceiptRepository = new SupabaseCustomerReceiptRepository(supabase);
 const deliveryNoteRepository = new SupabaseDeliveryNoteRepository(supabase);
+const returnNoteRepository = new SupabaseReturnNoteRepository(supabase);
 
 /**
  * SalesOrderService.convertToInvoice() writes new invoices straight through
@@ -117,6 +124,10 @@ export const creditNoteService = new CreditNoteService(
   productService,
   warehouseService,
   creditNoteLineProjector,
+  // Part 5 (docs/CURRENT_TASKS.md): reverses a return at the ORIGINAL sale's
+  // frozen cost when `originalInvoiceLineId` evidence exists, instead of
+  // today's current WAC.
+  new RealInvoiceFrozenCostLookup(supabase),
 );
 export const customerReceiptService = new CustomerReceiptService(
   customerReceiptRepository,
@@ -142,4 +153,24 @@ export const deliveryNoteService = new DeliveryNoteService(
   productService,
   warehouseService,
   new RpcDeliveryNotePoster(supabase),
+  auditLogService,
+  // Completion-run stabilization (Part 1): nets posted Return Notes into
+  // every remaining-to-deliver pre-check, matching the atomic
+  // `post_delivery_note` RPC's own re-derivation (migration 0061).
+  returnNoteRepository,
+);
+
+/**
+ * Phase 5D. Posting always runs through the atomic `post_return_note` RPC
+ * (migration 0058, live) — `RpcReturnNotePoster` calls it directly; this
+ * service never builds a `stock_movements`/`journal_entries` row itself.
+ */
+export const returnNoteService = new ReturnNoteService(
+  returnNoteRepository,
+  deliveryNoteRepository,
+  sharedInvoiceRepository,
+  accountMappingService,
+  inventoryAccountResolver,
+  productService,
+  new RpcReturnNotePoster(supabase),
 );

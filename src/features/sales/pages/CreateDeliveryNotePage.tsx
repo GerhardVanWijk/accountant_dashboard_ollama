@@ -7,6 +7,7 @@ import { EnumSelect } from '@/components/app/combobox/EnumSelect';
 import { useSalesOrders } from '@/features/sales/hooks/useSalesOrders';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
+import { useReturnNotes } from '@/features/sales/hooks/useReturnNotes';
 import { useDeliveryNoteMutations } from '@/features/sales/hooks/useDeliveryNoteMutations';
 import { useCustomerMap } from '@/features/sales/hooks/useCustomerMap';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
@@ -29,14 +30,15 @@ export function CreateDeliveryNotePage() {
   const { salesOrders, isLoading: soLoading } = useSalesOrders();
   const { invoices, loading: invLoading } = useInvoices();
   const { deliveryNotes, isLoading: dnLoading } = useDeliveryNotes();
+  const { returnNotes, isLoading: rnLoading } = useReturnNotes();
   const { customers: customerMap } = useCustomerMap();
   const { warehouses, loading: warehousesLoading } = useWarehouses();
   const { createDraft, isLoading: submitting } = useDeliveryNoteMutations();
 
   const order = salesOrders.find((o) => o.id === orderId);
   const fulfilment = useMemo(
-    () => (order ? computeSalesOrderFulfilment(order, invoices, deliveryNotes) : undefined),
-    [order, invoices, deliveryNotes],
+    () => (order ? computeSalesOrderFulfilment(order, invoices, deliveryNotes, returnNotes) : undefined),
+    [order, invoices, deliveryNotes, returnNotes],
   );
 
   const [warehouseId, setWarehouseId] = useState<string>('');
@@ -45,7 +47,7 @@ export function CreateDeliveryNotePage() {
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
-  const loading = soLoading || invLoading || dnLoading || warehousesLoading;
+  const loading = soLoading || invLoading || dnLoading || rnLoading || warehousesLoading;
   const customerName = order ? customerMap.get(order.customerId) ?? 'Unknown customer' : '';
 
   const deliverableLines = useMemo(() => {

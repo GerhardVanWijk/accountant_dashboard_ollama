@@ -1,14 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import type { Account, JournalEntry } from '@/types';
 import { JournalsPage } from './JournalsPage';
 import { accountService, journalEntryService, accountingPeriodService } from '../services';
 
+function Loc() {
+  const loc = useLocation();
+  return <div data-testid="loc">{loc.pathname}</div>;
+}
+
 function renderPage(initialEntries: string[] = ['/accounting/journals']) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
-      <JournalsPage />
+      <Routes>
+        <Route path="/accounting/journals" element={<><JournalsPage /><Loc /></>} />
+        <Route path="/accounting/journals/:journalEntryId" element={<Loc />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -119,26 +127,17 @@ describe('JournalsPage', () => {
     expect(screen.getByText('Reversal')).toBeInTheDocument();
   });
 
-  it('expands the entry named by ?record= in the URL, showing its lines and audit history', async () => {
+  it('redirects a legacy ?record= deep link to the canonical full-page record (Part 10)', async () => {
     mockedGetEntries.mockResolvedValue([makeEntry()]);
     renderPage(['/accounting/journals?record=je_0001']);
-    await screen.findByText('JE-0001');
-
-    expect(screen.getByText('Journal lines')).toBeInTheDocument();
-    expect(screen.getByText('Audit history')).toBeInTheDocument();
-    expect(await screen.findByText(/no audit entries recorded/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/accounting/journals/je_0001'));
   });
 
-  it('clicking the expand chevron toggles the lines open and closed', async () => {
+  it('clicking a row navigates to the full-page record', async () => {
     mockedGetEntries.mockResolvedValue([makeEntry()]);
     renderPage();
     await screen.findByText('JE-0001');
-
-    expect(screen.queryByText('Journal lines')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /show lines for je-0001/i }));
-    expect(await screen.findByText('Journal lines')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /hide lines for je-0001/i }));
-    expect(screen.queryByText('Journal lines')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('JE-0001'));
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/accounting/journals/je_0001'));
   });
 });

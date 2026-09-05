@@ -16,7 +16,8 @@ export type RelatedRecordType =
   | 'stock_adjustment'
   | 'stock_take'
   | 'opening_stock_batch'
-  | 'delivery_note';
+  | 'delivery_note'
+  | 'return_note';
 
 /** A source-document reference resolved to something a human can read and navigate to. */
 export interface ResolvedSourceDocument {
@@ -50,6 +51,7 @@ const META: Record<
   opening_stock_batch: { label: 'Opening stock', route: (id) => `/inventory/opening-stock/${id}`, previewType: 'opening_stock_batch' },
   supplier_return: { label: 'Supplier return', route: (id) => `/inventory/supplier-returns/${id}`, previewType: 'supplier_return' },
   delivery_note: { label: 'Delivery note', route: (id) => `/sales/delivery-notes/${id}`, previewType: 'delivery_note' },
+  return_note: { label: 'Return note', route: (id) => `/sales/return-notes/${id}`, previewType: 'return_note' },
   reversal: { label: 'Reversal' },
 };
 

@@ -7,8 +7,9 @@ import { invoiceToBusinessDocument } from './adapters/invoiceToBusinessDocument'
 import { creditNoteToBusinessDocument } from './adapters/creditNoteToBusinessDocument';
 import { purchaseOrderToBusinessDocument } from './adapters/purchaseOrderToBusinessDocument';
 import { deliveryNoteToBusinessDocument } from './adapters/deliveryNoteToBusinessDocument';
+import { returnNoteToBusinessDocument } from './adapters/returnNoteToBusinessDocument';
 import * as fx from './adapters/__fixtures__';
-import type { DeliveryNote } from '@/types';
+import type { DeliveryNote, ReturnNote } from '@/types';
 
 /** Phase 5C — stuffed with real-looking UUIDs, same convention as every other fixture here. */
 const deliveryNote: DeliveryNote = {
@@ -32,6 +33,35 @@ const deliveryNote: DeliveryNote = {
       unitPrice: 5750,
       taxAmount: 862.5,
       lineTotal: 23000,
+    },
+  ],
+};
+
+/** Phase 5D — stuffed with real-looking UUIDs, same convention as every other fixture here. */
+const returnNote: ReturnNote = {
+  id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+  createdAt: '2026-09-05T00:00:00.000Z',
+  updatedAt: '2026-09-05T00:00:00.000Z',
+  returnNoteNumber: 'RN-2026-0001',
+  deliveryNoteId: deliveryNote.id,
+  salesOrderId: fx.UUID.salesOrder,
+  customerId: fx.UUID.customer,
+  warehouseId: '12121212-1212-4212-8212-121212121212',
+  returnDate: '2026-09-05T00:00:00.000Z',
+  status: 'posted',
+  journalEntryId: fx.UUID.journal,
+  lineItems: [
+    {
+      id: 'line-should-never-print',
+      deliveryNoteLineId: deliveryNote.lineItems[0].id,
+      salesOrderLineId: fx.UUID.line1,
+      productId: fx.UUID.product,
+      description: 'Printer',
+      quantity: 1,
+      unitCost: 3200,
+      unitPrice: 5750,
+      taxAmount: 215.625,
+      lineTotal: 5750,
     },
   ],
 };
@@ -69,6 +99,17 @@ const cases = [
         warehouse: { id: deliveryNote.warehouseId, name: 'Main Warehouse', code: 'MAIN', isDefault: true, status: 'active', createdAt: '', updatedAt: '' },
         products: new Map([[fx.product.id, fx.product]]),
         salesOrderNumber: 'SO-2026-0004',
+      }),
+  ],
+  [
+    'return note',
+    () =>
+      returnNoteToBusinessDocument(returnNote, {
+        company: fx.company,
+        customer: fx.customer,
+        warehouse: { id: returnNote.warehouseId, name: 'Main Warehouse', code: 'MAIN', isDefault: true, status: 'active', createdAt: '', updatedAt: '' },
+        products: new Map([[fx.product.id, fx.product]]),
+        deliveryNoteNumber: 'DN-2026-0001',
       }),
   ],
 ] as const;
@@ -112,6 +153,23 @@ describe('delivery note (Phase 5C) — price suppressed by default', () => {
     expect(vm.totals).toEqual([]);
     const { container } = render(<BusinessDocument viewModel={vm} />);
     expect(container.textContent ?? '').not.toMatch(/5[,.]?750/); // the line's unitPrice never appears
+  });
+});
+
+describe('return note (Phase 5D) — price suppressed by default', () => {
+  it('never renders unit price, VAT or line-total figures — a Return Note is dispatch-reversal evidence, not a priced document', () => {
+    const vm = returnNoteToBusinessDocument(returnNote, {
+      company: fx.company,
+      customer: fx.customer,
+      products: new Map([[fx.product.id, fx.product]]),
+    });
+    expect(vm.columns).not.toContain('unitPrice');
+    expect(vm.columns).not.toContain('vat');
+    expect(vm.columns).not.toContain('amount');
+    expect(vm.totals).toEqual([]);
+    const { container } = render(<BusinessDocument viewModel={vm} />);
+    expect(container.textContent ?? '').not.toMatch(/5[,.]?750/); // the line's unitPrice never appears
+    expect(container.textContent ?? '').not.toMatch(/3[,.]?200/); // the line's unitCost never appears
   });
 });
 

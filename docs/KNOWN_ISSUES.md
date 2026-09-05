@@ -7,6 +7,104 @@ each section.
 
 ## Open
 
+### 2026-09-05 (final same-day run) — Pre-merge stabilization: Return Note fulfilment fix, normalized-lines blocker sharpened, Forecasting precision bug fixed
+
+Full detail: `docs/CURRENT_TASKS.md` § "PROJECT STATE" (PERMISSIONS DECISION MATRIX and HUMAN
+BROWSER QA CHECKLIST sections live there too). Summary:
+
+- **RESOLVED (code) / AUTHORED NOT APPLIED (DB)** — Return Note ↔ Sales Order fulfilment netting.
+  One authoritative formula (`orderedQty`, `deliveredQty`, `returnedUninvoicedQty`,
+  `netDeliveredQty = deliveredQty − returnedUninvoicedQty`, `directlyInvoicedQty`,
+  `physicalFulfilledQty = netDeliveredQty + directlyInvoicedQty`, `remainingToDeliver = max(0,
+  orderedQty − physicalFulfilledQty)`) now lives in `salesOrderFulfilment.ts`
+  (`sumReturnedBySalesOrderLine`, updated `sumPhysicallyIssuedBySalesOrderLine`/
+  `computeSalesOrderFulfilment`), threaded through `StockCommitmentService`, `SalesOrderForm`,
+  `SalesOrderDetailPage`, `CreateDeliveryNotePage`, and `DeliveryNoteService`'s own pre-checks
+  (including `buildInvoiceSelectionsForDeliveryNote`, which now nets a delivery line's own returned
+  quantity too). Migration `0061_return_note_aware_fulfilment_rpcs` applies the SAME fix to
+  `post_delivery_note` and `create_invoice_from_sales_order` (both `create or replace`, no schema
+  change) — authored, migration-contract-tested (17 tests incl. a formal quantity-matrix proof,
+  `src/repositories/returnNoteAwareFulfilmentRpcs.test.ts`), but **NOT applied live**: this
+  session's `apply_migration` call was blocked by its own permission gate (a live function
+  change). Until applied, the DB-level guards still reject a valid re-delivery of previously-
+  returned stock even though the TS read-model (Sales Order detail page, commitment map) now shows
+  it correctly as available — a real, visible UI/DB disagreement to watch for in browser QA.
+- **RESOLVED** — GDN-I report ("Goods Delivered Not Invoiced") ignored Return Notes.
+  `reconcileGoodsDeliveredNotInvoiced` now nets posted Return Note quantity out of
+  `outstandingQty` per delivery-note line (new `returnedQty` field + column), so the report and GL
+  1220 stay reconciled once returns exist. Re-proved the Return Note accounting entries while at
+  it: `post_return_note` posts exactly `DR 1200 / CR 1220` at the frozen delivery-time cost via
+  `costing_mode: 'return_in'` + `unit_cost_override` (confirmed in `post_inventory_transaction`'s
+  own sign logic) — no revenue/VAT/AR/COGS line, matching the design doc exactly.
+- **NEW finding, sharper than the prior "just needs a smoke test" framing** —
+  `NORMALIZED_DOCUMENT_LINES_ENABLED` readiness: `create_invoice_from_sales_order` (the RPC every
+  Sales-Order-derived invoice — partial invoicing, delivery-linked invoicing — is created through)
+  inserts directly into `invoices` via SQL and is **never routed through
+  `invoiceService.createInvoice()`**, so it permanently bypasses `invoiceLineProjector` regardless
+  of the flag (confirmed by code: `RpcSalesOrderDraftInvoiceWriter.write()` only calls `getById`
+  after the RPC insert, never `.create()`). Confirmed independently live: static parity across all
+  4 normalized tables is still perfect (0 mismatched docs/orphans/duplicates/company-mismatches),
+  but only because the newest `invoices.created_at` live is `2026-09-02 20:59:58` — zero documents
+  of any of the 4 types have been created or edited live since the backfill, so the dual-write path
+  has genuinely never been exercised, not merely gone unobserved. Flipping the flag today would
+  leave every SO-derived invoice's `invoice_lines` permanently empty. **NORMALIZED_DOCUMENT_LINES_
+  ENABLED stays `false`** — not flipped this run.
+- **PROPOSED, not applied** — a permissions decision matrix for Purchasing + non-Invoice Sales
+  documents (two new catalog features, `purchasing` / `sales_documents`, 8 proposed actions × 6
+  existing system roles). See `docs/CURRENT_TASKS.md`. No migration, no `usePermission()` call site.
+- **FIXED** — Forecasting: `FinancialPlanService.upsertPlanLine` now rounds `amount` to 2dp before
+  writing (`financial_plan_lines.amount` is a plain unscoped `numeric` column, so nothing else
+  guarded this) — closes a real precision gap (`100.999` or `0.1+0.2` float drift would previously
+  have been stored and summed verbatim). 11 new tests in the previously test-less
+  `financialPlanService.test.ts`. Everything else reviewed (income/expense sign handling,
+  favourable/unfavourable, zero-budget variance%, month-boundary crossing, empty periods, company
+  isolation via RLS) was already correct and already tested in `computeForecastReport.test.ts`.
+- **Gate:** tsc ✅ · eslint `--max-warnings 0` ✅ · **2680 tests / 330 files** ✅ (+48/+2 vs the
+  completion run) · `vite build` ✅. Live DB re-verified byte-identical to the completion run's own
+  figures (TB 0.00, all control accounts unchanged) — confirming zero live writes this run.
+
+### 2026-09-05 (later same day) — Major completion run: what got fixed, what's genuinely left
+
+Following the completion audit below, a large implementation run closed most of the findings it
+raised. Full detail: `docs/CURRENT_TASKS.md` § "PROJECT STATE", `docs/RETURN_NOTES_DESIGN.md`.
+
+**CLOSED this run:** the leaked `INV-2026-0001` smoke-test artifact (deleted, re-verified isolated
+first); Return Notes (Phase 5D, migrations 0056-0058); Credit Note original-invoice-line picker +
+historical cost basis; account reference company-safety hardening (migration 0059, 18 columns / 8
+tables, live-verified zero cross-company violations both before and after); global search coverage
+(now indexes Invoices/Bills/Quotes/Sales Orders/Purchase Orders/Credit Notes/Return Notes/Journal
+Entries); Journal Entry full-page migration (the last sheet-backed transaction record); Forecasting
+/ Budget vs Actual (migration 0060 — previously entirely absent).
+
+**CORRECTED finding (the earlier claim below was stale/wrong):** `usePermission()`/`useCanAccess()`
+is NOT "called nowhere in Sales/Purchases/Inventory feature UI" — live code shows it's already wired
+into 36+ files across Inventory, Invoicing, Customer Management, Supplier Management, Payroll,
+Reports, GL, and User Management (create/update/delete/import/export actions). The GENUINE gap,
+confirmed live: the permission catalog itself has no `purchasing` feature and no feature for any
+non-Invoice Sales document (Quotes/Sales Orders/Delivery Notes/Return Notes/Credit Notes/Receipts) —
+only 9 features exist at all: `customer_management`, `dashboard`, `gl`, `inventory`, `invoicing`,
+`payroll`, `reports`, `supplier_management`, `user_management`.
+
+**NOT done, deliberately — a real STOP, not an oversight:** extending the permission catalog to
+Purchasing/non-Invoice-Sales was NOT attempted this run. Reason: `user_roles` has 0 live assignments
+today, but `profiles.role` DOES have 4 real `viewer`-role accounts live. Quotes/Sales
+Orders/Delivery Notes/Return Notes/Credit Notes/Receipts/Purchase Orders/Bills/Payments currently
+have NO route-level gate at all — any authenticated user, including those 4 viewer accounts, can use
+every action on those pages today. Inventing a default role→permission matrix for two new feature
+areas (should `viewer` be able to create a Purchase Order? a Quote?) is a genuine business-policy
+decision this audit has no basis to make — guessing wrong either locks out real accounts with no
+admin-assignable recovery path (since assigning roles itself requires reaching a page these
+same permissions might gate) or ships gating that does nothing. This is exactly the "insufficient
+role data to safely infer access defaults" case documented as a valid stop condition. Needs an
+explicit product decision, then a migration + UI wiring pass mirroring the already-proven
+Inventory/Invoicing pattern exactly.
+
+**NOT flipped, deliberately:** `NORMALIZED_DOCUMENT_LINES_ENABLED` stays `false`. The 2026-09-05
+readiness audit found live parity perfect and the dual-write path provably non-blocking (see
+`docs/CURRENT_TASKS.md`), but no live smoke test of an actual create/update through the running app
+with the flag flipped has been run — static analysis alone shouldn't be the last word before a
+production flag flip.
+
 ### 2026-09-05 — Whole-project completion audit findings
 
 A broad, read-only audit (code + live database) was run across the entire app after closing Phase

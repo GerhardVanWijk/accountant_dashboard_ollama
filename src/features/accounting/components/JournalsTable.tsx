@@ -1,165 +1,36 @@
 import { useMemo } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
-import type { Account, AccountingPeriod, ID, JournalEntry } from '@/types';
+import type { AccountingPeriod, ID, JournalEntry } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
-import { RecordAuditHistorySection } from '@/components/app/record-audit-history';
 import { StatusBadge } from '@/components/app/status-badge';
-import { Button } from '@/components/ui/shadcn/button';
 import { formatDate } from '@/lib/app/format';
 import { findPeriodForDate } from '../utils/periodLookup';
 
-/** The double-entry lines behind one journal, shown when a row is expanded. */
-function JournalLines({
-  entry,
-  accountLabel,
-  reversalEntryId,
-  reversing,
-  onReverse,
-}: {
-  entry: JournalEntry;
-  accountLabel: (id: ID) => string;
-  reversalEntryId: ID | undefined;
-  reversing: boolean;
-  onReverse: () => void;
-}) {
-  const totalDebit = entry.lines.reduce((sum, l) => sum + l.debit, 0);
-  const totalCredit = entry.lines.reduce((sum, l) => sum + l.credit, 0);
-
-  return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Journal lines</p>
-        <p className="text-xs text-muted-foreground">
-          Source: {entry.source}
-          {entry.reversalOfEntryId && <> &middot; reverses entry {entry.reversalOfEntryId}</>}
-          {reversalEntryId && <> &middot; reversed by entry {reversalEntryId}</>}
-        </p>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-xs text-muted-foreground">
-              <th scope="col" className="py-2 pr-4 text-left font-medium">
-                Account
-              </th>
-              <th scope="col" className="py-2 pr-4 text-left font-medium">
-                Description
-              </th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">
-                Debit
-              </th>
-              <th scope="col" className="py-2 text-right font-medium">
-                Credit
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {entry.lines.map((line) => (
-              <tr key={line.id} className="border-b border-border/50">
-                <td className="figure py-2 pr-4 align-top text-xs tabular-nums">{accountLabel(line.accountId)}</td>
-                <td className="py-2 pr-4 align-top text-xs text-muted-foreground">{line.description ?? '—'}</td>
-                <td className="py-2 pr-4 text-right align-top">
-                  {line.debit > 0 ? (
-                    <Amount value={line.debit} plain className="text-xs" />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">&mdash;</span>
-                  )}
-                </td>
-                <td className="py-2 text-right align-top">
-                  {line.credit > 0 ? (
-                    <Amount value={line.credit} plain className="text-xs" />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">&mdash;</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={2} className="py-2 text-xs font-medium uppercase">
-                Totals
-              </td>
-              <td className="py-2 pr-4 text-right">
-                <Amount value={totalDebit} plain className="text-xs font-semibold" />
-              </td>
-              <td className="py-2 text-right">
-                <Amount value={totalCredit} plain className="text-xs font-semibold" />
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      <RecordAuditHistorySection recordType="JournalEntry" recordId={entry.id} />
-
-      <div className="flex justify-end">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={Boolean(reversalEntryId) || reversing}
-          onClick={onReverse}
-        >
-          {reversing ? 'Reversing…' : reversalEntryId ? 'Already reversed' : 'Reverse entry'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export interface JournalsTableProps {
   entries: JournalEntry[];
-  accounts: Account[];
   periods: AccountingPeriod[];
   reversedByEntryId: Map<ID, ID>;
-  onReverse: (entry: JournalEntry) => void;
-  reversingEntryId: ID | null;
-  /** Which entry's lines are expanded — URL-backed (`?record=`) by JournalsPage, so a deep link opens the right journal. */
-  openId: ID | null;
-  onToggleOpen: (id: ID) => void;
+  /** Row click navigates to the full-page record (Part 10) — same convention as every other document list. */
+  onRowClick: (entry: JournalEntry) => void;
 }
 
 /**
- * Posted journal entries, newest first, expandable to their double-entry
- * lines — re-skinned onto v0's DataTable + renderDetail pattern. "Reversed"
- * is derived purely from `reversedByEntryId` (does another entry point
- * `reversalOfEntryId` at this one), never from a mutated field on the entry
- * itself (docs/LEDGER_ARCHITECTURE.md) — same rule the pre-port
- * JournalEntryList enforced. Period label is a pure lookup via the
- * existing findPeriodForDate() utility, not a stored field on the entry.
+ * Posted journal entries, newest first — re-skinned onto v0's DataTable.
+ * Row click navigates to `JournalEntryDetailPage` (`/accounting/journals/:id`)
+ * — the inline expand-to-lines mechanic this table used before Part 10 is
+ * gone; the full page owns the lines, audit history, and the Reverse
+ * action now. "Reversed" is derived purely from `reversedByEntryId` (does
+ * another entry point `reversalOfEntryId` at this one), never from a
+ * mutated field on the entry itself (docs/LEDGER_ARCHITECTURE.md). Period
+ * label is a pure lookup via the existing findPeriodForDate() utility, not
+ * a stored field on the entry.
  */
-export function JournalsTable({ entries, accounts, periods, reversedByEntryId, onReverse, reversingEntryId, openId, onToggleOpen }: JournalsTableProps) {
-  const accountLabel = useMemo(() => {
-    const map = new Map(accounts.map((a) => [a.id, `${a.code} — ${a.name}`]));
-    return (id: ID) => map.get(id) ?? id;
-  }, [accounts]);
-
+export function JournalsTable({ entries, periods, reversedByEntryId, onRowClick }: JournalsTableProps) {
   const periodLabel = useMemo(() => {
     return (date: string) => findPeriodForDate(periods, date)?.name;
   }, [periods]);
 
   const columns: DataTableColumn<JournalEntry>[] = [
-    {
-      key: 'expand',
-      header: '',
-      headClassName: 'w-10',
-      cell: (entry) => {
-        const open = openId === entry.id;
-        return (
-          <button
-            type="button"
-            onClick={() => onToggleOpen(entry.id)}
-            aria-expanded={open}
-            aria-label={open ? `Hide lines for ${entry.entryNumber}` : `Show lines for ${entry.entryNumber}`}
-            className="rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            {open ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronRight className="size-4" aria-hidden="true" />}
-          </button>
-        );
-      },
-    },
     {
       key: 'number',
       header: 'Journal',
@@ -229,20 +100,8 @@ export function JournalsTable({ entries, accounts, periods, reversedByEntryId, o
       ]}
       emptyTitle="No journals found"
       emptyDescription="Adjust the filters, or capture a new journal entry."
-      caption="Expand a row to see its double-entry lines"
-      renderDetail={(entry) =>
-        entry.id === openId ? (
-          <div className="px-4 pb-4">
-            <JournalLines
-              entry={entry}
-              accountLabel={accountLabel}
-              reversalEntryId={reversedByEntryId.get(entry.id)}
-              reversing={reversingEntryId === entry.id}
-              onReverse={() => onReverse(entry)}
-            />
-          </div>
-        ) : null
-      }
+      caption="Select a row to view its double-entry lines"
+      onRowClick={onRowClick}
     />
   );
 }

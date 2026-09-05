@@ -25,6 +25,7 @@ import { SuperUserDashboardPage } from '@/features/admin/pages/SuperUserDashboar
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { ChartOfAccountsPage } from '@/features/accounting/pages/ChartOfAccountsPage';
 import { JournalsPage } from '@/features/accounting/pages/JournalsPage';
+import { JournalEntryDetailPage } from '@/features/accounting/pages/JournalEntryDetailPage';
 import { LedgerPage } from '@/features/accounting/pages/LedgerPage';
 import { TrialBalancePage } from '@/features/accounting/pages/TrialBalancePage';
 import { FinancialPeriodsPage } from '@/features/accounting/pages/FinancialPeriodsPage';
@@ -41,6 +42,9 @@ import { CreditNoteDetailPage } from '@/features/sales/pages/CreditNoteDetailPag
 import { DeliveryNotesPage } from '@/features/sales/pages/DeliveryNotesPage';
 import { DeliveryNoteDetailPage } from '@/features/sales/pages/DeliveryNoteDetailPage';
 import { CreateDeliveryNotePage } from '@/features/sales/pages/CreateDeliveryNotePage';
+import { ReturnNotesPage } from '@/features/sales/pages/ReturnNotesPage';
+import { ReturnNoteDetailPage } from '@/features/sales/pages/ReturnNoteDetailPage';
+import { CreateReturnNotePage } from '@/features/sales/pages/CreateReturnNotePage';
 import { CustomerReceiptsPage } from '@/features/sales/pages/CustomerReceiptsPage';
 import { CustomerReceiptDetailPage } from '@/features/sales/pages/CustomerReceiptDetailPage';
 import { VendorsPage } from '@/features/purchases/pages/VendorsPage';
@@ -104,6 +108,7 @@ import { ProvisionalTaxPage } from '@/features/tax/provisionalTax/pages/Provisio
 import { DeferredTaxPage } from '@/features/tax/deferredTax/pages/DeferredTaxPage';
 import { EclProvisionPage } from '@/features/financialInstruments/pages/EclProvisionPage';
 import { ReportsPage } from '@/features/reports/pages/ReportsPage';
+import { ForecastingPage } from '@/features/reports/forecasting/pages/ForecastingPage';
 import { IncomeStatementPage } from '@/features/reports/financialStatements/pages/IncomeStatementPage';
 import { BalanceSheetPage } from '@/features/reports/financialStatements/pages/BalanceSheetPage';
 import { CashFlowStatementPage } from '@/features/reports/cashFlow/pages/CashFlowStatementPage';
@@ -191,6 +196,7 @@ export const routes: RouteObject[] = [
           { path: 'companies', element: <CompanyPage /> },
           { path: 'accounting/coa', element: <PermissionRoute feature="gl" action="read"><ChartOfAccountsPage /></PermissionRoute> },
           { path: 'accounting/journals', element: <PermissionRoute feature="gl" action="read"><JournalsPage /></PermissionRoute> },
+          { path: 'accounting/journals/:journalEntryId', element: <PermissionRoute feature="gl" action="read"><JournalEntryDetailPage /></PermissionRoute> },
           { path: 'accounting/ledger', element: <PermissionRoute feature="gl" action="read"><LedgerPage /></PermissionRoute> },
           { path: 'accounting/trial-balance', element: <PermissionRoute feature="gl" action="read"><TrialBalancePage /></PermissionRoute> },
           { path: 'financial-periods', element: <FinancialPeriodsPage /> },
@@ -202,6 +208,9 @@ export const routes: RouteObject[] = [
           { path: 'sales/orders/:orderId/deliver', element: <CreateDeliveryNotePage /> },
           { path: 'sales/delivery-notes', element: <DeliveryNotesPage /> },
           { path: 'sales/delivery-notes/:deliveryNoteId', element: <DeliveryNoteDetailPage /> },
+          { path: 'sales/delivery-notes/:deliveryNoteId/return', element: <CreateReturnNotePage /> },
+          { path: 'sales/return-notes', element: <ReturnNotesPage /> },
+          { path: 'sales/return-notes/:returnNoteId', element: <ReturnNoteDetailPage /> },
           { path: 'sales/invoices', element: <PermissionRoute feature="invoicing" action="read"><InvoicesPage /></PermissionRoute> },
           { path: 'sales/invoices/:invoiceId', element: <PermissionRoute feature="invoicing" action="read"><InvoiceDetailPage /></PermissionRoute> },
           { path: 'sales/credit-notes', element: <CreditNotesPage /> },
@@ -274,6 +283,7 @@ export const routes: RouteObject[] = [
           { path: 'reports/cash-flow', element: <PermissionRoute feature="reports" action="read"><CashFlowStatementPage /></PermissionRoute> },
           { path: 'reports/customer-aging', element: <PermissionRoute feature="reports" action="read"><CustomerAgingPage /></PermissionRoute> },
           { path: 'reports/supplier-aging', element: <PermissionRoute feature="reports" action="read"><SupplierAgingPage /></PermissionRoute> },
+          { path: 'reports/forecasting', element: <PermissionRoute feature="reports" action="read"><ForecastingPage /></PermissionRoute> },
           { path: 'compliance/dashboard', element: <ComplianceDashboardPage /> },
           { path: 'compliance/public-interest-score', element: <PublicInterestScorePage /> },
           { path: 'compliance/reporting-standards', element: <ReportingStandardsPage /> },

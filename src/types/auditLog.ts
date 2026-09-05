@@ -44,6 +44,11 @@ export type AuditAction =
   | 'delivery_note_updated'
   | 'delivery_note_posted'
   | 'delivery_note_cancelled'
+  // Phase 5D — Return Notes (docs/RETURN_NOTES_DESIGN.md § "Audit").
+  | 'return_note_created'
+  | 'return_note_updated'
+  | 'return_note_posted'
+  | 'return_note_cancelled'
   // Shared Import Framework (Phase 6, docs/IMPORT_EXPORT_ARCHITECTURE.md).
   // One summary row per completed import run (recordType 'ImportBatch',
   // recordId a synthetic `import_<timestamp>` — there is no single existing

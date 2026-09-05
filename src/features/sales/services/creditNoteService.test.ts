@@ -20,6 +20,7 @@ import {
 import { InventoryAccountResolverService } from '@/features/inventory/services/inventoryAccountResolver';
 import { periodGuardFrom } from '@/features/inventory/services/documentInventoryPosting';
 import type { IDocumentLineProjector } from '@/repositories/IDocumentLineProjector';
+import type { InvoiceFrozenCostLookup } from '@/features/inventory/services/invoiceFrozenCostLookup';
 import type { AccountingPeriod, DocumentLineItem, ID, Product, ProductCategory, Warehouse } from '@/types';
 
 /** Records every sync() call — the spy used by the Phase 9B projection test. */
@@ -85,6 +86,7 @@ async function setup(
     products?: Record<string, Partial<Product>>;
     categories?: Record<string, Partial<ProductCategory>>;
     lineProjector?: IDocumentLineProjector;
+    invoiceFrozenCost?: InvoiceFrozenCostLookup;
   } = {},
 ) {
   const accountRepository = new MockAccountRepository(seedAccounts);
@@ -155,6 +157,7 @@ async function setup(
     products,
     warehouses,
     options.lineProjector,
+    options.invoiceFrozenCost,
   );
 
   const getJE = (id: string | undefined) => store.journalEntries.find((e) => e.id === id);
@@ -262,6 +265,88 @@ describe('CreditNoteService', () => {
       });
       await service.issueCreditNote(draft.id);
       expect(store.movements.filter((m) => m.type === 'sales_return')[0].warehouseId).toBe('wh_branch');
+    });
+
+    describe('cost basis (Part 5, docs/CURRENT_TASKS.md) — historical vs current WAC', () => {
+      it('reverses at the ORIGINAL sale\'s frozen cost, not today\'s current WAC, when originalInvoiceLineId evidence exists', async () => {
+        // The product's cost has drifted since the sale — sold at frozen 32, current WAC is now 40
+        // (docs example: "Sold at historical cost R3,200 / Current WAC at return = R3,500").
+        const frozenCost: InvoiceFrozenCostLookup = {
+          getFrozenCost: async (invoiceLineId) => (invoiceLineId === 'il_1' ? { unitCost: 32, totalCost: 64 } : undefined),
+        };
+        const { service, store, getJE } = await setup({ products: { prod_1: { costPrice: 40 } }, invoiceFrozenCost: frozenCost });
+        const draft = await service.createCreditNote({
+          creditNoteNumber: 'CN-FROZEN-COST',
+          customerId: 'cust_test',
+          issueDate: '2026-08-05T00:00:00.000Z',
+          reason: 'return',
+          lineItems: [
+            { id: 'li_1', productId: 'prod_1', originalInvoiceLineId: 'il_1', description: 'Widget', quantity: 2, unitPrice: 100, taxAmount: 30, lineTotal: 200 },
+          ],
+          subtotal: 200,
+          taxTotal: 30,
+          total: 230,
+          amountAllocated: 0,
+          currency: 'ZAR',
+          status: 'draft',
+          allocations: [],
+        });
+        const issued = await service.issueCreditNote(draft.id);
+        const entry = getJE(issued.journalEntryId)!;
+        // 2 * 32 (frozen) = 64 — NOT 2 * 40 (current WAC) = 80.
+        expect(entry.lines.find((l) => l.accountId === 'acc_1200')?.debit).toBeCloseTo(64);
+        expect(entry.lines.find((l) => l.accountId === 'acc_5000')?.credit).toBeCloseTo(64);
+        const [movement] = store.movements.filter((m) => m.type === 'sales_return');
+        expect(movement.unitCost).toBeCloseTo(32);
+      });
+
+      it('falls back to current WAC when no originalInvoiceLineId is set — the pre-existing, still-honest behaviour', async () => {
+        const frozenCost: InvoiceFrozenCostLookup = { getFrozenCost: async () => ({ unitCost: 32, totalCost: 64 }) };
+        const { service, getJE } = await setup({ products: { prod_1: { costPrice: 40 } }, invoiceFrozenCost: frozenCost });
+        const draft = await service.createCreditNote({
+          creditNoteNumber: 'CN-NO-LINK',
+          customerId: 'cust_test',
+          issueDate: '2026-08-05T00:00:00.000Z',
+          reason: 'return',
+          lineItems: [
+            { id: 'li_1', productId: 'prod_1', description: 'Widget', quantity: 2, unitPrice: 100, taxAmount: 30, lineTotal: 200 },
+          ],
+          subtotal: 200,
+          taxTotal: 30,
+          total: 230,
+          amountAllocated: 0,
+          currency: 'ZAR',
+          status: 'draft',
+          allocations: [],
+        });
+        const issued = await service.issueCreditNote(draft.id);
+        const entry = getJE(issued.journalEntryId)!;
+        // no link -> never even asked the lookup -> current WAC (40) * 2 = 80
+        expect(entry.lines.find((l) => l.accountId === 'acc_1200')?.debit).toBeCloseTo(80);
+      });
+
+      it('falls back to current WAC when originalInvoiceLineId is set but no frozen evidence exists — an honest limitation, not a fabricated number', async () => {
+        const { service, getJE } = await setup({ products: { prod_1: { costPrice: 40 } } }); // default lookup always returns undefined
+        const draft = await service.createCreditNote({
+          creditNoteNumber: 'CN-NO-EVIDENCE',
+          customerId: 'cust_test',
+          issueDate: '2026-08-05T00:00:00.000Z',
+          reason: 'return',
+          lineItems: [
+            { id: 'li_1', productId: 'prod_1', originalInvoiceLineId: 'il_unlinked', description: 'Widget', quantity: 2, unitPrice: 100, taxAmount: 30, lineTotal: 200 },
+          ],
+          subtotal: 200,
+          taxTotal: 30,
+          total: 230,
+          amountAllocated: 0,
+          currency: 'ZAR',
+          status: 'draft',
+          allocations: [],
+        });
+        const issued = await service.issueCreditNote(draft.id);
+        const entry = getJE(issued.journalEntryId)!;
+        expect(entry.lines.find((l) => l.accountId === 'acc_1200')?.debit).toBeCloseTo(80);
+      });
     });
 
     it('does not reverse COGS or restore stock for a non-return reason, even with a product line', async () => {

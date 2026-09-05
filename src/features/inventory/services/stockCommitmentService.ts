@@ -2,12 +2,16 @@ import type { SalesOrder } from '@/types';
 import type { ISalesOrderRepository } from '@/repositories/ISalesOrderRepository';
 import type { IInvoiceRepository } from '@/repositories/IInvoiceRepository';
 import type { IDeliveryNoteRepository } from '@/repositories/IDeliveryNoteRepository';
+import type { IReturnNoteRepository } from '@/repositories/IReturnNoteRepository';
 import { sumPhysicallyIssuedBySalesOrderLine } from '@/features/sales/utils/salesOrderFulfilment';
 import type { IWarehouseRepository } from '../repositories/IWarehouseRepository';
-import { invoiceRepository, salesOrderRepository, warehouseRepository, deliveryNoteRepository } from '../repositories/instances';
+import { invoiceRepository, salesOrderRepository, warehouseRepository, deliveryNoteRepository, returnNoteRepository } from '../repositories/instances';
 
 /** Narrow read surface this service needs from IDeliveryNoteRepository — keeps the default stub trivial. */
 type DeliveryNoteLookup = Pick<IDeliveryNoteRepository, 'getAll'>;
+
+/** Narrow read surface this service needs from IReturnNoteRepository — keeps the default stub trivial. */
+type ReturnNoteLookup = Pick<IReturnNoteRepository, 'getAll'>;
 
 /**
  * Stable per-(product, warehouse) key. Shared by the commitment map, the
@@ -109,21 +113,31 @@ export class StockCommitmentService implements StockCommitmentLookup {
      * (every existing test) is byte-unchanged.
      */
     private readonly deliveryNoteRepo: DeliveryNoteLookup = { getAll: async () => [] },
+    /**
+     * Phase 5D / completion-run stabilization: read-only source of POSTED
+     * Return Note evidence, netted OUT of delivered quantity before it
+     * offsets commitment (`sumPhysicallyIssuedBySalesOrderLine`). Optional,
+     * defaults to an empty-returning stub so every pre-5D construction of
+     * this class (every existing test) is byte-unchanged.
+     */
+    private readonly returnNoteRepo: ReturnNoteLookup = { getAll: async () => [] },
   ) {}
 
   async getCommitmentMap(): Promise<Map<string, number>> {
-    const [orders, warehouses, invoices, deliveryNotes] = await Promise.all([
+    const [orders, warehouses, invoices, deliveryNotes, returnNotes] = await Promise.all([
       this.salesOrderRepo.getAll(),
       this.warehouseRepo.getAll(),
       this.invoiceRepo.getAll(),
       this.deliveryNoteRepo.getAll(),
+      this.returnNoteRepo.getAll(),
     ]);
     const defaultWarehouseId = warehouses.find((w) => w.isDefault)?.id;
-    // Σ (deliveredQty + directlyInvoicedQty) per SO line — drafts (of either
-    // kind) excluded, a delivery-linked invoice line excluded from the
-    // "directly invoiced" side (already counted via deliveredQty) — see
+    // Σ (netDeliveredQty + directlyInvoicedQty) per SO line — drafts (of
+    // either kind) excluded, a delivery-linked invoice line excluded from
+    // the "directly invoiced" side (already counted via deliveredQty), a
+    // posted Return Note netted OUT of deliveredQty before the sum — see
     // `sumPhysicallyIssuedBySalesOrderLine`'s own doc comment.
-    const fulfilledByLine = sumPhysicallyIssuedBySalesOrderLine(invoices, deliveryNotes);
+    const fulfilledByLine = sumPhysicallyIssuedBySalesOrderLine(invoices, deliveryNotes, returnNotes);
 
     const map = new Map<string, number>();
     for (const order of orders) {
@@ -220,4 +234,5 @@ export const stockCommitmentService = new StockCommitmentService(
   warehouseRepository,
   invoiceRepository,
   deliveryNoteRepository,
+  returnNoteRepository,
 );

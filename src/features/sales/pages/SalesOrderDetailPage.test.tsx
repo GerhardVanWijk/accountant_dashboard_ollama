@@ -10,6 +10,7 @@ vi.mock('@/features/sales/hooks/useQuotes');
 vi.mock('@/features/sales/hooks/useInvoices');
 vi.mock('@/features/sales/hooks/useCustomerMap');
 vi.mock('@/features/sales/hooks/useDeliveryNotes', () => ({ useDeliveryNotes: () => ({ deliveryNotes: [], isLoading: false, loading: false, error: null, refetch: vi.fn() }) }));
+vi.mock('@/features/sales/hooks/useReturnNotes', () => ({ useReturnNotes: () => ({ returnNotes: [], isLoading: false, loading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('@/services/auditLogService', () => ({ auditLogService: { getForRecord: vi.fn().mockResolvedValue([]) } }));
 vi.mock('@/features/inventory/hooks/useProducts', () => ({ useProducts: () => ({ products: [], loading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('@/features/inventory/hooks/useWarehouses', () => ({ useWarehouses: () => ({ warehouses: [], loading: false, error: null, refetch: vi.fn() }) }));

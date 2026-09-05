@@ -1,6 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, CornerDownLeft, Loader2, PackageCheckIcon, PackageIcon, Search, UsersRound } from 'lucide-react';
+import {
+  Building2,
+  ClipboardCheckIcon,
+  ClipboardListIcon,
+  CornerDownLeft,
+  CreditCardIcon,
+  FileSignatureIcon,
+  FileTextIcon,
+  Loader2,
+  PackageCheckIcon,
+  PackageIcon,
+  PackageXIcon,
+  ReceiptIcon,
+  ScrollTextIcon,
+  Search,
+  UsersRound,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -42,6 +58,14 @@ const RECORD_META: Record<
   customer: { icon: UsersRound, label: 'Customer', heading: 'Customers' },
   supplier: { icon: Building2, label: 'Supplier', heading: 'Suppliers' },
   delivery_note: { icon: PackageCheckIcon, label: 'Delivery note', heading: 'Delivery notes' },
+  return_note: { icon: PackageXIcon, label: 'Return note', heading: 'Return notes' },
+  invoice: { icon: FileTextIcon, label: 'Invoice', heading: 'Invoices' },
+  bill: { icon: CreditCardIcon, label: 'Bill', heading: 'Bills' },
+  quote: { icon: FileSignatureIcon, label: 'Quote', heading: 'Quotes' },
+  sales_order: { icon: ClipboardListIcon, label: 'Sales order', heading: 'Sales orders' },
+  purchase_order: { icon: ClipboardCheckIcon, label: 'Purchase order', heading: 'Purchase orders' },
+  credit_note: { icon: ReceiptIcon, label: 'Credit note', heading: 'Credit notes' },
+  journal_entry: { icon: ScrollTextIcon, label: 'Journal entry', heading: 'Journal entries' },
 };
 
 export function GlobalSearch({ className }: { className?: string }) {
@@ -94,7 +118,20 @@ export function GlobalSearch({ className }: { className?: string }) {
   }, [navGroups]);
 
   const recordsByType = useMemo(() => {
-    return (['product', 'customer', 'supplier', 'delivery_note'] as GlobalSearchRecordType[]).map((type) => ({
+    return ([
+      'product',
+      'customer',
+      'supplier',
+      'delivery_note',
+      'return_note',
+      'invoice',
+      'bill',
+      'quote',
+      'sales_order',
+      'purchase_order',
+      'credit_note',
+      'journal_entry',
+    ] as GlobalSearchRecordType[]).map((type) => ({
       type,
       items: records.filter((r) => r.type === type),
     }));

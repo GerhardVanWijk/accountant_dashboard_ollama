@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DeliveryNote, DeliveryNoteLineItem, DocumentLineItem, Invoice, SalesOrder } from '@/types';
+import type { DeliveryNote, DeliveryNoteLineItem, DocumentLineItem, Invoice, ReturnNote, ReturnNoteLineItem, SalesOrder } from '@/types';
 import {
   buildInvoiceFromSelections,
   canCloseRemaining,
@@ -12,11 +12,13 @@ import {
   isFullyPostedInvoiced,
   isPostedDeliveryNoteStatus,
   isPostedInvoiceStatus,
+  isPostedReturnNoteStatus,
   isValidSelectionQuantity,
   sumDeliveredBySalesOrderLine,
   sumDirectlyInvoicedBySalesOrderLine,
   sumInvoicedBySalesOrderLine,
   sumPhysicallyIssuedBySalesOrderLine,
+  sumReturnedBySalesOrderLine,
 } from './salesOrderFulfilment';
 
 function soLine(overrides: Partial<DocumentLineItem> = {}): DocumentLineItem {
@@ -540,5 +542,161 @@ describe('computeSalesOrderFulfilment — Phase 5C delivery-aware fields', () =>
     expect(f.physicalFulfilledQty).toBe(7); // NOT 7 + 4 = 11
     expect(f.deliveredQty).toBe(7);
     expect(f.directlyInvoicedQty).toBe(0);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 5D — Return Note netting (completion-run stabilization, Part 1)
+// ────────────────────────────────────────────────────────────────────────────
+
+function rnLine(overrides: Partial<ReturnNoteLineItem> = {}): ReturnNoteLineItem {
+  return {
+    id: `rnl_${Math.random().toString(36).slice(2, 8)}`,
+    deliveryNoteLineId: 'dnl_1',
+    salesOrderLineId: 'L1',
+    productId: 'p1',
+    description: 'Item',
+    quantity: 1,
+    unitCost: 80,
+    unitPrice: 100,
+    taxAmount: 15,
+    lineTotal: 100,
+    ...overrides,
+  };
+}
+
+function returnNote(lineItems: ReturnNoteLineItem[], overrides: Partial<ReturnNote> = {}): ReturnNote {
+  return {
+    id: `rn_${Math.random().toString(36).slice(2, 8)}`,
+    returnNoteNumber: 'RN-1',
+    deliveryNoteId: 'dn_1',
+    salesOrderId: 'so_1',
+    customerId: 'cust_1',
+    warehouseId: 'wh_1',
+    returnDate: '2026-09-05',
+    status: 'posted',
+    lineItems,
+    createdAt: '',
+    updatedAt: '',
+    ...overrides,
+  };
+}
+
+describe('isPostedReturnNoteStatus', () => {
+  it('true only for posted', () => {
+    expect(isPostedReturnNoteStatus('posted')).toBe(true);
+    expect(isPostedReturnNoteStatus('draft')).toBe(false);
+    expect(isPostedReturnNoteStatus('cancelled')).toBe(false);
+  });
+});
+
+describe('sumReturnedBySalesOrderLine', () => {
+  it('sums posted RN line qty per SO line; drafts/cancelled excluded by the predicate', () => {
+    const rns = [
+      returnNote([rnLine({ salesOrderLineId: 'L1', quantity: 2 })]),
+      returnNote([rnLine({ salesOrderLineId: 'L1', quantity: 1 })]),
+      returnNote([rnLine({ salesOrderLineId: 'L1', quantity: 99 })], { status: 'draft' }),
+    ];
+    const map = sumReturnedBySalesOrderLine(rns, (rn) => isPostedReturnNoteStatus(rn.status));
+    expect(map.get('L1')).toBe(3);
+  });
+});
+
+describe('sumPhysicallyIssuedBySalesOrderLine — Return Note netting', () => {
+  it('nets a posted return out of deliveredQty before adding directlyInvoicedQty', () => {
+    const dns = [deliveryNote([dnLine({ salesOrderLineId: 'L1', quantity: 6 })])];
+    const rns = [returnNote([rnLine({ salesOrderLineId: 'L1', quantity: 2 })])];
+    const map = sumPhysicallyIssuedBySalesOrderLine([], dns, rns);
+    expect(map.get('L1')).toBe(4); // 6 delivered - 2 returned
+  });
+
+  it('never goes negative even if returns somehow exceed delivered for the map (defensive floor)', () => {
+    const dns = [deliveryNote([dnLine({ salesOrderLineId: 'L1', quantity: 2 })])];
+    const rns = [returnNote([rnLine({ salesOrderLineId: 'L1', quantity: 5 })])];
+    const map = sumPhysicallyIssuedBySalesOrderLine([], dns, rns);
+    expect(map.get('L1')).toBe(0);
+  });
+
+  it('reduces to the pre-5D formula exactly when no Return Note has ever been posted', () => {
+    const dns = [deliveryNote([dnLine({ salesOrderLineId: 'L1', quantity: 6 })])];
+    const invoices = [invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 3 })])];
+    const withReturns = sumPhysicallyIssuedBySalesOrderLine(invoices, dns, []);
+    const withoutParam = sumPhysicallyIssuedBySalesOrderLine(invoices, dns);
+    expect(withReturns).toEqual(withoutParam);
+  });
+});
+
+describe('computeSalesOrderFulfilment — Phase 5D Return Note worked examples (brief Part 1)', () => {
+  function so10() {
+    return order([soLine({ id: 'L1', productId: 'p1', quantity: 10, unitPrice: 100, lineTotal: 1000, taxAmount: 150 })]);
+  }
+
+  it('SO 10, DN 6, RN returns 2 uninvoiced → net delivered 4, remaining 6, committed 6', () => {
+    const dns = [deliveryNote([dnLine({ id: 'dnl_1', salesOrderLineId: 'L1', quantity: 6 })])];
+    const rns = [returnNote([rnLine({ deliveryNoteLineId: 'dnl_1', salesOrderLineId: 'L1', quantity: 2 })])];
+    const f = computeSalesOrderFulfilment(so10(), [], dns, rns);
+    expect(f.lines[0].deliveredQty).toBe(6);
+    expect(f.lines[0].returnedQty).toBe(2);
+    expect(f.lines[0].netDeliveredQty).toBe(4);
+    expect(f.lines[0].physicalFulfilledQty).toBe(4);
+    expect(f.lines[0].remainingToDeliver).toBe(6);
+  });
+
+  it('same scenario, then a second DN delivers 6 more → net physical fulfilled 10, remaining 0', () => {
+    const dns = [
+      deliveryNote([dnLine({ id: 'dnl_1', salesOrderLineId: 'L1', quantity: 6 })]),
+      deliveryNote([dnLine({ id: 'dnl_2', salesOrderLineId: 'L1', quantity: 6 })]),
+    ];
+    const rns = [returnNote([rnLine({ deliveryNoteLineId: 'dnl_1', salesOrderLineId: 'L1', quantity: 2 })])];
+    const f = computeSalesOrderFulfilment(so10(), [], dns, rns);
+    expect(f.lines[0].deliveredQty).toBe(12); // 6 + 6, gross
+    expect(f.lines[0].returnedQty).toBe(2);
+    expect(f.lines[0].netDeliveredQty).toBe(10); // 12 - 2, NOT clamped by ordered here — physicalFulfilledQty below does the clamping via remainingToDeliver
+    expect(f.lines[0].physicalFulfilledQty).toBe(10);
+    expect(f.lines[0].remainingToDeliver).toBe(0);
+  });
+
+  it('interaction with direct invoicing: ordered 10, delivered 6, returned 2 uninvoiced, directly invoiced 3 → physical fulfilled 7, remaining 3, no double counting', () => {
+    const dns = [deliveryNote([dnLine({ id: 'dnl_1', salesOrderLineId: 'L1', quantity: 6 })])];
+    const rns = [returnNote([rnLine({ deliveryNoteLineId: 'dnl_1', salesOrderLineId: 'L1', quantity: 2 })])];
+    const invoices = [invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 3 })])]; // direct, no deliveryNoteLineId
+    const f = computeSalesOrderFulfilment(so10(), invoices, dns, rns);
+    expect(f.lines[0].netDeliveredQty).toBe(4);
+    expect(f.lines[0].directlyInvoicedQty).toBe(3);
+    expect(f.lines[0].physicalFulfilledQty).toBe(7);
+    expect(f.lines[0].remainingToDeliver).toBe(3);
+  });
+
+  it('a return note does NOT alter invoiced quantity — remainingToInvoiceQty is untouched by a return', () => {
+    const dns = [deliveryNote([dnLine({ id: 'dnl_1', salesOrderLineId: 'L1', quantity: 6 })])];
+    const invoices = [invoice([soLine({ id: 'i1', salesOrderLineId: 'L1', quantity: 4, deliveryNoteLineId: 'dnl_1' })])];
+    const noReturn = computeSalesOrderFulfilment(so10(), invoices, dns, []);
+    const rns = [returnNote([rnLine({ deliveryNoteLineId: 'dnl_1', salesOrderLineId: 'L1', quantity: 2 })])];
+    const withReturn = computeSalesOrderFulfilment(so10(), invoices, dns, rns);
+    expect(withReturn.lines[0].remainingToInvoiceQty).toBe(noReturn.lines[0].remainingToInvoiceQty);
+    expect(withReturn.lines[0].postedFulfilledQty).toBe(noReturn.lines[0].postedFulfilledQty);
+  });
+
+  it('a draft Return Note never nets into remainingToDeliver', () => {
+    const dns = [deliveryNote([dnLine({ id: 'dnl_1', salesOrderLineId: 'L1', quantity: 6 })])];
+    const rns = [returnNote([rnLine({ deliveryNoteLineId: 'dnl_1', salesOrderLineId: 'L1', quantity: 2 })], { status: 'draft' })];
+    const f = computeSalesOrderFulfilment(so10(), [], dns, rns);
+    expect(f.lines[0].returnedQty).toBe(0);
+    expect(f.lines[0].remainingToDeliver).toBe(4);
+  });
+
+  it('backward compatibility: computeSalesOrderFulfilment(order, invoices, deliveryNotes) with NO fourth argument is byte-identical to passing []', () => {
+    const dns = [deliveryNote([dnLine({ id: 'dnl_1', salesOrderLineId: 'L1', quantity: 6 })])];
+    const withDefault = computeSalesOrderFulfilment(so10(), [], dns);
+    const withEmpty = computeSalesOrderFulfilment(so10(), [], dns, []);
+    expect(withDefault).toEqual(withEmpty);
+  });
+
+  it('a Return Note against a DIFFERENT sales order is ignored (company/order scoping)', () => {
+    const dns = [deliveryNote([dnLine({ id: 'dnl_1', salesOrderLineId: 'L1', quantity: 6 })])];
+    const rns = [returnNote([rnLine({ deliveryNoteLineId: 'dnl_x', salesOrderLineId: 'L1', quantity: 2 })], { salesOrderId: 'so_other' })];
+    const f = computeSalesOrderFulfilment(so10(), [], dns, rns);
+    expect(f.lines[0].returnedQty).toBe(0);
+    expect(f.lines[0].remainingToDeliver).toBe(4);
   });
 });

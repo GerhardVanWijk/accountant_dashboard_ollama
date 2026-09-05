@@ -29,6 +29,7 @@ const CUSTOMERS: Customer[] = [
 vi.mock('@/features/tax/hooks/useTaxRates', () => ({ useTaxRates: () => ({ taxRates: [] }) }));
 vi.mock('@/features/sales/hooks/useInvoices', () => ({ useInvoices: () => ({ invoices: [], loading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('@/features/sales/hooks/useDeliveryNotes', () => ({ useDeliveryNotes: () => ({ deliveryNotes: [], isLoading: false, loading: false, error: null, refetch: vi.fn() }) }));
+vi.mock('@/features/sales/hooks/useReturnNotes', () => ({ useReturnNotes: () => ({ returnNotes: [], isLoading: false, loading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('@/features/inventory/hooks/useProducts', () => ({ useProducts: () => ({ products: PRODUCTS }) }));
 vi.mock('@/features/inventory/hooks/useWarehouses', () => ({
   useWarehouses: () => ({

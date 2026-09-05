@@ -102,6 +102,7 @@ export function CreditNotesPage() {
         <CreditNoteFormModal
           customers={customerList}
           invoices={invoices}
+          creditNotes={creditNotes}
           defaultCreditNoteNumber={nextCreditNoteNumber}
           onSubmit={handleCreate}
           onClose={() => setShowForm(false)}

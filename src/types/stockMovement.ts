@@ -35,7 +35,9 @@ export type StockMovementSourceType =
   | 'supplier_return'
   | 'reversal'
   // --- Phase 5C (Delivery Notes).
-  | 'delivery_note';
+  | 'delivery_note'
+  // --- Phase 5D (Return Notes).
+  | 'return_note';
 
 /**
  * A single immutable entry in the perpetual-inventory ledger. This is the

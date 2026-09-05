@@ -15,6 +15,7 @@ const EXPORT_COLUMNS: ExportColumn<DeliveryLineReconciliationRow>[] = [
   { key: 'productName', header: 'Product', accessor: (r) => r.productName },
   { key: 'deliveredQty', header: 'Delivered qty', accessor: (r) => r.deliveredQty, align: 'right' },
   { key: 'invoicedQty', header: 'Invoiced qty', accessor: (r) => r.invoicedQty, align: 'right' },
+  { key: 'returnedQty', header: 'Returned qty', accessor: (r) => r.returnedQty, align: 'right' },
   { key: 'outstandingQty', header: 'Outstanding qty', accessor: (r) => r.outstandingQty, align: 'right' },
   { key: 'frozenUnitCost', header: 'Frozen unit cost', accessor: (r) => r.frozenUnitCost, align: 'right' },
   { key: 'outstandingCost', header: 'Outstanding cost', accessor: (r) => r.outstandingCost, align: 'right' },
@@ -64,9 +65,9 @@ export function GoodsDeliveredNotInvoicedReportPage() {
         )
       }
     >
-      <SectionCard title="Outstanding delivered lines" description="Delivered quantity minus invoiced quantity, per posted Delivery Note line.">
+      <SectionCard title="Outstanding delivered lines" description="Delivered quantity minus invoiced and returned quantity, per posted Delivery Note line.">
         {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing outstanding — every posted delivery has been fully invoiced (or no Delivery Notes have posted yet).</p>
+          <p className="text-sm text-muted-foreground">Nothing outstanding — every posted delivery has been fully invoiced or returned (or no Delivery Notes have posted yet).</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -76,6 +77,7 @@ export function GoodsDeliveredNotInvoicedReportPage() {
                   <th className="py-2 pr-3 font-medium">Product</th>
                   <th className="py-2 pr-3 text-right font-medium">Delivered</th>
                   <th className="py-2 pr-3 text-right font-medium">Invoiced</th>
+                  <th className="py-2 pr-3 text-right font-medium">Returned</th>
                   <th className="py-2 pr-3 text-right font-medium">Outstanding qty</th>
                   <th className="py-2 pr-3 text-right font-medium">Frozen unit cost</th>
                   <th className="py-2 text-right font-medium">Outstanding cost</th>
@@ -92,6 +94,7 @@ export function GoodsDeliveredNotInvoicedReportPage() {
                     <td className="py-2 pr-3">{r.productName}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{fmtQty(r.deliveredQty)}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{fmtQty(r.invoicedQty)}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{fmtQty(r.returnedQty)}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{fmtQty(r.outstandingQty)}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{formatCurrency(r.frozenUnitCost)}</td>
                     <td className="py-2 text-right tabular-nums">{formatCurrency(r.outstandingCost)}</td>

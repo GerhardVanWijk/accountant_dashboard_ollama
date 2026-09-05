@@ -12,6 +12,7 @@ vi.mock('@/features/inventory/hooks/useWarehouses');
 vi.mock('@/features/inventory/hooks/useProducts');
 vi.mock('@/features/inventory/hooks/useStockMovements');
 vi.mock('@/features/sales/hooks/useInvoices');
+vi.mock('@/features/sales/hooks/useReturnNotes');
 vi.mock('@/features/admin/hooks/useCompany');
 vi.mock('@/services/auditLogService', () => ({ auditLogService: { getForRecord: vi.fn().mockResolvedValue([]) } }));
 
@@ -23,6 +24,7 @@ import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useStockMovements } from '@/features/inventory/hooks/useStockMovements';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
+import { useReturnNotes } from '@/features/sales/hooks/useReturnNotes';
 import { useCompany } from '@/features/admin/hooks/useCompany';
 
 const so: SalesOrder = {
@@ -53,6 +55,7 @@ beforeEach(() => {
   vi.mocked(useProducts).mockReturnValue({ products: [{ id: 'p1', name: 'Printer', costPrice: 3200 }], loading: false, error: null, refetch: vi.fn() } as never);
   vi.mocked(useStockMovements).mockReturnValue({ movements: [], stockLevels: [], loading: false, error: null, refetch: vi.fn() } as never);
   vi.mocked(useInvoices).mockReturnValue({ invoices: [], loading: false, error: null, refetch: vi.fn() } as never);
+  vi.mocked(useReturnNotes).mockReturnValue({ returnNotes: [], isLoading: false, loading: false, error: null, refetch: vi.fn() } as never);
   vi.mocked(useCompany).mockReturnValue({ company: undefined, loading: false, error: null, refetch: vi.fn() } as never);
 });
 
@@ -113,6 +116,31 @@ describe('DeliveryNoteDetailPage', () => {
     renderAt();
     expect(screen.queryByRole('button', { name: 'Create invoice' })).not.toBeInTheDocument();
     expect(screen.getByText('INV-2026-0001')).toBeInTheDocument();
+  });
+
+  it('a posted delivery note with returnable quantity offers a "Create return" action', () => {
+    vi.mocked(useDeliveryNotes).mockReturnValue({ deliveryNotes: [dn({ status: 'posted', journalEntryId: 'je1' })], isLoading: false, loading: false, error: null, refetch: vi.fn() } as never);
+    renderAt();
+    expect(screen.getByRole('button', { name: 'Create return' })).toBeInTheDocument();
+  });
+
+  it('a draft delivery note never offers "Create return" — nothing has physically left the warehouse yet', () => {
+    renderAt();
+    expect(screen.queryByRole('button', { name: 'Create return' })).not.toBeInTheDocument();
+  });
+
+  it('lists posted return notes against this delivery, linking to the full-page record', () => {
+    vi.mocked(useDeliveryNotes).mockReturnValue({ deliveryNotes: [dn({ status: 'posted', journalEntryId: 'je1' })], isLoading: false, loading: false, error: null, refetch: vi.fn() } as never);
+    vi.mocked(useReturnNotes).mockReturnValue({
+      returnNotes: [{
+        id: 'rn1', createdAt: '', updatedAt: '', returnNoteNumber: 'RN-2026-0001', deliveryNoteId: 'dn1',
+        salesOrderId: 'so1', customerId: 'c1', warehouseId: 'wh1', returnDate: '2026-09-06', status: 'posted',
+        lineItems: [{ id: 'rl1', deliveryNoteLineId: 'l1', salesOrderLineId: 'sol1', productId: 'p1', description: 'Printer', quantity: 1, unitCost: 3200, unitPrice: 5750, taxAmount: 0, lineTotal: 0 }],
+      }],
+      isLoading: false, loading: false, error: null, refetch: vi.fn(),
+    } as never);
+    renderAt();
+    expect(screen.getByRole('link', { name: 'RN-2026-0001' })).toHaveAttribute('href', '/sales/return-notes/rn1');
   });
 
   it('offers a "Print / PDF" action but never a "Duplicate" one', () => {
