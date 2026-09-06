@@ -3,23 +3,29 @@ import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 
 import { Wordmark } from '@/components/app/wordmark';
+import { Seo } from '@/lib/seo/Seo';
 
+/** Capability statements verified against src/features/* — no bank "feeds" (import only), no certification claims. */
 const assurances = [
-  'SARS-aligned VAT201 and EMP201 workflows',
-  'Bank feeds for Standard Bank, FNB, ABSA and Nedbank',
-  'IFRS for SMEs statements, ready for your auditor',
-  'POPIA-compliant hosting in South Africa',
+  'Invoice in rands with 15% VAT handled for you',
+  'Import and reconcile bank statements — CSV, OFX, QIF, MT940',
+  'VAT201 built continuously from posted transactions',
+  'Payroll on verified SARS tax tables',
+  'Income Statement, Balance Sheet and Cash Flow on IFRS-for-SMEs lines',
 ];
 
 /**
  * Split layout shared by every credential screen (Login/SignUp/Forgot/Reset
  * password) — ported from accounting-v0-frontend/components/auth/auth-shell.tsx
- * (M6). The right-hand reassurance panel is v0's marketing copy, collapses
- * on mobile; the form column is real. next/link swapped for react-router.
+ * (M6). The right-hand panel lists real, verified capabilities (the v0
+ * template's fabricated "2 400 businesses" stat and named testimonial were
+ * removed 2026-09-06, same content-integrity rule the homepage already
+ * follows). Every credential screen is `noindex`. next/link → react-router.
  */
 export function AuthShell({ title, description, children, footer }: { title: string; description: string; children: ReactNode; footer?: ReactNode }) {
   return (
     <div className="grid min-h-svh lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
+      <Seo noindex />
       <div className="flex flex-col gap-8 px-6 py-10 sm:px-12 lg:px-16">
         <Link to="/" className="w-fit" aria-label="Vertex Accounting home">
           <Wordmark />
@@ -39,15 +45,11 @@ export function AuthShell({ title, description, children, footer }: { title: str
       </div>
 
       <aside className="hidden flex-col justify-between gap-10 border-l border-border bg-card p-12 lg:flex">
-        <div className="flex flex-col gap-4">
-          <p className="text-xs font-medium tracking-wide text-brand uppercase">Trusted by 2 400 South African businesses</p>
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-medium tracking-wide text-brand uppercase">Cloud accounting for South African business</p>
           <p className="text-xl leading-relaxed font-medium text-pretty">
-            &ldquo;We closed our year-end in four days instead of three weeks. The VAT201 reconciliation alone saved our bookkeeper a fortnight.&rdquo;
+            Your invoicing, banking, VAT, payroll and financial statements in one place — built for South African compliance.
           </p>
-          <div className="flex flex-col gap-0.5 text-sm">
-            <span className="font-medium">Thandiwe Nkosi</span>
-            <span className="text-muted-foreground">Financial Director, Naledi Construction Group</span>
-          </div>
         </div>
 
         <ul className="flex flex-col gap-3">

@@ -3,6 +3,9 @@ import { useAuthStore } from '@/stores/authStore';
 import { usePermissionStore } from '../stores/permissionStore';
 import { navGroups, type NavGroup } from '@/lib/app/navigation';
 import { permissionForPath } from '../permissionRouteMap';
+import { entitlementForPath } from '@/features/subscriptions/entitlementRouteMap';
+import { CORE_ENTITLEMENTS } from '@/features/subscriptions/entitlements';
+import { useEntitlementStore } from '@/features/subscriptions/stores/entitlementStore';
 
 /**
  * Filters the sidebar down to items the signed-in user can actually open —
@@ -19,19 +22,32 @@ import { permissionForPath } from '../permissionRouteMap';
 export function useVisibleNavGroups(): NavGroup[] {
   const role = useAuthStore((s) => s.profile?.role);
   const permissions = usePermissionStore((s) => s.permissions);
+  const entitlements = useEntitlementStore((s) => s.entitlements);
+  const entitlementsLoaded = useEntitlementStore((s) => s.loaded);
 
   return useMemo(() => {
     const privileged = role === 'admin' || role === 'superuser';
+    const isSuperuser = role === 'superuser';
 
-    function canSee(href: string): boolean {
+    /** Layer 3 — the user's fine-grained permission. admin/superuser bypass. */
+    function hasPermission(href: string): boolean {
       if (privileged) return true;
       const required = permissionForPath(href);
       if (!required) return true;
       return permissions.some((p) => p.feature === required.feature && (!required.action || p.action === required.action));
     }
 
+    /** Layer 2 — the company's plan entitlement. superuser bypasses; admin does NOT. */
+    function hasEntitlement(href: string): boolean {
+      if (isSuperuser) return true;
+      const key = entitlementForPath(href);
+      if (!key || CORE_ENTITLEMENTS.includes(key)) return true;
+      if (!entitlementsLoaded) return true; // don't hide anything until we know
+      return entitlements.has(key);
+    }
+
     return navGroups
-      .map((group) => ({ ...group, items: group.items.filter((item) => canSee(item.href)) }))
+      .map((group) => ({ ...group, items: group.items.filter((item) => hasPermission(item.href) && hasEntitlement(item.href)) }))
       .filter((group) => group.items.length > 0);
-  }, [role, permissions]);
+  }, [role, permissions, entitlements, entitlementsLoaded]);
 }

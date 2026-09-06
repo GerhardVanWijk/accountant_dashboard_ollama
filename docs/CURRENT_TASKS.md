@@ -1,8 +1,11 @@
 # Vertex Accounting — CURRENT TASKS
 
 **Authoritative project status**  
-**Date:** 2026-09-06 (FINAL USER MANAGEMENT / ONBOARDING SECURITY FIX — migration 0065)  
-**Branch/ship:** `hardening-2026-09-05` **MERGED → `main` `8ec8c11` + PUSHED 2026-09-06** on explicit user instruction, ahead of the human browser QA below. Cloudflare Pages auto-deploy from `main` confirmed live at `https://vertex-accounting.pages.dev` (bundle contains the new code, all asset hashes match the local `main` build). Browser QA is now a **post-deploy** task.  
+**Date:** 2026-09-06 (COMMERCIAL FOUNDATION — Blocks 1–4; migrations 0066–0069)  
+**Branch:** `commercial-foundation-2026-09-06` (off `main` `15025ec`). `main` untouched, NOT deployed. Payment provider = **Paystack** (integration pending merchant credentials); server runtime = **Supabase Edge Functions** (not built). NO payments processed.  
+**Gate:** 2833 tests / 343 files PASS · TypeScript PASS · ESLint (`--max-warnings 0`) PASS · Build PASS. Security advisors 96 WARN / **0 ERROR**. Live accounting byte-identical to baseline (TB `R0.00`, GL 1200 `R1,478,853.74`, 247 JE / 343 movements).  
+**Blocks done this run:** (1) first-company creation FIXED — `create_company_and_become_admin` now atomic + seeds a default SA chart of accounts + financial year + 12 periods, no orphans (0066/0067); (2) public SEO + `robots.txt`/`sitemap.xml`/`_headers` (CSP, HSTS, X-Robots-Tag noindex on private routes) + last v0 content-fabrication removed; (3) plan/entitlement engine — Layer 2 of the three-layer access model, `subscription_plans`/`plan_features`/`subscriptions`, `company_entitlements()` resolver, `<EntitlementGate>` + nav gating + server `require_entitlement()` scaffold on inventory (0068); (4) secure new-user invitations — hashed single-use time-limited email-bound tokens, create/accept/revoke RPCs, `/accept-invite` page, dual-mode "Add user" dialog (0069).  
+**Prior ship:** `hardening-2026-09-05` MERGED → `main` `8ec8c11` + Cloudflare prod deployed 2026-09-06 (0061–0065 + permission catalog + FIFO gate). Browser QA of that is still owed.  
 **Gate:** 2767 tests / 335 files PASS · TypeScript PASS · ESLint (`--max-warnings 0`) PASS · Build PASS  
 **Live accounting:** Trial Balance difference `R0.00` — byte-identical to pre-run baseline. GL 1200 `R1,478,853.74` = physical inventory valuation exactly. 247 JE / 928 lines / 0 unbalanced / 343 stock movements / 0 negative / 0 cross-company.  
 **Latest applied migrations:** `0065_secure_company_onboarding` — APPLIED + LIVE-VERIFIED 2026-09-06 (1 RPC + 1 replaced trigger fn + 1 new trigger fn/trigger + grant revokes; zero DDL on business tables, zero RLS policy changes, zero data rows). Prior: `0063` + `0064` (2026-09-05).  

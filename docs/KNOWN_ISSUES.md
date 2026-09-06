@@ -7,6 +7,195 @@ each section.
 
 ## Open
 
+### 2026-09-06 (COMMERCIAL FOUNDATION · BLOCK 4) — secure new-user invitations, migration 0069
+
+Branch `commercial-foundation-2026-09-06`. `main` untouched, not deployed. NO email infra —
+invitations are created + accepted in-app; delivery is a documented boundary for the future Edge
+Function; the UI shows "Invitation created" (copyable link), never "Email sent".
+
+- **`company_invitations`** table + `invitation_status` enum. Token: server-side
+  `gen_random_bytes(32)`, **only the SHA-256 hash stored**, raw token returned once. Single-use
+  (status→accepted), time-limited (7d), company-bound, email-bound. Partial unique index → at most
+  one pending invitation per (company, email). RLS: admins of the owning company (+ superuser) can
+  LIST; no client write.
+- **RPCs** (all SECURITY DEFINER, `authenticated`-only): `create_company_invitation(email,
+  profile_role, role_id?)` — admin-only, rejects `superuser` access level, role must belong to the
+  company, **never reveals whether the email is registered** (no user directory);
+  `accept_company_invitation(token)` — authenticated companyless caller, verifies status + expiry +
+  the caller's own `auth.users.email` == the invitation email, links the profile, assigns the
+  optional fine-grained role, marks accepted, audits; `revoke_company_invitation(id)` — admin-only.
+- **`protect_profile_privileged_columns` extended** with a 3rd strictly-scoped branch
+  (`vertex.invitation_company_id` GUC, mirroring 0066/0067): permits EXACTLY the caller's own
+  companyless `viewer` row → a non-superuser access level, into the invited company, **and only while
+  a matching pending unexpired invitation exists for the caller's verified email**. is_active
+  untouched. The 0065 self-lockout raises + the 0066/0067 bootstrap branch are unchanged in the same
+  function.
+- **Flow A unchanged** — `add_existing_user_to_company` (0065) is still the fast path for a
+  companyless user who has already signed up.
+- **Frontend**: `EmailDelivery` interface + `NoopEmailDelivery` (`delivered: false`);
+  `InvitationService` / `SupabaseInvitationRepository`; `/accept-invite?token=` page (signed-out →
+  prompts sign-up/in with the invited email + stashes the token; signed-in companyless → "Accept &
+  join"); `/admin/users` "Add user" dialog now has **They use Vertex** / **Invite by email** modes +
+  a **Pending invitations** section with revoke.
+- **`bookkeeper` role** — does NOT exist and was NOT silently mapped to `accountant`. Flagged as a
+  product decision in `docs/COMMERCIAL_ONBOARDING.md`.
+
+**Live verification (all rollback-wrapped, 0 rows persisted — baseline re-verified: 0 invitations,
+1 company, 1 linked profile, TB `R0.00`, GL 1200 `R1,478,853.74`, 247 JE):**
+non-admin create → rejected; invite as superuser → rejected; admin creates → `email_sent=false`,
+64-char token, only the hash stored; accept wrong email → rejected; accept bad token → rejected;
+correct invitee accepts → JOINED as the invited access level + the fine-grained role; accept again →
+rejected (single-use); accept revoked → rejected; accept expired → rejected.
+
+**Gate: 2833 tests / 343 files** PASS · tsc · eslint (`--max-warnings 0`) · build. Security advisors
+**96 WARN / 0 ERROR** (+4 vs 92: +1 anon-sign-in advisory for the new table, +3
+`authenticated_security_definer` for the 3 invitation RPCs — all deliberate). Accounting
+byte-identical.
+
+**Database writes:** `apply_migration` × 1 (`0069` — 1 table + 1 enum + 1 trigger-function replace +
+3 RPCs + RLS; **zero** DDL on business tables, **zero** business-data rows). Every live check
+rollback-wrapped.
+
+Docs: `docs/COMMERCIAL_ONBOARDING.md` (both Mermaid sequence diagrams — plan→checkout→webhook→
+subscription→company, and admin→invite/existing→accept→membership→role).
+
+### 2026-09-06 (COMMERCIAL FOUNDATION · BLOCKS 2 + 3) — SEO/security foundation + plan entitlements
+
+Branch `commercial-foundation-2026-09-06`. `main` untouched, not deployed. Payment provider = **Paystack**
+(pending merchant credentials); server runtime = **Supabase Edge Functions** (not built). NO payments,
+NO real user marked paid.
+
+**BLOCK 2 — public SEO + web-security foundation (no migration):**
+- `src/lib/seo/Seo.tsx` — dependency-free runtime `<head>` manager; `src/features/marketing/seo/*` —
+  per-page title/description/canonical/OG + Schema.org (Organization / WebSite / SoftwareApplication on
+  `/`, BreadcrumbList on sub-pages). Wired via `MarketingPageShell` + `HomePage`.
+- Real static `public/robots.txt` (Disallows every private family), `public/sitemap.xml` (16 public
+  canonical URLs **only** — test fails if a private path appears), `public/_headers` (CSP with
+  `default-src 'self'`, `frame-ancestors 'none'`, no `unsafe-eval`, `script-src` hash pinned to
+  `index.html`'s inline theme script and drift-checked, `connect-src` = the Supabase origin only;
+  HSTS; X-Frame-Options DENY; Referrer-Policy; Permissions-Policy `payment=(self)`; COOP).
+- Private routes: `X-Robots-Tag: noindex` in `_headers` + `<Seo noindex>` from `AppLayout` /
+  `OnboardingPage` / `SuperUserDashboardPage` / `AuthShell`. `/` stays indexable (shared URL).
+- Content-integrity: removed `AuthShell`'s fabricated "Trusted by 2 400 businesses" + named
+  testimonial (last v0 fiction) → real verified capability copy.
+- `dist/` audit: no source maps, no `.env`/`.sql`/`.pem`/dumps, no `service_role`/private-key strings.
+- **⚠ CSP needs one browser-QA pass** — derived from static bundle analysis (no `eval`/`Function`/`.wasm`
+  found), can't browser-test here. If a resource is blocked, one-line `_headers` fix + redeploy.
+- Docs: `docs/SEO.md`, `docs/SECURITY.md`.
+
+**BLOCK 3 — provider-independent commercial model (migration 0068):**
+- Three-layer access: **SUBSCRIPTION** active AND **PLAN ENTITLEMENT** present AND **USER PERMISSION**.
+  A company Admin does NOT bypass Layer 2; superuser does (explicit/audited).
+- `subscription_features` (22 keys, 5 core), `subscription_plans` (Starter R199 / Growth R449 /
+  Premium R899 — seeded from the audited public pricing), `plan_features` (32 grants, cumulative),
+  `subscriptions` (0..1/company, `subscription_status` enum, superuser/Edge-Function write only),
+  `subscription_events` (append-only audit).
+- Resolver `company_entitlements()` (SECURITY DEFINER): core always + (no subscription row → ALL,
+  "unmanaged"/grandfathered) + (managed → plan features **only while `status in (active,trialing)`** —
+  past_due/suspended/cancelled/expired drop to core-only). `company_has_entitlement()` /
+  `require_entitlement()` wrap it.
+- **Transition = no lockout**: the only live company (demo) has no subscription row → unmanaged →
+  fully entitled → nothing changes for it.
+- **Server enforcement scaffold**: `BEFORE INSERT` triggers on `products` / `warehouses` /
+  `stock_movements` call `require_entitlement('inventory')`. Other paid modules adopt the same
+  `require_entitlement(...)` pattern incrementally (documented order in `docs/PLAN_ENTITLEMENTS.md`).
+- Frontend: `entitlementStore` + `EntitlementsLoader` (in `AppLayout`) + `useEntitlement()` +
+  `<EntitlementGate>` (wraps `<Outlet/>` — direct URL to a non-plan module → `<UpgradeRequired>`, not a
+  broken route) + `entitlementRouteMap`. `useVisibleNavGroups` now hides non-entitled nav items (one
+  consistent policy) with an always-visible **Plan & Billing** entry (`/settings/subscription`).
+  `Pricing.tsx` renders from `PLAN_CATALOGUE` (the DB mirror; `subscriptionCatalogue.test.ts` fails on
+  drift). `SignUpPage` stashes `?plan=` for the future checkout.
+- Docs: `docs/PLAN_ENTITLEMENTS.md`, `docs/SUBSCRIPTIONS.md` (with the Plan→Checkout→Webhook→Subscription
+  Mermaid sequence, FUTURE stages labelled).
+
+**Live verification (all rollback-wrapped, 0 rows persisted — baseline re-verified: 0 subscriptions,
+1 company, 50 products, 343 movements, TB `R0.00`, GL 1200 `R1,478,853.74`):**
+- Resolver: unmanaged → 22; Starter → sales✓ inventory✗ GL✗; Growth → GL✓ income_tax✓ inventory✗
+  advanced_tax✗; Premium active → 20 (15 plan + 5 core); Premium past_due/suspended → **5 (core only)**;
+  `require_entitlement('inventory')` raises on a lapsed plan.
+- Inventory scaffold: unmanaged → `products`/`warehouses` inserts allowed; Starter → blocked with
+  "Your Vertex plan does not include this feature (inventory)"; Premium → allowed.
+- **Downgrade safety**: Premium→Starter downgrade → products 50, movements 343, JE 247, TB 0.00,
+  GL 1200 R1,478,853.74 **all unchanged (nothing deleted)**; new inventory writes then blocked;
+  re-upgrade → full access back, no migration.
+
+**Gate: 2823 tests / 342 files** PASS · tsc · eslint (`--max-warnings 0`) · build all green. Security
+advisors **92 WARN / 0 ERROR** (+5 WARN vs 87: +2 `auth_allow_anonymous_sign_ins` for the anon-readable
+pricing tables, +3 `authenticated_security_definer` for the entitlement resolver RPCs — all deliberate).
+Accounting byte-identical.
+
+**Database writes:** `apply_migration` × 1 (`0068` — 5 new tables + 1 enum + 3 resolver functions +
+1 trigger function + 3 triggers + RLS on the new tables + seed data; **zero** DDL on business tables,
+**zero** existing-RLS change, **zero** business-data rows). Every live check rollback-wrapped.
+
+### 2026-09-06 (COMMERCIAL FOUNDATION · BLOCK 1) — first-company creation fixed, migrations 0066 + 0067
+
+Branch `commercial-foundation-2026-09-06` (off `main` `15025ec`). `main` untouched, not deployed.
+Gate: **2788 tests / 336 files** PASS · tsc · eslint (`--max-warnings 0`) · build all green. Live
+accounting byte-identical (TB `R0.00`, GL 1200 `R1,478,853.74`, 247 JE / 343 movements). Security
+advisors **87 WARN / 0 ERROR** (unchanged — `seed_new_company_accounting` + the reworked
+`protect_profile_privileged_columns` are revoked from anon/authenticated; `create_company_and_become_admin`
+stays the same one intentional `authenticated_security_definer` entry it already was).
+
+**THE BUG (release blocker) — CLOSED.** A genuinely new authenticated user → `/onboarding` →
+"Create company" silently failed: `create_company_and_become_admin` (migration 0012, SECURITY
+DEFINER) INSERTed the company then `UPDATE profiles SET company_id=<new>, role='admin'`, which the
+`protect_profile_privileged_columns` BEFORE-UPDATE trigger **silently reverted** — SECURITY DEFINER
+changes the executing role, not the JWT, so inside the trigger `auth.uid()` is the new user and
+`get_my_role()` returns `'viewer'` (not-yet-committed value) → the lockdown branch pins `role` and
+`company_id` back to their old values. RPC returned no error → RouteGuard bounced the user back to
+`/onboarding` forever, one **orphan company per attempt** (3 were present at inspection; all 3 were
+removed externally before this run — 0 orphans now, nothing to clean). Migration 0012's comment
+claiming the RPC "bypasses the self-update trigger by design" was factually wrong. Reproduced live,
+rollback-wrapped. Also: no per-company chart-of-accounts / financial-year / period seeding existed
+anywhere, so a fixed link still yielded an empty, unusable company.
+
+**FIX:**
+- **Migration `0066`** — `protect_profile_privileged_columns` gains ONE strictly-scoped branch
+  honouring a transaction-local GUC `vertex.bootstrap_company_id` (set by the RPC around the profile
+  UPDATE, cleared immediately; a PostgREST/Supabase client cannot set it). `create_company_and_become_admin`
+  is dropped + recreated (11-arg: adds optional registration number / trading name / VAT / contact)
+  as one atomic transaction: validate caller (authenticated, companyless, not superuser, default
+  `viewer` role) → INSERT company → (GUC) link caller as admin → **verify** the link actually took →
+  `seed_new_company_accounting(...)` → audit → return. Any `raise` rolls the whole transaction back:
+  no orphan company, no partial state, never a 0-row "success". New reusable
+  `seed_new_company_accounting(company, fy_end_month, fy_end_day)` seeds the **generic South African
+  CoA** — every `AccountMappingKey` code (`src/features/accounting/services/accountMappingService.ts`)
+  + the generic operating-expense/income accounts from the demo CoA, **minus** Office National's
+  product-category `40x0`/`50x0` accounts — 60 accounts, plus the financial year derived
+  deterministically from the year-end config and 12 calendar-month periods. No customers / suppliers
+  / products / journals / balances / stock / demo data.
+- **Migration `0067`** (corrective follow-up) — 0066's bootstrap branch keyed only on
+  `new.company_id = the GUC`. Adversarial test (rollback-wrapped, GUC deliberately pre-set) showed
+  that *if* the GUC were set it would permit joining ANY company as admin. Hardened: the branch now
+  ALSO requires the target company to have **zero members and zero accounts** (the invariant of a
+  just-inserted, not-yet-linked company). A real existing company always has ≥1 member, so it can
+  never be a bootstrap target. Re-proven.
+
+**Live verification (all rollback-wrapped, 0 rows persisted — re-verified baseline: 1 company, 68
+accounts, TB 0.00, both test signups still companyless):**
+- Happy path (Feb, Jun and Dec year-ends): profile linked as `admin`, company visible under RLS, 60
+  accounts seeded, all 45 `AccountMappingKey` codes present, 1 financial year (`FY2027 (Mar 2026 -
+  Feb 2027)` etc.), 12 monthly periods, `get_my_company_id()` resolves → dashboard would load.
+- Double-submit → second call rejected (`You already belong to a company.`), only one company.
+- Non-authenticated → rejected. Superuser → rejected (`A superuser account cannot own a company.`).
+- Already-in-company → rejected. Mid-transaction failure (bad FY month) → whole transaction rolls
+  back, 0 company rows, profile unchanged.
+- GUC-abuse: join populated (demo) company → blocked + reverted; bootstrap → superuser → blocked +
+  reverted; hijack another user's row → blocked (RLS + `old.id = auth.uid()`); own empty company as
+  admin → allowed (equivalent to the RPC, no privilege gained).
+- 0065 admin self-lockout still fires for the freshly-created admin.
+
+**Frontend:** `/onboarding` rebuilt as a polished multi-section "Create your company" page on the
+Vertex design system (Company details / Registration & tax / Financial setup / Contact), explicit
+double-submit guard, honest error surface (stays on page), refresh-profile-then-navigate on success.
+`OnboardingPage.test.tsx` rewritten (6 tests) + new `companyBootstrapMigration.test.ts` (SQL
+contract, incl. an `AccountMappingKey`-driven "every mapped code is seeded" check).
+
+**Database writes this run:** two `apply_migration` (`0066`, `0067` — function create/replace +
+grant revokes; **zero** DDL on business tables, **zero** RLS policy changes, **zero** data rows).
+Every live check rollback-wrapped. `main` NOT merged, NOT deployed.
+
 ### 2026-09-06 (FINAL USER MANAGEMENT / ONBOARDING SECURITY FIX) — migration 0065
 
 Branch `hardening-2026-09-05` (off `main` `f7ec377`). `main` untouched. Pre-merge correctness/security fix.

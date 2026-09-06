@@ -32,6 +32,19 @@ vi.mock('@/features/auth/services', () => ({
   },
 }));
 
+vi.mock('@/features/invitations/services', () => ({
+  invitationService: {
+    listPending: vi.fn().mockResolvedValue([]),
+    createInvitation: vi.fn(),
+    revokeInvitation: vi.fn(),
+    acceptInvitation: vi.fn(),
+  },
+}));
+
+vi.mock('@/features/admin/hooks/useCompany', () => ({
+  useCompany: () => ({ company: { id: 'company_1', name: 'Test Co' }, loading: false, error: null, refetch: vi.fn() }),
+}));
+
 const mockedGetUsers = vi.mocked(profileService.getByCompany);
 const mockedGetRoles = vi.mocked(roleService.getByCompany);
 const mockedGetAssignments = vi.mocked(userRoleService.getByCompany);
@@ -155,7 +168,7 @@ describe('UsersPage', () => {
     render(<UsersPage />);
 
     (await screen.findByRole('button', { name: /add user/i })).click();
-    const dialog = await screen.findByRole('dialog', { name: /add an existing user/i });
+    const dialog = await screen.findByRole('dialog', { name: /add someone to this company/i });
     fireEvent.change(within(dialog).getByLabelText(/email address/i), { target: { value: 'sipho@example.co.za' } });
     within(dialog).getByRole('button', { name: /look up/i }).click();
 
@@ -163,7 +176,7 @@ describe('UsersPage', () => {
 
     // actor arg is passed by the page but ignored by the RPC (auth.uid())
     await waitFor(() => expect(profileService.addExistingUserToCompany).toHaveBeenCalledWith('user_1', 'pending_1', 'company_1'));
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: /add an existing user/i })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /add someone to this company/i })).not.toBeInTheDocument());
     // the user list is reloaded after a successful add
     expect(vi.mocked(profileService.getByCompany).mock.calls.length).toBeGreaterThan(1);
   });
@@ -177,13 +190,13 @@ describe('UsersPage', () => {
     render(<UsersPage />);
 
     (await screen.findByRole('button', { name: /add user/i })).click();
-    const dialog = await screen.findByRole('dialog', { name: /add an existing user/i });
+    const dialog = await screen.findByRole('dialog', { name: /add someone to this company/i });
     fireEvent.change(within(dialog).getByLabelText(/email address/i), { target: { value: 'sipho@example.co.za' } });
     within(dialog).getByRole('button', { name: /look up/i }).click();
     (await within(dialog).findByRole('button', { name: /add to company/i })).click();
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(/already a member of a company/i);
-    expect(screen.getByRole('dialog', { name: /add an existing user/i })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /add someone to this company/i })).toBeInTheDocument();
   });
 
   it('hides all admin actions for a user without user_management:update (non-admin, no fine-grained grant)', async () => {

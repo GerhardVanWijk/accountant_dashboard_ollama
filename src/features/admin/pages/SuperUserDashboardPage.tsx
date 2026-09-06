@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect } from '@/components/app/combobox';
 import { useAuthStore } from '@/stores/authStore';
+import { Seo } from '@/lib/seo/Seo';
 import type { AuditLogAccessEntry, Company, Profile, ProfileRole } from '@/types';
 import { companyService } from '@/features/admin/services';
 import { profileService, auditLogAccessService } from '@/features/auth/services';
@@ -233,6 +234,7 @@ export function SuperUserDashboardPage() {
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
+      <Seo noindex />
       <aside className="w-72 shrink-0 border-r border-border p-4">
         <div className="flex items-start justify-between gap-2">
           <h1 className="text-lg font-semibold">Superuser</h1>
