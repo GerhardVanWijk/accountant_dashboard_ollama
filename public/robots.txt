@@ -8,6 +8,7 @@ Disallow: /login
 Disallow: /signup
 Disallow: /forgot-password
 Disallow: /reset-password
+Disallow: /accept-invite
 Disallow: /onboarding
 Disallow: /companies
 Disallow: /financial-periods

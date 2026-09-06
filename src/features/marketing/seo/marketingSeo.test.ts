@@ -12,7 +12,7 @@ import {
  * Every top-level string-path route in the real router that is NOT an auth
  * screen is a public marketing page and must have an SEO entry.
  */
-const AUTH_PATHS = new Set(['/login', '/signup', '/forgot-password', '/reset-password']);
+const AUTH_PATHS = new Set(['/login', '/signup', '/forgot-password', '/reset-password', '/accept-invite']);
 const PUBLIC_ROUTES = routes
   .map((r) => r.path)
   .filter((p): p is string => typeof p === 'string' && p !== '/' && !AUTH_PATHS.has(p));

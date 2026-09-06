@@ -7,6 +7,58 @@ each section.
 
 ## Open
 
+### 2026-09-06 (COMMERCIAL FOUNDATION · BLOCK 4) — secure new-user invitations, migration 0069
+
+Branch `commercial-foundation-2026-09-06`. `main` untouched, not deployed. NO email infra —
+invitations are created + accepted in-app; delivery is a documented boundary for the future Edge
+Function; the UI shows "Invitation created" (copyable link), never "Email sent".
+
+- **`company_invitations`** table + `invitation_status` enum. Token: server-side
+  `gen_random_bytes(32)`, **only the SHA-256 hash stored**, raw token returned once. Single-use
+  (status→accepted), time-limited (7d), company-bound, email-bound. Partial unique index → at most
+  one pending invitation per (company, email). RLS: admins of the owning company (+ superuser) can
+  LIST; no client write.
+- **RPCs** (all SECURITY DEFINER, `authenticated`-only): `create_company_invitation(email,
+  profile_role, role_id?)` — admin-only, rejects `superuser` access level, role must belong to the
+  company, **never reveals whether the email is registered** (no user directory);
+  `accept_company_invitation(token)` — authenticated companyless caller, verifies status + expiry +
+  the caller's own `auth.users.email` == the invitation email, links the profile, assigns the
+  optional fine-grained role, marks accepted, audits; `revoke_company_invitation(id)` — admin-only.
+- **`protect_profile_privileged_columns` extended** with a 3rd strictly-scoped branch
+  (`vertex.invitation_company_id` GUC, mirroring 0066/0067): permits EXACTLY the caller's own
+  companyless `viewer` row → a non-superuser access level, into the invited company, **and only while
+  a matching pending unexpired invitation exists for the caller's verified email**. is_active
+  untouched. The 0065 self-lockout raises + the 0066/0067 bootstrap branch are unchanged in the same
+  function.
+- **Flow A unchanged** — `add_existing_user_to_company` (0065) is still the fast path for a
+  companyless user who has already signed up.
+- **Frontend**: `EmailDelivery` interface + `NoopEmailDelivery` (`delivered: false`);
+  `InvitationService` / `SupabaseInvitationRepository`; `/accept-invite?token=` page (signed-out →
+  prompts sign-up/in with the invited email + stashes the token; signed-in companyless → "Accept &
+  join"); `/admin/users` "Add user" dialog now has **They use Vertex** / **Invite by email** modes +
+  a **Pending invitations** section with revoke.
+- **`bookkeeper` role** — does NOT exist and was NOT silently mapped to `accountant`. Flagged as a
+  product decision in `docs/COMMERCIAL_ONBOARDING.md`.
+
+**Live verification (all rollback-wrapped, 0 rows persisted — baseline re-verified: 0 invitations,
+1 company, 1 linked profile, TB `R0.00`, GL 1200 `R1,478,853.74`, 247 JE):**
+non-admin create → rejected; invite as superuser → rejected; admin creates → `email_sent=false`,
+64-char token, only the hash stored; accept wrong email → rejected; accept bad token → rejected;
+correct invitee accepts → JOINED as the invited access level + the fine-grained role; accept again →
+rejected (single-use); accept revoked → rejected; accept expired → rejected.
+
+**Gate: 2833 tests / 343 files** PASS · tsc · eslint (`--max-warnings 0`) · build. Security advisors
+**96 WARN / 0 ERROR** (+4 vs 92: +1 anon-sign-in advisory for the new table, +3
+`authenticated_security_definer` for the 3 invitation RPCs — all deliberate). Accounting
+byte-identical.
+
+**Database writes:** `apply_migration` × 1 (`0069` — 1 table + 1 enum + 1 trigger-function replace +
+3 RPCs + RLS; **zero** DDL on business tables, **zero** business-data rows). Every live check
+rollback-wrapped.
+
+Docs: `docs/COMMERCIAL_ONBOARDING.md` (both Mermaid sequence diagrams — plan→checkout→webhook→
+subscription→company, and admin→invite/existing→accept→membership→role).
+
 ### 2026-09-06 (COMMERCIAL FOUNDATION · BLOCKS 2 + 3) — SEO/security foundation + plan entitlements
 
 Branch `commercial-foundation-2026-09-06`. `main` untouched, not deployed. Payment provider = **Paystack**

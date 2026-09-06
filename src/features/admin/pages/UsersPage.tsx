@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Plus, UserPlus } from 'lucide-react';
+import { Loader2, Plus, UserPlus, Copy, Check } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { StatusBadge } from '@/components/app/status-badge';
@@ -12,9 +12,12 @@ import { ConfirmDialog } from '@/components/app/form';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect } from '@/components/app/combobox';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/shadcn/toggle-group';
 import { useAuthStore } from '@/stores/authStore';
-import type { Permission, Profile, ProfileRole, Role, UserRoleAssignment } from '@/types';
+import type { CompanyInvitation, CreatedInvitation, Permission, Profile, ProfileRole, Role, UserRoleAssignment } from '@/types';
 import { profileService, roleService, userRoleService, permissionService } from '@/features/auth/services';
+import { invitationService } from '@/features/invitations/services';
+import { useCompany } from '@/features/admin/hooks/useCompany';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 const PROFILE_ROLES: ProfileRole[] = ['admin', 'accountant', 'manager', 'operator', 'viewer'];
@@ -25,31 +28,65 @@ function initialsFor(user: Profile): string {
   return initials || (user.email?.[0]?.toUpperCase() ?? '?');
 }
 
+const INVITE_ROLE_OPTIONS = (['viewer', 'operator', 'accountant', 'manager', 'admin'] as ProfileRole[]).map((r) => ({ value: r, label: r }));
+
 /**
- * "Add an existing user" — this app's real substitute for an email
- * invitation flow: it has no invite-delivery mechanism, so a colleague
- * signs up themselves first (at /signup), and a company admin adds them
- * here by their exact email. Lookup is find_unassigned_profile_by_email
- * (RPC, migration 0014); the assignment is the add_existing_user_to_company
- * RPC (migration 0065) — a SECURITY DEFINER path that validates every
- * precondition, is concurrency-safe, audits in-transaction, and (unlike the
- * plain UPDATE it replaced, which RLS silently reduced to a 0-row no-op)
- * throws a controlled error the dialog surfaces. Re-skinned onto v0's
- * Dialog (M10); the honest copy about no email delivery is preserved.
+ * "Add user" — two honest flows (docs/COMMERCIAL_ONBOARDING.md):
+ *   A) They ALREADY use Vertex → exact-email lookup
+ *      (find_unassigned_profile_by_email, 0014) + add_existing_user_to_company
+ *      (0065, atomic / concurrency-safe / audited).
+ *   B) The email has NOT registered → create_company_invitation (0069):
+ *      a server-side single-use, time-limited, email-bound token. Vertex
+ *      has NO email delivery yet, so the dialog shows the link to copy and
+ *      says "Invitation created" — never "Email sent".
  */
-function AddExistingUserDialog({ companyId, actorId, canCreate, onAdded }: { companyId: string; actorId: string; canCreate: boolean; onAdded: () => void }) {
+function AddUserDialog({
+  companyId,
+  actorId,
+  companyName,
+  roles,
+  canCreate,
+  onChanged,
+}: {
+  companyId: string;
+  actorId: string;
+  companyName: string;
+  roles: Role[];
+  canCreate: boolean;
+  onChanged: () => void;
+}) {
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<'existing' | 'invite'>('existing');
   const [email, setEmail] = useState('');
   const [found, setFound] = useState<Profile | null | undefined>(undefined);
+  const [inviteRole, setInviteRole] = useState<ProfileRole>('operator');
+  const [inviteFineRole, setInviteFineRole] = useState('');
+  const [created, setCreated] = useState<CreatedInvitation | null>(null);
+  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  if (!canCreate) return null;
+
+  const reset = () => {
+    setEmail('');
+    setFound(undefined);
+    setCreated(null);
+    setCopied(false);
+    setError(null);
+    setInviteRole('operator');
+    setInviteFineRole('');
+  };
+  const close = () => {
+    setOpen(false);
+    reset();
+  };
 
   const search = async () => {
     setError(null);
     setBusy(true);
     try {
-      const profile = await profileService.findUnassignedByEmail(email.trim());
-      setFound(profile ?? null);
+      setFound((await profileService.findUnassignedByEmail(email.trim())) ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -57,16 +94,14 @@ function AddExistingUserDialog({ companyId, actorId, canCreate, onAdded }: { com
     }
   };
 
-  const add = async () => {
+  const addExisting = async () => {
     if (!found) return;
     setBusy(true);
     setError(null);
     try {
       await profileService.addExistingUserToCompany(actorId, found.id, companyId);
-      setOpen(false);
-      setFound(undefined);
-      setEmail('');
-      onAdded();
+      close();
+      onChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -74,14 +109,38 @@ function AddExistingUserDialog({ companyId, actorId, canCreate, onAdded }: { com
     }
   };
 
-  if (!canCreate) return null;
-
-  const close = () => {
-    setOpen(false);
-    setEmail('');
-    setFound(undefined);
+  const invite = async () => {
+    setBusy(true);
     setError(null);
+    try {
+      const result = await invitationService.createInvitation({
+        email: email.trim(),
+        profileRole: inviteRole,
+        roleId: inviteFineRole || undefined,
+        companyName,
+        origin: window.location.origin,
+      });
+      setCreated(result);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const copyLink = async () => {
+    if (!created) return;
+    try {
+      await navigator.clipboard.writeText(created.acceptPath);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked */
+    }
+  };
+
+  const assignableRoles = roles.filter((r) => !r.companyId || r.companyId === companyId);
 
   return (
     <>
@@ -90,53 +149,131 @@ function AddExistingUserDialog({ companyId, actorId, canCreate, onAdded }: { com
         Add user
       </Button>
       {open && (
-      <FormShell open onClose={close} size="sm" mode="create" isDirty={Boolean(email)}>
-        <FormHeader title="Add an existing user" />
-        <FormBody>
-          <p className="text-sm text-muted-foreground">
-            This app has no email-invite delivery — a colleague must sign up themselves first (at /signup), then you add them here by their exact email.
-          </p>
-          <Field>
-            <FieldLabel htmlFor="add-user-email">Email address</FieldLabel>
-            <div className="flex gap-2">
-              <Input
-                id="add-user-email"
-                type="email"
-                placeholder="colleague@example.com"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setFound(undefined);
-                }}
-              />
-              <Button type="button" variant="outline" onClick={() => void search()} disabled={busy || !email.trim()}>
-                Look up
+        <FormShell open onClose={close} size="sm" mode="create" isDirty={Boolean(email)}>
+          <FormHeader title="Add someone to this company" />
+          <FormBody>
+            {created ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm font-medium text-foreground">Invitation created for {created.email}</p>
+                <p className="text-sm text-muted-foreground text-pretty">
+                  {created.emailSent
+                    ? "We've emailed them a link to join."
+                    : 'Vertex can’t send emails yet — copy this single-use link and send it to them yourself. It expires in 7 days.'}
+                </p>
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-2.5">
+                  <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{created.acceptPath}</code>
+                  <Button type="button" size="sm" variant="outline" onClick={() => void copyLink()}>
+                    {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
+                    {copied ? 'Copied' : 'Copy'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <ToggleGroup
+                  value={[mode]}
+                  onValueChange={(v) => {
+                    const next = v[0];
+                    if (next === 'existing' || next === 'invite') {
+                      setMode(next);
+                      setError(null);
+                      setFound(undefined);
+                    }
+                  }}
+                  variant="outline"
+                  spacing={0}
+                  aria-label="How to add this person"
+                >
+                  <ToggleGroupItem value="existing" className="h-9 flex-1 px-3 text-sm">
+                    They use Vertex
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="invite" className="h-9 flex-1 px-3 text-sm">
+                    Invite by email
+                  </ToggleGroupItem>
+                </ToggleGroup>
+
+                <Field>
+                  <FieldLabel htmlFor="add-user-email">Email address</FieldLabel>
+                  <div className="flex gap-2">
+                    <Input
+                      id="add-user-email"
+                      type="email"
+                      placeholder="colleague@example.com"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setFound(undefined);
+                      }}
+                    />
+                    {mode === 'existing' && (
+                      <Button type="button" variant="outline" onClick={() => void search()} disabled={busy || !email.trim()}>
+                        Look up
+                      </Button>
+                    )}
+                  </div>
+                </Field>
+
+                {mode === 'existing' && (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      For a colleague who has already signed up at /signup but hasn&apos;t joined a company yet.
+                    </p>
+                    {found === null && <p className="text-sm text-muted-foreground">No unassigned signup with that email. Use &ldquo;Invite by email&rdquo; instead.</p>}
+                    {found && (
+                      <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm">
+                        <span>{[found.firstName, found.lastName].filter(Boolean).join(' ') || found.email} ({found.email})</span>
+                        <Button size="sm" onClick={() => void addExisting()} disabled={busy}>
+                          Add to company
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {mode === 'invite' && (
+                  <>
+                    <Field>
+                      <FieldLabel htmlFor="invite-role">Access level</FieldLabel>
+                      <EnumSelect id="invite-role" value={inviteRole} onValueChange={(v) => setInviteRole(v as ProfileRole)} options={INVITE_ROLE_OPTIONS} />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="invite-fine-role">Role (optional)</FieldLabel>
+                      <EnumSelect
+                        id="invite-fine-role"
+                        value={inviteFineRole}
+                        onValueChange={setInviteFineRole}
+                        placeholder="No specific role"
+                        options={[{ value: '', label: 'No specific role' }, ...assignableRoles.map((r) => ({ value: r.id, label: r.name }))]}
+                      />
+                    </Field>
+                    <p className="text-xs text-muted-foreground">
+                      Creates a secure single-use link (valid 7 days). Vertex can&apos;t send the email yet, so you&apos;ll copy the link and send it.
+                    </p>
+                    <Button size="sm" className="self-start" onClick={() => void invite()} disabled={busy || !email.trim()}>
+                      {busy ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+                      Create invitation
+                    </Button>
+                  </>
+                )}
+              </>
+            )}
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+          </FormBody>
+          <FormFooter>
+            <Button type="button" variant="outline" onClick={created ? () => { reset(); } : close}>
+              {created ? 'Invite someone else' : 'Close'}
+            </Button>
+            {created && (
+              <Button type="button" onClick={close}>
+                Done
               </Button>
-            </div>
-          </Field>
-          {found === null && <p className="text-sm text-muted-foreground">No unassigned signup with that email.</p>}
-          {found && (
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm">
-              <span>
-                {[found.firstName, found.lastName].filter(Boolean).join(' ') || found.email} ({found.email})
-              </span>
-              <Button size="sm" onClick={() => void add()} disabled={busy}>
-                Add to company
-              </Button>
-            </div>
-          )}
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-        </FormBody>
-        <FormFooter>
-          <Button type="button" variant="outline" onClick={close}>
-            Close
-          </Button>
-        </FormFooter>
-      </FormShell>
+            )}
+          </FormFooter>
+        </FormShell>
       )}
     </>
   );
@@ -503,14 +640,23 @@ export function UsersPage() {
   const canCreate = useCanAccess('user_management', 'create');
   const canUpdate = useCanAccess('user_management', 'update');
 
+  const { company } = useCompany();
+  const [invitations, setInvitations] = useState<CompanyInvitation[]>([]);
+
   const reload = useCallback(async () => {
     if (!companyId) return;
     setLoading(true);
     try {
-      const [userList, roleList, assignmentList] = await Promise.all([profileService.getByCompany(companyId), roleService.getByCompany(companyId), userRoleService.getByCompany(companyId)]);
+      const [userList, roleList, assignmentList, inviteList] = await Promise.all([
+        profileService.getByCompany(companyId),
+        roleService.getByCompany(companyId),
+        userRoleService.getByCompany(companyId),
+        invitationService.listPending(companyId).catch(() => [] as CompanyInvitation[]),
+      ]);
       setUsers(userList);
       setRoles(roleList);
       setAssignments(assignmentList);
+      setInvitations(inviteList);
     } finally {
       setLoading(false);
     }
@@ -546,7 +692,20 @@ export function UsersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="User & role management" description="Everyone with access to this workspace, their access level and role assignments." actions={<AddExistingUserDialog companyId={companyId} actorId={actorId} canCreate={canCreate} onAdded={() => void reload()} />} />
+      <PageHeader
+        title="User & role management"
+        description="Everyone with access to this workspace, their access level and role assignments."
+        actions={
+          <AddUserDialog
+            companyId={companyId}
+            actorId={actorId}
+            companyName={company?.name ?? 'your company'}
+            roles={roles}
+            canCreate={canCreate}
+            onChanged={() => void reload()}
+          />
+        }
+      />
 
       {loading && (
         <div role="status" className="flex min-h-[30vh] items-center justify-center gap-3 text-muted-foreground">
@@ -579,6 +738,33 @@ export function UsersPage() {
               onAssignmentsChanged={() => void reload()}
             />
           </SectionCard>
+
+          {invitations.length > 0 && (
+            <SectionCard title="Pending invitations" description="People invited by email who haven't joined yet. A link is single-use and expires 7 days after it's created.">
+              <ul className="flex flex-col gap-2">
+                {invitations.map((inv) => (
+                  <li key={inv.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm">
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate font-medium text-foreground">{inv.email}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {inv.profileRole} · expires {new Date(inv.expiresAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {canUpdate && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => void invitationService.revokeInvitation(inv.id).then(() => void reload())}
+                      >
+                        Revoke
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          )}
 
           <RolesPanel companyId={companyId} actorId={actorId} roles={roles} assignments={assignments} canCreate={canCreate} canUpdate={canUpdate} onRolesChanged={() => void reload()} />
         </>

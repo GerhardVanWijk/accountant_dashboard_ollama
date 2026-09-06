@@ -23,6 +23,8 @@
   X-Robots-Tag: noindex, nofollow
 /reset-password
   X-Robots-Tag: noindex, nofollow
+/accept-invite
+  X-Robots-Tag: noindex, nofollow
 /onboarding
   X-Robots-Tag: noindex, nofollow
 /companies

@@ -21,6 +21,7 @@ import { SignUpPage } from '@/features/auth/pages/SignUpPage';
 import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage';
 import { OnboardingPage } from '@/features/auth/pages/OnboardingPage';
+import { AcceptInvitePage } from '@/features/auth/pages/AcceptInvitePage';
 import { SuperUserDashboardPage } from '@/features/admin/pages/SuperUserDashboardPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { ChartOfAccountsPage } from '@/features/accounting/pages/ChartOfAccountsPage';
@@ -162,6 +163,10 @@ export const routes: RouteObject[] = [
   {
     path: '/forgot-password',
     element: <ForgotPasswordPage />,
+  },
+  {
+    path: '/accept-invite',
+    element: <AcceptInvitePage />,
   },
   {
     path: '/reset-password',
