@@ -41,6 +41,7 @@ function renderAt(path: string) {
       },
       { path: '/login', element: <div>Login page</div> },
       { path: '/onboarding', element: <div>Onboarding page</div> },
+      { path: '/admin/superuser', element: <div>Superuser console</div> },
     ],
     { initialEntries: [path] },
   );
@@ -49,7 +50,7 @@ function renderAt(path: string) {
 
 describe('RouteGuard', () => {
   beforeEach(() => {
-    useAuthStore.setState({ session: null, profile: null, status: 'unauthenticated' });
+    useAuthStore.setState({ session: null, profile: null, status: 'unauthenticated', workspaceSuspended: false });
   });
 
   it('shows the real public homepage at "/" for an unauthenticated visitor, not a redirect to /login', () => {
@@ -80,5 +81,30 @@ describe('RouteGuard', () => {
     useAuthStore.setState({ session: FAKE_SESSION, profile: baseProfile({ companyId: undefined }), status: 'authenticated' });
     renderAt('/');
     expect(screen.getByText('Onboarding page')).toBeInTheDocument();
+  });
+
+  it('shows the workspace-suspended screen for a member whose company a superuser suspended (migration 0070)', () => {
+    useAuthStore.setState({
+      session: FAKE_SESSION,
+      profile: baseProfile(),
+      status: 'authenticated',
+      workspaceSuspended: true,
+    });
+    renderAt('/');
+    expect(screen.getByText(/this workspace is suspended/i)).toBeInTheDocument();
+    expect(screen.getByText(/nothing has been deleted/i)).toBeInTheDocument();
+    expect(screen.queryByText('Real Dashboard route reached')).not.toBeInTheDocument();
+  });
+
+  it('a superuser is never treated as workspace-suspended — it is confined to /admin/superuser', () => {
+    useAuthStore.setState({
+      session: FAKE_SESSION,
+      profile: baseProfile({ role: 'superuser', companyId: undefined }),
+      status: 'authenticated',
+      workspaceSuspended: false,
+    });
+    renderAt('/reports');
+    expect(screen.queryByText(/this workspace is suspended/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Superuser console')).toBeInTheDocument();
   });
 });

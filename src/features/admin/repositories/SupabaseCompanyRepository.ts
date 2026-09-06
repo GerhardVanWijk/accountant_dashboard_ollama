@@ -35,6 +35,9 @@ interface CompanyRow {
   sbc_eligibility_set_at: string | null;
   sbc_eligibility_reason: string | null;
   is_active: boolean;
+  suspended_at: string | null;
+  suspended_by: string | null;
+  suspension_reason: string | null;
   subscription_tier: string;
   // Phase 4B-2 — migration 0047 (AUTHORED, NOT APPLIED). All nullable.
   trading_name: string | null;
@@ -84,6 +87,9 @@ function rowToCompany(row: CompanyRow): Company {
     sbcEligibilitySetAt: row.sbc_eligibility_set_at ?? undefined,
     sbcEligibilityReason: row.sbc_eligibility_reason ?? undefined,
     isActive: row.is_active,
+    suspendedAt: row.suspended_at ?? undefined,
+    suspendedBy: row.suspended_by ?? undefined,
+    suspensionReason: row.suspension_reason ?? undefined,
     subscriptionTier: row.subscription_tier,
     tradingName: row.trading_name ?? undefined,
     logo: row.logo ?? undefined,

@@ -101,3 +101,39 @@ and write to the caller's company; `add_existing_user_to_company` /
 (always `auth.uid()`); the bootstrap trigger bypass permits only the exact
 first-company transition into an *empty* company. A full cross-company
 read/write sweep across every table is a Block-D QA task.
+
+## Client suspension (migration 0070)
+
+`companies.is_active` is now **enforced**: `get_my_company_id()` returns
+`NULL` for a member of a company whose `is_active = false`, so every
+company-scoped RLS clause (`company_id = (select get_my_company_id())`)
+denies — reads *and* writes. `0070` also adds `suspended_at` /
+`suspended_by` / `suspension_reason`. A superuser (scoped by
+`get_my_role()`) is unaffected and remains the recovery path.
+
+`set_company_suspended(company_id, suspend, reason)` — superuser-only,
+audited (`platform` module). It only flips `is_active` + the metadata; it
+deletes nothing, touches no GL / inventory / Paystack. RouteGuard shows a
+dedicated "workspace suspended" screen (via `my_workspace_suspended()`).
+
+## Superuser platform administration (migration 0070)
+
+The Vertex Platform Administration Console (`docs/SUPERUSER_PLATFORM_ADMIN.md`)
+is a **platform-admin surface, not an accounting-data browser** — its reads
+return account administration metadata and configuration *health* (counts,
+booleans), never a customer balance / journal / invoice / payroll / tax
+figure. Every write is a `SECURITY DEFINER` RPC that re-checks
+`public.get_my_role() IS DISTINCT FROM 'superuser'` (a `NULL` role → blocked,
+not bypassed); `EXECUTE` revoked from `anon`. A company Admin cannot call
+any of them. `audit_log_entries_select_superuser` is the only new RLS
+policy (a parallel superuser read path; the company-scoped policy is
+unchanged). Advisors after 0070: **0 ERROR** (+10 WARN, all the same
+`authenticated_security_definer_function_executable` class the invitation
+RPCs already carry).
+
+| Surface | Mechanism | State |
+|---|---|---|
+| Client suspend / reactivate | `set_company_suspended` (superuser-only, audited) + `get_my_company_id()` NULL-gate | active (0070) |
+| Manual subscription override | `superuser_set_subscription_plan` / `_status` (audited, `provider='manual'`) | active (0070) |
+| Superuser member / role / invitation administration | `superuser_set_member_access` / `_remove_member_from_company` / `_assign_role` / `_unassign_role` / `_create_company_invitation` / `_revoke_company_invitation` | active (0070) |
+| Support access to accounting data | Request / time-limited session / audited entry+exit | **designed, NOT built** (see console doc §1) |

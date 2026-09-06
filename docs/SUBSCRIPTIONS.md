@@ -86,3 +86,26 @@ never stored or transmitted by Vertex (Paystack-hosted checkout).
 A superuser bypasses Layers 1 and 2 (explicit, and `subscriptions` /
 `subscription_events` writes are superuser-only in RLS). Manual plan
 changes by support are auditable via `subscription_events`.
+
+### Manual override (migration 0070 — Platform Admin Console)
+
+`superuser_set_subscription_plan(company_id, plan_code, status)` and
+`superuser_set_subscription_status(company_id, status)` are the audited
+RPCs the **Vertex Platform Administration Console**
+(`docs/SUPERUSER_PLATFORM_ADMIN.md`) uses to assign / upgrade / downgrade /
+suspend a client's plan without Paystack. Each writes a
+`subscription_events` row **and** an `audit_log_entries` row (module
+`platform`).
+
+Every manually-administered subscription is stamped **`provider =
+'manual'`**, so three states stay permanently distinguishable:
+
+| State | `subscriptions` row | `provider` |
+|---|---|---|
+| **Unmanaged** | none | — |
+| **Manual / superuser override** | yes | `'manual'` |
+| **Provider managed** (future) | yes | `'paystack'` |
+
+A downgrade only changes entitlements — it never deletes accounting data
+(`docs/PLAN_ENTITLEMENTS.md`). No "paid" / payment / revenue / MRR is shown
+anywhere until real Paystack payment data exists.

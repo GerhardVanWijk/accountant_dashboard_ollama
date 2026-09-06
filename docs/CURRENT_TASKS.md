@@ -16,6 +16,30 @@
 
 ## STATUS THIS RUN — read first
 
+- **2026-09-06 — SUPERUSER → VERTEX PLATFORM ADMINISTRATION CONSOLE (migration 0070 + 0070b/c) DONE.**
+  Branch `superuser-platform-console-2026-09-06` (off `main` after the commercial-foundation merge
+  `347eae7`). `main` untouched, NOT merged, NOT deployed. The sparse single-screen Superuser page is
+  replaced by a full platform-admin console at `/admin/superuser/*` — sidebar (Overview / Clients /
+  Subscriptions / Users / Invitations / Security & Audit / Platform), Client Detail with 6 tabs.
+  **Privacy boundary enforced**: no customer accounting data (GL, invoices, balances, payroll, tax) —
+  config *health* (counts/booleans) only. Migration 0070: `companies` + suspension metadata;
+  `get_my_company_id()` now returns NULL for a suspended-company member (client-suspension enforcement
+  — every company-scoped RLS clause then denies); `my_workspace_suspended()` + a RouteGuard
+  "workspace suspended" screen; `set_company_suspended()` (superuser-only, audited, deletes nothing);
+  `audit_log_entries` superuser SELECT policy; `superuser_set_subscription_plan/_status()` (audited
+  manual override, `provider='manual'` marker); `superuser_set_member_access` / `_remove_member` /
+  `_assign_role` / `_unassign_role` / `_create_company_invitation` / `_revoke_company_invitation`;
+  **`bookkeeper` fine-grained SYSTEM role** (54 grants; NO user_management / audit / period-close /
+  tax:post — `profile_role` enum UNCHANGED, NOT mapped to Accountant); `platform_admin_metrics()` /
+  `_company_users()` (incl. last sign-in) / `_client_setup()`. All guards use `IS DISTINCT FROM
+  'superuser'` (a NULL role is blocked, not bypassed). Live behaviour proven rollback-wrapped
+  (suspend/reactivate, NULL-gate, demo unaffected, plan override + events + audit, member admin,
+  non-superuser rejections). Gate: **2854 tests / 345 files** PASS · tsc PASS · ESLint PASS · Build
+  PASS. Advisors **0 ERROR** (+10 WARN, same `authenticated_security_definer_function_executable`
+  class the invitation RPCs already carry). Live accounting byte-identical (TB `R0.00`, GL 1200
+  `R1,478,853.74`, 247 JE / 343 movements). **PARTIAL/deferred**: grouped effective-permissions
+  explorer on User Detail, support-access mode (designed not built), Paystack billing surface
+  (placeholder). Doc: `docs/SUPERUSER_PLATFORM_ADMIN.md`. **Superuser browser QA owed.**
 - **2026-09-06 — USER MANAGEMENT / ONBOARDING SECURITY FIX (migration 0065) DONE.** The admin
   "Add existing user to company" flow was a silent no-op (RLS filtered the companyless target row
   out of the plain `UPDATE profiles` before the update policy could act). Fixed with the

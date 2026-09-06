@@ -156,6 +156,17 @@ export interface Company extends BaseEntity {
   sbcEligibilityReason?: string;
   isActive: boolean;
   /**
+   * Client-suspension metadata (migration 0070). Set together whenever a
+   * platform superuser toggles `isActive` via
+   * `set_company_suspended()` — the Vertex Platform Administration Console.
+   * All unset while the client is active. Suspending a client blocks its
+   * members from the workspace (`get_my_company_id()` returns NULL for
+   * them) but preserves every accounting record.
+   */
+  suspendedAt?: ISODateString;
+  suspendedBy?: ID;
+  suspensionReason?: string;
+  /**
    * Phase 4B-2 (migration 0047 — AUTHORED, NOT APPLIED) — "Document &
    * branding" profile. Every field is optional and nullable in the DB;
    * with all of them unset a printed document renders exactly as it did

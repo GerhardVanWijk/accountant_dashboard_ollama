@@ -1,6 +1,22 @@
+import type { Profile } from '@/types';
 import { supabase } from '@/config/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { profileService } from './services';
+
+/**
+ * A member whose company was suspended by a platform superuser (migration
+ * 0070) keeps its `companyId` on the profile row but can't see anything —
+ * RouteGuard needs to know so it can show the "workspace suspended" screen.
+ * A superuser (no company) is never suspended this way.
+ */
+async function refreshWorkspaceSuspended(profile: Profile | null): Promise<void> {
+  if (!profile || profile.role === 'superuser' || !profile.companyId) {
+    useAuthStore.getState().setWorkspaceSuspended(false);
+    return;
+  }
+  const { data, error } = await supabase.rpc('my_workspace_suspended');
+  useAuthStore.getState().setWorkspaceSuspended(!error && data === true);
+}
 
 /**
  * Real session bootstrap (Phase T) — replaces `ensureAnonymousSession()`.
@@ -19,17 +35,22 @@ export async function bootstrapAuth(): Promise<void> {
   if (data.session) {
     const profile = await profileService.getById(data.session.user.id).catch(() => undefined);
     useAuthStore.getState().setProfile(profile ?? null);
+    await refreshWorkspaceSuspended(profile ?? null).catch(() => undefined);
   }
 
   supabase.auth.onAuthStateChange((_event, session) => {
     useAuthStore.getState().setSession(session);
     if (!session) {
       useAuthStore.getState().setProfile(null);
+      useAuthStore.getState().setWorkspaceSuspended(false);
       return;
     }
     profileService
       .getById(session.user.id)
-      .then((profile) => useAuthStore.getState().setProfile(profile ?? null))
+      .then(async (profile) => {
+        useAuthStore.getState().setProfile(profile ?? null);
+        await refreshWorkspaceSuspended(profile ?? null);
+      })
       .catch((error) => console.error('bootstrapAuth: failed to load profile after auth change:', error));
   });
 }

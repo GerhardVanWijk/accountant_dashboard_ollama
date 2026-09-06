@@ -22,7 +22,15 @@ import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage';
 import { OnboardingPage } from '@/features/auth/pages/OnboardingPage';
 import { AcceptInvitePage } from '@/features/auth/pages/AcceptInvitePage';
-import { SuperUserDashboardPage } from '@/features/admin/pages/SuperUserDashboardPage';
+import { SuperuserConsoleLayout } from '@/features/admin/superuser/SuperuserConsoleLayout';
+import { OverviewPage as SuperuserOverviewPage } from '@/features/admin/superuser/pages/OverviewPage';
+import { ClientsPage as SuperuserClientsPage } from '@/features/admin/superuser/pages/ClientsPage';
+import { ClientDetailPage as SuperuserClientDetailPage } from '@/features/admin/superuser/pages/ClientDetailPage';
+import { SubscriptionsPage as SuperuserSubscriptionsPage } from '@/features/admin/superuser/pages/SubscriptionsPage';
+import { PlatformUsersPage as SuperuserUsersPage } from '@/features/admin/superuser/pages/PlatformUsersPage';
+import { PlatformInvitationsPage as SuperuserInvitationsPage } from '@/features/admin/superuser/pages/PlatformInvitationsPage';
+import { SecurityAuditPage as SuperuserSecurityAuditPage } from '@/features/admin/superuser/pages/SecurityAuditPage';
+import { PlatformPage as SuperuserPlatformPage } from '@/features/admin/superuser/pages/PlatformPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { ChartOfAccountsPage } from '@/features/accounting/pages/ChartOfAccountsPage';
 import { JournalsPage } from '@/features/accounting/pages/JournalsPage';
@@ -195,7 +203,20 @@ export const routes: RouteObject[] = [
     element: <RouteGuard />,
     children: [
       { path: 'onboarding', element: <OnboardingPage /> },
-      { path: 'admin/superuser', element: <SuperUserDashboardPage /> },
+      {
+        path: 'admin/superuser',
+        element: <SuperuserConsoleLayout />,
+        children: [
+          { index: true, element: <SuperuserOverviewPage /> },
+          { path: 'clients', element: <SuperuserClientsPage /> },
+          { path: 'clients/:companyId', element: <SuperuserClientDetailPage /> },
+          { path: 'subscriptions', element: <SuperuserSubscriptionsPage /> },
+          { path: 'users', element: <SuperuserUsersPage /> },
+          { path: 'invitations', element: <SuperuserInvitationsPage /> },
+          { path: 'security', element: <SuperuserSecurityAuditPage /> },
+          { path: 'platform', element: <SuperuserPlatformPage /> },
+        ],
+      },
       {
         element: <AppLayout />,
         children: [

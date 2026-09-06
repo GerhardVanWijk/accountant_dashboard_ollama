@@ -130,4 +130,18 @@ balance. Re-upgrading restores full access with no data migration.
 Platform billing for Vertex **never** touches a customer's accounting
 ledger — no journal entries, no GL accounts, no Trial Balance effect.
 `subscriptions` / `subscription_events` are the only tables involved.
-Verified: TB `R0.00`, GL 1200 unchanged after 0068.
+Verified: TB `R0.00`, GL 1200 unchanged after 0068 (and again after 0070).
+
+## Superuser plan override (migration 0070)
+
+The **Vertex Platform Administration Console**
+(`docs/SUPERUSER_PLATFORM_ADMIN.md`) can change a client's plan manually
+via `superuser_set_subscription_plan()` — audited, `provider = 'manual'`.
+The Client Detail → Subscription tab shows, before any change, the modules
+**being added** and **becoming unavailable**, and requires an explicit
+confirm. A downgrade is proven non-destructive: the higher plan's module
+data is retained and reappears if the plan is restored — no migration, no
+deletion. `company_entitlements()` and the frontend mirror
+(`entitlements.ts`) are unchanged; the superuser console derives a client's
+entitlements from its plan the same way the resolver does (core always,
+unmanaged = all, else plan features while `active`/`trialing`).

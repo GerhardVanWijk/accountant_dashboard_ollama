@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { HomePage } from '@/features/marketing/pages/HomePage';
+import { WorkspaceSuspendedPage } from '@/features/auth/pages/WorkspaceSuspendedPage';
 
 /**
  * Guards the protected route tree (docs/DO_NOT_BREAK.md refers to this as
@@ -30,6 +31,7 @@ export function RouteGuard() {
   const status = useAuthStore((s) => s.status);
   const session = useAuthStore((s) => s.session);
   const profile = useAuthStore((s) => s.profile);
+  const workspaceSuspended = useAuthStore((s) => s.workspaceSuspended);
   const { pathname } = useLocation();
 
   if (status === 'loading' || (status === 'authenticated' && !profile)) {
@@ -50,6 +52,14 @@ export function RouteGuard() {
       return <Navigate to="/admin/superuser" replace />;
     }
     return <Outlet />;
+  }
+
+  // A member whose company was suspended by a platform superuser (migration
+  // 0070). The profile row still carries its companyId, but every
+  // company-scoped query is empty — show a dedicated screen, not a broken
+  // app shell. No accounting data was deleted.
+  if (profile?.companyId && workspaceSuspended) {
+    return <WorkspaceSuspendedPage />;
   }
 
   if (!profile?.companyId && pathname !== '/onboarding') {
