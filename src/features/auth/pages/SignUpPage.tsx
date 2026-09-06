@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, MailCheck } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -36,7 +36,21 @@ type FormValues = z.infer<typeof schema>;
  */
 export function SignUpPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // A ?plan= carried from the public pricing page. Stashed so it survives
+  // the email-confirmation round trip; the checkout flow (Block 5) reads it.
+  useEffect(() => {
+    const plan = searchParams.get('plan');
+    if (plan && /^[a-z_]{2,20}$/.test(plan)) {
+      try {
+        window.localStorage.setItem('vertex_pending_plan', plan);
+      } catch {
+        /* private mode / storage disabled — non-critical */
+      }
+    }
+  }, [searchParams]);
   const [confirmationSent, setConfirmationSent] = useState(false);
   const [sentTo, setSentTo] = useState('');
   const [showPassword, setShowPassword] = useState(false);

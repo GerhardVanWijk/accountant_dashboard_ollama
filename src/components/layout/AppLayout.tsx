@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { Seo } from '@/lib/seo/Seo';
 import { PermissionsLoader } from '@/features/auth/components/PermissionsLoader';
+import { EntitlementsLoader } from '@/features/subscriptions/components/EntitlementsLoader';
 import { AppSidebar } from '@/components/app/app-sidebar';
 import { AppTopbar } from '@/components/app/app-topbar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/shadcn/sidebar';
@@ -23,6 +24,7 @@ export function AppLayout() {
     <div className="app-shell">
       <Seo noindex />
       <PermissionsLoader />
+      <EntitlementsLoader />
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="min-w-0 bg-background">

@@ -7,6 +7,75 @@ each section.
 
 ## Open
 
+### 2026-09-06 (COMMERCIAL FOUNDATION · BLOCKS 2 + 3) — SEO/security foundation + plan entitlements
+
+Branch `commercial-foundation-2026-09-06`. `main` untouched, not deployed. Payment provider = **Paystack**
+(pending merchant credentials); server runtime = **Supabase Edge Functions** (not built). NO payments,
+NO real user marked paid.
+
+**BLOCK 2 — public SEO + web-security foundation (no migration):**
+- `src/lib/seo/Seo.tsx` — dependency-free runtime `<head>` manager; `src/features/marketing/seo/*` —
+  per-page title/description/canonical/OG + Schema.org (Organization / WebSite / SoftwareApplication on
+  `/`, BreadcrumbList on sub-pages). Wired via `MarketingPageShell` + `HomePage`.
+- Real static `public/robots.txt` (Disallows every private family), `public/sitemap.xml` (16 public
+  canonical URLs **only** — test fails if a private path appears), `public/_headers` (CSP with
+  `default-src 'self'`, `frame-ancestors 'none'`, no `unsafe-eval`, `script-src` hash pinned to
+  `index.html`'s inline theme script and drift-checked, `connect-src` = the Supabase origin only;
+  HSTS; X-Frame-Options DENY; Referrer-Policy; Permissions-Policy `payment=(self)`; COOP).
+- Private routes: `X-Robots-Tag: noindex` in `_headers` + `<Seo noindex>` from `AppLayout` /
+  `OnboardingPage` / `SuperUserDashboardPage` / `AuthShell`. `/` stays indexable (shared URL).
+- Content-integrity: removed `AuthShell`'s fabricated "Trusted by 2 400 businesses" + named
+  testimonial (last v0 fiction) → real verified capability copy.
+- `dist/` audit: no source maps, no `.env`/`.sql`/`.pem`/dumps, no `service_role`/private-key strings.
+- **⚠ CSP needs one browser-QA pass** — derived from static bundle analysis (no `eval`/`Function`/`.wasm`
+  found), can't browser-test here. If a resource is blocked, one-line `_headers` fix + redeploy.
+- Docs: `docs/SEO.md`, `docs/SECURITY.md`.
+
+**BLOCK 3 — provider-independent commercial model (migration 0068):**
+- Three-layer access: **SUBSCRIPTION** active AND **PLAN ENTITLEMENT** present AND **USER PERMISSION**.
+  A company Admin does NOT bypass Layer 2; superuser does (explicit/audited).
+- `subscription_features` (22 keys, 5 core), `subscription_plans` (Starter R199 / Growth R449 /
+  Premium R899 — seeded from the audited public pricing), `plan_features` (32 grants, cumulative),
+  `subscriptions` (0..1/company, `subscription_status` enum, superuser/Edge-Function write only),
+  `subscription_events` (append-only audit).
+- Resolver `company_entitlements()` (SECURITY DEFINER): core always + (no subscription row → ALL,
+  "unmanaged"/grandfathered) + (managed → plan features **only while `status in (active,trialing)`** —
+  past_due/suspended/cancelled/expired drop to core-only). `company_has_entitlement()` /
+  `require_entitlement()` wrap it.
+- **Transition = no lockout**: the only live company (demo) has no subscription row → unmanaged →
+  fully entitled → nothing changes for it.
+- **Server enforcement scaffold**: `BEFORE INSERT` triggers on `products` / `warehouses` /
+  `stock_movements` call `require_entitlement('inventory')`. Other paid modules adopt the same
+  `require_entitlement(...)` pattern incrementally (documented order in `docs/PLAN_ENTITLEMENTS.md`).
+- Frontend: `entitlementStore` + `EntitlementsLoader` (in `AppLayout`) + `useEntitlement()` +
+  `<EntitlementGate>` (wraps `<Outlet/>` — direct URL to a non-plan module → `<UpgradeRequired>`, not a
+  broken route) + `entitlementRouteMap`. `useVisibleNavGroups` now hides non-entitled nav items (one
+  consistent policy) with an always-visible **Plan & Billing** entry (`/settings/subscription`).
+  `Pricing.tsx` renders from `PLAN_CATALOGUE` (the DB mirror; `subscriptionCatalogue.test.ts` fails on
+  drift). `SignUpPage` stashes `?plan=` for the future checkout.
+- Docs: `docs/PLAN_ENTITLEMENTS.md`, `docs/SUBSCRIPTIONS.md` (with the Plan→Checkout→Webhook→Subscription
+  Mermaid sequence, FUTURE stages labelled).
+
+**Live verification (all rollback-wrapped, 0 rows persisted — baseline re-verified: 0 subscriptions,
+1 company, 50 products, 343 movements, TB `R0.00`, GL 1200 `R1,478,853.74`):**
+- Resolver: unmanaged → 22; Starter → sales✓ inventory✗ GL✗; Growth → GL✓ income_tax✓ inventory✗
+  advanced_tax✗; Premium active → 20 (15 plan + 5 core); Premium past_due/suspended → **5 (core only)**;
+  `require_entitlement('inventory')` raises on a lapsed plan.
+- Inventory scaffold: unmanaged → `products`/`warehouses` inserts allowed; Starter → blocked with
+  "Your Vertex plan does not include this feature (inventory)"; Premium → allowed.
+- **Downgrade safety**: Premium→Starter downgrade → products 50, movements 343, JE 247, TB 0.00,
+  GL 1200 R1,478,853.74 **all unchanged (nothing deleted)**; new inventory writes then blocked;
+  re-upgrade → full access back, no migration.
+
+**Gate: 2823 tests / 342 files** PASS · tsc · eslint (`--max-warnings 0`) · build all green. Security
+advisors **92 WARN / 0 ERROR** (+5 WARN vs 87: +2 `auth_allow_anonymous_sign_ins` for the anon-readable
+pricing tables, +3 `authenticated_security_definer` for the entitlement resolver RPCs — all deliberate).
+Accounting byte-identical.
+
+**Database writes:** `apply_migration` × 1 (`0068` — 5 new tables + 1 enum + 3 resolver functions +
+1 trigger function + 3 triggers + RLS on the new tables + seed data; **zero** DDL on business tables,
+**zero** existing-RLS change, **zero** business-data rows). Every live check rollback-wrapped.
+
 ### 2026-09-06 (COMMERCIAL FOUNDATION · BLOCK 1) — first-company creation fixed, migrations 0066 + 0067
 
 Branch `commercial-foundation-2026-09-06` (off `main` `15025ec`). `main` untouched, not deployed.

@@ -7,8 +7,28 @@ import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { Separator } from '@/components/ui/shadcn/separator';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/shadcn/toggle-group';
 import { cn } from '@/lib/utils';
-import { ANNUAL_DISCOUNT, VAT_RATE, addOns, brand, plans } from '../content';
+import { ENTITLEMENT_LABELS, PLAN_CATALOGUE } from '@/features/subscriptions/entitlements';
+import { ANNUAL_DISCOUNT, VAT_RATE, addOns, brand } from '../content';
 import { SectionHeading } from './SectionHeading';
+
+/**
+ * Plans are sourced from `PLAN_CATALOGUE` (which mirrors the
+ * `subscription_plans` / `plan_features` DB seed, migration 0068, and is
+ * drift-checked by subscriptionCatalogue.test.ts). The DB is the source of
+ * truth — this page and the app now agree by construction.
+ */
+const plans = PLAN_CATALOGUE.map((p) => ({
+  id: p.code,
+  name: p.name,
+  blurb: p.blurb,
+  monthly: p.priceCents / 100,
+  includedUsers: p.includedUsers,
+  popular: p.popular,
+  features: [
+    'Dashboard, Customers, Suppliers & Users',
+    ...p.features.map((f) => ENTITLEMENT_LABELS[f]),
+  ],
+}));
 
 function formatZar(amount: number, decimals = 0) {
   return `R ${amount
@@ -247,10 +267,16 @@ export function Pricing() {
             {annual ? <span className="text-xs text-brand/80">{formatZar(total * 12, 2)} billed once a year</span> : null}
           </div>
 
-          <Button render={<Link to={brand.demoHref} />} nativeButton={false} className="h-11 w-full bg-brand text-brand-foreground hover:bg-brand/90">
+          <Button render={<Link to={`/signup?plan=${selectedPlan.id}`} />} nativeButton={false} className="h-11 w-full bg-brand text-brand-foreground hover:bg-brand/90">
+            Get started with {selectedPlan.name}
+          </Button>
+          <Button render={<Link to={brand.demoHref} />} nativeButton={false} variant="outline" className="h-11 w-full">
             {brand.ctaPrimary}
           </Button>
-          <p className="text-center text-xs text-muted-foreground">This is an estimate only — nothing is charged. See the product for yourself first.</p>
+          <p className="text-center text-xs text-muted-foreground">
+            Online checkout is coming soon. Create your workspace now and you&apos;ll be able to activate this plan from
+            inside the app.
+          </p>
         </div>
       </div>
     </section>

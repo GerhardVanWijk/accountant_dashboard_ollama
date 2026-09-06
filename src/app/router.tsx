@@ -127,6 +127,8 @@ import { UsersPage } from '@/features/admin/pages/UsersPage';
 import { AuditPage } from '@/features/admin/pages/AuditPage';
 import { AuditTrailPage } from '@/features/admin/pages/AuditTrailPage';
 import { PermissionRoute } from '@/features/auth/components/PermissionRoute';
+import { EntitlementGate } from '@/features/subscriptions/components/EntitlementGate';
+import { SubscriptionPage } from '@/features/subscriptions/pages/SubscriptionPage';
 import { SettingsPage } from '@/features/settings/pages/SettingsPage';
 import { AccountingSettingsPage } from '@/features/settings/pages/AccountingSettingsPage';
 import { HelpPage } from '@/features/help/pages/HelpPage';
@@ -192,8 +194,15 @@ export const routes: RouteObject[] = [
       {
         element: <AppLayout />,
         children: [
+          {
+            // Layer 2 (entitlement) route gate — a company can't reach a
+            // module its plan doesn't include by typing the URL. Server-side
+            // require_entitlement(...) still guards the sensitive writes.
+            element: <EntitlementGate />,
+            children: [
           { index: true, element: <PermissionRoute feature="dashboard" action="read"><DashboardPage /></PermissionRoute> },
           { path: 'companies', element: <CompanyPage /> },
+          { path: 'settings/subscription', element: <SubscriptionPage /> },
           { path: 'accounting/coa', element: <PermissionRoute feature="gl" action="read"><ChartOfAccountsPage /></PermissionRoute> },
           { path: 'accounting/journals', element: <PermissionRoute feature="gl" action="read"><JournalsPage /></PermissionRoute> },
           { path: 'accounting/journals/:journalEntryId', element: <PermissionRoute feature="gl" action="read"><JournalEntryDetailPage /></PermissionRoute> },
@@ -300,6 +309,8 @@ export const routes: RouteObject[] = [
           { path: 'settings/accounting', element: <AccountingSettingsPage /> },
           { path: 'help', element: <HelpPage /> },
           { path: '*', element: <NotFoundPage /> },
+            ],
+          },
         ],
       },
     ],

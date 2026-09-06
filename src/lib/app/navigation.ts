@@ -233,6 +233,7 @@ export const navGroups: NavGroup[] = [
       { title: 'Notifications', href: '/notifications', icon: BellIcon, comingSoon: true },
       { title: 'Settings', href: '/settings', icon: SettingsIcon },
       { title: 'Accounting Settings', href: '/settings/accounting', icon: SlidersHorizontalIcon },
+      { title: 'Plan & Billing', href: '/settings/subscription', icon: CreditCardIcon },
     ],
   },
   {

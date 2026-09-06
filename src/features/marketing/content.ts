@@ -133,90 +133,18 @@ export const comparison = {
   ],
 } as const;
 
-export interface Plan {
-  id: string;
-  name: string;
-  blurb: string;
-  monthly: number;
-  includedUsers: number;
-  popular?: boolean;
-  features: string[];
-}
-
 /**
- * Plan prices are in ZAR, excluding VAT. INDICATIVE ONLY — there is no
- * live billing, payment gateway, trial enforcement or plan-limit
- * enforcement anywhere in this codebase (`Company.subscriptionTier` is an
- * unenforced free-text field). Nothing on this page can actually be
- * purchased; see Pricing.tsx's section copy for the disclaimer shown to
- * visitors.
+ * The three base plans now live in ONE place: `PLAN_CATALOGUE`
+ * (src/features/subscriptions/entitlements.ts), which mirrors the
+ * `subscription_plans` / `plan_features` DB seed (migration 0068) and is
+ * drift-checked by `subscriptionCatalogue.test.ts`. `Pricing.tsx` renders
+ * from that. Add-ons below stay here — they are genuinely indicative
+ * (no add-on billing model exists yet) and are not part of the base-plan
+ * entitlement catalogue.
+ *
+ * Prices are ZAR, excluding VAT. Still INDICATIVE ONLY — online checkout
+ * (Paystack) is not connected yet; see Pricing.tsx's section copy.
  */
-/**
- * `features` lists the real Vertex modules included in each tier — every
- * label matches src/lib/app/navigation.ts's own real nav-item titles (the
- * app's one authoritative naming source), not marketing paraphrase.
- * Public-website pricing-accuracy pass: replaced generic marketing
- * benefits ("Unlimited invoices", "Priority support", "Dedicated account
- * manager") with the actual accounting products each tier unlocks, so a
- * visitor can see what they're buying. Deliberately excluded from every
- * tier: Payroll (already its own add-on below — listing it here too
- * would double-sell it), Foreign Exchange/Exchange Rates/FX Calculator
- * (same reason — already the "FX toolkit" add-on; see that add-on's
- * comment), multi-company/multi-entity (this app is single-tenant —
- * confirmed via src/types/company.ts's own doc comment, so Premium's
- * old "multiple entities" blurb was itself inaccurate and is fixed
- * here), OCR/document capture, live bank feeds, and Pastel migration
- * (none exist anywhere in this codebase). Settings/Access Log/Documents/
- * Notifications omitted as configuration or not-yet-real, not as
- * sellable product differentiators.
- */
-export const plans: Plan[] = [
-  {
-    id: 'starter',
-    name: 'Starter',
-    blurb: 'Essential bookkeeping for sole proprietors and small businesses.',
-    monthly: 199,
-    includedUsers: 1,
-    features: ['Invoicing & Quotes', 'Customers & Suppliers', 'Bills & Expenses', 'Bank Reconciliation', 'VAT201', 'Fixed Asset Register', 'Financial Reports'],
-  },
-  {
-    id: 'growth',
-    name: 'Growth',
-    blurb: 'Complete accounting for growing businesses and bookkeepers.',
-    monthly: 449,
-    includedUsers: 3,
-    popular: true,
-    features: [
-      'Everything in Starter',
-      'Chart of Accounts & General Ledger',
-      'Journal Entries & Trial Balance',
-      'Financial Periods',
-      'Credit Notes & Customer Receipts',
-      'Supplier Payments & Vendor Aging',
-      'Income Statement, Balance Sheet & Cash Flow',
-      'Income Tax & Provisional Tax',
-      'Audit Trail',
-      'Users & Roles',
-    ],
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    blurb: 'Advanced accounting, reporting and operational tools for established businesses.',
-    monthly: 899,
-    includedUsers: 10,
-    features: [
-      'Everything in Growth',
-      'Inventory & Warehouses',
-      'Fixed Asset Depreciation & Disposals',
-      'Capital Gains & Dividends Tax',
-      'Deferred Tax & Expected Credit Losses',
-      'Related Party Register & Transactions',
-      'Lease Register & Amortisation',
-      'Compliance & Reporting Standards',
-    ],
-  },
-];
 
 export interface AddOn {
   id: string;
