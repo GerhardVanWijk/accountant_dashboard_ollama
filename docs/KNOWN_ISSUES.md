@@ -1744,3 +1744,31 @@ that constraint no longer applies. Superseded in `docs/DECISIONS.md`: parallel d
 is fine when bee scopes don't overlap and there's no dependency ordering; still
 sequence bees that share files or have producer/consumer dependencies (e.g. Dashboard
 Bee needed Wave 1's services to exist first).
+
+### 2026-09-07 (PRODUCT CATEGORIES + PRODUCT PICKER) — migration 0076
+
+Branch `product-catalog-picker-2026-09-07`. `main` untouched.
+
+- **`SupabaseProductRepository` was blind to `products.category_id`** — the
+  column was never in `ProductRow` / `rowToProduct` / `productToRow`, so
+  every `Product` in the app had `categoryId === undefined` despite all 50
+  live products being fully linked. This is what made the Categories page
+  show "0 products" per category and "50 uncategorised", made the New/Edit
+  Product category field a dead free-text box, and left
+  `inventoryAccountResolver`'s category branch unreachable. Fixed by
+  mapping the column (+ `sales_description` / `purchase_description` / the
+  per-product account-override columns, which had the same gap). See
+  `docs/PRODUCT_CATALOG_PICKER.md`.
+- **Account-resolution behaviour change (intended, not a bug):** future
+  postings for a categorised product now resolve the category's revenue /
+  COGS / inventory account instead of the generic key. Posted journals
+  untouched; TB balanced; GL 1200 unchanged. Watch the first few live
+  invoices/bills post to 4010–4040 / 5010–5040 rather than 4000 / 5000.
+- **Two category systems still coexist:** `products.category` (text,
+  denormalized mirror) and `products.category_id` → `product_categories`
+  (authoritative). `category_account_mappings` (0019) is a frozen legacy
+  duplicate; a future migration drops it + the `CategoryAccountMappingService`
+  read path (already flagged in `inventoryAccountResolver.ts`). NOT dropped
+  in this task.
+- `INVENTORY_ARCHITECTURE.md` line ~155 ("Absent entirely: product-category
+  entity") is stale — `product_categories` (0024) has existed since Phase 2.
