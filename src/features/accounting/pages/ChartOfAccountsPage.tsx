@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ListTree, Plus, Search } from 'lucide-react';
 import type { Account } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   InputGroup,
@@ -88,6 +89,8 @@ export function ChartOfAccountsPage() {
     navigate('/accounting/ledger');
   }
 
+  const activeCount = accounts.filter((a) => a.isActive).length;
+
   const filtered = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
     return accounts.filter((account) => {
@@ -145,6 +148,20 @@ export function ChartOfAccountsPage() {
           </Button>
         }
       />
+
+      {!loading && !error && accounts.length > 0 && (
+        <SectionCard>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <FigureBlock label="Accounts" value={String(accounts.length)} hint="In the chart" />
+            <FigureBlock label="Active" value={String(activeCount)} hint="Postable accounts" />
+            <FigureBlock
+              label="With postings"
+              value={String(postedAccountIds.size)}
+              hint="Cannot be hard-deleted"
+            />
+          </div>
+        </SectionCard>
+      )}
 
       <SectionCard bodyClassName="p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

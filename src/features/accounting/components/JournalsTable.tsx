@@ -47,8 +47,10 @@ export function JournalsTable({ entries, periods, reversedByEntryId, onRowClick 
       header: 'Description',
       sortValue: (e) => e.memo ?? '',
       cell: (e) => (
-        <div className="flex flex-col">
-          <span>{e.memo || '—'}</span>
+        <div className="flex min-w-0 flex-col">
+          <span className="block max-w-[40ch] truncate" title={e.memo || undefined}>
+            {e.memo || '—'}
+          </span>
           <span className="text-xs text-muted-foreground">{e.lines.length} lines</span>
         </div>
       ),

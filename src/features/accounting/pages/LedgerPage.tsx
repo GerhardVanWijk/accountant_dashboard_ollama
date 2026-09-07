@@ -67,40 +67,18 @@ export function LedgerPage() {
       />
 
       <SectionCard>
-        <div className="flex flex-col gap-5">
-          <div className="grid gap-6 sm:grid-cols-3">
-            <FigureBlock
-              label="Debits posted"
-              value={formatCurrency(totalDebit)}
-              hint={`${rows.length} lines shown`}
-            />
-            <FigureBlock label="Credits posted" value={formatCurrency(totalCredit)} hint="Across the same lines" />
-            <FigureBlock
-              label="Accounts touched"
-              value={String(accountsTouched)}
-              hint={selectedAccountId ? 'Narrowed to one account' : 'Distinct ledger accounts'}
-            />
-          </div>
-
-          <Select
-            items={[{ value: 'all', label: 'All accounts' }, ...accounts.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }))]}
-            value={selectedAccountId ?? 'all'}
-            onValueChange={(value) => setSelectedAccountId(value === 'all' ? null : String(value))}
-          >
-            <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-64" aria-label="Filter by account">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="all">All accounts</SelectItem>
-                {accounts.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.code} — {a.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <FigureBlock
+            label="Debits posted"
+            value={formatCurrency(totalDebit)}
+            hint={`${rows.length} lines shown`}
+          />
+          <FigureBlock label="Credits posted" value={formatCurrency(totalCredit)} hint="Across the same lines" />
+          <FigureBlock
+            label="Accounts touched"
+            value={String(accountsTouched)}
+            hint={selectedAccountId ? 'Narrowed to one account' : 'Distinct ledger accounts'}
+          />
         </div>
       </SectionCard>
 
@@ -120,7 +98,32 @@ export function LedgerPage() {
         </div>
       )}
 
-      {!loading && !error && <LedgerTable rows={rows} />}
+      {!loading && !error && (
+        <LedgerTable
+          rows={rows}
+          toolbar={
+            <Select
+              items={[{ value: 'all', label: 'All accounts' }, ...accounts.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }))]}
+              value={selectedAccountId ?? 'all'}
+              onValueChange={(value) => setSelectedAccountId(value === 'all' ? null : String(value))}
+            >
+              <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-64" aria-label="Filter by account">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="all">All accounts</SelectItem>
+                  {accounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.code} — {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          }
+        />
+      )}
     </div>
   );
 }

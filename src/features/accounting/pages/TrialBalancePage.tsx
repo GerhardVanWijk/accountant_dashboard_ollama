@@ -45,7 +45,7 @@ export function TrialBalancePage() {
         // docs/CURRENT_TASKS.md #26 — summary-strip + table placeholder rather
         // than a blank page and one spinner.
         <div role="status" aria-label="Computing trial balance" className="flex flex-col gap-6">
-          <div className="grid gap-6 rounded-xl border border-border p-5 sm:grid-cols-3">
+          <div className="grid gap-4 rounded-xl border border-border p-5 sm:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex flex-col gap-2">
                 <div className="h-3 w-24 animate-pulse rounded bg-muted" />
@@ -78,7 +78,7 @@ export function TrialBalancePage() {
       {!loading && !error && trialBalance && (
         <SectionCard>
           <div className="flex flex-col gap-5">
-            <div className="grid gap-6 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-3">
               <FigureBlock
                 label="Total debits"
                 value={formatCurrency(trialBalance.totalDebits)}

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
@@ -13,7 +14,7 @@ import type { LedgerViewRow } from '../utils/buildLedgerRows';
  * reads as a dash rather than a total, so it's never mistaken for a
  * cross-account sum.
  */
-export function LedgerTable({ rows }: { rows: LedgerViewRow[] }) {
+export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?: ReactNode }) {
   const navigate = useNavigate();
   // Real `source` values (e.g. "manual", "invoice", "bill") come straight
   // from JournalEntry.source — a free-form string, not a fixed enum like
@@ -47,8 +48,10 @@ export function LedgerTable({ rows }: { rows: LedgerViewRow[] }) {
       header: 'Description',
       sortValue: (r) => r.description ?? '',
       cell: (r) => (
-        <div className="flex flex-col">
-          <span className="text-sm">{r.description || '—'}</span>
+        <div className="flex min-w-0 flex-col">
+          <span className="block max-w-[36ch] truncate text-sm" title={r.description || undefined}>
+            {r.description || '—'}
+          </span>
           <RecordLink onClick={() => navigate(`/accounting/journals?record=${r.entryId}`)} className="figure text-xs">
             {r.entryNumber}
           </RecordLink>
@@ -118,6 +121,7 @@ export function LedgerTable({ rows }: { rows: LedgerViewRow[] }) {
       initialSortKey="date"
       initialSortDirection="desc"
       pageSize={15}
+      toolbar={toolbar}
       filters={
         sourceOptions.length > 0
           ? [
