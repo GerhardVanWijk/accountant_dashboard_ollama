@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore, type ThemePreference } from '@/stores/themeStore';
 import { profileService } from '@/features/auth/services';
 import { useCompany } from '@/features/admin/hooks/useCompany';
+import { NotificationPreferences } from '@/features/notifications/components/NotificationPreferences';
 
 function initials(firstName?: string, lastName?: string, email?: string): string {
   const value = [firstName?.[0], lastName?.[0]].filter(Boolean).join('');
@@ -234,13 +235,12 @@ function CompanyTab() {
 /**
  * Settings Centre — route `/settings`. Only exposes functionality this app
  * genuinely has: real profile fields, a real Supabase password change, the
- * one real persisted preference (theme), and a company summary that links
- * to the existing CompanyForm rather than duplicating it. v0's Security,
- * Notifications-preferences and avatar-upload tabs have no backing
- * persistence anywhere in this app and are intentionally not built — see
- * the M10 report for the full gap list. Accounting configuration lives on
- * its own page (`/settings/accounting`), matching v0's own two-page
- * structure.
+ * one real persisted preference (theme), real per-user notification
+ * category preferences (migration 0073 — Block D), and a company summary
+ * that links to the existing CompanyForm rather than duplicating it. There
+ * is deliberately no email/SMS notification toggle — Vertex has no such
+ * delivery channel, so a switch that did nothing would be misleading.
+ * Accounting configuration lives on its own page (`/settings/accounting`).
  */
 export function SettingsPage() {
   return (
@@ -261,6 +261,7 @@ export function SettingsPage() {
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="password">Password</TabsTrigger>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="company">Company</TabsTrigger>
         </TabsList>
         <TabsContent value="profile" className="pt-6">
@@ -271,6 +272,9 @@ export function SettingsPage() {
         </TabsContent>
         <TabsContent value="preferences" className="pt-6">
           <PreferencesTab />
+        </TabsContent>
+        <TabsContent value="notifications" className="pt-6">
+          <NotificationPreferences />
         </TabsContent>
         <TabsContent value="company" className="pt-6">
           <CompanyTab />

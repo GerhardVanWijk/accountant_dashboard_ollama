@@ -75,6 +75,15 @@ export class CategoryAccountMappingService implements CategoryAccountResolver {
     const byCategory = await this.ensureCache();
     return byCategory.get(categoryName) ?? EMPTY;
   }
+
+  /**
+   * Every mapping row for the company, uncached — for the Accounting
+   * Settings page, which needs a fresh view every time it opens (unlike
+   * the posting paths, which "resolve once").
+   */
+  async getAll() {
+    return this.repository.getAll();
+  }
 }
 
 /**

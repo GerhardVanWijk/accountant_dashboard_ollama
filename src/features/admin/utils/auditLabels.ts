@@ -45,6 +45,11 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   document_restored: 'Document restored',
   document_metadata_changed: 'Document details changed',
   document_deleted: 'Document deleted',
+  accounting_setting_changed: 'Accounting setting changed',
+  account_mapping_changed: 'Account mapping changed',
+  role_assigned: 'Role assigned',
+  role_unassigned: 'Role removed',
+  user_access_changed: 'User access changed',
 };
 
 export function auditActionLabel(action: string): string {
@@ -65,6 +70,8 @@ export const AUDIT_MODULES: readonly string[] = [
   'compliance',
   'reconciliationIntelligence',
   'documents',
+  'notifications',
+  'settings',
   'subscriptions',
   'admin',
 ];
