@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeftRightIcon, ClipboardCheckIcon, Loader2, PackagePlusIcon, ScaleIcon, Undo2Icon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { HelpLink } from '@/features/help/components/HelpLink';
 import { useStockAdjustments } from '../hooks/useStockAdjustments';
 import { useStockTransfers } from '../hooks/useStockTransfers';
 import { useStockTakes } from '../hooks/useStockTakes';
@@ -82,6 +83,7 @@ export function InventoryOperationsPage() {
       <PageHeader
         title="Stock operations"
         description="Every accounting-significant inventory workflow, reviewed and posted through its own draft-then-post lifecycle — never a direct quantity edit."
+        actions={<HelpLink article="inventory-adjustments" />}
       />
 
       {busy && (

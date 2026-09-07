@@ -2,6 +2,7 @@
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Amount, FigureBlock } from '@/components/app/figure';
+import { HelpLink } from '@/features/help/components/HelpLink';
 import { Button } from '@/components/ui/shadcn/button';
 import { formatCurrency } from '@/lib/app/format';
 import { cn } from '@/lib/utils';
@@ -125,6 +126,7 @@ export function VatReturnPage() {
         description="Output VAT charged on sales less input VAT claimed on purchases, for real posted documents only — not a submitted SARS return."
         actions={
           <div className="flex items-center gap-2">
+            <HelpLink article="vat" />
             <label className="flex items-center gap-2 text-sm">
               <span className="sr-only">Period</span>
               <input

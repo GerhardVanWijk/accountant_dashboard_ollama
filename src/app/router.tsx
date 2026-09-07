@@ -141,6 +141,7 @@ import { SubscriptionPage } from '@/features/subscriptions/pages/SubscriptionPag
 import { SettingsPage } from '@/features/settings/pages/SettingsPage';
 import { AccountingSettingsPage } from '@/features/settings/pages/AccountingSettingsPage';
 import { HelpPage } from '@/features/help/pages/HelpPage';
+import { HelpArticlePage } from '@/features/help/pages/HelpArticlePage';
 import { DocumentsPage } from '@/features/documents/pages/DocumentsPage';
 import { NotificationsPage } from '@/features/notifications/pages/NotificationsPage';
 import { NotFoundPage } from '@/features/admin/pages/NotFoundPage';
@@ -338,6 +339,7 @@ export const routes: RouteObject[] = [
           { path: 'settings', element: <SettingsPage /> },
           { path: 'settings/accounting', element: <AccountingSettingsPage /> },
           { path: 'help', element: <HelpPage /> },
+          { path: 'help/:articleId', element: <HelpArticlePage /> },
           { path: '*', element: <NotFoundPage /> },
             ],
           },

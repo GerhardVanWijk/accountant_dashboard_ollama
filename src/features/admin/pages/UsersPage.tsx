@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Plus, UserPlus, Copy, Check } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { HelpLink } from '@/features/help/components/HelpLink';
 import { FigureBlock } from '@/components/app/figure';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Avatar, AvatarFallback } from '@/components/ui/shadcn/avatar';
@@ -698,14 +699,17 @@ export function UsersPage() {
         title="User & role management"
         description="Everyone with access to this workspace, their access level and role assignments."
         actions={
-          <AddUserDialog
-            companyId={companyId}
-            actorId={actorId}
-            companyName={company?.name ?? 'your company'}
-            roles={roles}
-            canCreate={canCreate}
-            onChanged={() => void reload()}
-          />
+          <>
+            <HelpLink article="users-roles" />
+            <AddUserDialog
+              companyId={companyId}
+              actorId={actorId}
+              companyName={company?.name ?? 'your company'}
+              roles={roles}
+              canCreate={canCreate}
+              onChanged={() => void reload()}
+            />
+          </>
         }
       />
 

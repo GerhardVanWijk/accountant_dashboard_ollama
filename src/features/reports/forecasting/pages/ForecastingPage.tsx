@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { HelpLink } from '@/features/help/components/HelpLink';
 import { FigureBlock } from '@/components/app/figure';
 import { Amount } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
@@ -160,7 +161,12 @@ export function ForecastingPage() {
       <PageHeader
         title="Forecasting"
         description="Budget vs Forecast vs Actual, by GL account. Planning data never posts to the ledger — Actual is computed live from posted journal entries."
-        actions={<ExportMenu dataset={exportDataset} allowed={canExport} />}
+        actions={
+          <>
+            <HelpLink article="forecasting" />
+            <ExportMenu dataset={exportDataset} allowed={canExport} />
+          </>
+        }
       />
 
       <SectionCard>

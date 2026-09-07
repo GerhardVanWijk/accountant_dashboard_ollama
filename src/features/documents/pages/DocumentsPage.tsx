@@ -4,6 +4,7 @@ import type { CompanyDocument, Profile } from '@/types';
 import { documentExpiryStatus } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
+import { HelpLink } from '@/features/help/components/HelpLink';
 import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { ConfirmDialog } from '@/components/app/form';
@@ -115,12 +116,15 @@ export function DocumentsPage() {
         title="Company documents"
         description="Securely store and manage important company records and supporting documents."
         actions={
-          canManage ? (
-            <Button size="sm" onClick={() => setDialog({ kind: 'upload' })}>
-              <UploadCloud data-icon="inline-start" />
-              Upload document
-            </Button>
-          ) : undefined
+          <>
+            <HelpLink article="documents" />
+            {canManage && (
+              <Button size="sm" onClick={() => setDialog({ kind: 'upload' })}>
+                <UploadCloud data-icon="inline-start" />
+                Upload document
+              </Button>
+            )}
+          </>
         }
       />
 

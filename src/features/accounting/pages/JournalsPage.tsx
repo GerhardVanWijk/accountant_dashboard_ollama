@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
+import { HelpLink } from '@/features/help/components/HelpLink';
 import { Button } from '@/components/ui/shadcn/button';
 import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
@@ -45,10 +46,13 @@ export function JournalsPage() {
         title="Journal entries"
         description="Manual adjustments to the ledger. Every entry carries equal debits and credits and posts to the ledger immediately."
         actions={
-          <Button size="sm" onClick={() => setShowForm(true)}>
-            <Plus data-icon="inline-start" />
-            New journal entry
-          </Button>
+          <>
+            <HelpLink article="journal-entries" />
+            <Button size="sm" onClick={() => setShowForm(true)}>
+              <Plus data-icon="inline-start" />
+              New journal entry
+            </Button>
+          </>
         }
       />
 

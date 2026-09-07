@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import type { BankAccount, ID } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { HelpLink } from '@/features/help/components/HelpLink';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import {
   Select,
@@ -61,6 +62,7 @@ export function BankReconciliationPage() {
       <PageHeader
         title="Bank reconciliation"
         description="Read the bank statement against the general-ledger cashbook line by line, prove each line against its accounting entry, and finalize once the difference is zero."
+        actions={<HelpLink article="bank-reconciliation" />}
       />
 
       <SectionCard>
