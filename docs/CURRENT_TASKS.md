@@ -4,7 +4,7 @@
 
 ## BANK DETAIL PANEL + NEW BANK TRANSACTION FORM UX (branch `bank-detail-panel-txn-form-ux-2026-09-07`) — 2026-09-07
 
-**BUILT on branch. `main` untouched, NOT merged/deployed. Awaiting human browser QA.** Presentation/responsive UX only — no migration, no DB write, no accounting/DTO/calculation change.
+**SHIPPED 2026-09-07** — on explicit user instruction ahead of human browser QA, `bank-detail-panel-txn-form-ux-2026-09-07` was fast-forward-merged → `main` (`0a1755b..868817f`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Presentation/responsive UX only — no migration, no DB write, no accounting/DTO/calculation change. **Post-deploy browser QA (1920/1440/1366/1024/tablet/mobile) of the bank detail panel + the New/Edit bank transaction forms is now owed.**
 
 - **Root cause of the narrow record-detail side panel:** `RecordDetailSheet` passed width as a plain `sm:max-w-*` className, which loses the CSS-specificity race against the shared `SheetContent`'s baked-in `data-[side=right]:sm:max-w-sm` — so *every* record-detail panel (Customer/Supplier "wide" ones included) was pinned at 384px regardless of the prop. Fixed with a `width="default" | "wide"` prop expressed as `data-[side=right]:` variants (`default` ≈ 26rem→30rem xl; `wide` ≈ 2xl→3xl lg). Callers' broken `className="sm:max-w-xl/3xl"` overrides removed; `recordSheetClass`/`wideRecordSheetClass` deleted from `form-surface.ts`.
 - **Shared `RecordDetailSheet` relayout:** non-scrolling outer → pinned header / one scrolling body / pinned footer (the FormShell architecture) so the × close button stays reachable; footer is `bg-muted/50` border-t, `justify-end`, no longer `flex-1`-stranded at the bottom of a tall empty panel.
