@@ -7,6 +7,44 @@ each section.
 
 ## Open
 
+### 2026-09-07 (ADMINISTRATION MODULE · BLOCKS D–G) — migrations 0073/0073b/0074/0075/0075b
+
+Branch `administration-module-2026-09-06`. `main` untouched, NOT deployed.
+
+- **`evaluate_company_notifications()` re-entrancy** — the engine creates a
+  `_active` temp table with `on commit drop`. Calling it twice in one DB
+  session before commit (a superuser sweeping several companies over one
+  connection) raised `relation "_active" already exists`. Fixed by a
+  `drop table if exists _active` guard (migration `0073b`; folded into
+  `0073` for fresh installs). In normal operation each PostgREST RPC call
+  is its own transaction, so this only ever surfaced during multi-company
+  testing.
+- **`notification_muteable_category` search_path** — shipped in `0073`
+  without `set search_path`; advisor flagged `function_search_path_mutable`.
+  It touches no schema objects, so `set search_path = ''` is the fix
+  (migration `0075b`; folded into `0073`).
+- **`budget_variance` notification is dormant** — check C9 compares each
+  budgeted `financial_plan_lines` row for the current month against posted
+  GL net movement. There are 0 budget lines in production, so it never
+  fires yet. It also assumes budget amounts are entered in the same
+  debit-positive convention as `sum(debit - credit)`; revisit when the
+  first real budgets are captured.
+- **VAT-deadline notification not implemented** — deriving a SARS filing
+  deadline needs the bi-monthly category split (Cat A / Cat B), which
+  Vertex does not store, and there is no persisted VAT-return record to
+  tell filed from unfiled. A pure calendar reminder was judged to be
+  inventing data. `tax_deadline` remains a valid category for a future
+  check once a VAT-return entity exists.
+- **`0073b` / `0075b` follow-up migrations** — the live project had `0073`
+  / `0075` applied before these two small fixes were found. On a fresh
+  `supabase db reset` they are harmless no-ops (the fixed definitions are
+  already in `0073`).
+- **Migration `0074` numbering** — the original block plan named `0074`
+  "Administration permissions" and `0075` "Settings". Actual order:
+  `0074` = accounting-settings audit (Block E), `0075` = Administration
+  permissions + role/access audit (Block G). Filenames/timestamps are
+  unique and chronological.
+
 ### 2026-09-06 (COMMERCIAL FOUNDATION · BLOCK 4) — secure new-user invitations, migration 0069
 
 Branch `commercial-foundation-2026-09-06`. `main` untouched, not deployed. NO email infra —

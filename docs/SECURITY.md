@@ -137,3 +137,57 @@ RPCs already carry).
 | Manual subscription override | `superuser_set_subscription_plan` / `_status` (audited, `provider='manual'`) | active (0070) |
 | Superuser member / role / invitation administration | `superuser_set_member_access` / `_remove_member_from_company` / `_assign_role` / `_unassign_role` / `_create_company_invitation` / `_revoke_company_invitation` | active (0070) |
 | Support access to accounting data | Request / time-limited session / audited entry+exit | **designed, NOT built** (see console doc §1) |
+
+## Administration module verification (Blocks D–G, 2026-09-07)
+
+Migrations `0073`/`0073b`/`0074`/`0075`/`0075b` applied to the live Vertex
+production Supabase project. `main` untouched, NOT deployed.
+
+**Cross-company isolation** — as company B's admin, attempted reads of
+company A's data through RLS:
+
+| Target | A rows visible to B |
+|---|---|
+| `company_documents` | 0 |
+| `audit_log_entries` | 0 |
+| `audit_logs_access` | 0 |
+| `notifications` | 0 |
+| `notification_reads` | 0 |
+| `profiles` | 0 |
+| `category_account_mappings` | 0 |
+| `companies` | 0 |
+
+`mark_notification_read` on one of A's notification ids from B's session
+wrote nothing (`notification_visible` fails → RPC returns early).
+`notification_feed` from B's session returned only company B rows.
+
+**Document security (re-check of Block B + 0073/0075):**
+
+| Control | State |
+|---|---|
+| Bucket `company-documents` | private (`public = false`) |
+| Downloads | short-lived signed URLs (`createSignedUrl`, 300 s default) |
+| Object path isolation | metadata CHECK `storage_path like company_id \|\| '/%'` + `storage.objects` SELECT policy keyed on `foldername[1] = get_my_company_id()` |
+| Cross-company signed URL | **cannot be minted** — the SELECT policy denies the object, so `createSignedUrl` fails |
+| MIME allow-list | bucket `allowed_mime_types` + table CHECK (no SVG/HTML/active formats) |
+| 25 MiB limit | bucket `file_size_limit` + table CHECK + client validation |
+| Archive | `is_archived` flag + guard trigger; company users never hard-delete |
+| Hard delete | `storage.objects` + `company_documents` DELETE policy = superuser only |
+| Immutable file identity | 0071 guard trigger forces `company_id` / `storage_path` / `file_name` / `file_size` / `mime_type` / `uploaded_by` / `uploaded_at` back on UPDATE |
+| Audit | 0071 trigger on every upload / archive / restore / metadata-change / delete |
+
+**Notification noise test** — a normal posted journal + a normal bank
+transaction for a company → `evaluate_company_notifications` opened 0 /
+resolved 0. An expired `company_documents` row → one `critical`
+notification. Full matrix in `NOTIFICATIONS.md`.
+
+**Advisors after all five migrations:** **0 ERROR**, 123 WARN — all
+pre-existing classes (`authenticated_security_definer_function_executable`,
+the same class the invitation and superuser RPCs already carry, and
+`auth_allow_anonymous_sign_ins`). No new ERROR introduced. No unrelated
+historical WARN touched — the one genuinely-new fixable WARN
+(`notification_muteable_category` search_path) was fixed in 0075b.
+
+**Accounting invariants:** byte-identical throughout — Trial Balance
+difference R0.00, GL 1200 R1,478,853.74, 247 journal entries, 343 stock
+movements.

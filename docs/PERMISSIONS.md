@@ -378,3 +378,32 @@ The one supported path for a person to join a company that already exists:
    signup that hasn't been onboarded yet.
 5. The person can now sign in and reach the company app per their
    permissions.
+
+## Administration module features (migration 0075, 2026-09-07)
+
+Additive to the same Layer 2 catalog. Five features, 33 system-role grants,
+`<PermissionRoute feature="…" action="read">` gates on five routes. NO RLS
+change. NO lockout (re-verified: `user_roles` still 0 assignments; only
+company members are `admin`/`superuser`, which bypass every fine-grained
+gate). Migration writes 0 `user_roles` and 0 `profiles` rows.
+
+| Feature | Actions | Route gate | Grants (mirror each role's existing shape) |
+|---|---|---|---|
+| `documents` | read, create, update, delete, export | `/documents` | every operational role reads + files company records; archive is `update`; hard delete stays superuser-only at the RLS layer, so no role gets `delete` |
+| `notifications` | read | `/notifications` | every operational role |
+| `settings` | read | `/settings` | every operational role (personal settings) |
+| `accounting_settings` | read | `/settings/accounting` | `finance_manager`, `accountant` (the read-heavy finance roles that also hold `audit` / `gl`) |
+| `billing` | read | `/settings/subscription` | **no system-role grant** — `admin` / `superuser` only |
+
+`permissionForPath()` resolves each of the five routes;
+`permissionRouteMap.ts` documents which routes stay deliberately ungated
+(`/companies` — audited by the 0074 trigger; `/help` + `/help/:articleId`
+— documentation; `/admin/superuser/*` — RouteGuard already confines to
+superusers).
+
+### Audit of role / access changes (migration 0075)
+
+`user_roles` INSERT/DELETE → `role_assigned` / `role_unassigned`; `profiles`
+UPDATE of `role` or `is_active` → `user_access_changed`. Trigger-based, so
+a direct table write is covered too. Payloads carry the role name and the
+active flag only — no email or other PII.

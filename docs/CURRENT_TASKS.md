@@ -1,5 +1,23 @@
 # Vertex Accounting — CURRENT TASKS
 
+---
+
+## ADMINISTRATION MODULE (branch `administration-module-2026-09-06`) — 2026-09-07
+
+**Blocks A–G COMPLETE. `main` untouched, NOT deployed. Awaiting human browser QA before merge.**
+
+- **A** inspection + matrices · **B** Company Documents + private Storage (0071) · **C** Audit Trail + Access Log hardening (0072) — all previously done.
+- **D** Global Notifications (`0073` + `0073b`): `notifications` / `notification_reads` / `notification_mutes`; `evaluate_company_notifications()` — 9 deterministic checks over real data, condition-driven lifecycle (open → persist → auto-resolve → re-open with `event_seq+1`); `notification_feed` / `_unread_count` / `mark_*` / `set_notification_category_muted` RPCs; RLS company + role + permission + entitlement targeting; navbar bell (one only, no flashing) + `/notifications` page + Settings → Notifications. Noise test PASS (normal journal + bank txn → opened 0). Doc: `NOTIFICATIONS.md`.
+- **E** Settings / Accounting Settings / Plan & Billing (`0074`): Settings gains a Notifications tab; Accounting Settings is a real config view (live company config + category account mappings) not a link hub; `companies` trigger audits every high-risk accounting-config change (before/after); Plan & Billing adds interval / current period / management state / in-plan vs locked module lists (no fabricated payment data).
+- **F** Help Centre: 44 articles / 13 categories (incl. 14 real troubleshooting cases), ranked search, `/help/:articleId` pages, contextual `<HelpLink>` on 7 workflows. Doc: `HELP_CENTRE.md`.
+- **G** app-wide hardening (`0075` + `0075b`): `documents` / `notifications` / `settings` / `accounting_settings` / `billing` permission features + 33 grants + route gates; `user_roles` + `profiles` audit triggers; `useLogSensitiveAccess` on Payroll (×4) / Income tax / Provisional tax / Superuser console / Documents. Cross-company isolation PASS (0 rows of company A visible to company B across documents/audit/access-log/notifications/notification-state/profiles/mappings/company). Signed download URL cannot be minted cross-company. Doc updates: `SECURITY.md` § "Administration module verification".
+
+**Migrations applied to live prod:** `0073`, `0073b`, `0074`, `0075`, `0075b` (preflight → apply → rollback-wrapped verify, same process as 0071/0072). **Advisors: 0 ERROR / 123 WARN** (all pre-existing classes; the one new fixable WARN fixed in 0075b). **Accounting byte-identical:** TB `R0.00`, GL 1200 `R1,478,853.74`, 247 JE / 343 movements. **Gate:** type-check PASS · lint (`--max-warnings 0`) PASS · full test suite PASS · build PASS. **Production business-data writes:** only `public.notifications` rows for genuinely-derived conditions (2 for Office National Demo, 4 for `test 1`) — real feature output, self-maintaining, no accounting effect. No fake/test rows persisted.
+
+**NEXT: human browser QA of the branch, then merge. Do not add further implementation phases.**
+
+---
+
 **Authoritative project status**  
 **Date:** 2026-09-06 (COMMERCIAL FOUNDATION — Blocks 1–4; migrations 0066–0069)  
 **Branch:** `commercial-foundation-2026-09-06` (off `main` `15025ec`). `main` untouched, NOT deployed. Payment provider = **Paystack** (integration pending merchant credentials); server runtime = **Supabase Edge Functions** (not built). NO payments processed.  

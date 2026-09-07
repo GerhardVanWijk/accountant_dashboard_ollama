@@ -135,3 +135,20 @@ flag, `deleteForever`, signed-URL delegation.
 Migration 0071 was verified live, rollback-wrapped: guard preserves file
 identity + archive bookkeeping, all five audit actions fire, the
 path-prefix CHECK rejects cross-company paths, the MIME CHECK rejects SVG.
+
+## Block G re-check (2026-09-07) — PASS
+
+Re-verified against the live project as part of the Administration
+hardening block (full table in `SECURITY.md` § "Document security"):
+private bucket, signed-URL-only downloads, path/company isolation on both
+the metadata row and the storage object, MIME allow-list, 25 MiB cap,
+archive-not-delete for company users, superuser-only hard delete,
+immutable file identity, audit trigger on every state change. A signed
+download URL **cannot** be generated for another company's document — the
+`storage.objects` SELECT policy keys on `foldername[1] =
+get_my_company_id()`.
+
+**Notification integration (0073):** a non-archived document with
+`expiry_date` within 30 days raises a `warning` notification; once past,
+`critical`. dedupe_key `document_expiry:<id>`; resolves automatically when
+the document is archived, deleted, or its expiry date is moved out.

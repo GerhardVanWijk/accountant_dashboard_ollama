@@ -63,9 +63,24 @@ full account number).
 Instrumentation exists in ~40 services (Sales, Purchases, Inventory,
 Banking recon, GL periods, Tax rates, Compliance, Company, Roles…). Live
 row volume is currently low because production data was seed-loaded
-directly rather than through the services. **Closing the remaining write-
-path gaps app-wide is Block G** — see the coverage matrix there. Company
-Documents (Block B) is fully covered by a DB trigger.
+directly rather than through the services.
+
+**Trigger-based coverage** (cannot be bypassed by a direct table call):
+
+| Table | Trigger (migration) | Semantic events |
+|---|---|---|
+| `company_documents` | 0071 | `document_uploaded` / `_archived` / `_restored` / `_metadata_changed` / `_deleted` (module `documents`) |
+| `companies` | **0074** | `accounting_setting_changed` (module `settings`) — any change to accounting basis, currency, financial year end, VAT registration / frequency / basis, with before/after JSON. Covers the CompanyForm path AND any future path. |
+| `category_account_mappings` | **0074** | `account_mapping_changed` (module `settings`) |
+| `user_roles` | **0075** | `role_assigned` / `role_unassigned` (module `admin`) |
+| `profiles` | **0075** | `user_access_changed` (module `admin`) — when `role` or `is_active` changes; payload is role + active flag only, no email/PII |
+
+**Audit privacy:** payloads never carry passwords, tokens, invitation
+secrets, bank/payment details or auth credentials. Verified live — a scan
+of every `audit_log_entries` row for `token|secret|password|hash|bank|iban
+|swift|account_number|cvv|card` returned only false positives. The 0069
+invitation RPCs store `email` + `profileRole` + `roleId` only, never the
+raw token or its hash.
 
 ## Architecture
 

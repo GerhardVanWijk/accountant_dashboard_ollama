@@ -73,3 +73,27 @@ RLS denials in Postgres return zero rows silently — there is no
 client-visible error to catch — so `denied_rls` rows are only ever written
 at explicit app-level checkpoints, never as proof every actual denial was
 captured. See `src/types/accessAudit.ts`.
+
+## Sensitive-area instrumentation (Block G)
+
+`useLogSensitiveAccess(area)` writes one `allowed` row when a genuinely
+sensitive page mounts — server-deduped to one row per user per area per
+24 h by `log_access_event`. Wired into:
+
+Users & roles · Audit trail · Access log · Accounting settings · Plan &
+billing · Notifications · Company documents · Payroll (Employees / Runs /
+EMP201 / EMP501) · Income tax · Provisional tax · the Superuser console
+(one entry per session).
+
+Ordinary module pages (Sales, Purchasing, Banking, Inventory, GL, Reports,
+Dashboard…) are **not** instrumented — the log stays useful.
+
+`<PermissionRoute>` writes one `denied_permission` row (server-deduped to
+one per user per area per hour) when a user hits a route their fine-grained
+role lacks. Block G added gates on `/documents`, `/notifications`,
+`/settings`, `/settings/accounting`, `/settings/subscription`, so a role
+without the matching feature now produces a denied row instead of silently
+seeing the page.
+
+**Verified live:** a spike of ≥5 denied events for a company in 24 h also
+raises a `security` notification (see `NOTIFICATIONS.md` C4).
