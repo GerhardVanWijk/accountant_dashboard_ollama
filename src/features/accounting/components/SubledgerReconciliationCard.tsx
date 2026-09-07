@@ -24,7 +24,13 @@ export function SubledgerReconciliationCard({ label, reconciliation }: Subledger
     <SectionCard
       title={label}
       actions={
-        <Badge variant="outline" className={cn(isReconciled ? 'text-status-positive' : 'text-status-negative')}>
+        <Badge
+          className={cn(
+            isReconciled
+              ? 'bg-status-positive-muted text-status-positive'
+              : 'bg-status-negative-muted text-status-negative',
+          )}
+        >
           {isReconciled ? 'Reconciled' : 'Variance detected'}
         </Badge>
       }
@@ -44,7 +50,7 @@ export function SubledgerReconciliationCard({ label, reconciliation }: Subledger
         </div>
         <div>
           <dt className="text-xs tracking-wide text-muted-foreground uppercase">Variance</dt>
-          <dd className={cn('mt-1', !isReconciled && 'font-semibold text-negative')}>
+          <dd className={cn('mt-1', !isReconciled && 'text-base font-semibold text-negative')}>
             <Amount value={variance} />
           </dd>
         </div>

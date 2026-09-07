@@ -163,9 +163,9 @@ export function ChartOfAccountsPage() {
         </SectionCard>
       )}
 
-      <SectionCard bodyClassName="p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <InputGroup className="w-full sm:max-w-72">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <InputGroup className="w-full sm:w-72">
             <InputGroupAddon>
               <Search />
             </InputGroupAddon>
@@ -215,80 +215,80 @@ export function ChartOfAccountsPage() {
             </SelectContent>
           </Select>
         </div>
-      </SectionCard>
 
-      {loading && (
-        // docs/CURRENT_TASKS.md #26 — the page header + filter shell above stay
-        // visible; this is a table-shaped placeholder, not a blank page + spinner.
-        <div role="status" aria-label="Loading chart of accounts" className="overflow-hidden rounded-xl border border-border">
-          <div className="h-10 border-b border-border bg-muted/40" />
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4 border-b border-border/50 px-4 py-3 last:border-0">
-              <div className="h-4 w-14 animate-pulse rounded bg-muted" />
-              <div className="h-4 flex-1 animate-pulse rounded bg-muted" style={{ maxWidth: `${40 + ((i * 13) % 45)}%` }} />
-              <div className="h-4 w-16 animate-pulse rounded bg-muted" />
-            </div>
-          ))}
-        </div>
-      )}
+        {loading && (
+          // docs/CURRENT_TASKS.md #26 — the page header + filter shell above stay
+          // visible; this is a table-shaped placeholder, not a blank page + spinner.
+          <div role="status" aria-label="Loading chart of accounts" className="overflow-hidden rounded-xl border border-border">
+            <div className="h-10 border-b border-border bg-muted/40" />
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 border-b border-border/50 px-4 py-3 last:border-0">
+                <div className="h-4 w-14 animate-pulse rounded bg-muted" />
+                <div className="h-4 flex-1 animate-pulse rounded bg-muted" style={{ maxWidth: `${40 + ((i * 13) % 45)}%` }} />
+                <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+              </div>
+            ))}
+          </div>
+        )}
 
-      {!loading && error && (
-        <div role="alert" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
-          <p className="text-sm text-destructive">{error.message}</p>
-          <Button variant="outline" size="sm" onClick={refetch}>
-            Try again
-          </Button>
-        </div>
-      )}
+        {!loading && error && (
+          <div role="alert" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
+            <p className="text-sm text-destructive">{error.message}</p>
+            <Button variant="outline" size="sm" onClick={refetch}>
+              Try again
+            </Button>
+          </div>
+        )}
 
-      {!loading && !error && accounts.length === 0 && (
-        <SectionCard>
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <ListTree />
-              </EmptyMedia>
-              <EmptyTitle>No accounts yet</EmptyTitle>
-              <EmptyDescription>Add your first ledger account to start building the chart.</EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
-                <Plus data-icon="inline-start" />
-                New account
-              </Button>
-            </EmptyContent>
-          </Empty>
-        </SectionCard>
-      )}
+        {!loading && !error && accounts.length === 0 && (
+          <SectionCard>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <ListTree />
+                </EmptyMedia>
+                <EmptyTitle>No accounts yet</EmptyTitle>
+                <EmptyDescription>Add your first ledger account to start building the chart.</EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+                  <Plus data-icon="inline-start" />
+                  New account
+                </Button>
+              </EmptyContent>
+            </Empty>
+          </SectionCard>
+        )}
 
-      {!loading && !error && accounts.length > 0 && filtered.length === 0 && (
-        <SectionCard>
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Search />
-              </EmptyMedia>
-              <EmptyTitle>No matching accounts</EmptyTitle>
-              <EmptyDescription>Adjust the search or filters to widen the view.</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        </SectionCard>
-      )}
+        {!loading && !error && accounts.length > 0 && filtered.length === 0 && (
+          <SectionCard>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Search />
+                </EmptyMedia>
+                <EmptyTitle>No matching accounts</EmptyTitle>
+                <EmptyDescription>Adjust the search or filters to widen the view.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          </SectionCard>
+        )}
 
-      {!loading && !error && filtered.length > 0 && (
-        <AccountTable
-          accounts={filtered}
-          postedAccountIds={postedAccountIds}
-          onSelect={(account) => openRecord(account.id)}
-          onEdit={(account) => {
-            setFormError(null);
-            setDialog({ mode: 'edit', account });
-          }}
-          onToggleActive={(account) => {
-            void handleToggleActive(account);
-          }}
-        />
-      )}
+        {!loading && !error && filtered.length > 0 && (
+          <AccountTable
+            accounts={filtered}
+            postedAccountIds={postedAccountIds}
+            onSelect={(account) => openRecord(account.id)}
+            onEdit={(account) => {
+              setFormError(null);
+              setDialog({ mode: 'edit', account });
+            }}
+            onToggleActive={(account) => {
+              void handleToggleActive(account);
+            }}
+          />
+        )}
+      </div>
 
       <AccountDetailSheet
         account={selectedAccount}

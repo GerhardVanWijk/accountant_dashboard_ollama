@@ -60,7 +60,7 @@ export function LedgerPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <PageHeader
         title="General ledger"
         description="Every posted line, traceable back to the journal that created it. Narrow to one account to see its running balance."
@@ -102,28 +102,33 @@ export function LedgerPage() {
         <LedgerTable
           rows={rows}
           toolbar={
-            <Select
-              items={[{ value: 'all', label: 'All accounts' }, ...accounts.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }))]}
-              value={selectedAccountId ?? 'all'}
-              onValueChange={(value) => setSelectedAccountId(value === 'all' ? null : String(value))}
-            >
-              <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-64" aria-label="Filter by account">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="all">All accounts</SelectItem>
-                  {accounts.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.code} — {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <span className="shrink-0 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Ledger account
+              </span>
+              <Select
+                items={[{ value: 'all', label: 'All accounts' }, ...accounts.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }))]}
+                value={selectedAccountId ?? 'all'}
+                onValueChange={(value) => setSelectedAccountId(value === 'all' ? null : String(value))}
+              >
+                <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-64" aria-label="Ledger account">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="all">All accounts</SelectItem>
+                    {accounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.code} — {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
           }
         />
       )}
-    </div>
+    </>
   );
 }

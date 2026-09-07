@@ -34,6 +34,7 @@ export function JournalsTable({ entries, periods, reversedByEntryId, onRowClick 
     {
       key: 'number',
       header: 'Journal',
+      headClassName: 'w-[8rem]',
       sortValue: (e) => e.entryNumber,
       cell: (e) => (
         <div className="flex flex-col">
@@ -48,7 +49,7 @@ export function JournalsTable({ entries, periods, reversedByEntryId, onRowClick 
       sortValue: (e) => e.memo ?? '',
       cell: (e) => (
         <div className="flex min-w-0 flex-col">
-          <span className="block max-w-[40ch] truncate" title={e.memo || undefined}>
+          <span className="block max-w-[52ch] truncate" title={e.memo || undefined}>
             {e.memo || '—'}
           </span>
           <span className="text-xs text-muted-foreground">{e.lines.length} lines</span>
@@ -58,6 +59,7 @@ export function JournalsTable({ entries, periods, reversedByEntryId, onRowClick 
     {
       key: 'date',
       header: 'Date',
+      headClassName: 'w-[10rem]',
       sortValue: (e) => e.date,
       cell: (e) => (
         <div className="flex flex-col">
@@ -70,12 +72,14 @@ export function JournalsTable({ entries, periods, reversedByEntryId, onRowClick 
       key: 'totalDebit',
       header: 'Value',
       align: 'right',
+      headClassName: 'w-[9rem]',
       sortValue: (e) => e.lines.reduce((sum, l) => sum + l.debit, 0),
-      cell: (e) => <Amount value={e.lines.reduce((sum, l) => sum + l.debit, 0)} className="text-sm font-medium" />,
+      cell: (e) => <Amount value={e.lines.reduce((sum, l) => sum + l.debit, 0)} className="text-sm" />,
     },
     {
       key: 'status',
       header: 'Status',
+      headClassName: 'w-[7.5rem]',
       sortValue: (e) => (reversedByEntryId.has(e.id) ? 'reversed' : e.status),
       cell: (e) => <StatusBadge status={reversedByEntryId.has(e.id) ? 'reversed' : e.status} />,
     },

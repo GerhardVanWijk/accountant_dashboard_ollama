@@ -77,7 +77,7 @@ export function TrialBalancePage() {
 
       {!loading && !error && trialBalance && (
         <SectionCard>
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4">
             <div className="grid gap-4 sm:grid-cols-3">
               <FigureBlock
                 label="Total debits"
@@ -101,16 +101,16 @@ export function TrialBalancePage() {
               role="status"
               className={
                 trialBalance.balanced
-                  ? 'flex items-start gap-3 rounded-lg border border-status-positive-outline bg-status-positive-surface p-4'
-                  : 'flex items-start gap-3 rounded-lg border border-status-negative-outline bg-status-negative-surface p-4'
+                  ? 'flex items-center gap-2 rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2'
+                  : 'flex items-center gap-2 rounded-lg border border-status-negative-outline bg-status-negative-surface px-3 py-2'
               }
             >
               {trialBalance.balanced ? (
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-status-positive" aria-hidden="true" />
+                <CheckCircle2 className="size-3.5 shrink-0 text-status-positive" aria-hidden="true" />
               ) : (
-                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-status-negative" aria-hidden="true" />
+                <TriangleAlert className="size-3.5 shrink-0 text-status-negative" aria-hidden="true" />
               )}
-              <p className="text-sm leading-relaxed">
+              <p className="text-xs leading-snug">
                 {trialBalance.balanced ? (
                   <>
                     <span className="font-medium">Balanced — total debits equal total credits.</span>{' '}

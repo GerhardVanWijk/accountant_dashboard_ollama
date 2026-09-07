@@ -29,17 +29,21 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
     {
       key: 'date',
       header: 'Date',
+      headClassName: 'w-[7rem]',
       sortValue: (r) => r.date,
       cell: (r) => <span className="whitespace-nowrap">{formatDate(r.date)}</span>,
     },
     {
       key: 'account',
       header: 'Account',
+      headClassName: 'w-[12rem]',
       sortValue: (r) => r.accountCode,
       cell: (r) => (
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <span className="figure text-xs tabular-nums">{r.accountCode}</span>
-          <span className="text-xs text-muted-foreground">{r.accountName}</span>
+          <span className="block max-w-[11rem] truncate text-xs text-muted-foreground" title={r.accountName}>
+            {r.accountName}
+          </span>
         </div>
       ),
     },
@@ -49,7 +53,7 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
       sortValue: (r) => r.description ?? '',
       cell: (r) => (
         <div className="flex min-w-0 flex-col">
-          <span className="block max-w-[36ch] truncate text-sm" title={r.description || undefined}>
+          <span className="block max-w-[52ch] truncate text-sm" title={r.description || undefined}>
             {r.description || '—'}
           </span>
           <RecordLink onClick={() => navigate(`/accounting/journals?record=${r.entryId}`)} className="figure text-xs">
@@ -61,6 +65,7 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
     {
       key: 'source',
       header: 'Source',
+      headClassName: 'w-[7rem]',
       hideBelowMd: true,
       sortValue: (r) => r.source ?? '',
       cell: (r) =>
@@ -76,6 +81,7 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
       key: 'debit',
       header: 'Debit',
       align: 'right',
+      headClassName: 'w-[8.5rem]',
       sortValue: (r) => r.debit,
       cell: (r) =>
         r.debit > 0 ? (
@@ -88,6 +94,7 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
       key: 'credit',
       header: 'Credit',
       align: 'right',
+      headClassName: 'w-[8.5rem]',
       sortValue: (r) => r.credit,
       cell: (r) =>
         r.credit > 0 ? (
@@ -100,6 +107,7 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
       key: 'balance',
       header: 'Account balance',
       align: 'right',
+      headClassName: 'w-[9.5rem]',
       hideBelowMd: true,
       sortValue: (r) => r.balance ?? 0,
       cell: (r) =>

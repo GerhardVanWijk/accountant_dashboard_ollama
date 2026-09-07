@@ -11,6 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/shadcn/table';
 import { RecordLink } from '@/components/app/record-link';
+import { cn } from '@/lib/utils';
 import { buildAccountHierarchy } from '../utils/buildAccountHierarchy';
 
 export interface AccountTableProps {
@@ -39,23 +40,35 @@ export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActiv
 
   return (
     <div className="overflow-hidden rounded-xl border border-border">
-      <Table className="min-w-[760px]">
+      <Table className="min-w-[820px]">
+        {/*
+         * Fixed proportions so Account name keeps the visual room on wide
+         * screens and the other columns don't open an empty band between
+         * name and normal balance (docs — CoA visual refinement §5/§9).
+         */}
+        <colgroup>
+          <col className="w-[92px]" />
+          <col />
+          <col className="w-[132px]" />
+          <col className="w-[172px]" />
+          <col className="w-[152px]" />
+        </colgroup>
         <TableHeader className="bg-muted/40">
           <TableRow className="hover:bg-transparent">
             <TableHead className={HEAD_CLASS}>Code</TableHead>
             <TableHead className={HEAD_CLASS}>Account name</TableHead>
             <TableHead className={HEAD_CLASS}>Normal balance</TableHead>
             <TableHead className={HEAD_CLASS}>Status</TableHead>
-            <TableHead className={HEAD_CLASS}>Actions</TableHead>
+            <TableHead className={cn(HEAD_CLASS, 'text-right')}>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {groups.map((group) => (
             <Fragment key={group.type}>
-              <TableRow className="bg-muted/20 hover:bg-muted/20">
+              <TableRow className="border-y border-border bg-muted/60 hover:bg-muted/60">
                 <TableCell
                   colSpan={5}
-                  className="px-4 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                  className="px-4 py-2.5 text-xs font-semibold tracking-wide text-foreground uppercase"
                 >
                   {group.label}
                 </TableCell>
@@ -93,7 +106,7 @@ export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActiv
                     </div>
                   </TableCell>
                   <TableCell className="px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" onClick={() => onEdit(account)}>
                         Edit
                       </Button>

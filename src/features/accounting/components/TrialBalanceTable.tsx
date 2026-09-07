@@ -35,6 +35,7 @@ export function TrialBalanceTable({ rows, totals, accountsById }: TrialBalanceTa
     {
       key: 'code',
       header: 'Account',
+      headClassName: 'w-[7rem]',
       sortValue: (r) => r.code,
       cell: (r) => <span className="figure font-medium text-foreground tabular-nums">{r.code}</span>,
     },
@@ -42,11 +43,16 @@ export function TrialBalanceTable({ rows, totals, accountsById }: TrialBalanceTa
       key: 'name',
       header: 'Description',
       sortValue: (r) => r.name,
-      cell: (r) => <RecordLink onClick={() => openLedger(r.accountId)}>{r.name}</RecordLink>,
+      cell: (r) => (
+        <RecordLink onClick={() => openLedger(r.accountId)} className="block max-w-[44ch] truncate">
+          {r.name}
+        </RecordLink>
+      ),
     },
     {
       key: 'type',
       header: 'Category',
+      headClassName: 'w-[10rem]',
       sortValue: (r) => typeOf(r.accountId) ?? '',
       hideBelowMd: true,
       cell: (r) => {
@@ -58,6 +64,7 @@ export function TrialBalanceTable({ rows, totals, accountsById }: TrialBalanceTa
       key: 'debit',
       header: 'Debit',
       align: 'right',
+      headClassName: 'w-[9rem]',
       sortValue: (r) => r.debit,
       cell: (r) =>
         r.debit > 0 ? <Amount value={r.debit} plain className="text-sm" /> : <span className="text-xs text-muted-foreground">&mdash;</span>,
@@ -66,6 +73,7 @@ export function TrialBalanceTable({ rows, totals, accountsById }: TrialBalanceTa
       key: 'credit',
       header: 'Credit',
       align: 'right',
+      headClassName: 'w-[9rem]',
       sortValue: (r) => r.credit,
       cell: (r) =>
         r.credit > 0 ? <Amount value={r.credit} plain className="text-sm" /> : <span className="text-xs text-muted-foreground">&mdash;</span>,
@@ -94,16 +102,16 @@ export function TrialBalanceTable({ rows, totals, accountsById }: TrialBalanceTa
       emptyDescription="Adjust the search or category filter."
       caption="All amounts in rand"
       footerRow={
-        <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={2} className="px-4 py-3 text-xs font-medium tracking-wide uppercase">
+        <TableRow className="border-t-2 border-border bg-muted/70 hover:bg-muted/70">
+          <TableCell colSpan={2} className="px-4 py-3.5 text-xs font-semibold tracking-wide text-foreground uppercase">
             Totals
           </TableCell>
-          <TableCell className="hidden px-4 py-3 md:table-cell" />
-          <TableCell className="px-4 py-3 text-right">
-            <Amount value={totals.debit} plain className="font-semibold" />
+          <TableCell className="hidden px-4 py-3.5 md:table-cell" />
+          <TableCell className="px-4 py-3.5 text-right">
+            <Amount value={totals.debit} plain className="font-semibold text-foreground" />
           </TableCell>
-          <TableCell className="px-4 py-3 text-right">
-            <Amount value={totals.credit} plain className="font-semibold" />
+          <TableCell className="px-4 py-3.5 text-right">
+            <Amount value={totals.credit} plain className="font-semibold text-foreground" />
           </TableCell>
         </TableRow>
       }

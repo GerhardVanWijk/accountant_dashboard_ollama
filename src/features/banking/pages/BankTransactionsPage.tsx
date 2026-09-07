@@ -111,7 +111,7 @@ export function BankTransactionsPage() {
       />
 
       <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-3">
           <FigureBlock label="Statement lines" value={String(transactions.length)} hint="In the current view" />
           <FigureBlock
             label="Awaiting reconciliation"
@@ -127,26 +127,6 @@ export function BankTransactionsPage() {
           />
         </div>
       </SectionCard>
-
-      <Select
-        items={[{ value: 'all', label: 'All accounts' }, ...bankAccounts.map((a) => ({ value: a.id, label: a.name }))]}
-        value={selectedAccountId}
-        onValueChange={(value) => setSelectedAccountId(String(value))}
-      >
-        <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-56" aria-label="Filter by bank account">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            <SelectItem value="all">All accounts</SelectItem>
-            {bankAccounts.map((a) => (
-              <SelectItem key={a.id} value={a.id}>
-                {a.name}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
 
       {mutationError && (
         <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -183,6 +163,27 @@ export function BankTransactionsPage() {
           onAllocate={(txn) => setDialog({ mode: 'allocate', transaction: txn })}
           onDelete={(txn) => setDialog({ mode: 'confirmDelete', transaction: txn })}
           onSelect={(txn) => openRecord(txn.id)}
+          toolbar={
+            <Select
+              items={[{ value: 'all', label: 'All accounts' }, ...bankAccounts.map((a) => ({ value: a.id, label: a.name }))]}
+              value={selectedAccountId}
+              onValueChange={(value) => setSelectedAccountId(String(value))}
+            >
+              <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-[13rem] sm:max-w-[16rem]" aria-label="Filter by bank account">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="all">All accounts</SelectItem>
+                  {bankAccounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          }
         />
       )}
 

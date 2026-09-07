@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { BankAccount } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
@@ -15,6 +16,8 @@ export interface BankTransactionTableProps {
   onAllocate: (transaction: BankTransactionWithAllocations) => void;
   onDelete: (transaction: BankTransactionWithAllocations) => void;
   onSelect?: (transaction: BankTransactionWithAllocations) => void;
+  /** Bank-account selector, rendered in the table's own filter toolbar. */
+  toolbar?: ReactNode;
 }
 
 /**
@@ -28,13 +31,14 @@ export interface BankTransactionTableProps {
  * M5 report. Money in/out split into separate columns, matching v0's
  * unambiguous-direction convention.
  */
-export function BankTransactionTable({ transactions, bankAccountsById, showAccountColumn = false, onAllocate, onDelete, onSelect }: BankTransactionTableProps) {
+export function BankTransactionTable({ transactions, bankAccountsById, showAccountColumn = false, onAllocate, onDelete, onSelect, toolbar }: BankTransactionTableProps) {
   const columns: DataTableColumn<BankTransactionWithAllocations>[] = [
     {
       key: 'date',
       header: 'Date',
+      headClassName: 'w-[7.5rem]',
       sortValue: (t) => t.date,
-      cell: (t) => <span className="whitespace-nowrap">{formatDate(t.date)}</span>,
+      cell: (t) => <span className="whitespace-nowrap text-sm">{formatDate(t.date)}</span>,
     },
     {
       key: 'description',
@@ -43,20 +47,24 @@ export function BankTransactionTable({ transactions, bankAccountsById, showAccou
       cell: (t) => {
         const needsAllocation = t.allocations.length === 0 && !t.transferPairId;
         return (
-          <div className="flex flex-col gap-0.5">
-            <span className="flex items-center gap-1.5 text-sm">
-              {onSelect ? (
-                <RecordLink onClick={() => onSelect(t)}>{t.description}</RecordLink>
-              ) : (
-                t.description
-              )}
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <span className="block max-w-[44ch] truncate text-sm" title={t.description}>
+                {onSelect ? (
+                  <RecordLink onClick={() => onSelect(t)}>{t.description}</RecordLink>
+                ) : (
+                  t.description
+                )}
+              </span>
               {needsAllocation && (
-                <Badge variant="outline" className="text-status-warning">
+                <Badge variant="outline" className="shrink-0 whitespace-nowrap border-status-warning/40 text-status-warning">
                   Needs allocation
                 </Badge>
               )}
             </span>
-            <span className="text-xs text-muted-foreground">{t.reference ?? '—'}</span>
+            <span className="block max-w-[44ch] truncate text-xs text-muted-foreground" title={t.reference ?? undefined}>
+              {t.reference ?? '—'}
+            </span>
           </div>
         );
       },
@@ -66,10 +74,13 @@ export function BankTransactionTable({ transactions, bankAccountsById, showAccou
           {
             key: 'account',
             header: 'Account',
+            headClassName: 'w-[13rem]',
             hideBelowMd: true,
             sortValue: (t: BankTransactionWithAllocations) => bankAccountsById.get(t.bankAccountId)?.name ?? '',
             cell: (t: BankTransactionWithAllocations) => (
-              <span className="text-xs text-muted-foreground">{bankAccountsById.get(t.bankAccountId)?.name ?? t.bankAccountId}</span>
+              <span className="block max-w-[16rem] truncate text-xs text-muted-foreground" title={bankAccountsById.get(t.bankAccountId)?.name ?? undefined}>
+                {bankAccountsById.get(t.bankAccountId)?.name ?? t.bankAccountId}
+              </span>
             ),
           } satisfies DataTableColumn<BankTransactionWithAllocations>,
         ]
@@ -78,26 +89,29 @@ export function BankTransactionTable({ transactions, bankAccountsById, showAccou
       key: 'in',
       header: 'Money in',
       align: 'right',
+      headClassName: 'w-[8.5rem]',
       sortValue: (t) => (t.direction === 'debit' ? t.amount : 0),
-      cell: (t) => (t.direction === 'debit' ? <Amount value={t.amount} plain className="text-sm text-positive" /> : <span className="text-xs text-muted-foreground">&mdash;</span>),
+      cell: (t) => (t.direction === 'debit' ? <Amount value={t.amount} plain className="text-sm" /> : <span className="text-xs text-muted-foreground">&mdash;</span>),
     },
     {
       key: 'out',
       header: 'Money out',
       align: 'right',
+      headClassName: 'w-[8.5rem]',
       sortValue: (t) => (t.direction === 'credit' ? t.amount : 0),
       cell: (t) => (t.direction === 'credit' ? <Amount value={t.amount} plain className="text-sm" /> : <span className="text-xs text-muted-foreground">&mdash;</span>),
     },
     {
       key: 'status',
       header: 'Status',
+      headClassName: 'w-[7.5rem]',
       sortValue: (t) => t.status,
-      cell: (t) => <StatusBadge status={t.status} />,
+      cell: (t) => <StatusBadge status={t.status} className="whitespace-nowrap" />,
     },
     {
       key: 'actions',
       header: '',
-      headClassName: 'w-24',
+      headClassName: 'w-[7.5rem]',
       cell: (t) => (
         <div className="flex items-center justify-end gap-1">
           <Button
@@ -134,6 +148,7 @@ export function BankTransactionTable({ transactions, bankAccountsById, showAccou
       initialSortKey="date"
       initialSortDirection="desc"
       pageSize={15}
+      toolbar={toolbar}
       filters={[
         {
           key: 'status',
