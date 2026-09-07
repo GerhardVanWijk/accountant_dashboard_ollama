@@ -4,6 +4,8 @@
 
 ## DASHBOARD V3 (branch `accounting-page-visual-refinement-2026-09-07`, commit `a3bbf28`) — 2026-09-07
 
+**SHIPPED 2026-09-07 FINAL COGS VERIFICATION** — on explicit user instruction ahead of human browser QA, `dashboard-v3-final-cogs-verification-2026-09-07` was fast-forward-merged → `main` (`8f434cf..305d901`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Reporting/read-model classification only — no migration, no DB write, no posting mutation. Dashboard realized stock margin now reuses the Income Statement COGS classifier, including category COGS accounts `5000`-`5049` while excluding `5050` inventory adjustment. **Post-deploy browser QA of Dashboard V3 is still owed.**
+
 **SHIPPED 2026-09-07** — on explicit user instruction ahead of human browser QA, fast-forward-merged → `main` (`1362248..a3bbf28`, carried alongside the accounting-page pass below) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Frontend + read-model only — no schema, migration, RPC or posting change; every figure still comes from already-posted journal entries via `calculateMonthlyFinancials`.
 
 - `MonthlyFinancials` splits `expenses` → `cogs` + `operatingExpenses`, keyed on the existing `COST_OF_GOODS_SOLD_ACCOUNT_CODE` (reused from the income-statement service); the total is unchanged.
