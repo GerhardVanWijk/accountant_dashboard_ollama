@@ -3,6 +3,7 @@ import type { NewStockAdjustmentLine, Product, Warehouse } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect, ProductCombobox } from '@/components/app/combobox';
+import { useProductCategories } from '../hooks/useProductCategories';
 import { Amount } from '@/components/app/figure';
 
 export interface StockAdjustmentLinesEditorProps {
@@ -41,6 +42,7 @@ export function StockAdjustmentLinesEditor({
   warehouses,
   disabled = false,
 }: StockAdjustmentLinesEditorProps) {
+  const { categories } = useProductCategories();
   const trackedProducts = products.filter((p) => p.trackInventory);
 
   function updateLine(index: number, patch: Partial<NewStockAdjustmentLine>) {
@@ -103,6 +105,9 @@ export function StockAdjustmentLinesEditor({
               <div className="col-span-2 sm:col-span-1">
                 <ProductCombobox
                   products={trackedProducts}
+                  categories={categories}
+                  context="inventory"
+                  warehouseId={line.warehouseId || undefined}
                   value={line.productId || null}
                   onChange={(productId) => selectProduct(index, productId ?? '')}
                   customLineLabel={null}

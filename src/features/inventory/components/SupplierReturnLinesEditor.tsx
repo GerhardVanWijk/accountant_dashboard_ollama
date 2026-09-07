@@ -3,6 +3,7 @@ import type { NewSupplierReturnLine, Product, TaxRate, Warehouse } from '@/types
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect, ProductCombobox } from '@/components/app/combobox';
+import { useProductCategories } from '../hooks/useProductCategories';
 import { Amount } from '@/components/app/figure';
 
 export interface SupplierReturnLinesEditorProps {
@@ -36,6 +37,7 @@ function computeLine(quantity: number, unitPrice: number, taxRateId: string | un
  * anything).
  */
 export function SupplierReturnLinesEditor({ lines, onChange, products, warehouses, taxRates, disabled = false }: SupplierReturnLinesEditorProps) {
+  const { categories } = useProductCategories();
   function updateLine(index: number, patch: Partial<NewSupplierReturnLine>) {
     const merged = { ...lines[index], ...patch };
     const { lineTotal, taxAmount } = computeLine(merged.quantity, merged.unitPrice, merged.taxRateId, taxRates);
@@ -92,6 +94,9 @@ export function SupplierReturnLinesEditor({ lines, onChange, products, warehouse
             <div className="col-span-2 sm:col-span-1">
               <ProductCombobox
                 products={products}
+                categories={categories}
+                context="inventory"
+                warehouseId={line.warehouseId || undefined}
                 value={line.productId || null}
                 onChange={(productId) => selectProduct(index, productId ?? '')}
                 customLineLabel={null}

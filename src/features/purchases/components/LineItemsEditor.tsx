@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect, ProductCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
+import { useProductCategories } from '@/features/inventory/hooks/useProductCategories';
 import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS } from '@/features/assets/constants';
 
 export interface LineItemsEditorProps {
@@ -91,6 +92,7 @@ export function LineItemsEditor({
   disabled = false,
   allowFixedAssetCapitalization = false,
 }: LineItemsEditorProps) {
+  const { categories } = useProductCategories();
   const showWarehouseColumn = warehouses.length > 1;
   const showAssetColumn = allowFixedAssetCapitalization;
   /**
@@ -218,6 +220,9 @@ export function LineItemsEditor({
               <div className="col-span-2 sm:col-span-1">
                 <ProductCombobox
                   products={products}
+                  categories={categories}
+                  context="purchase"
+                  warehouseId={item.warehouseId}
                   value={item.productId ?? null}
                   onChange={(productId) => selectProduct(index, productId)}
                   disabled={disabled || Boolean(item.fixedAssetDetails)}

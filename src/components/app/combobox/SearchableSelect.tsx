@@ -24,10 +24,12 @@ export interface SearchableSelectOption {
   /** Extra text folded into the search match (SKU, code, barcode, …). */
   keywords?: string;
   disabled?: boolean;
-  /** Right-aligned metadata in the row (e.g. "On hand: 12"). */
+  /** Right-aligned metadata in the row (e.g. "On hand: 12" or a stacked stat block). */
   meta?: ReactNode;
   /** Leading icon/element in the row. */
   icon?: ReactNode;
+  /** Draw a divider above this row — used to set a "Custom line" action apart from real products. */
+  dividerBefore?: boolean;
 }
 
 export interface SearchableSelectProps {
@@ -51,6 +53,10 @@ export interface SearchableSelectProps {
   className?: string;
   /** Extra class on the trigger button (width overrides live here). */
   triggerClassName?: string;
+  /** Extra class on the popover content (e.g. a min-width for rich rows). */
+  contentClassName?: string;
+  /** Rendered between the search input and the result list (e.g. a category filter). */
+  headerSlot?: ReactNode;
   'aria-label'?: string;
 }
 
@@ -89,6 +95,8 @@ export function SearchableSelect({
   name,
   className,
   triggerClassName,
+  headerSlot,
+  contentClassName,
   'aria-label': ariaLabel,
 }: SearchableSelectProps) {
   const items = useMemo<OptionItem[]>(
@@ -144,8 +152,11 @@ export function SearchableSelect({
         )}
       </div>
 
-      <ComboboxContent>
+      <ComboboxContent className={contentClassName}>
         <ComboboxInput placeholder={searchPlaceholder} />
+        {headerSlot ? (
+          <div className="border-b border-border px-2 py-1.5">{headerSlot}</div>
+        ) : null}
         {loading ? (
           <div className="flex items-center justify-center gap-2 px-3 py-6 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -156,8 +167,13 @@ export function SearchableSelect({
             <ComboboxEmpty>{emptyMessage}</ComboboxEmpty>
             <ComboboxList>
               {(item: OptionItem) => (
-                <ComboboxItem key={item.value} value={item} disabled={item.disabled}>
-                  <span className="flex min-w-0 flex-1 flex-col">
+                <ComboboxItem
+                  key={item.value}
+                  value={item}
+                  disabled={item.disabled}
+                  className={cn('items-start', item.dividerBefore && 'mt-1 border-t border-border pt-2')}
+                >
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="flex min-w-0 items-center gap-2">
                       {item.icon}
                       <span className="truncate font-medium">{item.label}</span>
@@ -169,7 +185,7 @@ export function SearchableSelect({
                     ) : null}
                   </span>
                   {item.meta ? (
-                    <span className="ml-2 shrink-0 text-xs text-muted-foreground tabular-nums">
+                    <span className="ml-3 flex shrink-0 flex-col items-end gap-0.5 text-xs text-muted-foreground tabular-nums">
                       {item.meta}
                     </span>
                   ) : null}

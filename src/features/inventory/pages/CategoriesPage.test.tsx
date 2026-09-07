@@ -53,6 +53,18 @@ describe('CategoriesPage', () => {
     expect(screen.getByText('With account mappings')).toBeInTheDocument();
   });
 
+  it('derives the Products count from products.category_id (not the free-text field), company-scoped', () => {
+    renderPage();
+    // p1 → c1 (Furniture); p2 has no categoryId → uncategorised
+    const furnitureRow = screen.getByText('Furniture').closest('tr')!;
+    expect(furnitureRow).toHaveTextContent('1');
+    const stationeryRow = screen.getByText('Stationery').closest('tr')!;
+    expect(stationeryRow).toHaveTextContent('0');
+    // Uncategorised = count of products with category_id IS NULL
+    const uncategorised = screen.getByText('Uncategorised products').closest('div')!;
+    expect(uncategorised).toHaveTextContent('1');
+  });
+
   it('shows the empty state', () => {
     catHook.mockReturnValue({
       categories: [],

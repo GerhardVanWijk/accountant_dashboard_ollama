@@ -3,6 +3,7 @@ import type { NewStockTransferLine, Product } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { ProductCombobox } from '@/components/app/combobox';
+import { useProductCategories } from '../hooks/useProductCategories';
 import { Amount } from '@/components/app/figure';
 
 export interface StockTransferLinesEditorProps {
@@ -32,6 +33,7 @@ function totalCost(line: NewStockTransferLine): number {
  * context, not the number that will post.
  */
 export function StockTransferLinesEditor({ lines, onChange, products, disabled = false }: StockTransferLinesEditorProps) {
+  const { categories } = useProductCategories();
   const trackedProducts = products.filter((p) => p.trackInventory);
 
   function updateLine(index: number, patch: Partial<NewStockTransferLine>) {
@@ -78,6 +80,8 @@ export function StockTransferLinesEditor({ lines, onChange, products, disabled =
             <div className="col-span-2 sm:col-span-1">
               <ProductCombobox
                 products={trackedProducts}
+                categories={categories}
+                context="inventory"
                 value={line.productId || null}
                 onChange={(productId) => selectProduct(index, productId ?? '')}
                 customLineLabel={null}

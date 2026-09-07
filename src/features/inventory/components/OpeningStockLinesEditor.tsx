@@ -3,6 +3,7 @@ import type { NewOpeningStockLine, Product, Warehouse } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect, ProductCombobox } from '@/components/app/combobox';
+import { useProductCategories } from '../hooks/useProductCategories';
 import { Amount } from '@/components/app/figure';
 
 export interface OpeningStockLinesEditorProps {
@@ -30,6 +31,7 @@ function totalCost(line: NewOpeningStockLine): number {
  * this line sets).
  */
 export function OpeningStockLinesEditor({ lines, onChange, products, warehouses, disabled = false }: OpeningStockLinesEditorProps) {
+  const { categories } = useProductCategories();
   const trackedProducts = products.filter((p) => p.trackInventory);
 
   function updateLine(index: number, patch: Partial<NewOpeningStockLine>) {
@@ -73,6 +75,9 @@ export function OpeningStockLinesEditor({ lines, onChange, products, warehouses,
             <div className="col-span-2 sm:col-span-1">
               <ProductCombobox
                 products={trackedProducts}
+                categories={categories}
+                context="inventory"
+                warehouseId={line.warehouseId || undefined}
                 value={line.productId || null}
                 onChange={(productId) => updateLine(index, { productId: productId ?? '' })}
                 customLineLabel={null}

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect, ProductCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
+import { useProductCategories } from '@/features/inventory/hooks/useProductCategories';
 import { computeLine } from '../utils/lineItemCalculations';
 
 export interface SalesLineItemsEditorProps {
@@ -69,6 +70,7 @@ export function SalesLineItemsEditor({
   onHandFor,
   disabled = false,
 }: SalesLineItemsEditorProps) {
+  const { categories } = useProductCategories();
   const showWarehouseColumn = warehouses.length > 1;
 
   /**
@@ -189,6 +191,10 @@ export function SalesLineItemsEditor({
             <div className="col-span-2 sm:col-span-1">
               <ProductCombobox
                 products={products}
+                categories={categories}
+                context="sales"
+                warehouseId={item.warehouseId}
+                onHandFor={onHandFor}
                 value={item.productId ?? null}
                 onChange={(productId) => selectProduct(index, productId)}
                 disabled={disabled}

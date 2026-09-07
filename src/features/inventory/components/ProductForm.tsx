@@ -8,12 +8,16 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
-import { EnumSelect } from '@/components/app/combobox';
+import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
 import { FormBody, FormFooter } from '@/components/app/form';
 import { UOM_OPTIONS, INVENTORY_CURRENCY } from '../constants';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
+import { useProductCategories } from '../hooks/useProductCategories';
 import { FIFO_VALUATION_ENABLED } from '@/config/featureFlags';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
+
+/** Sentinel for the "No category" choice — SearchableSelect needs a non-empty value to render the selected state. */
+const NO_CATEGORY = '__none__';
 
 function isNonNegativeNumber(value: string): boolean {
   return value.trim() !== '' && !Number.isNaN(Number(value)) && Number(value) >= 0;
@@ -24,7 +28,7 @@ const productSchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
   description: z.string().trim().optional(),
   type: z.enum(['good', 'service']),
-  category: z.string().trim().optional(),
+  categoryId: z.string().optional(),
   uom: z.string().trim().optional(),
   barcode: z.string().trim().optional(),
   costPrice: z.string().refine(isNonNegativeNumber, { message: 'Cost price must be 0 or more' }),
@@ -56,7 +60,7 @@ function toDefaultValues(product?: Product): ProductFormValues {
     name: product?.name ?? '',
     description: product?.description ?? '',
     type: product?.type ?? 'good',
-    category: product?.category ?? '',
+    categoryId: product?.categoryId ?? '',
     uom: product?.uom ?? 'EA',
     barcode: product?.barcode ?? '',
     costPrice: String(product?.costPrice ?? 0),
@@ -79,6 +83,10 @@ function toDefaultValues(product?: Product): ProductFormValues {
  */
 export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: ProductFormProps) {
   const { taxRates } = useTaxRates();
+  const { categories } = useProductCategories();
+  const categoryOptions = categories
+    .filter((c) => c.isActive || c.id === product?.categoryId)
+    .map((c) => ({ value: c.id, label: c.name }));
   const {
     register,
     handleSubmit,
@@ -104,7 +112,11 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
       name: data.name,
       description: data.description || undefined,
       type: data.type as ProductType,
-      category: data.category || undefined,
+      // category_id is authoritative; the free-text `category` is written as
+      // a denormalized mirror of the chosen category's name so the legacy
+      // column stays consistent and never becomes a second source of truth.
+      categoryId: data.categoryId || undefined,
+      category: categories.find((c) => c.id === data.categoryId)?.name ?? '',
       uom: data.uom || undefined,
       barcode: data.barcode || undefined,
       costPrice: Number(data.costPrice),
@@ -159,7 +171,21 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
         </Field>
         <Field>
           <FieldLabel htmlFor="category">Category</FieldLabel>
-          <Input id="category" {...register('category')} />
+          <Controller
+            control={control}
+            name="categoryId"
+            render={({ field }) => (
+              <SearchableSelect
+                id="category"
+                value={field.value || NO_CATEGORY}
+                onChange={(v) => field.onChange(v && v !== NO_CATEGORY ? v : '')}
+                options={[{ value: NO_CATEGORY, label: 'No category' }, ...categoryOptions]}
+                placeholder="No category"
+                searchPlaceholder="Search categories…"
+                aria-label="Category"
+              />
+            )}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="uom">Unit of Measure</FieldLabel>

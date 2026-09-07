@@ -20,7 +20,14 @@ interface ProductRow {
   barcode: string | null;
   uom: string | null;
   category: string | null;
+  category_id: string | null;
   valuation_method: string | null;
+  sales_description: string | null;
+  purchase_description: string | null;
+  sales_account_id: string | null;
+  inventory_account_id: string | null;
+  cogs_account_id: string | null;
+  purchase_account_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -44,7 +51,14 @@ function rowToProduct(row: ProductRow): Product {
     barcode: row.barcode ?? undefined,
     uom: row.uom ?? undefined,
     category: row.category ?? undefined,
+    categoryId: row.category_id ?? undefined,
     valuationMethod: (row.valuation_method as Product['valuationMethod']) ?? undefined,
+    salesDescription: row.sales_description ?? undefined,
+    purchaseDescription: row.purchase_description ?? undefined,
+    salesAccountId: row.sales_account_id ?? undefined,
+    inventoryAccountId: row.inventory_account_id ?? undefined,
+    cogsAccountId: row.cogs_account_id ?? undefined,
+    purchaseAccountId: row.purchase_account_id ?? undefined,
   };
 }
 
@@ -63,8 +77,19 @@ function productToRow(entity: Partial<Product>): Record<string, unknown> {
   if (entity.status !== undefined) row.status = entity.status;
   if (entity.barcode !== undefined) row.barcode = entity.barcode;
   if (entity.uom !== undefined) row.uom = entity.uom;
-  if (entity.category !== undefined) row.category = entity.category;
+  if (entity.category !== undefined) row.category = entity.category || null;
+  // `category_id` (FK to product_categories) is the authoritative link;
+  // `category` (text) is kept as a denormalized mirror — the form writes
+  // both, so the legacy column never diverges. An empty / absent id clears
+  // the link to NULL (an empty string is not a valid FK).
+  if (entity.categoryId !== undefined) row.category_id = entity.categoryId || null;
   if (entity.valuationMethod !== undefined) row.valuation_method = entity.valuationMethod;
+  if (entity.salesDescription !== undefined) row.sales_description = entity.salesDescription || null;
+  if (entity.purchaseDescription !== undefined) row.purchase_description = entity.purchaseDescription || null;
+  if (entity.salesAccountId !== undefined) row.sales_account_id = entity.salesAccountId || null;
+  if (entity.inventoryAccountId !== undefined) row.inventory_account_id = entity.inventoryAccountId || null;
+  if (entity.cogsAccountId !== undefined) row.cogs_account_id = entity.cogsAccountId || null;
+  if (entity.purchaseAccountId !== undefined) row.purchase_account_id = entity.purchaseAccountId || null;
   return row;
 }
 
