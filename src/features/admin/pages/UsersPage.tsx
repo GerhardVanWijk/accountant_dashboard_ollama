@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect } from '@/components/app/combobox';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/shadcn/toggle-group';
 import { useAuthStore } from '@/stores/authStore';
+import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import type { CompanyInvitation, CreatedInvitation, Permission, Profile, ProfileRole, Role, UserRoleAssignment } from '@/types';
 import { profileService, roleService, userRoleService, permissionService } from '@/features/auth/services';
 import { invitationService } from '@/features/invitations/services';
@@ -631,6 +632,7 @@ function RolesPanel({ companyId, actorId, roles, assignments, canCreate, canUpda
 export function UsersPage() {
   const companyId = useAuthStore((s) => s.profile?.companyId);
   const actorId = useAuthStore((s) => s.profile?.id);
+  useLogSensitiveAccess('User management');
 
   const [users, setUsers] = useState<Profile[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);

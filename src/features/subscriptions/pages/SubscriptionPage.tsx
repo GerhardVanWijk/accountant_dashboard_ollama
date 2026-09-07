@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
 import { Seo } from '@/lib/seo/Seo';
+import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import {
   ENTITLEMENT_LABELS,
   PLAN_CATALOGUE,
@@ -36,6 +37,7 @@ const NON_CORE_ORDER: EntitlementKey[] = [
  * shows the honest "not on a managed plan" state.
  */
 export function SubscriptionPage() {
+  useLogSensitiveAccess('Plan & billing');
   const subscription = useSubscription();
   const planCode = usePlanCode();
   const resolvedPlan = planCode ? PLAN_CATALOGUE.find((p) => p.code === planCode) : undefined;

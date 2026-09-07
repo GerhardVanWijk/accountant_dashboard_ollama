@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import type { AuditLogAccessEntry, Profile } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/app/format';
 
 export interface AccessLogTableProps {
   entries: AuditLogAccessEntry[];
-  /** actorId -> a real Profile, same resolution pattern as AuditTrailPage's profilesById — falls back to the raw id when unresolved, never a fabricated name. */
   profilesById: Map<string, Profile>;
 }
 
@@ -13,27 +14,45 @@ function displayName(actorId: string | undefined, profilesById: Map<string, Prof
   if (!actorId) return 'Unknown';
   const profile = profilesById.get(actorId);
   if (!profile) return actorId;
-  const name = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
-  return name || profile.email || actorId;
+  return [profile.firstName, profile.lastName].filter(Boolean).join(' ') || profile.email || actorId;
+}
+
+const RESULT_META: Record<string, { label: string; className: string }> = {
+  allowed: { label: 'Allowed', className: 'bg-status-positive-muted text-status-positive' },
+  denied_permission: { label: 'Permission denied', className: 'bg-status-negative-muted text-status-negative' },
+  denied_rls: { label: 'Blocked by policy', className: 'bg-status-warning-muted text-status-warning' },
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  view: 'Opened area',
+  access_denied: 'Access denied',
+  suspended_access_attempt: 'Suspended-workspace attempt',
+};
+
+function reasonFor(e: AuditLogAccessEntry): string {
+  if (e.result === 'denied_permission') {
+    const feature = typeof e.detail?.feature === 'string' ? e.detail.feature : undefined;
+    return feature ? `Missing permission: ${feature}` : 'Missing permission';
+  }
+  if (e.result === 'denied_rls') return 'Blocked by a database security policy';
+  return '—';
 }
 
 /**
- * Access checkpoints, re-skinned onto the shared DataTable (search/filter/
- * sort, entirely absent before this pass) — mirrors AuditTrailTable's shape
- * for consistency between the two "who did what" pages, while keeping this
- * log's real, distinct fields (result, tableName, detail) rather than
- * conflating it with the business Audit Trail.
+ * Access checkpoints (`audit_logs_access`) — WHO tried to reach a protected
+ * area and whether it was allowed or denied. A different log from the
+ * business Audit Trail; not conflated with it.
  */
 export function AccessLogTable({ entries, profilesById }: AccessLogTableProps) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const tables = [...new Set(entries.map((e) => e.tableName))].sort();
+  const areas = [...new Set(entries.map((e) => e.tableName))].sort();
 
   const columns: DataTableColumn<AuditLogAccessEntry>[] = [
     {
       key: 'when',
-      header: 'When',
+      header: 'Time',
       sortValue: (e) => e.occurredAt,
-      cell: (e) => <span className="figure text-muted-foreground tabular-nums">{formatDateTime(e.occurredAt)}</span>,
+      cell: (e) => <span className="figure tabular-nums text-muted-foreground">{formatDateTime(e.occurredAt)}</span>,
     },
     {
       key: 'user',
@@ -41,13 +60,37 @@ export function AccessLogTable({ entries, profilesById }: AccessLogTableProps) {
       sortValue: (e) => displayName(e.actorId, profilesById),
       cell: (e) => <span className="font-medium text-foreground">{displayName(e.actorId, profilesById)}</span>,
     },
-    { key: 'action', header: 'Action', sortValue: (e) => e.action, cell: (e) => e.action },
-    { key: 'table', header: 'Table', hideBelowMd: true, sortValue: (e) => e.tableName, cell: (e) => <span className="figure text-xs text-muted-foreground">{e.tableName}</span> },
+    {
+      key: 'action',
+      header: 'Action',
+      hideBelowMd: true,
+      sortValue: (e) => e.action,
+      cell: (e) => ACTION_LABELS[e.action] ?? e.action,
+    },
+    {
+      key: 'area',
+      header: 'Area / resource',
+      sortValue: (e) => e.tableName,
+      cell: (e) => <span className="text-foreground">{e.tableName}</span>,
+    },
     {
       key: 'result',
       header: 'Result',
       sortValue: (e) => e.result,
-      cell: (e) => <span className={e.result === 'allowed' ? 'text-status-positive' : 'text-status-negative'}>{e.result}</span>,
+      cell: (e) => {
+        const meta = RESULT_META[e.result] ?? { label: e.result, className: 'bg-muted text-muted-foreground' };
+        return (
+          <Badge variant="outline" className={cn('border-transparent', meta.className)}>
+            {meta.label}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: 'reason',
+      header: 'Reason',
+      hideBelowLg: true,
+      cell: (e) => <span className="text-xs text-muted-foreground">{reasonFor(e)}</span>,
     },
   ];
 
@@ -56,15 +99,15 @@ export function AccessLogTable({ entries, profilesById }: AccessLogTableProps) {
       rows={entries}
       columns={columns}
       getRowKey={(e) => e.id}
-      searchable={(e) => [displayName(e.actorId, profilesById), e.action, e.tableName].join(' ')}
-      searchPlaceholder="Search by user, action or table"
+      searchable={(e) => [displayName(e.actorId, profilesById), e.action, e.tableName, e.result].join(' ')}
+      searchPlaceholder="Search by user, area or result"
       initialSortKey="when"
       initialSortDirection="desc"
       filters={[
         {
-          key: 'table',
-          label: 'All tables',
-          options: tables.map((t) => ({ value: t, label: t })),
+          key: 'area',
+          label: 'All areas',
+          options: areas.map((t) => ({ value: t, label: t })),
           match: (e, value) => e.tableName === value,
         },
         {
@@ -72,19 +115,23 @@ export function AccessLogTable({ entries, profilesById }: AccessLogTableProps) {
           label: 'All results',
           options: [
             { value: 'allowed', label: 'Allowed' },
-            { value: 'denied', label: 'Denied' },
+            { value: 'denied', label: 'Denied (any)' },
+            { value: 'denied_permission', label: 'Permission denied' },
+            { value: 'denied_rls', label: 'Blocked by policy' },
           ],
-          match: (e, value) => e.result === value,
+          match: (e, value) => (value === 'denied' ? e.result.startsWith('denied') : e.result === value),
         },
       ]}
-      emptyTitle="No access log entries yet"
-      emptyDescription="Access checkpoints logged by the app will appear here."
-      onRowClick={(e) => (e.detail && Object.keys(e.detail).length > 0 ? setOpenId((current) => (current === e.id ? null : e.id)) : undefined)}
-      getRowAriaLabel={(e) => (e.detail && Object.keys(e.detail).length > 0 ? `Show captured detail for this ${e.action} on ${e.tableName}` : `${e.action} on ${e.tableName}, no further detail captured`)}
+      emptyTitle="No access events yet"
+      emptyDescription="Denied permission attempts and entries into sensitive areas will appear here."
+      onRowClick={(e) => (e.detail && Object.keys(e.detail).length > 0 ? setOpenId((c) => (c === e.id ? null : e.id)) : undefined)}
+      getRowAriaLabel={(e) => `${e.action} on ${e.tableName} — ${e.result}`}
       renderDetail={(e) =>
         e.id === openId && e.detail ? (
           <div className="px-4 pb-4">
-            <pre className="overflow-x-auto rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">{JSON.stringify(e.detail, null, 2)}</pre>
+            <pre className="overflow-x-auto rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+              {JSON.stringify(e.detail, null, 2)}
+            </pre>
           </div>
         ) : null
       }

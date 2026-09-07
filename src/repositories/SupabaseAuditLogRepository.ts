@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuditLogEntry, ID } from '@/types';
-import type { IAuditLogRepository } from './IAuditLogRepository';
+import type { AuditLogPage, AuditLogPageQuery, IAuditLogRepository } from './IAuditLogRepository';
 import { isInvalidUuidError } from './supabaseErrors';
 
 interface AuditLogRow {
@@ -86,6 +86,31 @@ export class SupabaseAuditLogRepository implements IAuditLogRepository {
       throw new Error(`SupabaseAuditLogRepository.getById: ${error.message}`);
     }
     return data ? rowToAuditLogEntry(data as AuditLogRow) : undefined;
+  }
+
+  async getPage(query: AuditLogPageQuery): Promise<AuditLogPage> {
+    const from = query.page * query.pageSize;
+    let q = this.client
+      .from('audit_log_entries')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, from + query.pageSize - 1);
+
+    if (query.module) q = q.eq('module', query.module);
+    if (query.action) q = q.eq('action', query.action);
+    if (query.actions?.length) q = q.in('action', query.actions);
+    if (query.userId) q = q.eq('user_id', query.userId);
+    if (query.recordType) q = q.eq('record_type', query.recordType);
+    if (query.from) q = q.gte('created_at', query.from);
+    if (query.to) q = q.lte('created_at', query.to);
+    if (query.search?.trim()) {
+      const t = query.search.trim().replace(/[%,()]/g, '');
+      q = q.or(`record_id.ilike.%${t}%,reason.ilike.%${t}%`);
+    }
+
+    const { data, error, count } = await q;
+    if (error) throw new Error(`SupabaseAuditLogRepository.getPage: ${error.message}`);
+    return { rows: (data as AuditLogRow[]).map(rowToAuditLogEntry), total: count ?? 0 };
   }
 
   async getByRecord(recordType: string, recordId: ID): Promise<AuditLogEntry[]> {

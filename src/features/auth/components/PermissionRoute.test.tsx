@@ -1,6 +1,12 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+
+vi.mock('../services', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services')>()),
+  auditLogAccessService: { logDenied: vi.fn(), logSensitiveView: vi.fn(), logEvent: vi.fn(), log: vi.fn() },
+}));
+
 import { PermissionRoute } from './PermissionRoute';
 import { useAuthStore } from '@/stores/authStore';
 import { usePermissionStore } from '../stores/permissionStore';

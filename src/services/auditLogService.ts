@@ -1,5 +1,9 @@
 import type { AuditAction, AuditLogEntry, ID } from '@/types';
-import type { IAuditLogRepository } from '@/repositories/IAuditLogRepository';
+import type {
+  AuditLogPage,
+  AuditLogPageQuery,
+  IAuditLogRepository,
+} from '@/repositories/IAuditLogRepository';
 import { SupabaseAuditLogRepository } from '@/repositories/SupabaseAuditLogRepository';
 import { supabase } from '@/config/supabase';
 
@@ -37,6 +41,40 @@ export class AuditLogService {
 
   async getAll(): Promise<AuditLogEntry[]> {
     return this.repository.getAll();
+  }
+
+  /** Filtered, newest-first, paged — the Audit Trail page never loads the whole history. */
+  async getPage(query: AuditLogPageQuery): Promise<AuditLogPage> {
+    return this.repository.getPage(query);
+  }
+
+  /**
+   * Headline counts for the Audit Trail KPI cards, all since `sinceIso`
+   * (default: 30 days ago). Four count-only queries, never row payloads.
+   */
+  async getKpis(sinceIso?: string): Promise<{
+    events: number;
+    financialPostings: number;
+    securityAdmin: number;
+    reversals: number;
+  }> {
+    const from = sinceIso ?? new Date(Date.now() - 30 * 86_400_000).toISOString();
+    const base = { page: 0, pageSize: 1, from } as const;
+    const [events, financialPostings, securityAdmin, reversals] = await Promise.all([
+      this.repository.getPage({ ...base }),
+      this.repository.getPage({
+        ...base,
+        actions: ['posted', 'bank_reconciled', 'stock_take_posted', 'supplier_return_posted', 'delivery_note_posted', 'return_note_posted', 'tax_return_finalised', 'period_closed', 'financial_year_closed'],
+      }),
+      this.repository.getPage({ ...base, module: 'admin' }),
+      this.repository.getPage({ ...base, actions: ['reversed', 'cancelled', 'delivery_note_cancelled', 'return_note_cancelled'] }),
+    ]);
+    return {
+      events: events.total,
+      financialPostings: financialPostings.total,
+      securityAdmin: securityAdmin.total,
+      reversals: reversals.total,
+    };
   }
 
   async getForRecord(recordType: string, recordId: ID): Promise<AuditLogEntry[]> {

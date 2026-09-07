@@ -1,20 +1,23 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { AuditTrailPage } from './AuditTrailPage';
-import { auditLogService } from '@/services/auditLogService';
-import { profileService } from '@/features/auth/services';
-import { useAuthStore } from '@/stores/authStore';
 import type { AuditLogEntry, Profile } from '@/types';
 
 vi.mock('@/services/auditLogService', () => ({
-  auditLogService: { getAll: vi.fn() },
+  auditLogService: { getPage: vi.fn(), getKpis: vi.fn() },
 }));
 vi.mock('@/features/auth/services', () => ({
   profileService: { getByCompany: vi.fn() },
+  auditLogAccessService: { logSensitiveView: vi.fn(), logDenied: vi.fn(), logEvent: vi.fn() },
 }));
 
-const mockedGetAll = vi.mocked(auditLogService.getAll);
+import { AuditTrailPage } from './AuditTrailPage';
+import { auditLogService } from '@/services/auditLogService';
+import { profileService, auditLogAccessService } from '@/features/auth/services';
+import { useAuthStore } from '@/stores/authStore';
+
+const mockedGetPage = vi.mocked(auditLogService.getPage);
+const mockedGetKpis = vi.mocked(auditLogService.getKpis);
 const mockedGetByCompany = vi.mocked(profileService.getByCompany);
 
 function makeEntry(overrides: Partial<AuditLogEntry> = {}): AuditLogEntry {
@@ -50,11 +53,12 @@ function makeProfile(overrides: Partial<Profile> = {}): Profile {
 describe('AuditTrailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAuthStore.setState({ profile: makeProfile() });
+    useAuthStore.setState({ profile: makeProfile(), status: 'authenticated' });
+    mockedGetKpis.mockResolvedValue({ events: 3, financialPostings: 1, securityAdmin: 2, reversals: 0 });
   });
 
-  it('renders the real audit log, resolving the acting user against real profile data', async () => {
-    mockedGetAll.mockResolvedValue([makeEntry()]);
+  it('renders one server page of audit events, resolving the acting user against real profile data', async () => {
+    mockedGetPage.mockResolvedValue({ rows: [makeEntry()], total: 1 });
     mockedGetByCompany.mockResolvedValue([makeProfile()]);
 
     render(
@@ -65,11 +69,25 @@ describe('AuditTrailPage', () => {
 
     await waitFor(() => expect(screen.getByText('Thandi Mokoena')).toBeInTheDocument());
     expect(screen.getByText('Suspended')).toBeInTheDocument();
-    expect(mockedGetAll).toHaveBeenCalledTimes(1);
+    expect(mockedGetPage).toHaveBeenCalled();
+    expect(mockedGetPage.mock.calls[0][0]).toMatchObject({ page: 0, pageSize: 25 });
   });
 
-  it('falls back to the raw userId when no matching profile is found, rather than inventing a name', async () => {
-    mockedGetAll.mockResolvedValue([makeEntry({ userId: 'system' })]);
+  it('logs a sensitive-area access event on mount', async () => {
+    mockedGetPage.mockResolvedValue({ rows: [], total: 0 });
+    mockedGetByCompany.mockResolvedValue([]);
+
+    render(
+      <MemoryRouter>
+        <AuditTrailPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(auditLogAccessService.logSensitiveView).toHaveBeenCalledWith('Audit trail', undefined));
+  });
+
+  it('falls back to "System" for the system sentinel actor', async () => {
+    mockedGetPage.mockResolvedValue({ rows: [makeEntry({ userId: 'system' })], total: 1 });
     mockedGetByCompany.mockResolvedValue([]);
 
     render(
@@ -81,8 +99,8 @@ describe('AuditTrailPage', () => {
     await waitFor(() => expect(screen.getByText('System')).toBeInTheDocument());
   });
 
-  it('shows an honest empty state when nothing has been logged yet', async () => {
-    mockedGetAll.mockResolvedValue([]);
+  it('shows an empty state when the filtered query returns nothing', async () => {
+    mockedGetPage.mockResolvedValue({ rows: [], total: 0 });
     mockedGetByCompany.mockResolvedValue([]);
 
     render(
@@ -91,6 +109,6 @@ describe('AuditTrailPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('No audit events yet')).toBeInTheDocument();
+    expect(await screen.findByText('No matching events')).toBeInTheDocument();
   });
 });

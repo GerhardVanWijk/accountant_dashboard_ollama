@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 
 interface ConfigLink {
   href: string;
@@ -31,6 +32,7 @@ const CONFIG_LINKS: ConfigLink[] = [
  * Settings hub) without duplicating any of those pages' forms.
  */
 export function AccountingSettingsPage() {
+  useLogSensitiveAccess('Accounting settings');
   return (
     <div className="flex flex-col gap-6">
       <PageHeader

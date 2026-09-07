@@ -6,8 +6,8 @@ The Administration section of Vertex — the pages under the sidebar's
 | Page | Route | Status | Doc |
 |---|---|---|---|
 | Users & Roles | `/admin/users` | shipped (pre-existing) | — |
-| Audit Trail | `/admin/audit-trail` | Block C | `AUDIT_TRAIL.md` |
-| Access Log | `/admin/audit` | Block C | `ACCESS_LOG.md` |
+| Audit Trail | `/admin/audit-trail` | **shipped (Block C)** | `AUDIT_TRAIL.md` |
+| Access Log | `/admin/audit` | **shipped (Block C)** | `ACCESS_LOG.md` |
 | Documents | `/documents` | **shipped (Block B)** | `COMPANY_DOCUMENTS.md` |
 | Notifications | `/notifications` + navbar bell | Block D | `NOTIFICATIONS.md` |
 | Settings | `/settings` | Block E | — |
@@ -33,7 +33,13 @@ record genuinely different things and stay separate tables.
   matrices in `AUDIT_TRAIL.md` / `ACCESS_LOG.md` / `NOTIFICATIONS.md`.
 - **B — Company Documents + private Storage:** **done** (migration 0071).
   See `COMPANY_DOCUMENTS.md`.
-- **C — Audit Trail + Access Log:** pending.
+- **C — Audit Trail + Access Log:** **done** (migration 0072). Audit
+  immutability triggers + query indexes + `log_access_event` RPC + widened
+  access-log read. Audit Trail page: server pagination + filters + KPIs +
+  before/after event detail. Access Log: `log_access_event` wired into
+  `<PermissionRoute>` denials + `useLogSensitiveAccess` on the
+  Administration sensitive pages; KPIs + result badges. See
+  `AUDIT_TRAIL.md` / `ACCESS_LOG.md`.
 - **D — Notification engine + navbar bell:** pending.
 - **E — Settings / Accounting Settings / Plan & Billing:** pending.
 - **F — Help Centre:** pending.

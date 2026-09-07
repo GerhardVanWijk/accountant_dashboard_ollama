@@ -16,6 +16,9 @@ class InMemoryAuditLogRepository implements IAuditLogRepository {
   async getByRecord(recordType: string, recordId: ID) {
     return this.entries.filter((e) => e.recordType === recordType && e.recordId === recordId);
   }
+  async getPage() {
+    return { rows: [...this.entries], total: this.entries.length };
+  }
   async create(entity: AuditLogEntry) {
     const record = { ...entity, id: entity.id || `al_${this.entries.length + 1}` };
     this.entries.push(record);

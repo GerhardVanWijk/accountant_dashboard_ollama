@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuditAccessResult, AuditLogAccessEntry, ID } from '@/types';
-import type { IAuditLogAccessRepository, LogAccessDTO } from './IAuditLogAccessRepository';
+import type {
+  IAuditLogAccessRepository,
+  LogAccessDTO,
+  LogAccessEventInput,
+} from './IAuditLogAccessRepository';
 
 interface AuditLogAccessRow {
   id: string;
@@ -62,5 +66,16 @@ export class SupabaseAuditLogAccessRepository implements IAuditLogAccessReposito
       detail: entry.detail ?? null,
     });
     if (error) throw new Error(`SupabaseAuditLogAccessRepository.log: ${error.message}`);
+  }
+
+  async logEvent(input: LogAccessEventInput): Promise<void> {
+    const { error } = await this.client.rpc('log_access_event', {
+      p_action: input.action,
+      p_area: input.area,
+      p_result: input.result,
+      p_detail: input.detail ?? {},
+      p_dedupe_window: `${input.dedupeWindowMinutes ?? 60} minutes`,
+    });
+    if (error) throw new Error(`SupabaseAuditLogAccessRepository.logEvent: ${error.message}`);
   }
 }
