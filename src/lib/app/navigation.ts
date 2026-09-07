@@ -229,7 +229,7 @@ export const navGroups: NavGroup[] = [
       { title: 'Users & Roles', href: '/admin/users', icon: UserCogIcon },
       { title: 'Audit Trail', href: '/admin/audit-trail', icon: ArchiveIcon },
       { title: 'Access Log', href: '/admin/audit', icon: KeyRoundIcon },
-      { title: 'Documents', href: '/documents', icon: FolderOpenIcon, comingSoon: true },
+      { title: 'Documents', href: '/documents', icon: FolderOpenIcon },
       { title: 'Notifications', href: '/notifications', icon: BellIcon, comingSoon: true },
       { title: 'Settings', href: '/settings', icon: SettingsIcon },
       { title: 'Accounting Settings', href: '/settings/accounting', icon: SlidersHorizontalIcon },
