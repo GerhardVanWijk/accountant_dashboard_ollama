@@ -4,14 +4,14 @@
 
 ## GLOBAL FORM UX / VISUAL REFINEMENT (branch `global-form-ux-2026-09-07`) — 2026-09-07
 
-**DONE + COMMITTED on branch. `main` untouched, NOT deployed. No migration, no DB write, no accounting effect (frontend form UX only).**
+**SHIPPED 2026-09-07** — on explicit user instruction ahead of human browser QA, `global-form-ux-2026-09-07` was fast-forward-merged → `main` (`5b878f8..f00bd21`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). No migration, no DB write, no accounting effect (frontend form UX only). **Post-deploy browser QA of the form pass (desktop/tablet/mobile) is now owed.**
 
 - **Problem:** page-hosted forms (SupplierFormPage, the Create Delivery/Return pages) stretched fields edge-to-edge on a wide monitor; ~60 hand-rolled `grid grid-cols-1 gap-4 md:grid-cols-2` copies across ~30 forms; hand-rolled `<input type="checkbox">` in 8 RHF forms.
 - **New shared primitives** (`@/components/app/form`): `FormGrid` (`columns` 1/2/3 responsive field grid), `FormField` (label+control+hint+error bundle, `span="full"`), `CheckboxField` (horizontal checkbox+label row), `FormPageLayout` (centred, `max-w-4xl` standard / `max-w-6xl` document, optional `backTo`). Decision taken with user: **centred card, max-w-4xl / 6xl**; **full sweep, all forms**.
 - **Swept** every form named in the brief (Inventory ×8, Purchases ×3, Sales ×5, Customer, Supplier ×2, Accounting ×2, Banking ×2, Company, Assets ×2, Tax ×3, Leases, RelatedParties, Employees ×2, FX) → `FormGrid` + `CheckboxField`; SupplierFormPage / CreateDeliveryNotePage / CreateReturnNotePage → `FormPageLayout` (last two also dropped bespoke `h-9` input strings for shared `Input`/`Field`). Document forms: metadata grid + Notes capped `max-w-3xl`, line table full width.
 - **N/A:** Radio groups (no component, 1 non-form usage); Services module (doesn't exist); the "27 ad-hoc dialogs" (already on FormShell since P3D–P3G).
-- Gate: type-check · lint(`--max-warnings 0`) · **2953 tests** (+10) · build ALL PASS. Accounting byte-identical. Doc: `GLOBAL_FORM_UX.md`.
-- **NEXT: browser QA of the form pass (desktop/tablet/mobile), then merge.**
+- Gate: type-check · lint(`--max-warnings 0`) · **2953 tests** (+10) · build ALL PASS. Accounting byte-identical. Doc: `GLOBAL_FORM_UX.md`. `DO_NOT_BREAK.md` gained a "use FormGrid" rule.
+- **NEXT: post-deploy browser QA of the form pass (desktop/tablet/mobile).**
 
 ---
 
