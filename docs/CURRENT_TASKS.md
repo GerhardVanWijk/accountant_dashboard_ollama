@@ -2,6 +2,21 @@
 
 ---
 
+## ACCOUNTING REGISTER PAGES — SHARED VISUAL LANGUAGE (branch `accounting-tables-visual-consistency-2026-09-07`, commit `0ec4669`) — 2026-09-07
+
+**SHIPPED 2026-09-07** — on explicit user instruction ahead of human browser QA, `accounting-tables-visual-consistency-2026-09-07` was fast-forward-merged → `main` (`c7093e2..0ec4669`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Presentation only — no migration, no DB write, no calculation / classification / balance / pagination-semantics / reconciliation / variance change. **Post-deploy browser QA (1920/1600/1440/1366/1024/tablet/mobile) of Bank Transactions, Chart of Accounts, General Ledger, Journal Entries and Trial Balance is now owed.**
+
+- Per-page refinement then a cross-page consistency pass so the five registers share page gutters, title/subtitle proportions, primary-action position, metric-card heights, filter-toolbar rhythm, table header height + row density, money alignment, badge sizing, pagination layout and responsive breakpoints — each page keeps its purpose (Bank = operational, CoA = structural, Ledger = evidence, Journals = journal-focused, Trial Balance = control/reconciliation).
+- **Chart of Accounts:** `<colgroup>` column proportions (Account name largest), stronger group-header rows, right-aligned Actions; filter toolbar taken out of its `SectionCard` and re-classed to the shared `DataTable` control spec, wrapped with the table in a `gap-4` column; page is now a bare fragment.
+- **General Ledger:** visible "Ledger account" label on the account selector (`aria-label` "Filter by account" → "Ledger account"); `headClassName` column widths; account-name + wider description truncation; bare-fragment page shell.
+- **Journal Entries:** `headClassName` column widths; description truncation widened; Value cell drops `font-medium` to match every other money cell.
+- **Trial Balance:** compact balanced/out-of-balance banner subordinate to the control totals; column widths; stronger TOTALS row; subledger cards get tonal status badges + variance emphasis only when non-zero.
+- **Bank Transactions:** metric grid gap 6 → 4; account selector moved into the `DataTable` toolbar; `headClassName` column widths; Money in no longer force-coloured.
+- Gate: type-check · lint(`--max-warnings 0`) · **2973 tests** · build ALL PASS.
+- **NEXT: post-deploy browser QA of the five register pages.**
+
+---
+
 ## DASHBOARD V3 (branch `accounting-page-visual-refinement-2026-09-07`, commit `a3bbf28`) — 2026-09-07
 
 **SHIPPED 2026-09-07 FINAL COGS VERIFICATION** — on explicit user instruction ahead of human browser QA, `dashboard-v3-final-cogs-verification-2026-09-07` was fast-forward-merged → `main` (`8f434cf..305d901`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Reporting/read-model classification only — no migration, no DB write, no posting mutation. Dashboard realized stock margin now reuses the Income Statement COGS classifier, including category COGS accounts `5000`-`5049` while excluding `5050` inventory adjustment. **Post-deploy browser QA of Dashboard V3 is still owed.**
