@@ -2,6 +2,33 @@
 
 ---
 
+## DASHBOARD V3 (branch `accounting-page-visual-refinement-2026-09-07`, commit `a3bbf28`) — 2026-09-07
+
+**SHIPPED 2026-09-07** — on explicit user instruction ahead of human browser QA, fast-forward-merged → `main` (`1362248..a3bbf28`, carried alongside the accounting-page pass below) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Frontend + read-model only — no schema, migration, RPC or posting change; every figure still comes from already-posted journal entries via `calculateMonthlyFinancials`.
+
+- `MonthlyFinancials` splits `expenses` → `cogs` + `operatingExpenses`, keyed on the existing `COST_OF_GOODS_SOLD_ACCOUNT_CODE` (reused from the income-statement service); the total is unchanged.
+- New `calculateDashboardV3Metrics` (gross/net profit, gross/net margin %, realized stock margin %) + `dashboardPeriods` (3m / 6m / 12m / financial-year / YTD / custom range helpers), both unit-tested.
+- `useDashboardData`: trailing window 12 → 24 months, exposes `lastUpdated`.
+- `DashboardPage` rebuilt: Revenue / Gross Profit / Net Profit / Cash Position KPIs; Gross Margin % / Net Margin %; Profitability trend + Cash movement charts; Receivables/Payables ageing. Drops the mock "Expense mix" / "Revenue by customer" panels. `useCanAccess` gate added.
+- Gate: type-check · lint(`--max-warnings 0`) · **2971 tests** · build ALL PASS.
+- **NEXT: post-deploy browser QA of the dashboard.**
+
+---
+
+## ACCOUNTING PAGES — VISUAL COHERENCE PASS (branch `accounting-page-visual-refinement-2026-09-07`, commit `87f4ee8`) — 2026-09-07
+
+**SHIPPED 2026-09-07** — on explicit user instruction ahead of human browser QA, fast-forward-merged → `main` (`1362248..a3bbf28`) + pushed; Cloudflare Pages auto-deploys production (`vertex-accounting.pages.dev`). Frontend/responsive only — no schema, migration, service, calculation, journal, balance, filter, search, route, action, permission, badge or pagination change.
+
+- Chart of Accounts gains the compact summary strip the other accounting list pages have (Accounts / Active / With postings — counts off loaded data, no fabricated balances).
+- `AccountTable` rebuilt on the shared `Table` primitives so header / row-height / hover / border chrome matches every `DataTable` register; the account-hierarchy / group-header logic is unchanged.
+- General Ledger: the account selector moves out of the KPI card into the table's own filter toolbar (one compact toolbar); KPI card keeps just its three figures.
+- Journals / Ledger: long descriptions truncate with a full `title=` value instead of forcing the column wide.
+- KPI strips: grid gap 6 → 4 across Journals / Ledger / Trial Balance / Financial Periods / Chart of Accounts.
+- Gate: type-check · lint(`--max-warnings 0`) · **2971 tests** · build ALL PASS.
+- **NEXT: post-deploy browser QA of the six accounting pages (1920/1600/1440/1366/1024/tablet/mobile).**
+
+---
+
 ## BANK DETAIL PANEL + NEW BANK TRANSACTION FORM UX (branch `bank-detail-panel-txn-form-ux-2026-09-07`) — 2026-09-07
 
 **SHIPPED 2026-09-07** — on explicit user instruction ahead of human browser QA, `bank-detail-panel-txn-form-ux-2026-09-07` was fast-forward-merged → `main` (`0a1755b..868817f`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Presentation/responsive UX only — no migration, no DB write, no accounting/DTO/calculation change. **Post-deploy browser QA (1920/1440/1366/1024/tablet/mobile) of the bank detail panel + the New/Edit bank transaction forms is now owed.**
