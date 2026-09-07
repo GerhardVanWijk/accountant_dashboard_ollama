@@ -20,12 +20,15 @@
  * components), never here. `admin`/`superuser` bypass all of this via
  * `useCanAccess()` (see docs/PERMISSIONS.md).
  *
- * Still deliberately ungated (no matching permission, per the brief's "Do
- * not create permissions merely because a route exists"): `/companies`
- * (company profile — admin-oriented, folded into a future settings model),
- * `/settings` + `/settings/accounting` (link-hub, real model is Block C),
- * `/help`, `/admin/superuser` (RouteGuard already confines this to
- * superusers).
+ *  - Administration module (Block G, migration 0075) added `documents`,
+ *    `notifications`, `settings`, `accounting_settings` and `billing`, and
+ *    the route gates below. `billing` has no system-role grant → admin /
+ *    superuser only.
+ *
+ * Still deliberately ungated: `/companies` (company profile — admin-
+ * oriented; edits are audited by the 0074 trigger), `/help` +
+ * `/help/:articleId` (documentation), `/admin/superuser/*` (RouteGuard
+ * already confines this to superusers).
  */
 export interface RoutePermission {
   feature: string;
@@ -117,6 +120,11 @@ export const routePermissions: Record<string, RoutePermission> = {
   '/admin/users': { feature: 'user_management', action: 'read' },
   '/admin/audit': { feature: 'audit', action: 'read' },
   '/admin/audit-trail': { feature: 'audit', action: 'read' },
+  '/documents': { feature: 'documents', action: 'read' },
+  '/notifications': { feature: 'notifications', action: 'read' },
+  '/settings': { feature: 'settings', action: 'read' },
+  '/settings/accounting': { feature: 'accounting_settings', action: 'read' },
+  '/settings/subscription': { feature: 'billing', action: 'read' },
 };
 
 /** Looks up the exact route, then its longest matching prefix (e.g. `/payroll/employees/42` under `/payroll/employees`) — same prefix convention `sectionForPath()` in `src/lib/app/navigation.ts` already uses. */

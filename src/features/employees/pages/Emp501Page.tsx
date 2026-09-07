@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock, Amount } from '@/components/app/figure';
@@ -17,6 +18,7 @@ import { getSarsTaxYear } from '../utils/sarsTaxYear';
  * PageHeader/SectionCard/FigureBlock (M13); no PAYE/UIF/SDL math here.
  */
 export function Emp501Page() {
+  useLogSensitiveAccess('Payroll — EMP501');
   const [taxYearStartYear, setTaxYearStartYear] = useState(getSarsTaxYear().start.getUTCFullYear());
   const taxYear = useMemo(() => getSarsTaxYear(new Date(Date.UTC(taxYearStartYear, 5, 1))), [taxYearStartYear]);
 

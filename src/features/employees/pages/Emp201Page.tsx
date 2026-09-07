@@ -1,5 +1,6 @@
 ﻿import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock, Amount } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
@@ -66,6 +67,7 @@ function ReconciliationCard({ label, check }: { label: string; check: PayrollCon
  * performed here.
  */
 export function Emp201Page() {
+  useLogSensitiveAccess('Payroll — EMP201');
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());

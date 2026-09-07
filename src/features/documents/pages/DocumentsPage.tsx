@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { ConfirmDialog } from '@/components/app/form';
 import { useAuthStore } from '@/stores/authStore';
+import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { profileService } from '@/features/auth/services';
 import { useCompanyDocuments } from '../hooks/useCompanyDocuments';
@@ -29,6 +30,7 @@ type Dialog =
  * (migration 0071); downloads are short-lived signed URLs.
  */
 export function DocumentsPage() {
+  useLogSensitiveAccess('Company documents');
   const companyId = useAuthStore((s) => s.profile?.companyId);
   const isSuperuser = useAuthStore((s) => s.profile?.role === 'superuser');
   const canManage = useCanAccess('documents', 'create');

@@ -1,5 +1,6 @@
 ﻿import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import { FileQuestion, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
@@ -16,6 +17,7 @@ import { SbcEligibilityForm } from '../components/SbcEligibilityForm';
 
 /** Income Tax — route `/tax/income-tax` (docs/ROUTES.md). Re-skinned onto v0's PageHeader/SectionCard/Dialog (M7); data/mutation wiring unchanged. */
 export function IncomeTaxPage() {
+  useLogSensitiveAccess('Income tax');
   const {
     financialYears,
     company,

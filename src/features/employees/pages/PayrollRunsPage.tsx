@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import { Loader2, Plus } from 'lucide-react';
 import type { PayrollRun } from '@/types';
 import { PageHeader } from '@/components/app/page-header';
@@ -36,6 +37,7 @@ function endOfMonthISO(): string {
  * PageHeader/SectionCard/DataTable/Dialog (M13).
  */
 export function PayrollRunsPage() {
+  useLogSensitiveAccess('Payroll — runs');
   const { runs, loading, error, refetch, createPayrollRun, updatePayslipOverride, deletePayrollRun, postPayrollRun } = usePayrollRuns();
   const { accounts, loading: accountsLoading } = useAccounts();
   const [dialog, setDialog] = useState<DialogState>(null);

@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { Loader2, CalendarClock } from 'lucide-react';
+import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
@@ -12,6 +13,7 @@ import { PaymentSlotCard } from '../components/PaymentSlotCard';
 
 /** Provisional Tax — route `/tax/provisional-tax`. Re-skinned onto v0's PageHeader/SectionCard (M7); data/mutation wiring unchanged. */
 export function ProvisionalTaxPage() {
+  useLogSensitiveAccess('Provisional tax');
   const { financialYears, periods, loading, error, refetch, getOrCreatePeriod, recordEstimate, payProvisionalTax, getReconciliation } = useProvisionalTax();
 
   const [selectedFinancialYearId, setSelectedFinancialYearId] = useState<string | null>(null);

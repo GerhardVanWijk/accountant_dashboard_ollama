@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import {
   LayoutDashboard,
   Building2,
@@ -41,6 +42,7 @@ const NAV: NavItem[] = [
  * profile to `/admin/superuser/*`.
  */
 export function SuperuserConsoleLayout() {
+  useLogSensitiveAccess('Superuser platform console');
   const logout = useAuthStore((s) => s.logout);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { pathname } = useLocation();

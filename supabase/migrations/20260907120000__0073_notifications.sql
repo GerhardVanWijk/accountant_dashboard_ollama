@@ -107,7 +107,7 @@ create table public.notification_mutes (
 -- tax and reconciliation stay always-on; a 'critical'-severity item in a
 -- muteable category is still shown (see notification_feed).
 create or replace function public.notification_muteable_category(p_category text) returns boolean
-language sql immutable as $$
+language sql immutable set search_path = '' as $$
   select p_category in ('inventory_integrity','budget_variance','receivable_overdue','document_expiry');
 $$;
 

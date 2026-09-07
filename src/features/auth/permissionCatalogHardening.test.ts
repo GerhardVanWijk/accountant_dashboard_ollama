@@ -215,16 +215,29 @@ describe('route gating — direct URL navigation', () => {
       'reports',
       'user_management',
       ...NEW_FEATURES,
+      // Administration module (Block G, migration 0075)
+      'documents',
+      'notifications',
+      'settings',
+      'accounting_settings',
+      'billing',
     ]);
     for (const { feature } of Object.values(routePermissions)) {
       expect(known.has(feature), `unknown feature "${feature}" in routePermissions`).toBe(true);
     }
   });
 
-  it('leaves deliberately-ungated routes ungated', () => {
+  it('gates the Administration routes (Block G, migration 0075)', () => {
+    expect(permissionForPath('/documents')).toEqual({ feature: 'documents', action: 'read' });
+    expect(permissionForPath('/notifications')).toEqual({ feature: 'notifications', action: 'read' });
+    expect(permissionForPath('/settings')).toEqual({ feature: 'settings', action: 'read' });
+    expect(permissionForPath('/settings/accounting')).toEqual({ feature: 'accounting_settings', action: 'read' });
+    expect(permissionForPath('/settings/subscription')).toEqual({ feature: 'billing', action: 'read' });
+  });
+
+  it('leaves documentation / company-profile / superuser routes ungated', () => {
     expect(permissionForPath('/companies')).toBeUndefined();
-    expect(permissionForPath('/settings')).toBeUndefined();
-    expect(permissionForPath('/settings/accounting')).toBeUndefined();
     expect(permissionForPath('/help')).toBeUndefined();
+    expect(permissionForPath('/help/vat')).toBeUndefined();
   });
 });

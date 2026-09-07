@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { Employee } from '@/types';
@@ -22,6 +23,7 @@ type DialogState = { mode: 'create' } | { mode: 'edit'; employee: Employee } | n
  * unchanged.
  */
 export function EmployeesPage() {
+  useLogSensitiveAccess('Payroll — employees');
   const { employees, loading, error, refetch, createEmployee, updateEmployee, deleteEmployee } = useEmployees();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [dirty, setDirty] = useState(false);
