@@ -7,6 +7,7 @@ import {
   CartesianGrid,
   Cell,
   Line,
+  LineChart,
   Pie,
   PieChart,
   XAxis,
@@ -39,6 +40,8 @@ import { formatCurrencyCompact, formatCurrency } from '@/lib/app/format';
 export interface MonthlySeriesPoint {
   month: string;
   revenue: number;
+  grossProfit?: number;
+  grossMarginPercent?: number | null;
   expenses: number;
   netResult: number;
   cashIn: number;
@@ -179,9 +182,30 @@ export function PerformanceChart({ data }: { data: MonthlySeriesPoint[] }) {
 
 /** Cash in against cash out — the movement behind the closing balance. */
 export function CashFlowChart({ data }: { data: MonthlySeriesPoint[] }) {
+  const [range, setRange] = useState<'3' | '6' | '12'>('6');
+  const visible = range === '3' ? data.slice(-3) : range === '6' ? data.slice(-6) : data.slice(-12);
+
   return (
-    <ChartContainer config={cashConfig} className="aspect-auto h-[330px] w-full">
-      <BarChart data={data.slice(-6)} margin={{ left: 4, right: 4, top: 8 }}>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-end">
+        <ToggleGroup
+          value={[range]}
+          onValueChange={(value) => {
+            const next = value[0];
+            if (next === '3' || next === '6' || next === '12') setRange(next);
+          }}
+          variant="outline"
+          size="sm"
+        >
+          {(['3', '6', '12'] as const).map((value) => (
+            <ToggleGroupItem key={value} value={value} className="px-3 text-xs aria-pressed:bg-brand aria-pressed:text-brand-foreground">
+              {value}M
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+      <ChartContainer config={cashConfig} className="aspect-auto h-[280px] w-full">
+      <BarChart data={visible} margin={{ left: 4, right: 4, top: 8 }}>
         <CartesianGrid vertical={false} strokeDasharray="3 3" />
         <XAxis
           dataKey="month"
@@ -213,6 +237,53 @@ export function CashFlowChart({ data }: { data: MonthlySeriesPoint[] }) {
         <ChartLegend content={<ChartLegendContent />} />
       </BarChart>
     </ChartContainer>
+    </div>
+  );
+}
+
+const marginConfig = {
+  grossMarginPercent: { label: 'Gross margin %', color: 'var(--chart-2)' },
+} satisfies ChartConfig;
+
+export function GrossMarginChart({ data }: { data: MonthlySeriesPoint[] }) {
+  const [range, setRange] = useState<'3' | '6' | '12'>('6');
+  const visible = (range === '3' ? data.slice(-3) : range === '6' ? data.slice(-6) : data.slice(-12)).filter(
+    (point) => point.grossMarginPercent !== null && point.grossMarginPercent !== undefined,
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-end">
+        <ToggleGroup
+          value={[range]}
+          onValueChange={(value) => {
+            const next = value[0];
+            if (next === '3' || next === '6' || next === '12') setRange(next);
+          }}
+          variant="outline"
+          size="sm"
+        >
+          {(['3', '6', '12'] as const).map((value) => (
+            <ToggleGroupItem key={value} value={value} className="px-3 text-xs aria-pressed:bg-brand aria-pressed:text-brand-foreground">
+              {value}M
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+      {visible.length > 0 ? (
+        <ChartContainer config={marginConfig} className="aspect-auto h-[280px] w-full">
+          <LineChart data={visible} margin={{ left: 4, right: 4, top: 8 }}>
+            <CartesianGrid vertical={false} strokeDasharray="3 3" />
+            <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={10} tickFormatter={(value: string) => value.split(' ')[0]} />
+            <YAxis tickLine={false} axisLine={false} tickMargin={8} width={48} tickFormatter={(value: number) => `${value.toFixed(0)}%`} />
+            <ChartTooltip content={<ChartTooltipContent formatter={(value) => `${Number(value).toFixed(1)}%`} />} />
+            <Line dataKey="grossMarginPercent" type="monotone" stroke="var(--color-grossMarginPercent)" strokeWidth={2} dot={false} />
+          </LineChart>
+        </ChartContainer>
+      ) : (
+        <p className="py-8 text-center text-sm text-muted-foreground">No margin trend for this range.</p>
+      )}
+    </div>
   );
 }
 

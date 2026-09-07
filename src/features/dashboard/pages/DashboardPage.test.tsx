@@ -5,6 +5,7 @@ import { DashboardPage } from './DashboardPage';
 import { useDashboardData, type DashboardData } from '../hooks/useDashboardData';
 
 vi.mock('../hooks/useDashboardData');
+vi.mock('@/features/auth/hooks/useCanAccess', () => ({ useCanAccess: vi.fn(() => true) }));
 
 const mockedUseDashboardData = vi.mocked(useDashboardData);
 
@@ -48,7 +49,7 @@ function baseData(overrides: Partial<DashboardData> = {}): DashboardData {
       },
     ],
     monthlyFinancials: [
-      { month: '2026-08', label: 'Aug', revenue: 512700, expenses: 384900, cashIn: 493100, cashOut: 391200 },
+      { month: '2026-08', label: 'Aug', revenue: 512700, cogs: 225000, expenses: 384900, operatingExpenses: 159900, cashIn: 493100, cashOut: 391200 },
     ],
     cashFlowSeries: [{ label: 'Aug', netCashFlow: 101900, cumulativeCash: 101900 }],
     hasAnyData: true,
@@ -58,7 +59,7 @@ function baseData(overrides: Partial<DashboardData> = {}): DashboardData {
 
 describe('DashboardPage', () => {
   it('shows a loading state while fetching', () => {
-    mockedUseDashboardData.mockReturnValue({ data: null, loading: true, error: null, refetch: vi.fn() });
+    mockedUseDashboardData.mockReturnValue({ data: null, loading: true, error: null, refetch: vi.fn(), lastUpdated: null });
     renderPage();
     expect(screen.getByText(/loading dashboard/i)).toBeInTheDocument();
   });
@@ -69,6 +70,7 @@ describe('DashboardPage', () => {
       loading: false,
       error: new Error('Network unavailable'),
       refetch: vi.fn(),
+      lastUpdated: null,
     });
     renderPage();
     expect(screen.getByText(/network unavailable/i)).toBeInTheDocument();
@@ -87,24 +89,29 @@ describe('DashboardPage', () => {
       loading: false,
       error: null,
       refetch: vi.fn(),
+      lastUpdated: null,
     });
     renderPage();
     expect(screen.getByText(/nothing to show yet/i)).toBeInTheDocument();
   });
 
   it('renders KPIs, charts, aging widgets, and activity feed once data loads', () => {
-    mockedUseDashboardData.mockReturnValue({ data: baseData(), loading: false, error: null, refetch: vi.fn() });
+    mockedUseDashboardData.mockReturnValue({ data: baseData(), loading: false, error: null, refetch: vi.fn(), lastUpdated: '2026-09-07T12:00:00.000Z' });
     renderPage();
 
     expect(screen.getByText('Revenue')).toBeInTheDocument();
-    expect(screen.getByText('Expenses')).toBeInTheDocument();
+    expect(screen.getByText('Gross Profit')).toBeInTheDocument();
     expect(screen.getByText('Net Profit')).toBeInTheDocument();
     expect(screen.getByText('Cash Position')).toBeInTheDocument();
-    expect(screen.getByText('Revenue and expenses')).toBeInTheDocument();
+    expect(screen.getByText('Gross Margin %')).toBeInTheDocument();
+    expect(screen.getByText('Net Margin %')).toBeInTheDocument();
+    expect(screen.getByText('Profitability trend')).toBeInTheDocument();
     expect(screen.getByText('Cash movement')).toBeInTheDocument();
-    expect(screen.getByText('Accounts Receivable')).toBeInTheDocument();
-    expect(screen.getByText('Accounts Payable')).toBeInTheDocument();
+    expect(screen.getByText('Receivables ageing')).toBeInTheDocument();
+    expect(screen.getByText('Payables ageing')).toBeInTheDocument();
     expect(screen.getByText('Inventory Valuation')).toBeInTheDocument();
-    expect(screen.getByText('Acme Trading Co.')).toBeInTheDocument();
+    expect(screen.queryByText('Acme Trading Co.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Expense mix')).not.toBeInTheDocument();
+    expect(screen.queryByText('Revenue by customer')).not.toBeInTheDocument();
   });
 });

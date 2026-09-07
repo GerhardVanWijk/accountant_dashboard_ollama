@@ -16,6 +16,8 @@ export function toV0MonthlySeries(months: MonthlyFinancials[]): MonthlySeriesPoi
   return months.map((m) => ({
     month: m.label,
     revenue: m.revenue,
+    grossProfit: m.revenue - m.cogs,
+    grossMarginPercent: m.revenue === 0 ? null : ((m.revenue - m.cogs) / m.revenue) * 100,
     expenses: m.expenses,
     netResult: calculateNetProfit(m),
     cashIn: m.cashIn,

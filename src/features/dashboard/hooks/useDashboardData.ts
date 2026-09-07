@@ -20,7 +20,7 @@ import type { FleetAgingBuckets } from '../types/aging.types';
  * data behind both options — calculateMonthlyFinancials only sums a wider
  * window of the same already-posted journal entries, no new calculation.
  */
-const TRAILING_MONTHS = 12;
+const TRAILING_MONTHS = 24;
 
 export interface DashboardData {
   kpis: DashboardKpis;
@@ -38,6 +38,7 @@ export interface UseDashboardDataResult {
   data: DashboardData | null;
   loading: boolean;
   error: Error | null;
+  lastUpdated: string | null;
   /** Re-runs every fetch — call after data changes elsewhere in the app. */
   refetch: () => void;
 }
@@ -57,6 +58,7 @@ export function useDashboardData(): UseDashboardDataResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +94,7 @@ export function useDashboardData(): UseDashboardDataResult {
           cashFlowSeries: calculateCashFlowSeries(monthlyFinancials),
           hasAnyData: arAging.total > 0 || apAging.total > 0 || inventoryValuation > 0 || activity.length > 0,
         });
+        setLastUpdated(new Date().toISOString());
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err : new Error('Failed to load dashboard data'));
@@ -107,5 +110,5 @@ export function useDashboardData(): UseDashboardDataResult {
 
   const refetch = useCallback(() => setReloadToken((t) => t + 1), []);
 
-  return { data, loading, error, refetch };
+  return { data, loading, error, refetch, lastUpdated };
 }

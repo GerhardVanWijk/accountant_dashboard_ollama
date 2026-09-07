@@ -1,4 +1,5 @@
 import type { Account, JournalEntry } from '@/types';
+import { COST_OF_GOODS_SOLD_ACCOUNT_CODE } from '@/features/reports/financialStatements/services/calculateIncomeStatement';
 
 /** Chart of Accounts code for the single Cash and Bank control account every posting module credits/debits — matched by `code`, not a fixed id (account ids are real Supabase-generated uuids). */
 const CASH_AND_BANK_ACCOUNT_CODE = '1000';
@@ -11,7 +12,9 @@ export interface MonthlyFinancials {
   /** Short chart-axis label, e.g. "Aug". */
   label: string;
   revenue: number;
+  cogs: number;
   expenses: number;
+  operatingExpenses: number;
   /** Cash received this month (debit movement on the Cash and Bank control account). */
   cashIn: number;
   /** Cash paid out this month (credit movement on the Cash and Bank control account). */
@@ -67,11 +70,11 @@ export function calculateMonthlyFinancials(
   accounts: Account[],
   monthKeys: string[],
 ): MonthlyFinancials[] {
-  const accountType = new Map(accounts.map((a) => [a.id, a.type]));
+  const accountById = new Map(accounts.map((a) => [a.id, a]));
   const cashAndBankAccountId = accounts.find((a) => a.code === CASH_AND_BANK_ACCOUNT_CODE)?.id;
-  const totals = new Map<string, { revenue: number; expenses: number; cashIn: number; cashOut: number }>();
+  const totals = new Map<string, { revenue: number; cogs: number; expenses: number; operatingExpenses: number; cashIn: number; cashOut: number }>();
   for (const key of monthKeys) {
-    totals.set(key, { revenue: 0, expenses: 0, cashIn: 0, cashOut: 0 });
+    totals.set(key, { revenue: 0, cogs: 0, expenses: 0, operatingExpenses: 0, cashIn: 0, cashOut: 0 });
   }
 
   for (const entry of entries) {
@@ -80,11 +83,17 @@ export function calculateMonthlyFinancials(
     if (!bucket) continue; // outside the requested window
 
     for (const line of entry.lines) {
-      const type = accountType.get(line.accountId);
-      if (type === 'revenue') {
+      const account = accountById.get(line.accountId);
+      if (account?.type === 'revenue') {
         bucket.revenue += line.credit - line.debit;
-      } else if (type === 'expense') {
-        bucket.expenses += line.debit - line.credit;
+      } else if (account?.type === 'expense') {
+        const amount = line.debit - line.credit;
+        bucket.expenses += amount;
+        if (account.code === COST_OF_GOODS_SOLD_ACCOUNT_CODE) {
+          bucket.cogs += amount;
+        } else {
+          bucket.operatingExpenses += amount;
+        }
       }
       if (cashAndBankAccountId && line.accountId === cashAndBankAccountId) {
         bucket.cashIn += line.debit;

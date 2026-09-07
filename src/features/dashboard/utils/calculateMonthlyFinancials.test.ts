@@ -151,9 +151,9 @@ describe('calculateMonthlyFinancials', () => {
   it('returns a zero row for every requested month with no matching entries', () => {
     const result = calculateMonthlyFinancials([], ACCOUNTS, ['2026-06', '2026-07', '2026-08']);
     expect(result).toEqual([
-      { month: '2026-06', label: 'Jun', revenue: 0, expenses: 0, cashIn: 0, cashOut: 0 },
-      { month: '2026-07', label: 'Jul', revenue: 0, expenses: 0, cashIn: 0, cashOut: 0 },
-      { month: '2026-08', label: 'Aug', revenue: 0, expenses: 0, cashIn: 0, cashOut: 0 },
+      { month: '2026-06', label: 'Jun', revenue: 0, cogs: 0, expenses: 0, operatingExpenses: 0, cashIn: 0, cashOut: 0 },
+      { month: '2026-07', label: 'Jul', revenue: 0, cogs: 0, expenses: 0, operatingExpenses: 0, cashIn: 0, cashOut: 0 },
+      { month: '2026-08', label: 'Aug', revenue: 0, cogs: 0, expenses: 0, operatingExpenses: 0, cashIn: 0, cashOut: 0 },
     ]);
   });
 });
