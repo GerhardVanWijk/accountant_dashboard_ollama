@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
+import { ScrollText } from 'lucide-react';
 import type { AccountingPeriod, ID, JournalEntry } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatDate } from '@/lib/app/format';
 import { findPeriodForDate } from '../utils/periodLookup';
@@ -34,11 +36,14 @@ export function JournalsTable({ entries, periods, reversedByEntryId, onRowClick 
     {
       key: 'number',
       header: 'Journal',
-      headClassName: 'w-[8rem]',
+      headClassName: 'w-[9rem]',
       sortValue: (e) => e.entryNumber,
       cell: (e) => (
-        <div className="flex flex-col">
-          <span className="figure font-medium text-foreground">{e.entryNumber}</span>
+        <div className="flex flex-col gap-0.5">
+          <RecordLink onClick={() => onRowClick(e)} className="figure inline-flex w-fit items-center gap-1.5 text-sm font-semibold">
+            <ScrollText className="size-3.5 shrink-0" aria-hidden="true" />
+            {e.entryNumber}
+          </RecordLink>
           {e.reversalOfEntryId && <span className="text-xs text-muted-foreground">Reversal</span>}
         </div>
       ),
@@ -72,9 +77,10 @@ export function JournalsTable({ entries, periods, reversedByEntryId, onRowClick 
       key: 'totalDebit',
       header: 'Value',
       align: 'right',
-      headClassName: 'w-[9rem]',
+      headClassName: 'w-[9rem] border-l border-border',
+      cellClassName: 'border-l border-border',
       sortValue: (e) => e.lines.reduce((sum, l) => sum + l.debit, 0),
-      cell: (e) => <Amount value={e.lines.reduce((sum, l) => sum + l.debit, 0)} className="text-sm" />,
+      cell: (e) => <Amount value={e.lines.reduce((sum, l) => sum + l.debit, 0)} className="text-sm font-medium" />,
     },
     {
       key: 'status',

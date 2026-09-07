@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { ArrowDownLeft, ArrowUpRight, Loader2, Network, Wallet } from 'lucide-react';
+import { PageHeader } from '@/components/app/page-header';
+import { StatStrip, StatTile } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Select,
@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import { formatCurrency } from '@/lib/app/format';
+import { cn } from '@/lib/utils';
 import { useAccounts } from '../hooks/useAccounts';
 import { useAccountLedger } from '../hooks/useAccountLedger';
 import { useJournalEntries } from '../hooks/useJournalEntries';
@@ -66,21 +67,52 @@ export function LedgerPage() {
         description="Every posted line, traceable back to the journal that created it. Narrow to one account to see its running balance."
       />
 
-      <SectionCard>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <FigureBlock
-            label="Debits posted"
-            value={formatCurrency(totalDebit)}
-            hint={`${rows.length} lines shown`}
-          />
-          <FigureBlock label="Credits posted" value={formatCurrency(totalCredit)} hint="Across the same lines" />
-          <FigureBlock
-            label="Accounts touched"
-            value={String(accountsTouched)}
-            hint={selectedAccountId ? 'Narrowed to one account' : 'Distinct ledger accounts'}
-          />
-        </div>
-      </SectionCard>
+      <StatStrip columns={3}>
+        <StatTile
+          icon={ArrowDownLeft}
+          label="Debits posted"
+          value={formatCurrency(totalDebit)}
+          hint={`${rows.length} lines in view`}
+          tone="info"
+        />
+        <StatTile
+          icon={ArrowUpRight}
+          label="Credits posted"
+          value={formatCurrency(totalCredit)}
+          hint="Across the same lines"
+          tone="info"
+        />
+        <StatTile
+          icon={Network}
+          label="Accounts touched"
+          value={String(accountsTouched)}
+          hint={selectedAccountId ? 'Narrowed to one account' : 'Distinct ledger accounts'}
+        />
+      </StatStrip>
+
+      <div
+        className={cn(
+          'flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-sm',
+          selectedAccount
+            ? 'border-brand-outline bg-brand-muted/50'
+            : 'border-border bg-muted/40',
+        )}
+      >
+        <Wallet className={cn('size-4 shrink-0', selectedAccount ? 'text-brand' : 'text-muted-foreground')} aria-hidden="true" />
+        {selectedAccount ? (
+          <p className="min-w-0">
+            <span className="font-semibold text-foreground">
+              <span className="figure tabular-nums">{selectedAccount.code}</span> · {selectedAccount.name}
+            </span>{' '}
+            <span className="text-muted-foreground">— Account balance is a running balance for this account.</span>
+          </p>
+        ) : (
+          <p className="text-muted-foreground">
+            <span className="font-medium text-foreground">All accounts</span> — cross-account view. Narrow to one
+            account for a running balance.
+          </p>
+        )}
+      </div>
 
       {loading && (
         <div role="status" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
@@ -101,10 +133,11 @@ export function LedgerPage() {
       {!loading && !error && (
         <LedgerTable
           rows={rows}
-          toolbar={
+          singleAccount={Boolean(selectedAccount)}
+          toolbarLeading={
             <div className="flex w-full items-center gap-2 sm:w-auto">
               <span className="shrink-0 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                Ledger account
+                Account
               </span>
               <Select
                 items={[{ value: 'all', label: 'All accounts' }, ...accounts.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }))]}

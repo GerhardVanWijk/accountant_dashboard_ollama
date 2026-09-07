@@ -16,8 +16,10 @@ export interface BankTransactionTableProps {
   onAllocate: (transaction: BankTransactionWithAllocations) => void;
   onDelete: (transaction: BankTransactionWithAllocations) => void;
   onSelect?: (transaction: BankTransactionWithAllocations) => void;
-  /** Bank-account selector, rendered in the table's own filter toolbar. */
+  /** Rendered on the right of the table's filter toolbar. */
   toolbar?: ReactNode;
+  /** Rendered at the start of the filter toolbar, before the search box (the bank-account selector). */
+  toolbarLeading?: ReactNode;
 }
 
 /**
@@ -31,7 +33,7 @@ export interface BankTransactionTableProps {
  * M5 report. Money in/out split into separate columns, matching v0's
  * unambiguous-direction convention.
  */
-export function BankTransactionTable({ transactions, bankAccountsById, showAccountColumn = false, onAllocate, onDelete, onSelect, toolbar }: BankTransactionTableProps) {
+export function BankTransactionTable({ transactions, bankAccountsById, showAccountColumn = false, onAllocate, onDelete, onSelect, toolbar, toolbarLeading }: BankTransactionTableProps) {
   const columns: DataTableColumn<BankTransactionWithAllocations>[] = [
     {
       key: 'date',
@@ -48,22 +50,26 @@ export function BankTransactionTable({ transactions, bankAccountsById, showAccou
         const needsAllocation = t.allocations.length === 0 && !t.transferPairId;
         return (
           <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-              <span className="block max-w-[44ch] truncate text-sm" title={t.description}>
-                {onSelect ? (
-                  <RecordLink onClick={() => onSelect(t)}>{t.description}</RecordLink>
-                ) : (
-                  t.description
-                )}
+            <span className="block max-w-[48ch] truncate text-sm font-medium" title={t.description}>
+              {onSelect ? (
+                <RecordLink onClick={() => onSelect(t)}>{t.description}</RecordLink>
+              ) : (
+                t.description
+              )}
+            </span>
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="truncate text-xs text-muted-foreground" title={t.reference ?? undefined}>
+                {t.reference ?? '—'}
               </span>
               {needsAllocation && (
-                <Badge variant="outline" className="shrink-0 whitespace-nowrap border-status-warning/40 text-status-warning">
+                <Badge
+                  variant="outline"
+                  className="h-4 shrink-0 gap-1 whitespace-nowrap border-status-warning/40 px-1.5 text-[0.6875rem] text-status-warning"
+                >
+                  <span className="size-1.5 rounded-full bg-status-warning" aria-hidden="true" />
                   Needs allocation
                 </Badge>
               )}
-            </span>
-            <span className="block max-w-[44ch] truncate text-xs text-muted-foreground" title={t.reference ?? undefined}>
-              {t.reference ?? '—'}
             </span>
           </div>
         );
@@ -89,9 +95,15 @@ export function BankTransactionTable({ transactions, bankAccountsById, showAccou
       key: 'in',
       header: 'Money in',
       align: 'right',
-      headClassName: 'w-[8.5rem]',
+      headClassName: 'w-[8.5rem] border-l border-border',
+      cellClassName: 'border-l border-border',
       sortValue: (t) => (t.direction === 'debit' ? t.amount : 0),
-      cell: (t) => (t.direction === 'debit' ? <Amount value={t.amount} plain className="text-sm" /> : <span className="text-xs text-muted-foreground">&mdash;</span>),
+      cell: (t) =>
+        t.direction === 'debit' ? (
+          <Amount value={t.amount} plain className="text-sm font-medium" />
+        ) : (
+          <span className="text-xs text-muted-foreground">&mdash;</span>
+        ),
     },
     {
       key: 'out',
@@ -99,7 +111,12 @@ export function BankTransactionTable({ transactions, bankAccountsById, showAccou
       align: 'right',
       headClassName: 'w-[8.5rem]',
       sortValue: (t) => (t.direction === 'credit' ? t.amount : 0),
-      cell: (t) => (t.direction === 'credit' ? <Amount value={t.amount} plain className="text-sm" /> : <span className="text-xs text-muted-foreground">&mdash;</span>),
+      cell: (t) =>
+        t.direction === 'credit' ? (
+          <Amount value={t.amount} plain className="text-sm font-medium" />
+        ) : (
+          <span className="text-xs text-muted-foreground">&mdash;</span>
+        ),
     },
     {
       key: 'status',
@@ -149,6 +166,7 @@ export function BankTransactionTable({ transactions, bankAccountsById, showAccou
       initialSortDirection="desc"
       pageSize={15}
       toolbar={toolbar}
+      toolbarLeading={toolbarLeading}
       filters={[
         {
           key: 'status',

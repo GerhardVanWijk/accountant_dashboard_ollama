@@ -103,6 +103,7 @@ export function DataTable<T>({
   emptyTitle = 'Nothing to show',
   emptyDescription = 'No records match the current search and filters.',
   toolbar,
+  toolbarLeading,
   footerRow,
   caption,
   renderDetail,
@@ -124,6 +125,12 @@ export function DataTable<T>({
   emptyDescription?: string;
   /** Extra controls rendered to the right of the search and filters. */
   toolbar?: ReactNode;
+  /**
+   * Controls rendered at the *start* of the toolbar row, before the search
+   * box — for the primary entity selector a register is scoped by (a bank
+   * account, a ledger account), which should read first.
+   */
+  toolbarLeading?: ReactNode;
   /** A totals row pinned beneath the body. */
   footerRow?: ReactNode;
   caption?: string;
@@ -250,13 +257,14 @@ export function DataTable<T>({
     setPage(0);
   }
 
-  const hasControls = Boolean(searchable || filters?.length || toolbar);
+  const hasControls = Boolean(searchable || filters?.length || toolbar || toolbarLeading);
 
   return (
     <div className="flex flex-col gap-4">
       {hasControls ? (
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            {toolbarLeading ? <div className="flex flex-wrap items-center gap-2">{toolbarLeading}</div> : null}
             {searchable ? (
               <InputGroup className="w-full sm:w-72">
                 <InputGroupAddon>
@@ -331,8 +339,8 @@ export function DataTable<T>({
           </Empty>
         ) : (
           <Table>
-            <TableHeader className="bg-muted/40">
-              <TableRow className="hover:bg-transparent">
+            <TableHeader className="bg-muted/60">
+              <TableRow className="border-b-2 border-border hover:bg-transparent">
                 {columns.map((column) => {
                   const sortable = Boolean(column.sortValue);
                   const active = sortKey === column.key;
@@ -353,7 +361,7 @@ export function DataTable<T>({
                           : undefined
                       }
                       className={cn(
-                        'px-4 text-xs font-medium tracking-wide text-muted-foreground uppercase',
+                        'h-11 px-4 text-xs font-semibold tracking-wide text-muted-foreground uppercase',
                         alignClass[column.align ?? 'left'],
                         column.hideBelowMd && 'hidden md:table-cell',
                         column.hideBelowLg && 'hidden lg:table-cell',
@@ -383,13 +391,17 @@ export function DataTable<T>({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paged.map((row) => {
+              {paged.map((row, rowIndex) => {
                 const detail = renderDetail?.(row);
                 const clickable = Boolean(onRowClick);
                 return (
                   <Fragment key={getRowKey(row)}>
                     <TableRow
                       className={cn(
+                        // Zebra striping so a wide financial row stays easy to
+                        // track across to its figures; the hover/selected
+                        // treatments below still win over the stripe.
+                        !detail && rowIndex % 2 === 1 && 'bg-muted/25',
                         detail && 'border-b-0 bg-muted/25',
                         // The table's base row style already hovers to bg-muted/50 — the
                         // addition here is the brand-green left accent (matching the

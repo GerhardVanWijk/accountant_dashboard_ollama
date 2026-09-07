@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FileText } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
 import { RecordLink } from '@/components/app/record-link';
@@ -14,7 +15,18 @@ import type { LedgerViewRow } from '../utils/buildLedgerRows';
  * reads as a dash rather than a total, so it's never mistaken for a
  * cross-account sum.
  */
-export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?: ReactNode }) {
+export function LedgerTable({
+  rows,
+  toolbar,
+  toolbarLeading,
+  singleAccount = false,
+}: {
+  rows: LedgerViewRow[];
+  toolbar?: ReactNode;
+  toolbarLeading?: ReactNode;
+  /** True when the view is narrowed to one account — the balance column is then a real running balance. */
+  singleAccount?: boolean;
+}) {
   const navigate = useNavigate();
   // Real `source` values (e.g. "manual", "invoice", "bill") come straight
   // from JournalEntry.source — a free-form string, not a fixed enum like
@@ -52,11 +64,15 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
       header: 'Description',
       sortValue: (r) => r.description ?? '',
       cell: (r) => (
-        <div className="flex min-w-0 flex-col">
-          <span className="block max-w-[52ch] truncate text-sm" title={r.description || undefined}>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="block max-w-[56ch] truncate text-sm font-medium text-foreground" title={r.description || undefined}>
             {r.description || '—'}
           </span>
-          <RecordLink onClick={() => navigate(`/accounting/journals?record=${r.entryId}`)} className="figure text-xs">
+          <RecordLink
+            onClick={() => navigate(`/accounting/journals?record=${r.entryId}`)}
+            className="figure inline-flex w-fit items-center gap-1 text-xs"
+          >
+            <FileText className="size-3" aria-hidden="true" />
             {r.entryNumber}
           </RecordLink>
         </div>
@@ -65,12 +81,13 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
     {
       key: 'source',
       header: 'Source',
-      headClassName: 'w-[7rem]',
+      headClassName: 'w-[7.5rem]',
       hideBelowMd: true,
       sortValue: (r) => r.source ?? '',
       cell: (r) =>
         r.source ? (
-          <Badge variant="outline" className="text-xs font-normal capitalize">
+          <Badge variant="outline" className="gap-1 text-xs font-normal capitalize">
+            <span className="size-1.5 rounded-full bg-muted-foreground/60" aria-hidden="true" />
             {r.source}
           </Badge>
         ) : (
@@ -81,7 +98,8 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
       key: 'debit',
       header: 'Debit',
       align: 'right',
-      headClassName: 'w-[8.5rem]',
+      headClassName: 'w-[8.5rem] border-l border-border',
+      cellClassName: 'border-l border-border',
       sortValue: (r) => r.debit,
       cell: (r) =>
         r.debit > 0 ? (
@@ -105,7 +123,7 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
     },
     {
       key: 'balance',
-      header: 'Account balance',
+      header: singleAccount ? 'Running balance' : 'Account balance',
       align: 'right',
       headClassName: 'w-[9.5rem]',
       hideBelowMd: true,
@@ -114,7 +132,7 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
         r.balance === undefined ? (
           <span className="text-xs text-muted-foreground">—</span>
         ) : (
-          <Amount value={r.balance} plain className="text-sm text-muted-foreground" />
+          <Amount value={r.balance} plain className="text-sm font-medium text-foreground" />
         ),
     },
   ];
@@ -130,6 +148,7 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
       initialSortDirection="desc"
       pageSize={15}
       toolbar={toolbar}
+      toolbarLeading={toolbarLeading}
       filters={
         sourceOptions.length > 0
           ? [
@@ -144,7 +163,11 @@ export function LedgerTable({ rows, toolbar }: { rows: LedgerViewRow[]; toolbar?
       }
       emptyTitle="No ledger entries found"
       emptyDescription="Adjust the search or account filter to widen the view."
-      caption="Account balance is only shown once the view is narrowed to a single account"
+      caption={
+        singleAccount
+          ? 'Running balance is the selected account only, oldest to newest'
+          : 'Account balance shows only once the view is narrowed to a single account'
+      }
     />
   );
 }

@@ -82,7 +82,8 @@ describe('TrialBalancePage', () => {
     });
     renderPage();
     expect(await screen.findByText('Cash and Bank')).toBeInTheDocument();
-    expect(screen.getByText(/balanced — total debits equal total credits/i)).toBeInTheDocument();
+    expect(screen.getByText('Balanced')).toBeInTheDocument();
+    expect(screen.getByText(/total debits equal total credits/i)).toBeInTheDocument();
   });
 
   it('renders a clear out-of-balance indicator when balanced is false', async () => {

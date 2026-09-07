@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ListTree, Plus, Search } from 'lucide-react';
+import { CircleCheck, CircleSlash, ListTree, Plus, Search } from 'lucide-react';
 import type { Account } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { StatStrip, StatTile } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   InputGroup,
@@ -90,6 +90,16 @@ export function ChartOfAccountsPage() {
   }
 
   const activeCount = accounts.filter((a) => a.isActive).length;
+  const inactiveCount = accounts.length - activeCount;
+  // Structure breakdown — derived from the already-loaded accounts, no extra query.
+  const countByType = useMemo(
+    () =>
+      ACCOUNT_TYPES.map((t) => ({
+        ...t,
+        count: accounts.filter((a) => a.type === t.value).length,
+      })),
+    [accounts],
+  );
 
   const filtered = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -150,17 +160,35 @@ export function ChartOfAccountsPage() {
       />
 
       {!loading && !error && accounts.length > 0 && (
-        <SectionCard>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <FigureBlock label="Accounts" value={String(accounts.length)} hint="In the chart" />
-            <FigureBlock label="Active" value={String(activeCount)} hint="Postable accounts" />
-            <FigureBlock
-              label="With postings"
-              value={String(postedAccountIds.size)}
-              hint="Cannot be hard-deleted"
+        <div className="flex flex-col gap-3 sm:gap-4">
+          <StatStrip columns={3}>
+            <StatTile
+              icon={ListTree}
+              label="Total accounts"
+              value={String(accounts.length)}
+              hint={`${postedAccountIds.size} with postings`}
             />
+            <StatTile icon={CircleCheck} label="Active" value={String(activeCount)} hint="Postable" tone="positive" />
+            <StatTile
+              icon={CircleSlash}
+              label="Inactive"
+              value={String(inactiveCount)}
+              hint="Hidden from posting"
+              tone={inactiveCount > 0 ? 'warning' : 'default'}
+            />
+          </StatStrip>
+
+          <div className="flex flex-wrap gap-px overflow-hidden rounded-xl border border-border bg-border">
+            {countByType.map((t) => (
+              <div key={t.value} className="flex min-w-[7.5rem] flex-1 flex-col gap-0.5 bg-card px-4 py-3">
+                <span className="text-[0.7rem] font-semibold tracking-wider text-muted-foreground uppercase">
+                  {t.label}
+                </span>
+                <span className="figure text-lg font-semibold tabular-nums text-foreground">{t.count}</span>
+              </div>
+            ))}
           </div>
-        </SectionCard>
+        </div>
       )}
 
       <div className="flex flex-col gap-4">

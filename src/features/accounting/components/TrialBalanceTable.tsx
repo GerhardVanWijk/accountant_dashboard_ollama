@@ -35,16 +35,20 @@ export function TrialBalanceTable({ rows, totals, accountsById }: TrialBalanceTa
     {
       key: 'code',
       header: 'Account',
-      headClassName: 'w-[7rem]',
+      headClassName: 'w-[7.5rem]',
       sortValue: (r) => r.code,
-      cell: (r) => <span className="figure font-medium text-foreground tabular-nums">{r.code}</span>,
+      cell: (r) => (
+        <span className="figure inline-flex rounded-md bg-muted/70 px-2 py-0.5 text-sm font-semibold tabular-nums text-foreground">
+          {r.code}
+        </span>
+      ),
     },
     {
       key: 'name',
       header: 'Description',
       sortValue: (r) => r.name,
       cell: (r) => (
-        <RecordLink onClick={() => openLedger(r.accountId)} className="block max-w-[44ch] truncate">
+        <RecordLink onClick={() => openLedger(r.accountId)} className="block max-w-[48ch] truncate text-sm font-medium">
           {r.name}
         </RecordLink>
       ),
@@ -57,17 +61,28 @@ export function TrialBalanceTable({ rows, totals, accountsById }: TrialBalanceTa
       hideBelowMd: true,
       cell: (r) => {
         const type = typeOf(r.accountId);
-        return <span className="text-xs text-muted-foreground">{type ? accountTypeLabel(type) : '—'}</span>;
+        return type ? (
+          <span className="inline-flex rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+            {accountTypeLabel(type)}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        );
       },
     },
     {
       key: 'debit',
       header: 'Debit',
       align: 'right',
-      headClassName: 'w-[9rem]',
+      headClassName: 'w-[9rem] border-l border-border',
+      cellClassName: 'border-l border-border',
       sortValue: (r) => r.debit,
       cell: (r) =>
-        r.debit > 0 ? <Amount value={r.debit} plain className="text-sm" /> : <span className="text-xs text-muted-foreground">&mdash;</span>,
+        r.debit > 0 ? (
+          <Amount value={r.debit} plain className="text-sm font-medium" />
+        ) : (
+          <span className="text-xs text-muted-foreground">&mdash;</span>
+        ),
     },
     {
       key: 'credit',
@@ -76,7 +91,11 @@ export function TrialBalanceTable({ rows, totals, accountsById }: TrialBalanceTa
       headClassName: 'w-[9rem]',
       sortValue: (r) => r.credit,
       cell: (r) =>
-        r.credit > 0 ? <Amount value={r.credit} plain className="text-sm" /> : <span className="text-xs text-muted-foreground">&mdash;</span>,
+        r.credit > 0 ? (
+          <Amount value={r.credit} plain className="text-sm font-medium" />
+        ) : (
+          <span className="text-xs text-muted-foreground">&mdash;</span>
+        ),
     },
   ];
 
@@ -102,16 +121,16 @@ export function TrialBalanceTable({ rows, totals, accountsById }: TrialBalanceTa
       emptyDescription="Adjust the search or category filter."
       caption="All amounts in rand"
       footerRow={
-        <TableRow className="border-t-2 border-border bg-muted/70 hover:bg-muted/70">
-          <TableCell colSpan={2} className="px-4 py-3.5 text-xs font-semibold tracking-wide text-foreground uppercase">
+        <TableRow className="border-t-2 border-border bg-muted hover:bg-muted">
+          <TableCell colSpan={2} className="px-4 py-4 text-xs font-bold tracking-[0.1em] text-foreground uppercase">
             Totals
           </TableCell>
-          <TableCell className="hidden px-4 py-3.5 md:table-cell" />
-          <TableCell className="px-4 py-3.5 text-right">
-            <Amount value={totals.debit} plain className="font-semibold text-foreground" />
+          <TableCell className="hidden px-4 py-4 md:table-cell" />
+          <TableCell className="border-l border-border px-4 py-4 text-right">
+            <Amount value={totals.debit} plain className="text-base font-bold text-foreground" />
           </TableCell>
-          <TableCell className="px-4 py-3.5 text-right">
-            <Amount value={totals.credit} plain className="font-semibold text-foreground" />
+          <TableCell className="px-4 py-4 text-right">
+            <Amount value={totals.credit} plain className="text-base font-bold text-foreground" />
           </TableCell>
         </TableRow>
       }

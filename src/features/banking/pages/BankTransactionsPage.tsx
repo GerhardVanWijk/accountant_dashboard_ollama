@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Download, Loader2, Plus } from 'lucide-react';
+import { Clock, Download, Layers, Loader2, Plus, Split } from 'lucide-react';
 import type { BankAccount } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { StatStrip, StatTile } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Select,
@@ -110,23 +110,28 @@ export function BankTransactionsPage() {
         }
       />
 
-      <SectionCard>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <FigureBlock label="Statement lines" value={String(transactions.length)} hint="In the current view" />
-          <FigureBlock
-            label="Awaiting reconciliation"
-            value={String(unreconciledCount)}
-            hint="Not yet cleared"
-            tone={unreconciledCount > 0 ? 'warning' : 'default'}
-          />
-          <FigureBlock
-            label="Needs allocation"
-            value={String(needsAllocationCount)}
-            hint="No GL split yet"
-            tone={needsAllocationCount > 0 ? 'warning' : 'default'}
-          />
-        </div>
-      </SectionCard>
+      <StatStrip columns={3}>
+        <StatTile
+          icon={Layers}
+          label="Statement lines"
+          value={String(transactions.length)}
+          hint="In the current view"
+        />
+        <StatTile
+          icon={Clock}
+          label="Awaiting reconciliation"
+          value={String(unreconciledCount)}
+          hint="Not yet cleared against a statement"
+          tone={unreconciledCount > 0 ? 'warning' : 'positive'}
+        />
+        <StatTile
+          icon={Split}
+          label="Needs allocation"
+          value={String(needsAllocationCount)}
+          hint="No GL split posted yet"
+          tone={needsAllocationCount > 0 ? 'warning' : 'positive'}
+        />
+      </StatStrip>
 
       {mutationError && (
         <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -163,13 +168,13 @@ export function BankTransactionsPage() {
           onAllocate={(txn) => setDialog({ mode: 'allocate', transaction: txn })}
           onDelete={(txn) => setDialog({ mode: 'confirmDelete', transaction: txn })}
           onSelect={(txn) => openRecord(txn.id)}
-          toolbar={
+          toolbarLeading={
             <Select
               items={[{ value: 'all', label: 'All accounts' }, ...bankAccounts.map((a) => ({ value: a.id, label: a.name }))]}
               value={selectedAccountId}
               onValueChange={(value) => setSelectedAccountId(String(value))}
             >
-              <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-[13rem] sm:max-w-[16rem]" aria-label="Filter by bank account">
+              <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-[12rem] sm:max-w-[15rem]" aria-label="Filter by bank account">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

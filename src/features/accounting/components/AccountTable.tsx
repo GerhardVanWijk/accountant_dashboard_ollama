@@ -23,7 +23,7 @@ export interface AccountTableProps {
   onSelect: (account: Account) => void;
 }
 
-const HEAD_CLASS = 'px-4 text-xs font-medium tracking-wide text-muted-foreground uppercase';
+const HEAD_CLASS = 'h-11 px-4 text-xs font-semibold tracking-wide text-muted-foreground uppercase';
 
 /**
  * Hierarchical Chart of Accounts listing. Built on the shared `Table`
@@ -53,8 +53,8 @@ export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActiv
           <col className="w-[172px]" />
           <col className="w-[152px]" />
         </colgroup>
-        <TableHeader className="bg-muted/40">
-          <TableRow className="hover:bg-transparent">
+        <TableHeader className="bg-muted/60">
+          <TableRow className="border-b-2 border-border hover:bg-transparent">
             <TableHead className={HEAD_CLASS}>Code</TableHead>
             <TableHead className={HEAD_CLASS}>Account name</TableHead>
             <TableHead className={HEAD_CLASS}>Normal balance</TableHead>
@@ -65,34 +65,43 @@ export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActiv
         <TableBody>
           {groups.map((group) => (
             <Fragment key={group.type}>
-              <TableRow className="border-y border-border bg-muted/60 hover:bg-muted/60">
-                <TableCell
-                  colSpan={5}
-                  className="px-4 py-2.5 text-xs font-semibold tracking-wide text-foreground uppercase"
-                >
-                  {group.label}
+              <TableRow className="border-y-2 border-border bg-muted hover:bg-muted">
+                <TableCell colSpan={5} className="border-l-2 border-l-brand px-4 py-2.5">
+                  <span className="inline-flex items-center gap-2 text-xs font-bold tracking-[0.12em] text-foreground uppercase">
+                    {group.label}
+                    <span className="figure rounded bg-background px-1.5 py-0.5 text-[0.7rem] font-semibold tabular-nums text-muted-foreground">
+                      {group.rows.length}
+                    </span>
+                  </span>
                 </TableCell>
               </TableRow>
-              {group.rows.map(({ account, depth }) => (
-                <TableRow key={account.id} className="hover:bg-muted/20">
-                  <TableCell className="figure px-4 py-3 text-sm tabular-nums text-foreground">{account.code}</TableCell>
+              {group.rows.map(({ account, depth }, i) => (
+                <TableRow
+                  key={account.id}
+                  className={cn('transition-colors hover:bg-muted/40', i % 2 === 1 && 'bg-muted/25')}
+                >
+                  <TableCell className="px-4 py-3 align-top">
+                    <span className="figure inline-flex rounded-md bg-muted/70 px-2 py-0.5 text-sm font-semibold tabular-nums text-foreground">
+                      {account.code}
+                    </span>
+                  </TableCell>
                   <TableCell className="px-4 py-3 whitespace-normal">
-                    <div style={{ paddingLeft: depth * 16 }} className="flex flex-col">
+                    <div style={{ paddingLeft: depth * 16 }} className="flex flex-col gap-0.5">
                       <RecordLink onClick={() => onSelect(account)} className="text-sm font-medium">
                         {account.name}
                       </RecordLink>
                       {account.subType && <span className="text-xs text-muted-foreground">{account.subType}</span>}
                     </div>
                   </TableCell>
-                  <TableCell className="px-4 py-3 text-sm text-muted-foreground capitalize">
-                    {account.normalBalance}
+                  <TableCell className="px-4 py-3 align-top">
+                    <span className="inline-flex rounded-full border border-border px-2 py-0.5 text-xs capitalize text-muted-foreground">
+                      {account.normalBalance}
+                    </span>
                   </TableCell>
-                  <TableCell className="px-4 py-3">
+                  <TableCell className="px-4 py-3 align-top">
                     <div className="flex flex-wrap items-center gap-1.5">
                       {account.isActive ? (
-                        <Badge variant="outline" className="text-status-positive">
-                          Active
-                        </Badge>
+                        <Badge className="bg-status-positive-muted text-status-positive">Active</Badge>
                       ) : (
                         <Badge variant="secondary" className="text-muted-foreground">
                           Inactive
@@ -105,7 +114,7 @@ export function AccountTable({ accounts, postedAccountIds, onEdit, onToggleActiv
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="px-4 py-3">
+                  <TableCell className="px-4 py-3 align-top">
                     <div className="flex flex-wrap items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" onClick={() => onEdit(account)}>
                         Edit

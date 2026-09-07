@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Plus } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { Loader2, Network, Plus, ScrollText, Undo2, Wallet } from 'lucide-react';
+import { PageHeader } from '@/components/app/page-header';
+import { StatStrip, StatTile } from '@/components/app/stat-tile';
 import { HelpLink } from '@/features/help/components/HelpLink';
 import { Button } from '@/components/ui/shadcn/button';
 import { useLegacyRecordRedirect } from '@/components/app/record-page';
@@ -56,14 +56,29 @@ export function JournalsPage() {
         }
       />
 
-      <SectionCard>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <FigureBlock label="Posted value" value={formatCurrency(postedValue)} hint={`${posted.length} entries in the ledger`} />
-          <FigureBlock label="Reversals" value={String(reversed.length)} hint="Corrected by a reversing entry" />
-          <FigureBlock label="Total entries" value={String(entries.length)} hint="Across every posted period" />
-          <FigureBlock label="Accounts in use" value={String(accounts.filter((a) => a.isActive).length)} hint="Active, postable accounts" />
-        </div>
-      </SectionCard>
+      <StatStrip columns={4}>
+        <StatTile
+          icon={Wallet}
+          label="Posted value"
+          value={formatCurrency(postedValue)}
+          hint={`${posted.length} entries in the ledger`}
+          tone="positive"
+        />
+        <StatTile
+          icon={Undo2}
+          label="Reversals"
+          value={String(reversed.length)}
+          hint="Corrected by a reversing entry"
+          tone={reversed.length > 0 ? 'warning' : 'default'}
+        />
+        <StatTile icon={ScrollText} label="Total entries" value={String(entries.length)} hint="Across every posted period" />
+        <StatTile
+          icon={Network}
+          label="Accounts in use"
+          value={String(accounts.filter((a) => a.isActive).length)}
+          hint="Active, postable accounts"
+        />
+      </StatStrip>
 
       {loading && (
         <div role="status" className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground">
