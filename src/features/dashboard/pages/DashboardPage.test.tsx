@@ -64,6 +64,16 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/loading dashboard/i)).toBeInTheDocument();
   });
 
+  it('keeps the previous dashboard on screen (dimmed) during a manual refresh', () => {
+    mockedUseDashboardData.mockReturnValue({ data: baseData(), loading: true, error: null, refetch: vi.fn(), lastUpdated: '2026-09-07T12:00:00.000Z' });
+    renderPage();
+    // No full skeleton — the data is still rendered...
+    expect(screen.queryByText(/loading dashboard/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Revenue')).toBeInTheDocument();
+    // ...and the key-figures region is marked busy.
+    expect(screen.getByRole('region', { name: /key figures/i })).toHaveAttribute('aria-busy', 'true');
+  });
+
   it('shows an error state with retry when the fetch fails', () => {
     mockedUseDashboardData.mockReturnValue({
       data: null,
@@ -113,5 +123,18 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Acme Trading Co.')).not.toBeInTheDocument();
     expect(screen.queryByText('Expense mix')).not.toBeInTheDocument();
     expect(screen.queryByText('Revenue by customer')).not.toBeInTheDocument();
+  });
+
+  it('has one global period control and no competing per-chart range toggles', () => {
+    mockedUseDashboardData.mockReturnValue({ data: baseData(), loading: false, error: null, refetch: vi.fn(), lastUpdated: '2026-09-07T12:00:00.000Z' });
+    renderPage();
+
+    expect(screen.getByLabelText(/dashboard period/i)).toBeInTheDocument();
+    // the old chart-local windows are gone
+    for (const label of ['6 months', '12 months', '3M', '6M', '12M']) {
+      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
+    }
+    // every financial chart now offers a Chart / Table view instead
+    expect(screen.getAllByRole('button', { name: 'Table' }).length).toBeGreaterThanOrEqual(3);
   });
 });

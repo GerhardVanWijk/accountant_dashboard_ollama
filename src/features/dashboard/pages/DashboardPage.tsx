@@ -14,6 +14,7 @@ import { EnumSelect } from '@/components/app/combobox';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useEntitlementStore } from '@/features/subscriptions/stores/entitlementStore';
 import { formatCurrency } from '@/lib/app/format';
+import { cn } from '@/lib/utils';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { calculateDashboardV3Metrics } from '../utils/calculateDashboardV3Metrics';
 import { filterMonthlyFinancialsByPeriod, resolveDashboardPeriod, type DashboardPeriodKey } from '../utils/dashboardPeriods';
@@ -68,7 +69,10 @@ export function DashboardPage() {
   const visibleMonths = useMemo(() => filterMonthlyFinancialsByPeriod(data?.monthlyFinancials ?? [], period), [data?.monthlyFinancials, period]);
   const metrics = useMemo(() => calculateDashboardV3Metrics(visibleMonths), [visibleMonths]);
 
-  if (loading) {
+  // Full loader only on the first load. A manual refresh keeps the previous
+  // render on screen (see `refreshing` below) rather than flashing a skeleton
+  // — useDashboardData retains `data` until the next fetch resolves.
+  if (loading && !data) {
     return <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-muted-foreground"><Loader2 className="size-5 animate-spin" aria-hidden="true" /><p className="text-sm">Loading dashboard...</p></div>;
   }
   if (error) {
@@ -78,8 +82,9 @@ export function DashboardPage() {
     return <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 text-center"><p className="text-sm font-medium">Nothing to show yet</p><p className="max-w-sm text-sm text-muted-foreground">Add customers, suppliers, or products to see live metrics here.</p></div>;
   }
 
+  // `data` is present here; `loading` now means a manual refresh is in flight.
+  const refreshing = loading;
   const monthlySeries = toV0MonthlySeries(visibleMonths);
-  const fullMonthlySeries = toV0MonthlySeries(data.monthlyFinancials);
   const arBuckets = toV0AgeingBuckets(data.arAging);
   const apBuckets = toV0AgeingBuckets(data.apAging);
   const inventoryAllowed = canInventory && hasInventoryEntitlement;
@@ -113,7 +118,7 @@ export function DashboardPage() {
         description={`Flow metrics for ${period.startDate} to ${period.endDate}; point-in-time figures are as at ${period.endDate}.`}
         actions={<><EnumSelect aria-label="Dashboard period" value={periodKey} onValueChange={(value) => setPeriodKey(value as DashboardPeriodKey)} className="w-40" options={[{ value: '3m', label: '3 months' }, { value: '6m', label: '6 months' }, { value: '12m', label: '12 months' }, { value: 'financial-year', label: 'Financial year' }, { value: 'ytd', label: 'YTD' }]} /><Button variant="outline" size="sm" onClick={() => setEditing((v) => !v)}><Settings2 data-icon="inline-start" />Customize dashboard</Button><Button variant="outline" size="sm" onClick={refetch}><RotateCw data-icon="inline-start" />Refresh</Button></>}
       />
-      <p className="text-xs text-muted-foreground">Last updated {lastUpdated ? new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'after refresh'}.</p>
+      <p className="text-xs text-muted-foreground">Last updated {lastUpdated ? new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'after refresh'}.{refreshing ? ' Refreshing…' : ''}</p>
 
       {editing ? (
         <SectionCard title="Dashboard widgets" description="Show, hide, and reorder visual widgets. Financial data is never stored here.">
@@ -129,7 +134,7 @@ export function DashboardPage() {
         </SectionCard>
       ) : null}
 
-      <section aria-label="Key figures" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <section aria-label="Key figures" aria-busy={refreshing} className={cn('grid gap-4 transition-opacity duration-200 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6', refreshing && 'pointer-events-none opacity-60')}>
         <MetricCard label="Revenue" formattedValue={formatCurrency(metrics.revenue)} trendPercent={data.kpis.revenue.trendPercent} higherIsBetter hint="Flow for selected period" />
         <MetricCard label="Gross Profit" formattedValue={formatCurrency(metrics.grossProfit)} higherIsBetter hint="Revenue less posted COGS" />
         <MetricCard label="Net Profit" formattedValue={formatCurrency(metrics.netProfit)} higherIsBetter hint="After operating expenses" />
@@ -138,12 +143,12 @@ export function DashboardPage() {
         <MetricCard label="Net Margin %" formattedValue={formatPercent(metrics.netMarginPercent)} higherIsBetter hint="Net profit divided by revenue" />
       </section>
 
-      <div className="grid auto-rows-min gap-6 lg:grid-cols-2 xl:grid-cols-3">
+      <div aria-busy={refreshing} className={cn('grid auto-rows-min gap-6 transition-opacity duration-200 lg:grid-cols-2 xl:grid-cols-3', refreshing && 'pointer-events-none opacity-60')}>
         {visibleWidgets.map((id) => {
-          if (id === 'profitability') return <WidgetFrame key={id} span="full"><SectionCard title="Profitability trend" description="Revenue, gross profit, and net result"><PerformanceChart data={monthlySeries} /></SectionCard></WidgetFrame>;
-          if (id === 'gross-margin') return <WidgetFrame key={id}><SectionCard title="Gross margin trend" description="Chart filter is local"><GrossMarginChart data={fullMonthlySeries} /></SectionCard></WidgetFrame>;
+          if (id === 'profitability') return <WidgetFrame key={id} span="full"><SectionCard title="Profitability trend" description="Revenue against expenses, with net result below"><PerformanceChart data={monthlySeries} /></SectionCard></WidgetFrame>;
+          if (id === 'gross-margin') return <WidgetFrame key={id}><SectionCard title="Gross margin trend" description="Gross profit as a percentage of revenue"><GrossMarginChart data={monthlySeries} /></SectionCard></WidgetFrame>;
           if (id === 'cash-position') return <WidgetFrame key={id}><SectionCard title="Cash position" description={`As at ${period.endDate}`}><FigureBlock label="Net position" value={formatCurrency(data.kpis.cashPosition.value)} hint="Cumulative from posted bank movements" tone="positive" /><dl className="mt-5 flex flex-col gap-3 border-t border-border pt-4"><div className="flex justify-between gap-4"><dt className="text-sm text-muted-foreground">Cash in</dt><dd><Amount value={visibleMonths.reduce((s, m) => s + m.cashIn, 0)} className="text-sm" /></dd></div><div className="flex justify-between gap-4"><dt className="text-sm text-muted-foreground">Cash out</dt><dd><Amount value={-visibleMonths.reduce((s, m) => s + m.cashOut, 0)} className="text-sm" /></dd></div></dl></SectionCard></WidgetFrame>;
-          if (id === 'cash-movement') return <WidgetFrame key={id}><SectionCard title="Cash movement" description="Cash in against cash out"><CashFlowChart data={fullMonthlySeries} /></SectionCard></WidgetFrame>;
+          if (id === 'cash-movement') return <WidgetFrame key={id}><SectionCard title="Cash movement" description="Cash in against cash out"><CashFlowChart data={monthlySeries} /></SectionCard></WidgetFrame>;
           if (id === 'ar-aging') return <WidgetFrame key={id}><SectionCard title="Receivables ageing" description={`As at ${period.endDate}`} actions={<Button render={<Link to="/sales/invoices" />} nativeButton={false} variant="ghost" size="sm" className="text-xs">View invoices<ArrowUpRight data-icon="inline-end" /></Button>}><AgeingPanel buckets={arBuckets} emptyLabel="No outstanding customer invoices." /></SectionCard></WidgetFrame>;
           if (id === 'ap-aging') return <WidgetFrame key={id}><SectionCard title="Payables ageing" description={`As at ${period.endDate}`} actions={<Button render={<Link to="/purchases/vendors" />} nativeButton={false} variant="ghost" size="sm" className="text-xs">View suppliers<ArrowUpRight data-icon="inline-end" /></Button>}><AgeingPanel buckets={apBuckets} emptyLabel="No outstanding supplier invoices." /></SectionCard></WidgetFrame>;
           if (id === 'inventory') return <WidgetFrame key={id} span="third"><MetricCard label="Inventory Valuation" formattedValue={formatCurrency(data.inventoryValuation)} hint={`As at ${period.endDate}`} /></WidgetFrame>;

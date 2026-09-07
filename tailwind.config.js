@@ -88,6 +88,10 @@ export default {
         'chart-3': 'var(--chart-3)',
         'chart-4': 'var(--chart-4)',
         'chart-5': 'var(--chart-5)',
+        /* Semantic P&L series — sign-carrying chart marks (net-result bar).
+           See tokens.css; resolves through the app's --color-positive/-negative. */
+        'series-positive': 'var(--series-positive)',
+        'series-negative': 'var(--series-negative)',
         brand: 'var(--brand)',
         'brand-foreground': 'var(--brand-foreground)',
         'brand-muted': 'var(--brand-muted)',

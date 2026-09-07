@@ -117,11 +117,29 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* Chart series palette. Validated against the dataviz categorical checks
+     (colour-blind ΔE, OKLCH lightness band, chroma floor, surface contrast)
+     with `node validate_palette.js "#2a78d6,#eb6834,#1baf7a,#eda100,#e87ba4"
+     --mode light --surface "#ffffff"` — all hard gates pass (three light
+     hues sit below 3:1 on white, mitigated by the always-on legend + the
+     Chart/Table toggle on every dashboard chart). Charts only ever render
+     inside .app-shell; the dark steps are the SAME five hues re-stepped for
+     the dark card surface (see [data-theme='dark'] below) — never a
+     neutral/greyscale flip. Kept as hex, not oklch, so the values re-feed
+     to the validator verbatim. */
+  --chart-1: #2a78d6; /* blue    */
+  --chart-2: #eb6834; /* orange  */
+  --chart-3: #1baf7a; /* aqua    */
+  --chart-4: #eda100; /* yellow  */
+  --chart-5: #e87ba4; /* magenta */
+
+  /* Semantic P&L series — sign-carrying marks (the net-result diverging
+     bar). Reuses this app's financial-number palette so a profit bar reads
+     the same green as a positive Amount elsewhere in Vertex; both flip
+     together in dark mode via --color-positive/-negative. Position (above/
+     below the zero baseline) is the primary cue; colour only reinforces. */
+  --series-positive: rgb(var(--color-positive));
+  --series-negative: rgb(var(--color-negative));
   --radius: 0.625rem;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -187,8 +205,12 @@
 }
 
 /* App shell surfaces: the authenticated product uses the same dark,
-   restrained sidebar/chart palette as the v0 marketing site, regardless of
-   the light/dark toggle — mirrors globals.css's ".dark, .app-shell" rule. */
+   restrained sidebar palette as the v0 marketing site, regardless of the
+   light/dark toggle — mirrors globals.css's ".dark, .app-shell" rule.
+   (Chart tokens are NOT set here: the light palette on :root applies in
+   light mode and the [data-theme='dark'] block below re-steps it for the
+   dark card surface. Previously this block set a colour palette that the
+   [data-theme='dark'] block then silently reverted to greyscale.) */
 [data-theme='dark'],
 .app-shell {
   --sidebar: oklch(0.168 0.004 240);
@@ -199,11 +221,6 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 8%);
   --sidebar-ring: var(--brand);
-  --chart-1: oklch(0.76 0.15 166);
-  --chart-2: oklch(0.72 0.1 234);
-  --chart-3: oklch(0.79 0.14 78);
-  --chart-4: oklch(0.68 0.19 22);
-  --chart-5: oklch(0.62 0.08 280);
 }
 
 [data-theme='dark'] {
@@ -225,11 +242,18 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+
+  /* Chart series — dark steps of the same five hues as :root, validated
+     with `node validate_palette.js "#3987e5,#d95926,#199e70,#c98500,#d55181"
+     --mode dark --surface "#171717"` (the .app-shell dark card): all hard
+     gates pass, all five clear 3:1 on the dark surface. NOT a greyscale
+     flip — the neutral values that used to sit here overrode .app-shell's
+     colour palette in dark mode (confirmed bug, 2026-09-07). */
+  --chart-1: #3987e5; /* blue    */
+  --chart-2: #d95926; /* orange  */
+  --chart-3: #199e70; /* aqua    */
+  --chart-4: #c98500; /* yellow  */
+  --chart-5: #d55181; /* magenta */
 }
 
 /* The brand green is the single primary action colour across the v0
