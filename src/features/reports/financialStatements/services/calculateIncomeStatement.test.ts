@@ -124,6 +124,33 @@ describe('calculateIncomeStatement', () => {
     expect(statement.netProfitAfterTax).toBe(0);
   });
 
+  it('classifies category-specific COGS accounts as COGS without swallowing inventory adjustments', () => {
+    const categoryAccounts: Account[] = [
+      ...accounts,
+      account({ id: 'acc_5010', code: '5010', name: 'COGS Furniture', type: 'expense', normalBalance: 'debit' }),
+      account({ id: 'acc_5040', code: '5040', name: 'COGS Consumables', type: 'expense', normalBalance: 'debit' }),
+      account({ id: 'acc_5050', code: '5050', name: 'Inventory Adjustment', type: 'expense', normalBalance: 'debit' }),
+    ];
+    const entries: JournalEntry[] = [
+      entry({
+        id: 'je_cogs_categories',
+        entryNumber: 'JE-COGS',
+        date: '2026-04-01',
+        lines: [
+          { id: 'l1', accountId: 'acc_5010', debit: 100, credit: 0 },
+          { id: 'l2', accountId: 'acc_5040', debit: 200, credit: 0 },
+          { id: 'l3', accountId: 'acc_5050', debit: 50, credit: 0 },
+        ],
+      }),
+    ];
+
+    const statement = calculateIncomeStatement(entries, categoryAccounts, '2026-04-01', '2026-04-30');
+
+    expect(statement.costOfGoodsSoldTotal).toBe(300);
+    expect(statement.costOfGoodsSoldLines.map((line) => line.code)).toEqual(['5010', '5040']);
+    expect(statement.operatingExpenseLines.map((line) => line.code)).toEqual(['5050']);
+  });
+
   it('excludes entries dated outside the requested range', () => {
     const entries: JournalEntry[] = [
       entry({

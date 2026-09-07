@@ -23,6 +23,9 @@ const ACCOUNTS: Account[] = [
   account({ id: 'acc_1100', code: '1100', name: 'Accounts Receivable', type: 'asset', normalBalance: 'debit' }),
   account({ id: 'acc_4000', code: '4000', name: 'Sales Revenue', type: 'revenue', normalBalance: 'credit' }),
   account({ id: 'acc_5000', code: '5000', name: 'Cost of Goods Sold', type: 'expense', normalBalance: 'debit' }),
+  account({ id: 'acc_5010', code: '5010', name: 'COGS Furniture', type: 'expense', normalBalance: 'debit' }),
+  account({ id: 'acc_5040', code: '5040', name: 'COGS Consumables', type: 'expense', normalBalance: 'debit' }),
+  account({ id: 'acc_5050', code: '5050', name: 'Inventory Adjustment', type: 'expense', normalBalance: 'debit' }),
   account({ id: 'acc_5100', code: '5100', name: 'Operating Expenses', type: 'expense', normalBalance: 'debit' }),
 ];
 
@@ -98,6 +101,23 @@ describe('calculateMonthlyFinancials', () => {
 
     const [august] = calculateMonthlyFinancials(entries, ACCOUNTS, ['2026-08']);
     expect(august.revenue).toBe(700); // 1000 - 300
+  });
+
+  it('uses the Income Statement COGS classifier for category-specific COGS accounts', () => {
+    const entries: JournalEntry[] = [
+      entry({
+        date: '2026-08-05',
+        lines: [
+          { id: 'l1', accountId: 'acc_5010', debit: 120, credit: 0 },
+          { id: 'l2', accountId: 'acc_5040', debit: 80, credit: 0 },
+          { id: 'l3', accountId: 'acc_5050', debit: 25, credit: 0 },
+        ],
+      }),
+    ];
+
+    const [august] = calculateMonthlyFinancials(entries, ACCOUNTS, ['2026-08']);
+    expect(august.cogs).toBe(200);
+    expect(august.operatingExpenses).toBe(25);
   });
 
   it('sums cash in/out from the Cash and Bank control account only', () => {

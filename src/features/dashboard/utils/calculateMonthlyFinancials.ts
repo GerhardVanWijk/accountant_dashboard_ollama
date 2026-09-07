@@ -1,5 +1,5 @@
 import type { Account, JournalEntry } from '@/types';
-import { COST_OF_GOODS_SOLD_ACCOUNT_CODE } from '@/features/reports/financialStatements/services/calculateIncomeStatement';
+import { isCostOfGoodsSoldAccount } from '@/features/reports/financialStatements/services/calculateIncomeStatement';
 
 /** Chart of Accounts code for the single Cash and Bank control account every posting module credits/debits — matched by `code`, not a fixed id (account ids are real Supabase-generated uuids). */
 const CASH_AND_BANK_ACCOUNT_CODE = '1000';
@@ -89,7 +89,7 @@ export function calculateMonthlyFinancials(
       } else if (account?.type === 'expense') {
         const amount = line.debit - line.credit;
         bucket.expenses += amount;
-        if (account.code === COST_OF_GOODS_SOLD_ACCOUNT_CODE) {
+        if (isCostOfGoodsSoldAccount(account)) {
           bucket.cogs += amount;
         } else {
           bucket.operatingExpenses += amount;

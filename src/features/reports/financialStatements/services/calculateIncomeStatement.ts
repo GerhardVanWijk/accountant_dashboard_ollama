@@ -9,8 +9,13 @@ import type { Account, ID, JournalEntry } from '@/types';
  * src/features/employees/components/PostPayrollRunForm.tsx.
  */
 export const COST_OF_GOODS_SOLD_ACCOUNT_CODE = '5000';
+const COST_OF_GOODS_SOLD_ACCOUNT_CODE_PATTERN = /^50[0-4]\d$/;
 /** New in Phase 9 Wave 1 — the corporate income tax charge (§51/§52). */
 export const INCOME_TAX_EXPENSE_ACCOUNT_CODE = '5500';
+
+export function isCostOfGoodsSoldAccount(account: Account): boolean {
+  return account.type === 'expense' && COST_OF_GOODS_SOLD_ACCOUNT_CODE_PATTERN.test(account.code);
+}
 
 export interface StatementAccountLine {
   accountId: ID;
@@ -111,7 +116,7 @@ export function calculateIncomeStatement(
     } else if (account.type === 'expense') {
       const amount = -net; // debit - credit, the expense's own normal direction
       const line = { accountId: account.id, code: account.code, name: account.name, amount };
-      if (account.code === COST_OF_GOODS_SOLD_ACCOUNT_CODE) {
+      if (isCostOfGoodsSoldAccount(account)) {
         costOfGoodsSoldLines.push(line);
       } else if (account.code === INCOME_TAX_EXPENSE_ACCOUNT_CODE) {
         incomeTaxExpenseLines.push(line);
