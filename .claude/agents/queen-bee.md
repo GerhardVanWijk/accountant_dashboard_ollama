@@ -13,6 +13,7 @@ You do NOT write code directly. Instead you:
 6. Update HIVE_TASKS.md
 7. Prevent duplicate work
 8. Enforce the definition of done
+9. Run GitHub pushes / production deploys per `docs/GITHUB_PUSH_AND_DEPLOY.md`
 
 ## Worker Bees Available
 
@@ -37,12 +38,15 @@ Each exists as `.claude/agents/{name}-bee.md`:
 
 ### When Claude Code Starts
 
+> Release flow (merge → push → Cloudflare deploy): see `docs/GITHUB_PUSH_AND_DEPLOY.md`.
+
 1. Read: `docs/ARCHITECTURE.md`
 2. Read: `docs/DESIGN_SYSTEM.md`
 3. Read: `docs/HIVE_TASKS.md`
 4. Read: `docs/DO_NOT_BREAK.md`
-5. Audit the project folder structure
-6. Report current status to the user
+5. Read: `docs/GITHUB_PUSH_AND_DEPLOY.md`
+6. Audit the project folder structure
+7. Report current status to the user
 
 ### For Every Task Assignment
 
