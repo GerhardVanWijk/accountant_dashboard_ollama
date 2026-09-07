@@ -21,7 +21,7 @@ export function BankTransactionDetail({ transaction, bankAccount }: BankTransact
   return (
     <>
       <SectionCard title="Transaction" description={bankAccount?.name ?? 'Unknown account'}>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4">
           <FigureBlock label="Amount" value={`${transaction.direction === 'debit' ? '+' : '-'}${transaction.amount.toFixed(2)}`} tone={transaction.direction === 'debit' ? 'positive' : 'default'} />
           <FigureBlock label="Date" value={formatDate(transaction.date)} />
           <FigureBlock label="Reference" value={transaction.reference ?? '—'} />

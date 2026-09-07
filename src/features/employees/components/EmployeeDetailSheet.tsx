@@ -21,7 +21,6 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange }: EmployeeDe
       titleAdornment={employee ? <StatusBadge status={employee.status} /> : undefined}
       state={state}
       notFoundMessage="This employee could not be found — they may have been deleted."
-      className="sm:max-w-xl"
     >
       {employee && (
         <div className="flex flex-col gap-6">

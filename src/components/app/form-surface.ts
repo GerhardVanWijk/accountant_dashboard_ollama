@@ -110,6 +110,9 @@ export const formOverlayClass =
 
 /* ============================ record-detail ============================ */
 
-/** Record-detail sheet width (docs/CURRENT_TASKS.md #23) — sheets are already full-height. */
-export const recordSheetClass = 'w-full sm:max-w-lg';
-export const wideRecordSheetClass = 'w-full sm:max-w-xl';
+/*
+ * Record-detail sheet width now lives on `RecordDetailSheet` itself (its
+ * `width="default" | "wide"` prop) — it has to be expressed with the
+ * `data-[side=right]:` variant to beat the shared `SheetContent`'s baked-in
+ * `sm:max-w-sm`, which a plain class here never did.
+ */

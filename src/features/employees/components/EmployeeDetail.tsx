@@ -25,7 +25,7 @@ export function EmployeeDetail({ employee }: EmployeeDetailProps) {
   return (
     <>
       <SectionCard title={`${employee.firstName} ${employee.lastName}`} description={EMPLOYMENT_TYPE_LABELS[employee.employmentType]}>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4">
           <FigureBlock label="Basic salary" value={formatCurrency(employee.basicSalary)} />
           <FigureBlock label="Pay frequency" value={PAY_FREQUENCY_LABELS[employee.payFrequency]} />
           <FigureBlock label="Started" value={formatDate(employee.startDate)} />

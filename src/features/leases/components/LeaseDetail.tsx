@@ -17,7 +17,7 @@ export function LeaseDetail({ lease, amortizationHistory, onOpenJournal }: Lease
   return (
     <>
       <SectionCard title={lease.assetDescription} description={lease.lessorName}>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4">
           <FigureBlock label="Outstanding liability" value={formatCurrency(lease.outstandingLeaseLiability)} />
           <FigureBlock label="ROU carrying value" value={formatCurrency(rouCarryingValue)} tone="positive" />
           <FigureBlock label="Monthly payment" value={formatCurrency(lease.monthlyPayment)} />

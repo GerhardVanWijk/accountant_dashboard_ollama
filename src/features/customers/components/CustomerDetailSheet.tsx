@@ -26,7 +26,7 @@ export function CustomerDetailSheet({ customerId, open, onOpenChange, onEdit }: 
       onOpenChange={onOpenChange}
       title="Customer"
       state={customerId ? 'ready' : 'not-found'}
-      className="sm:max-w-3xl"
+      width="wide"
     >
       {customerId && <CustomerDetailPage customerId={customerId} onBack={() => onOpenChange(false)} onEdit={onEdit} />}
     </RecordDetailSheet>

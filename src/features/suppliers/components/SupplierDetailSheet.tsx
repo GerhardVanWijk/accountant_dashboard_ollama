@@ -13,7 +13,7 @@ export interface SupplierDetailSheetProps {
 /** Wide variant, same reasoning as CustomerDetailSheet — SupplierDetailPage is a rich tabbed profile, not a compact document. */
 export function SupplierDetailSheet({ supplierId, suppliersState, open, onOpenChange, onEdit }: SupplierDetailSheetProps) {
   return (
-    <RecordDetailSheet open={open} onOpenChange={onOpenChange} title="Supplier" state={supplierId ? 'ready' : 'not-found'} className="sm:max-w-3xl">
+    <RecordDetailSheet open={open} onOpenChange={onOpenChange} title="Supplier" state={supplierId ? 'ready' : 'not-found'} width="wide">
       {supplierId && <SupplierDetailPage supplierId={supplierId} suppliersState={suppliersState} onBack={() => onOpenChange(false)} onEdit={onEdit} />}
     </RecordDetailSheet>
   );

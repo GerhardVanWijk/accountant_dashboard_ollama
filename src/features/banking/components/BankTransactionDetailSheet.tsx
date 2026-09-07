@@ -58,7 +58,6 @@ export function BankTransactionDetailSheet({ transaction, isLoading, bankAccount
       titleAdornment={transaction ? <StatusBadge status={transaction.status} /> : undefined}
       state={state}
       notFoundMessage="This transaction could not be found — it may have been deleted."
-      className="sm:max-w-xl"
       actions={
         transaction && onAllocate && !transaction.transferPairId ? (
           <Button size="sm" onClick={onAllocate}>

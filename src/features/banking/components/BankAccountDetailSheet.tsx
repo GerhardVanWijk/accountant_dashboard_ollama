@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import type { BankAccount } from '@/types';
 import { RecordDetailSheet, RelatedRecordsSection, type RelatedRecordItem } from '@/components/app/record-detail-sheet';
 import { RecordAuditHistorySection } from '@/components/app/record-audit-history';
-import { RecordLink } from '@/components/app/record-link';
 import { Button } from '@/components/ui/shadcn/button';
 import { BankAccountDetail } from './BankAccountDetail';
 
@@ -30,8 +29,8 @@ export function BankAccountDetailSheet({ account, glAccountCode, lastReconciledD
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!account) return [];
     return [
-      { label: 'Transactions', value: <RecordLink onClick={() => navigate('/banking/transactions')}>View transactions</RecordLink> },
-      { label: 'Reconciliation', value: <RecordLink onClick={() => navigate('/banking/reconciliation')}>View reconciliation</RecordLink> },
+      { label: 'Transactions', value: 'View transactions', onActivate: () => navigate('/banking/transactions') },
+      { label: 'Reconciliation', value: 'View reconciliation', onActivate: () => navigate('/banking/reconciliation') },
     ];
   }, [account, navigate]);
 
@@ -42,7 +41,6 @@ export function BankAccountDetailSheet({ account, glAccountCode, lastReconciledD
       title={account?.name ?? 'Bank account'}
       state={account ? 'ready' : 'not-found'}
       notFoundMessage="This bank account could not be found — it may have been deleted."
-      className="sm:max-w-xl"
       actions={
         account && onEdit ? (
           <Button size="sm" onClick={onEdit}>

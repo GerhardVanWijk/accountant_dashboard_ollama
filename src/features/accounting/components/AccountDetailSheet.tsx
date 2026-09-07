@@ -8,7 +8,6 @@ import {
 import { StatusBadge } from '@/components/app/status-badge';
 import { Amount } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
-import { recordSheetClass } from '@/components/app/form-surface';
 import { formatDate } from '@/lib/app/format';
 import { useAccountLedger } from '../hooks/useAccountLedger';
 import { accountTypeLabel } from '../types/account.types';
@@ -59,7 +58,6 @@ export function AccountDetailSheet({
       titleAdornment={account ? <StatusBadge status={account.isActive ? 'active' : 'inactive'} /> : undefined}
       state={account ? 'ready' : 'not-found'}
       notFoundMessage="This account could not be found — it may have been removed from the chart."
-      className={recordSheetClass}
       actions={
         account ? (
           <>

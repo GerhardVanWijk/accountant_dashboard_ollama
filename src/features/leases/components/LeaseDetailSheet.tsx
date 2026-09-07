@@ -41,7 +41,6 @@ export function LeaseDetailSheet({ lease, amortizationHistory, open, onOpenChang
       titleAdornment={lease ? <StatusBadge status={lease.status} /> : undefined}
       state={state}
       notFoundMessage="This lease could not be found — it may have been deleted."
-      className="sm:max-w-xl"
     >
       {lease && (
         <div className="flex flex-col gap-6">

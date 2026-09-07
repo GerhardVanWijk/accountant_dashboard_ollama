@@ -2,6 +2,20 @@
 
 ---
 
+## BANK DETAIL PANEL + NEW BANK TRANSACTION FORM UX (branch `bank-detail-panel-txn-form-ux-2026-09-07`) — 2026-09-07
+
+**BUILT on branch. `main` untouched, NOT merged/deployed. Awaiting human browser QA.** Presentation/responsive UX only — no migration, no DB write, no accounting/DTO/calculation change.
+
+- **Root cause of the narrow record-detail side panel:** `RecordDetailSheet` passed width as a plain `sm:max-w-*` className, which loses the CSS-specificity race against the shared `SheetContent`'s baked-in `data-[side=right]:sm:max-w-sm` — so *every* record-detail panel (Customer/Supplier "wide" ones included) was pinned at 384px regardless of the prop. Fixed with a `width="default" | "wide"` prop expressed as `data-[side=right]:` variants (`default` ≈ 26rem→30rem xl; `wide` ≈ 2xl→3xl lg). Callers' broken `className="sm:max-w-xl/3xl"` overrides removed; `recordSheetClass`/`wideRecordSheetClass` deleted from `form-surface.ts`.
+- **Shared `RecordDetailSheet` relayout:** non-scrolling outer → pinned header / one scrolling body / pinned footer (the FormShell architecture) so the × close button stays reachable; footer is `bg-muted/50` border-t, `justify-end`, no longer `flex-1`-stranded at the bottom of a tall empty panel.
+- **New shared primitives** in `record-detail-sheet.tsx`: `RecordDetailHero` (full-width headline figure, readable "R 0,00" → "R 1 250 000 000,00"), `RecordDetailGrid` (2-col metadata, never 3), `RelatedRecordItem.onActivate` (whole row becomes the click target + chevron).
+- **Bank Account detail** rebuilt: hero Current balance + 2-col grid (Account number / Currency / Ledger account / Last reconciled / Status). Other in-sheet detail bodies (BankTransaction, Asset, Lease, Employee) dropped `sm:grid-cols-3` → 2-col. Audit-history list caps height + scrolls past 6 entries.
+- **New Bank Transaction form:** `TransactionFormModal` (and the sibling `AllocateTransactionFormModal`) → `size="md" height="natural" className="sm:max-w-3xl"` — content-driven height, no full-viewport dead space. `TransactionForm` re-laid on `FormSection` + `FormGrid`; Gross amount is a fixed-width `InputGroup` "R" money field, not a full-bleed input. `AllocationRows` rebuilt: "Allocation" / "Add allocation", proportioned desktop grid that collapses to stacked cards below `sm`, and a real reconciliation summary (Transaction amount / Allocated / Remaining + semantic Balanced / needs-allocation / over-allocated pill). Same `computeAllocationTax` / submit path.
+- Gate: type-check · lint(`--max-warnings 0`) · **2967 tests** (+14: `BankAccountDetail`, `AllocationRows`, `record-detail-sheet`) · build ALL PASS.
+- **NEXT: human browser QA (1920/1440/1366/1024/tablet/mobile) of the bank detail panel + the New/Edit bank transaction forms, then merge.**
+
+---
+
 ## GLOBAL FORM UX / VISUAL REFINEMENT (branch `global-form-ux-2026-09-07`) — 2026-09-07
 
 **SHIPPED 2026-09-07** — on explicit user instruction ahead of human browser QA, `global-form-ux-2026-09-07` was fast-forward-merged → `main` (`5b878f8..f00bd21`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). No migration, no DB write, no accounting effect (frontend form UX only). **Post-deploy browser QA of the form pass (desktop/tablet/mobile) is now owed.**

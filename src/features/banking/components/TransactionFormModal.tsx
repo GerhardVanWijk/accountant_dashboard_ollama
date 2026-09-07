@@ -7,11 +7,26 @@ export interface TransactionFormModalProps extends Omit<TransactionFormProps, 'o
   onClose: () => void;
 }
 
-/** `TransactionForm` in the shared Vertex form shell (P3D). */
+/**
+ * `TransactionForm` in the shared Vertex form shell (P3D).
+ *
+ * `height="natural"` + a mid-width cap (wider than `md`, well short of the
+ * `lg` business-document width): one allocation row should read as a compact,
+ * intentional dialog, not a half-empty full-height sheet. The body scrolls
+ * only once enough allocation rows push it past the viewport.
+ */
 export function TransactionFormModal({ onClose, ...formProps }: TransactionFormModalProps) {
   const [dirty, setDirty] = useState(false);
   return (
-    <FormShell open onClose={onClose} size="lg" mode="create" isDirty={dirty}>
+    <FormShell
+      open
+      onClose={onClose}
+      size="md"
+      height="natural"
+      mode="create"
+      isDirty={dirty}
+      className="sm:max-w-3xl"
+    >
       <FormHeader title="New bank transaction" />
       <TransactionForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
     </FormShell>

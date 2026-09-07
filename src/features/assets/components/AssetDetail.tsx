@@ -18,7 +18,7 @@ export function AssetDetail({ asset, depreciationHistory, onOpenJournal }: Asset
   return (
     <>
       <SectionCard title={asset.name} description={CATEGORY_LABELS[asset.category]}>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4">
           <FigureBlock label="Cost" value={formatCurrency(asset.cost)} />
           <FigureBlock label="Accumulated depreciation" value={formatCurrency(asset.accumulatedDepreciation)} />
           <FigureBlock label="Carrying value" value={formatCurrency(carryingValue)} tone="positive" />

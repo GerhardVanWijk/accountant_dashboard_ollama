@@ -53,7 +53,6 @@ export function AssetDetailSheet({ asset, depreciationHistory, disposal, open, o
       titleAdornment={asset ? <StatusBadge status={asset.status} /> : undefined}
       state={state}
       notFoundMessage="This asset could not be found — it may have been deleted."
-      className="sm:max-w-xl"
     >
       {asset && (
         <div className="flex flex-col gap-6">

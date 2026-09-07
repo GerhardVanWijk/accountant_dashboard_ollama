@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import type { AuditLogEntry } from '@/types';
 import { auditLogService } from '@/services/auditLogService';
 import { formatDateTime } from '@/lib/app/format';
+import { cn } from '@/lib/utils';
 import { RecordDetailSection } from '@/components/app/record-detail-sheet';
 
 const ACTION_LABEL: Partial<Record<AuditLogEntry['action'], string>> = {
@@ -98,7 +99,9 @@ export function RecordAuditHistorySection({
   return (
     <RecordDetailSection title={title}>
       {subtitle ? <p className="mb-2 text-xs text-muted-foreground">{subtitle}</p> : null}
-      <ol className="flex flex-col gap-2">
+      {/* Cap the height once history gets long so a busy record can't push the
+          rest of the panel (and its footer) out of reach — scroll within. */}
+      <ol className={cn('flex flex-col gap-2', entries.length > 6 && 'app-scroll max-h-80 overflow-y-auto pr-1')}>
         {entries.map((entry) => (
           <li key={entry.id} className="rounded-lg border border-border px-3 py-2">
             <div className="flex items-center justify-between gap-2">
