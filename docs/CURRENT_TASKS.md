@@ -4,7 +4,7 @@
 
 ## PRODUCT CATEGORIES + PRODUCT PICKER (branch `product-catalog-picker-2026-09-07`) — 2026-09-07
 
-**DONE + COMMITTED on branch. `main` untouched, NOT deployed. Migration 0076 applied to live prod.**
+**SHIPPED 2026-09-07** — on explicit user instruction ahead of human browser QA, `product-catalog-picker-2026-09-07` was fast-forward-merged → `main` (`b2dcbfa..04d40c4`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Migration 0076 was already applied to live prod. **Post-deploy browser QA of the picker + product/category flows is now owed.**
 
 - **Root cause:** `SupabaseProductRepository` never mapped `products.category_id` → every `Product` in the app had `categoryId` undefined despite all 50 live products being linked. Fixed the repo (`ProductRow`/`rowToProduct`/`productToRow` + `sales_description`/`purchase_description`/account-override columns).
 - Category selector on New/Edit Product (`SearchableSelect`, "No category" state, writes `categoryId`, mirrors name into legacy `category`). Categories page counts were already `categoryId`-based — fixed upstream. **No backfill needed** (50/50 linked, 0 ambiguous).
@@ -12,7 +12,7 @@
 - **Shared `ProductCombobox` redesigned** — one component, `sales`/`purchase`/`inventory` contexts. Name-primary rows (`name` / `SKU · category` / `stock · price`); sales shows sell price and NEVER WAC/cost; purchase→cost, inventory→WAC only with `inventory:cost_edit`; warehouse-aware stock; always-visible "name, SKU or barcode" search; in-popover category-filter chips; custom line set apart. Applied to all 6 line editors (Quote/SO/Invoice/CN, PO/Bill, opening stock/adjustment/transfer/supplier return).
 - Migration **0076**: `products_category_company_integrity` trigger (cross-company `category_id` → 42501, verified live) + a no-op guarded self-heal backfill.
 - Gate: type-check · lint(`--max-warnings 0`) · **2943 tests** · build ALL PASS. Advisors **0 ERROR / 122 WARN**. Accounting byte-identical (TB R0.00, GL 1200 R1,478,853.74, 247 JE, 343 movements). Doc: `PRODUCT_CATALOG_PICKER.md`.
-- **NEXT: browser QA of the picker + product/category flows, then merge.**
+- **NEXT: post-deploy browser QA of the picker + product/category flows.**
 
 ---
 
