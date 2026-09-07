@@ -2,6 +2,24 @@
 
 ---
 
+## ACCOUNTING REGISTER PAGES — VISIBLE STRUCTURAL REDESIGN (branch `accounting-registers-structural-redesign-2026-09-07`, commit `7519446`) — 2026-09-07
+
+**SHIPPED 2026-09-07** — on explicit user instruction ahead of human browser QA, `accounting-registers-structural-redesign-2026-09-07` was fast-forward-merged → `main` (`27c35a3..7519446`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Layout / composition / responsive presentation only — no migration, no DB write, no calculation / classification / posting / reconciliation / variance change. **Post-deploy browser QA (1920/1600/1440/1366/1024/tablet/mobile) of Bank Transactions, Chart of Accounts, General Ledger, Journal Entries and Trial Balance is now owed.**
+
+- The prior consistency pass (`0ec4669`) was too subtle to see; this is a deliberate, noticeable upgrade.
+- **New shared primitive** `StatTile` + `StatStrip` (`@/components/app/stat-tile`): icon chip + label + large tabular figure + supporting line; `warning`/`negative` tones add a coloured hairline + faint wash + coloured figure. `StatStrip` caps the widest layout (3 or 4) and collapses 2-up then 1-up so a 4-metric row is never crushed.
+- **`DataTable` (global):** filter controls now sit in a bordered toolbar bar; new `toolbarLeading` slot renders the entity selector before the search box; header h-11 / `bg-muted/60` / 2px underline / `font-semibold`; body rows zebra-striped (hover / selected / brand-accent still win).
+- **Bank Transactions:** 3 icon tiles (warning when awaiting-recon / needs-allocation non-zero); toolbar `[Account][Search][Status]`; vertical rule between Money in / Money out; description bold, reference + dot "Needs allocation" pill on a quiet 2nd line.
+- **Chart of Accounts:** 3 tiles + a 5-cell type-count breakdown bar (derived from loaded `accounts`, no query); group headers get a brand left bar + count chip + bold wide tracking; code chip; normal-balance pill; filled Active badge; zebra rows.
+- **General Ledger:** 3 icon tiles + a new current-view context bar (brand-tinted with the account when narrowed, neutral for All accounts); toolbar `[Account][Search][Source]`; JE ref as a file-icon link; source badge dot; balance column → "Running balance" + bold in single-account mode.
+- **Journal Entries:** 4 icon tiles; journal number is now a brand link with a scroll icon (obvious click target, same navigation).
+- **Trial Balance:** control strip = two tiles + a double-width Difference control card (2px coloured border + wash, Balanced/Out-of-balance pill, 3xl coloured amount, explanation folded in — old thin banner removed); heavier TOTALS row; subledger section promoted (divider, `Scale` icon, heading, "n/3 reconciled" pill); cards redesigned with a coloured top strip, dot status badge, Variance in its own tinted box promoted when non-zero.
+- One TB copy assertion updated to the new "Balanced" pill wording.
+- Gate: type-check · lint(`--max-warnings 0`) · **2973 tests** · build ALL PASS.
+- **NEXT: post-deploy browser QA of the five register pages.**
+
+---
+
 ## ACCOUNTING REGISTER PAGES — SHARED VISUAL LANGUAGE (branch `accounting-tables-visual-consistency-2026-09-07`, commit `0ec4669`) — 2026-09-07
 
 **SHIPPED 2026-09-07** — on explicit user instruction ahead of human browser QA, `accounting-tables-visual-consistency-2026-09-07` was fast-forward-merged → `main` (`c7093e2..0ec4669`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Presentation only — no migration, no DB write, no calculation / classification / balance / pagination-semantics / reconciliation / variance change. **Post-deploy browser QA (1920/1600/1440/1366/1024/tablet/mobile) of Bank Transactions, Chart of Accounts, General Ledger, Journal Entries and Trial Balance is now owed.**
