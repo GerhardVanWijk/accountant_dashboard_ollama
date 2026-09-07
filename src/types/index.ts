@@ -54,3 +54,4 @@ export * from './deliveryNote';
 export * from './returnNote';
 export * from './financialPlan';
 export * from './companyDocument';
+export * from './notification';

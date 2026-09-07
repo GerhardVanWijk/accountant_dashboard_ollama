@@ -142,6 +142,7 @@ import { SettingsPage } from '@/features/settings/pages/SettingsPage';
 import { AccountingSettingsPage } from '@/features/settings/pages/AccountingSettingsPage';
 import { HelpPage } from '@/features/help/pages/HelpPage';
 import { DocumentsPage } from '@/features/documents/pages/DocumentsPage';
+import { NotificationsPage } from '@/features/notifications/pages/NotificationsPage';
 import { NotFoundPage } from '@/features/admin/pages/NotFoundPage';
 
 /**
@@ -333,6 +334,7 @@ export const routes: RouteObject[] = [
           { path: 'admin/audit', element: <PermissionRoute feature="audit" action="read"><AuditPage /></PermissionRoute> },
           { path: 'admin/audit-trail', element: <PermissionRoute feature="audit" action="read"><AuditTrailPage /></PermissionRoute> },
           { path: 'documents', element: <DocumentsPage /> },
+          { path: 'notifications', element: <NotificationsPage /> },
           { path: 'settings', element: <SettingsPage /> },
           { path: 'settings/accounting', element: <AccountingSettingsPage /> },
           { path: 'help', element: <HelpPage /> },
