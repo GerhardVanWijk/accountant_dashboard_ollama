@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { formatDate } from '@/lib/app/format';
 import type { SupersedeTaxRateInput } from '../services';
 
@@ -66,7 +66,7 @@ export function SupersedeTaxRateForm({ currentVersion, onSubmit, onCancel, isLoa
         edited — it stays exactly as posted; a new version starts on the date below.
       </p>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="supersede-rate">New Rate (%)</FieldLabel>
           <Input id="supersede-rate" type="number" min="0" max="100" step="0.01" className="text-right" value={rate} onChange={(e) => setRate(parseFloat(e.target.value) || 0)} />
@@ -75,7 +75,7 @@ export function SupersedeTaxRateForm({ currentVersion, onSubmit, onCancel, isLoa
           <FieldLabel htmlFor="supersede-effective-from">Effective From</FieldLabel>
           <Input id="supersede-effective-from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
         </Field>
-      </div>
+      </FormGrid>
 
       <Field>
         <FieldLabel htmlFor="supersede-source">Source Reference</FieldLabel>

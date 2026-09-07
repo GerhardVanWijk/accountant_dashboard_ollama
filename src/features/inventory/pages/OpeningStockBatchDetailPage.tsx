@@ -99,7 +99,7 @@ export function OpeningStockBatchDetailPage({ recordId, embedded }: RecordPagePr
 
           {canManage && isDraft && (
             <label className="flex w-fit items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-              <input type="checkbox" checked={confirmChecked} onChange={(e) => setConfirmChecked(e.target.checked)} className="accent-primary" />
+              <input type="checkbox" checked={confirmChecked} onChange={(e) => setConfirmChecked(e.target.checked)} className="size-4 rounded border-input accent-primary" />
               I confirm this opening balance is accurate and ready to post.
             </label>
           )}

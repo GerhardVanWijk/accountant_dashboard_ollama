@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { CustomerCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { CreateQuoteDTO } from '../services';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
@@ -91,7 +91,7 @@ export function QuoteForm({ customers, quote, defaultQuoteNumber, onSubmit, onCa
   return (
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
       <FormBody>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormGrid className="max-w-3xl">
         <Field>
           <FieldLabel htmlFor="quote-number">Quote number</FieldLabel>
           <Input
@@ -132,7 +132,7 @@ export function QuoteForm({ customers, quote, defaultQuoteNumber, onSubmit, onCa
             disabled={isSubmitting}
           />
         </Field>
-      </div>
+      </FormGrid>
 
       <SalesLineItemsEditor
         lineItems={lineItems}
@@ -158,7 +158,7 @@ export function QuoteForm({ customers, quote, defaultQuoteNumber, onSubmit, onCa
         </div>
       </div>
 
-      <Field>
+      <Field className="max-w-3xl">
         <FieldLabel htmlFor="quote-notes">Notes (optional)</FieldLabel>
         <Textarea id="quote-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={isSubmitting} />
       </Field>

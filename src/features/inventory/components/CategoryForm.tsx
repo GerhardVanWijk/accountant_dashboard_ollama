@@ -7,9 +7,8 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
-import { FormBody, FormFooter, FormSection } from '@/components/app/form';
+import { CheckboxField, FormBody, FormFooter, FormGrid, FormSection } from '@/components/app/form';
 import type {
   CreateProductCategoryDTO,
   UpdateProductCategoryDTO,
@@ -134,14 +133,12 @@ export function CategoryForm({ category, accounts, taxRates, onSubmit, onCancel,
             control={control}
             name="isActive"
             render={({ field }) => (
-              <Field orientation="horizontal">
-                <Checkbox
-                  id="cat-active"
-                  checked={field.value}
-                  onCheckedChange={(v) => field.onChange(v === true)}
-                />
-                <FieldLabel htmlFor="cat-active">Active</FieldLabel>
-              </Field>
+              <CheckboxField
+                id="cat-active"
+                checked={Boolean(field.value)}
+                onCheckedChange={field.onChange}
+                label="Active"
+              />
             )}
           />
         </FormSection>
@@ -150,7 +147,7 @@ export function CategoryForm({ category, accounts, taxRates, onSubmit, onCancel,
           title="Account mappings"
           description="Optional. When set, these win over the standard account for every product in this category (a product-specific override still wins over the category)."
         >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <FormGrid>
             <Field>
               <FieldLabel htmlFor="cat-rev">Sales revenue</FieldLabel>
               <AccountSelect control={control} name="revenueAccountId" id="cat-rev" list={byType(['revenue'])} />
@@ -183,7 +180,7 @@ export function CategoryForm({ category, accounts, taxRates, onSubmit, onCancel,
                 )}
               />
             </Field>
-          </div>
+          </FormGrid>
         </FormSection>
       </FormBody>
 

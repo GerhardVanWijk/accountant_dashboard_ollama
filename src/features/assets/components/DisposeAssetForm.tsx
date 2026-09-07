@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Account, FixedAsset } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { SearchableSelect } from '@/components/app/combobox';
@@ -67,7 +67,7 @@ export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel, onDirty
         />
       </Field>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="disposalDate">Disposal Date</FieldLabel>
           <Input id="disposalDate" type="date" value={disposalDate} onChange={(e) => setDisposalDate(e.target.value)} />
@@ -77,7 +77,7 @@ export function DisposeAssetForm({ assets, accounts, onSubmit, onCancel, onDirty
           <Input id="proceeds" type="number" step="0.01" value={proceeds} onChange={(e) => setProceeds(e.target.value)} />
           {proceedsError && <FieldError errors={[{ message: 'Proceeds cannot be negative' }]} />}
         </Field>
-      </div>
+      </FormGrid>
 
       <Field>
         <FieldLabel htmlFor="proceedsAccountId">Proceeds Account</FieldLabel>

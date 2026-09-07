@@ -7,7 +7,7 @@ import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { EnumSelect, type EnumOption } from '@/components/app/combobox';
-import { FormFooter, FormSection, FormTabs, type FormTab } from '@/components/app/form';
+import { CheckboxField, FormFooter, FormGrid, FormSection, FormTabs, type FormTab } from '@/components/app/form';
 import { customerFormSchema, type CustomerFormTab, type CustomerFormValues } from '../utils/customerFormSchema';
 
 const STATUS_OPTIONS: EnumOption[] = [
@@ -99,7 +99,7 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
       label: tabLabels.general,
       hasError: tabHasError.general,
       content: (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormGrid>
           <Field>
             <FieldLabel htmlFor="customer-number">Customer number</FieldLabel>
             <Input id="customer-number" {...register('customerNumber')} />
@@ -136,11 +136,11 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
               )}
             />
           </Field>
-          <Field className="sm:col-span-2">
+          <Field className="col-span-full">
             <FieldLabel htmlFor="customer-notes">Notes</FieldLabel>
             <Textarea id="customer-notes" rows={3} {...register('notes')} />
           </Field>
-        </div>
+        </FormGrid>
       ),
     },
     {
@@ -151,7 +151,7 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
         <div className="flex flex-col gap-4">
           {contactFields.length === 0 && <p className="text-sm text-muted-foreground">No contacts added yet.</p>}
           {contactFields.map((field, index) => (
-            <div key={field.id} className="grid grid-cols-1 gap-3 rounded-lg border border-border p-4 sm:grid-cols-2">
+            <FormGrid key={field.id} className="rounded-lg border border-border p-4">
               <Field>
                 <FieldLabel htmlFor={`contact-name-${field.id}`}>Name</FieldLabel>
                 <Input id={`contact-name-${field.id}`} {...register(`contacts.${index}.name` as const)} />
@@ -170,13 +170,13 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
                 <FieldLabel htmlFor={`contact-phone-${field.id}`}>Phone</FieldLabel>
                 <Input id={`contact-phone-${field.id}`} {...register(`contacts.${index}.phone` as const)} />
               </Field>
-              <div className="flex justify-end sm:col-span-2">
+              <div className="col-span-full flex justify-end">
                 <Button variant="ghost" size="sm" type="button" onClick={() => removeContact(index)}>
                   <Trash2 data-icon="inline-start" />
                   Remove contact
                 </Button>
               </div>
-            </div>
+            </FormGrid>
           ))}
           <div>
             <Button
@@ -201,7 +201,7 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
       content: (
         <>
           <FormSection title="Billing address">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormGrid>
               <Field>
                 <FieldLabel htmlFor="billing-line1">Address line 1</FieldLabel>
                 <Input id="billing-line1" {...register('billingAddress.line1')} />
@@ -229,18 +229,24 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
                 <Input id="billing-country" {...register('billingAddress.country')} />
                 <FieldError errors={[errors.billingAddress?.country]} />
               </Field>
-            </div>
+            </FormGrid>
           </FormSection>
 
-          <Field orientation="horizontal">
-            <input type="checkbox" id="shipping-same" className="size-4 rounded border-input" {...register('shippingSameAsBilling')} />
-            <FieldLabel htmlFor="shipping-same" className="font-normal">
-              Shipping address same as billing
-            </FieldLabel>
-          </Field>
+          <Controller
+            control={control}
+            name="shippingSameAsBilling"
+            render={({ field }) => (
+              <CheckboxField
+                id="shipping-same"
+                checked={Boolean(field.value)}
+                onCheckedChange={field.onChange}
+                label="Shipping address same as billing"
+              />
+            )}
+          />
 
           <FormSection title="Shipping address" className={shippingSameAsBilling ? 'hidden' : undefined}>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormGrid>
               <Field>
                 <FieldLabel htmlFor="shipping-line1">Address line 1</FieldLabel>
                 <Input id="shipping-line1" {...register('shippingAddress.line1')} />
@@ -265,7 +271,7 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
                 <FieldLabel htmlFor="shipping-country">Country</FieldLabel>
                 <Input id="shipping-country" {...register('shippingAddress.country')} />
               </Field>
-            </div>
+            </FormGrid>
           </FormSection>
         </>
       ),
@@ -275,7 +281,7 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
       label: tabLabels.financial,
       hasError: tabHasError.financial,
       content: (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormGrid>
           <Field>
             <FieldLabel htmlFor="customer-tax-number">Tax/VAT number</FieldLabel>
             <Input id="customer-tax-number" {...register('taxNumber')} />
@@ -342,13 +348,20 @@ export function CustomerForm({ mode, defaultValues, onSubmit, onCancel, submitti
             <Input id="customer-discount" type="number" min="0" max="100" step="0.1" {...register('defaultDiscountPercent')} />
             <FieldError errors={[errors.defaultDiscountPercent]} />
           </Field>
-          <Field orientation="horizontal" className="sm:col-span-2">
-            <input type="checkbox" id="customer-credit-hold" className="size-4 rounded border-input" {...register('creditHold')} />
-            <FieldLabel htmlFor="customer-credit-hold" className="font-normal">
-              Place this customer on credit hold
-            </FieldLabel>
-          </Field>
-        </div>
+          <Controller
+            control={control}
+            name="creditHold"
+            render={({ field }) => (
+              <CheckboxField
+                id="customer-credit-hold"
+                span="full"
+                checked={Boolean(field.value)}
+                onCheckedChange={field.onChange}
+                label="Place this customer on credit hold"
+              />
+            )}
+          />
+        </FormGrid>
       ),
     },
   ];

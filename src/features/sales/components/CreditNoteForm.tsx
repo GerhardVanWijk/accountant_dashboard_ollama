@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { CustomerCombobox, EnumSelect, SearchableSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { CreateCreditNoteDTO } from '../services';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
@@ -188,7 +188,7 @@ export function CreditNoteForm({ customers, invoices, creditNotes = [], defaultC
   return (
     <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
       <FormBody>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormGrid className="max-w-3xl">
         <Field>
           <FieldLabel htmlFor="cn-number">Credit note number</FieldLabel>
           <Input id="cn-number" className="figure" value={creditNoteNumber} onChange={(e) => setCreditNoteNumber(e.target.value)} />
@@ -236,7 +236,7 @@ export function CreditNoteForm({ customers, invoices, creditNotes = [], defaultC
           <Input id="cn-issue-date" type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
         </Field>
         {reason === 'other' && (
-          <Field className="sm:col-span-2">
+          <Field className="col-span-full">
             <FieldLabel htmlFor="cn-reason-detail">Specify reason</FieldLabel>
             <Textarea
               id="cn-reason-detail"
@@ -248,7 +248,7 @@ export function CreditNoteForm({ customers, invoices, creditNotes = [], defaultC
             />
           </Field>
         )}
-      </div>
+      </FormGrid>
 
       {selectedInvoice && creditableLines.length > 0 && (
         <div className="flex flex-col gap-2 rounded-xl border border-border p-4">
@@ -327,7 +327,7 @@ export function CreditNoteForm({ customers, invoices, creditNotes = [], defaultC
         </div>
       </div>
 
-      <Field>
+      <Field className="max-w-3xl">
         <FieldLabel htmlFor="cn-notes">Notes (optional)</FieldLabel>
         <Textarea id="cn-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>

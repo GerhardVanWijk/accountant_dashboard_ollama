@@ -7,7 +7,7 @@ import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { CheckboxField, FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { ACCOUNT_TYPES } from '../types/account.types';
 
 const NORMAL_BALANCE_OPTIONS = [
@@ -88,7 +88,7 @@ export function AccountForm({
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="account-code">Account code</FieldLabel>
           <Input id="account-code" className="figure" {...register('code')} />
@@ -166,15 +166,22 @@ export function AccountForm({
             )}
           />
         </Field>
-        <Field orientation="horizontal" className="sm:col-span-2">
-          <input type="checkbox" id="account-active" className="size-4 rounded border-input" {...register('isActive')} />
-          <FieldLabel htmlFor="account-active" className="font-normal">
-            Active — can be posted to
-          </FieldLabel>
-        </Field>
-      </div>
+        <Controller
+          control={control}
+          name="isActive"
+          render={({ field }) => (
+            <CheckboxField
+              id="account-active"
+              span="full"
+              checked={Boolean(field.value)}
+              onCheckedChange={field.onChange}
+              label="Active — can be posted to"
+            />
+          )}
+        />
+      </FormGrid>
 
-      <Field>
+      <Field className="max-w-3xl">
         <FieldLabel htmlFor="account-description">Description (optional)</FieldLabel>
         <Textarea id="account-description" rows={2} {...register('description')} />
       </Field>

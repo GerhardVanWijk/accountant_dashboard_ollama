@@ -4,7 +4,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { Employee, EmployeeAllowance, EmployeeDeduction } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { CheckboxField, FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
@@ -124,7 +124,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, onDirtyChange }: Em
   return (
     <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
       <FormBody>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="employeeNumber">Employee Number</FieldLabel>
           <Input id="employeeNumber" className="font-mono" {...register('employeeNumber')} />
@@ -147,9 +147,9 @@ export function EmployeeForm({ employee, onSubmit, onCancel, onDirtyChange }: Em
             )}
           />
         </Field>
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="firstName">First Name</FieldLabel>
           <Input id="firstName" {...register('firstName')} />
@@ -160,9 +160,9 @@ export function EmployeeForm({ employee, onSubmit, onCancel, onDirtyChange }: Em
           <Input id="lastName" {...register('lastName')} />
           <FieldError errors={[errors.lastName]} />
         </Field>
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <FormGrid columns={3}>
         <Field>
           <FieldLabel htmlFor="idNumber">SA ID Number</FieldLabel>
           <Input id="idNumber" {...register('idNumber')} />
@@ -176,9 +176,9 @@ export function EmployeeForm({ employee, onSubmit, onCancel, onDirtyChange }: Em
           <Input id="dateOfBirth" type="date" {...register('dateOfBirth')} />
           <FieldDescription>Drives the 65+/75+ PAYE rebate tier.</FieldDescription>
         </Field>
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input id="email" type="email" {...register('email')} />
@@ -187,9 +187,9 @@ export function EmployeeForm({ employee, onSubmit, onCancel, onDirtyChange }: Em
           <FieldLabel htmlFor="phone">Phone</FieldLabel>
           <Input id="phone" {...register('phone')} />
         </Field>
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <FormGrid columns={3}>
         <Field>
           <FieldLabel htmlFor="employmentType">Employment Type</FieldLabel>
           <Controller
@@ -229,9 +229,9 @@ export function EmployeeForm({ employee, onSubmit, onCancel, onDirtyChange }: Em
           <Input id="startDate" type="date" {...register('startDate')} />
           <FieldError errors={[errors.startDate]} />
         </Field>
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="basicSalary">Basic Salary per Pay Period ({PAYROLL_CURRENCY})</FieldLabel>
           <Input id="basicSalary" type="number" step="0.01" {...register('basicSalary')} />
@@ -241,15 +241,18 @@ export function EmployeeForm({ employee, onSubmit, onCancel, onDirtyChange }: Em
           control={control}
           name="uifExempt"
           render={({ field }) => (
-            <Field orientation="horizontal" className="items-center pt-6">
-              <Checkbox id="uifExempt" checked={field.value} onCheckedChange={(value) => field.onChange(value === true)} />
-              <FieldLabel htmlFor="uifExempt">UIF exempt</FieldLabel>
-            </Field>
+            <CheckboxField
+              id="uifExempt"
+              span="full"
+              checked={Boolean(field.value)}
+              onCheckedChange={field.onChange}
+              label="UIF exempt"
+            />
           )}
         />
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="bankName">Bank Name</FieldLabel>
           <Input id="bankName" {...register('bankName')} />
@@ -258,7 +261,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, onDirtyChange }: Em
           <FieldLabel htmlFor="bankAccountNumber">Bank Account Number</FieldLabel>
           <Input id="bankAccountNumber" {...register('bankAccountNumber')} />
         </Field>
-      </div>
+      </FormGrid>
 
       <fieldset className="rounded-lg border border-border p-4">
         <legend className="px-1.5 text-sm font-medium">Standard Allowances</legend>

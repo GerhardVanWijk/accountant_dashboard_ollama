@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { SearchableSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { CreateInvoiceDTO } from '@/services/invoiceService';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
@@ -90,7 +90,7 @@ export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading 
   return (
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
       <FormBody>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormGrid className="max-w-3xl">
         <Field>
           <FieldLabel htmlFor="invoice-number">Invoice number</FieldLabel>
           <Input
@@ -135,7 +135,7 @@ export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading 
             disabled={isLoading}
           />
         </Field>
-      </div>
+      </FormGrid>
 
       <SalesLineItemsEditor
         lineItems={lineItems}
@@ -161,7 +161,7 @@ export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading 
         </div>
       </div>
 
-      <Field>
+      <Field className="max-w-3xl">
         <FieldLabel htmlFor="invoice-notes">Notes (optional)</FieldLabel>
         <Textarea id="invoice-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={isLoading} />
       </Field>

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { CustomerCombobox, EnumSelect, SearchableSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
-import { FormBody, FormFooter, FormSection } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid, FormSection } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
 import type { CreateCustomerReceiptDTO } from '../services';
 
@@ -174,7 +174,7 @@ export function CustomerReceiptForm({
     <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
       <FormBody>
         <FormSection title="Receipt details">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormGrid>
             <Field>
               <FieldLabel htmlFor="receipt-number">Receipt number</FieldLabel>
               <Input id="receipt-number" className="figure" value={receiptNumber} onChange={(e) => setReceiptNumber(e.target.value)} />
@@ -204,11 +204,11 @@ export function CustomerReceiptForm({
                 options={METHOD_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
               />
             </Field>
-            <Field className="sm:col-span-2">
+            <Field className="col-span-full">
               <FieldLabel htmlFor="receipt-reference">Reference (optional)</FieldLabel>
               <Input id="receipt-reference" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="EFT reference, cheque number, …" />
             </Field>
-          </div>
+          </FormGrid>
 
           <div className="rounded-xl border border-brand-outline bg-brand-muted/40 p-4">
             <FieldLabel htmlFor="receipt-amount" className="text-xs tracking-wide text-muted-foreground uppercase">

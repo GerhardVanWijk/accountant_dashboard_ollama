@@ -8,7 +8,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { EnumSelect } from '@/components/app/combobox';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS, ASSETS_CURRENCY } from '../constants';
 import type { CreateFixedAssetDTO, UpdateFixedAssetDTO } from '../services';
 
@@ -144,7 +144,7 @@ export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFor
   return (
     <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
       <FormBody>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="assetNumber">Asset Number</FieldLabel>
           <Input id="assetNumber" className="font-mono" {...register('assetNumber')} />
@@ -155,14 +155,14 @@ export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFor
           <Input id="name" {...register('name')} />
           <FieldError errors={[errors.name]} />
         </Field>
-      </div>
+      </FormGrid>
 
-      <Field>
+      <Field className="max-w-3xl">
         <FieldLabel htmlFor="description">Description</FieldLabel>
         <Textarea id="description" rows={2} {...register('description')} />
       </Field>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="category">Category</FieldLabel>
           <Controller
@@ -185,9 +185,9 @@ export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFor
           <Input id="acquisitionDate" type="date" disabled={locked} {...register('acquisitionDate')} />
           <FieldError errors={[errors.acquisitionDate]} />
         </Field>
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <FormGrid columns={3}>
         <Field>
           <FieldLabel htmlFor="cost">Cost ({ASSETS_CURRENCY})</FieldLabel>
           <Input id="cost" type="number" step="0.01" disabled={locked} {...register('cost')} />
@@ -203,9 +203,9 @@ export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFor
           <Input id="usefulLifeYears" type="number" step="1" disabled={locked} {...register('usefulLifeYears')} />
           <FieldError errors={[errors.usefulLifeYears]} />
         </Field>
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="depreciationMethod">Depreciation Method</FieldLabel>
           <Controller
@@ -231,9 +231,9 @@ export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFor
             <FieldError errors={[errors.reducingBalanceRatePercent]} />
           </Field>
         )}
-      </div>
+      </FormGrid>
 
-      <Field>
+      <Field className="max-w-3xl">
         <FieldLabel htmlFor="taxWearTearRatePercent">SARS Wear-and-Tear Rate (%)</FieldLabel>
         <Input id="taxWearTearRatePercent" type="number" step="0.01" {...register('taxWearTearRatePercent')} />
         <FieldDescription>

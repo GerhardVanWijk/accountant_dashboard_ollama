@@ -5,7 +5,7 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/fiel
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { EnumSelect } from '@/components/app/combobox';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { CreateStockAdjustmentDTO, UpdateStockAdjustmentDTO } from '../services/stockAdjustmentService';
 import { StockAdjustmentLinesEditor } from './StockAdjustmentLinesEditor';
 
@@ -110,7 +110,7 @@ export function StockAdjustmentDocumentForm({
             {formError}
           </p>
         )}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <FormGrid columns={3}>
           <Field>
             <FieldLabel htmlFor="sa-warehouse">Warehouse</FieldLabel>
             <EnumSelect
@@ -134,7 +134,7 @@ export function StockAdjustmentDocumentForm({
               options={Object.entries(REASON_LABEL).map(([value, label]) => ({ value, label }))}
             />
           </Field>
-        </div>
+        </FormGrid>
 
         <Field>
           <FieldLabel htmlFor="sa-notes">Notes</FieldLabel>

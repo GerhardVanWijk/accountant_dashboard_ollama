@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { FormError, FormGrid, FormPageLayout } from '@/components/app/form';
 import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { useReturnNotes } from '@/features/sales/hooks/useReturnNotes';
@@ -12,7 +16,6 @@ import { computeReturnableDeliveryNoteLines } from '@/features/sales/services';
 import type { CreateReturnNoteLineDTO } from '@/features/sales/services';
 
 const fmtQty = (n: number) => n.toLocaleString('en-ZA', { maximumFractionDigits: 3 });
-const inputClass = 'h-9 w-full rounded-md border border-input bg-background px-3 text-sm tabular-nums';
 
 /**
  * Full-page "Create return" form — route
@@ -101,23 +104,25 @@ export function CreateReturnNotePage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title={`Create return — ${dn.deliveryNoteNumber}`}
-        description={`${customerName} · return delivered-but-not-yet-invoiced goods. Already-invoiced quantity must be returned via a Credit Note instead — posting reverses DR 1200 Inventory / CR 1220 Goods Delivered Not Invoiced at the ORIGINAL frozen delivery cost.`}
-      />
-
+    <FormPageLayout
+      size="document"
+      surface="plain"
+      title={`Create return — ${dn.deliveryNoteNumber}`}
+      description={`${customerName} · return delivered-but-not-yet-invoiced goods. Already-invoiced quantity must be returned via a Credit Note instead — posting reverses DR 1200 Inventory / CR 1220 Goods Delivered Not Invoiced at the ORIGINAL frozen delivery cost.`}
+      backTo={`/sales/delivery-notes/${dn.id}`}
+      backLabel="Back to delivery note"
+    >
       <SectionCard>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="rn-date" className="text-sm font-medium">Return date</label>
-            <input id="rn-date" type="date" className={inputClass} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">Warehouse</span>
-            <p className="flex h-9 items-center text-sm text-muted-foreground">Same warehouse the delivery left from — not editable.</p>
-          </div>
-        </div>
+        <FormGrid>
+          <Field>
+            <FieldLabel htmlFor="rn-date">Return date</FieldLabel>
+            <Input id="rn-date" type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
+          </Field>
+          <Field>
+            <FieldLabel>Warehouse</FieldLabel>
+            <p className="flex h-8 items-center text-sm text-muted-foreground">Same warehouse the delivery left from — not editable.</p>
+          </Field>
+        </FormGrid>
       </SectionCard>
 
       <SectionCard>
@@ -146,12 +151,12 @@ export function CreateReturnNotePage() {
                     <td className="py-2 pr-3 text-right tabular-nums">{fmtQty(l.alreadyReturnedQty)}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{fmtQty(l.returnableQty)}</td>
                     <td className="py-2 text-right">
-                      <input
+                      <Input
                         type="number"
                         min={0}
                         max={l.returnableQty}
                         step="0.001"
-                        className={`${inputClass} w-28 text-right`}
+                        className="ml-auto w-28 text-right tabular-nums"
                         value={quantities[l.deliveryNoteLineId] ?? '0'}
                         onChange={(e) => setQty(l.deliveryNoteLineId, e.target.value)}
                       />
@@ -165,22 +170,13 @@ export function CreateReturnNotePage() {
       </SectionCard>
 
       <SectionCard>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="rn-notes" className="text-sm font-medium">Notes (optional)</label>
-          <textarea
-            id="rn-notes"
-            className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
+        <Field>
+          <FieldLabel htmlFor="rn-notes">Notes (optional)</FieldLabel>
+          <Textarea id="rn-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
       </SectionCard>
 
-      {formError && (
-        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {formError}
-        </div>
-      )}
+      {formError && <FormError>{formError}</FormError>}
 
       <div className="flex items-center gap-2">
         <Button onClick={() => void handleSubmit()} disabled={submitting || returnableLines.length === 0}>
@@ -190,6 +186,6 @@ export function CreateReturnNotePage() {
           Cancel
         </Button>
       </div>
-    </div>
+    </FormPageLayout>
   );
 }

@@ -5,7 +5,7 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/fiel
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { EnumSelect } from '@/components/app/combobox';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { CreateOpeningStockBatchDTO, UpdateOpeningStockBatchDTO } from '../services/openingStockBatchService';
 import { OpeningStockLinesEditor } from './OpeningStockLinesEditor';
 
@@ -88,7 +88,7 @@ export function OpeningStockBatchDocumentForm({ batch, products, warehouses, onS
             {formError}
           </p>
         )}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <FormGrid>
           <Field>
             <FieldLabel htmlFor="osb-warehouse">Warehouse</FieldLabel>
             <EnumSelect
@@ -103,7 +103,7 @@ export function OpeningStockBatchDocumentForm({ batch, products, warehouses, onS
             <FieldLabel htmlFor="osb-date">Effective date</FieldLabel>
             <Input id="osb-date" type="date" value={effectiveDate} onChange={(e) => markDirty(setEffectiveDate)(e.target.value)} />
           </Field>
-        </div>
+        </FormGrid>
 
         <Field>
           <FieldLabel htmlFor="osb-notes">Notes</FieldLabel>

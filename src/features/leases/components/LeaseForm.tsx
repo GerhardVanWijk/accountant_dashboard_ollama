@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { LeaseContract } from '@/types/lease';
 import { Button } from '@/components/ui/shadcn/button';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Amount } from '@/components/app/figure';
@@ -107,7 +107,7 @@ export function LeaseForm({ lease, onSubmit, onCancel, onDirtyChange }: LeaseFor
         <FieldError errors={[errors.assetDescription]} />
       </Field>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="commencementDate">Commencement Date</FieldLabel>
           <Input id="commencementDate" type="date" {...register('commencementDate')} />
@@ -118,9 +118,9 @@ export function LeaseForm({ lease, onSubmit, onCancel, onDirtyChange }: LeaseFor
           <Input id="leaseTermMonths" type="number" step="1" {...register('leaseTermMonths')} />
           <FieldError errors={[errors.leaseTermMonths]} />
         </Field>
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="monthlyPayment">Monthly Payment</FieldLabel>
           <Input id="monthlyPayment" type="number" step="0.01" {...register('monthlyPayment')} />
@@ -133,7 +133,7 @@ export function LeaseForm({ lease, onSubmit, onCancel, onDirtyChange }: LeaseFor
           <FieldError errors={[errors.discountRatePercent]} />
           <FieldDescription>Your incremental borrowing rate — always a manual input, never looked up automatically.</FieldDescription>
         </Field>
-      </div>
+      </FormGrid>
 
       <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
         <div className="flex items-center justify-between">

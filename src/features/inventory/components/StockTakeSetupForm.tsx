@@ -5,7 +5,7 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/fiel
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { CreateStockTakeDTO, UpdateStockTakeDTO } from '../services/stockTakeService';
 
 export interface StockTakeSetupFormProps {
@@ -92,7 +92,7 @@ export function StockTakeSetupForm({ stockTake, warehouses, categories, onSubmit
             {formError}
           </p>
         )}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <FormGrid>
           <Field>
             <FieldLabel htmlFor="stk-warehouse">Warehouse</FieldLabel>
             <EnumSelect
@@ -107,7 +107,7 @@ export function StockTakeSetupForm({ stockTake, warehouses, categories, onSubmit
             <FieldLabel htmlFor="stk-date">Count date</FieldLabel>
             <Input id="stk-date" type="date" value={countDate} onChange={(e) => markDirty(setCountDate)(e.target.value)} />
           </Field>
-        </div>
+        </FormGrid>
 
         <Field>
           <FieldLabel htmlFor="stk-scope">Scope</FieldLabel>

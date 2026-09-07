@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { ExchangeRate } from '@/types/foreignExchange';
 import type { CreateExchangeRateDTO } from '../services';
 
@@ -69,7 +69,7 @@ export function ExchangeRateForm({ initialValue, onSubmit, onCancel, isLoading =
   return (
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate onInput={() => onDirtyChange?.(true)}>
       <FormBody>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid columns={2}>
         <Field>
           <FieldLabel htmlFor="fromCurrency">From Currency</FieldLabel>
           <Input id="fromCurrency" className="font-mono uppercase" placeholder="e.g. USD" maxLength={6} value={fromCurrency} onChange={(e) => setFromCurrency(e.target.value)} />
@@ -89,9 +89,9 @@ export function ExchangeRateForm({ initialValue, onSubmit, onCancel, isLoading =
           <FieldLabel htmlFor="rateDate">Rate Date</FieldLabel>
           <Input id="rateDate" type="date" value={rateDate} onChange={(e) => setRateDate(e.target.value)} />
         </Field>
-      </div>
+      </FormGrid>
 
-      <Field>
+      <Field className="max-w-3xl">
         <FieldLabel htmlFor="sourceReference">Source Reference</FieldLabel>
         <Textarea id="sourceReference" rows={2} placeholder="e.g. Manually entered from [bank/source] on [date] — not a live feed" value={sourceReference} onChange={(e) => setSourceReference(e.target.value)} />
         <FieldDescription>

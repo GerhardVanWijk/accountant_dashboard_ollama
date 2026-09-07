@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { CustomerCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { CreateSalesOrderDTO } from '../services';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
@@ -138,7 +138,7 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
       <FormBody>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormGrid className="max-w-3xl">
         <Field>
           <FieldLabel htmlFor="order-number">Order number</FieldLabel>
           <Input
@@ -169,7 +169,7 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
             disabled={isSubmitting}
           />
         </Field>
-      </div>
+      </FormGrid>
 
       <SalesLineItemsEditor
         lineItems={lineItems}
@@ -198,7 +198,7 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
         </div>
       </div>
 
-      <Field>
+      <Field className="max-w-3xl">
         <FieldLabel htmlFor="order-notes">Notes (optional)</FieldLabel>
         <Textarea id="order-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={isSubmitting} />
       </Field>

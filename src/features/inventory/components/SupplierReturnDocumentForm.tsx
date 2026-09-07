@@ -5,7 +5,7 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/fiel
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { SupplierCombobox } from '@/components/app/combobox';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { CreateSupplierReturnDTO, UpdateSupplierReturnDTO } from '../services/supplierReturnService';
 import { SupplierReturnLinesEditor } from './SupplierReturnLinesEditor';
 
@@ -104,7 +104,7 @@ export function SupplierReturnDocumentForm({
             {formError}
           </p>
         )}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <FormGrid>
           <Field>
             <FieldLabel htmlFor="sr-supplier">Supplier</FieldLabel>
             <SupplierCombobox
@@ -118,7 +118,7 @@ export function SupplierReturnDocumentForm({
             <FieldLabel htmlFor="sr-date">Return date</FieldLabel>
             <Input id="sr-date" type="date" value={returnDate} onChange={(e) => markDirty(setReturnDate)(e.target.value)} />
           </Field>
-        </div>
+        </FormGrid>
 
         <Field>
           <FieldLabel htmlFor="sr-reason">Reason</FieldLabel>

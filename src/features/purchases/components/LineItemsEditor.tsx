@@ -237,7 +237,7 @@ export function LineItemsEditor({
                     disabled={disabled || Boolean(item.productId)}
                     onChange={(e) => toggleFixedAsset(index, e.target.checked)}
                     aria-label="Capitalize as fixed asset"
-                    className="accent-primary"
+                    className="size-4 rounded border-input accent-primary"
                   />
                   Asset
                 </label>

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { SupplierCombobox } from '@/components/app/combobox';
 import { FigureBlock } from '@/components/app/figure';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
 import type { CreateBillDTO } from '../services';
 import { LineItemsEditor } from './LineItemsEditor';
@@ -92,7 +92,7 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel, onD
   return (
     <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
       <FormBody>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid className="max-w-3xl">
         <Field>
           <FieldLabel htmlFor="bill-number">Bill Number</FieldLabel>
           <Input id="bill-number" className="font-mono" value={billNumber} onChange={(e) => setBillNumber(e.target.value)} />
@@ -114,7 +114,7 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel, onD
           <FieldLabel htmlFor="bill-due-date">Due Date</FieldLabel>
           <Input id="bill-due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </Field>
-      </div>
+      </FormGrid>
 
       <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} products={products} warehouses={warehouses} allowFixedAssetCapitalization />
 
@@ -124,7 +124,7 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel, onD
         <FigureBlock label="Total" value={formatCurrency(total)} className="text-base" />
       </div>
 
-      <Field>
+      <Field className="max-w-3xl">
         <FieldLabel htmlFor="bill-notes">Notes (optional)</FieldLabel>
         <Textarea id="bill-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>

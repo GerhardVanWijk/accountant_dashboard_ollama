@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { SectionCard } from '@/components/app/page-header';
+import { FormPageLayout } from '@/components/app/form';
 import {
   Empty,
   EmptyDescription,
@@ -66,48 +67,42 @@ export function SupplierFormPage({ mode, supplierId, suppliersState, onDone, onC
     }
 
     return (
-      <>
-        <PageHeader title={`Edit ${supplier.name}`} description="Update this supplier's account details." />
-        <SectionCard bodyClassName="p-0">
-          <SupplierForm
-            initialValues={supplier}
-            submitLabel="Save changes"
-            submitError={submitError}
-            onCancel={onCancel}
-            onSubmit={async (values) => {
-              setSubmitError(null);
-              try {
-                await updateSupplier(supplier.id, mapFormValuesToSupplierPatch(values));
-                onDone();
-              } catch (err) {
-                setSubmitError(err instanceof Error ? err.message : 'Could not save supplier.');
-              }
-            }}
-          />
-        </SectionCard>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <PageHeader title="Add supplier" description="Create a new accounts-payable vendor record." />
-      <SectionCard bodyClassName="p-0">
+      <FormPageLayout title={`Edit ${supplier.name}`} description="Update this supplier's account details.">
         <SupplierForm
-          submitLabel="Create supplier"
+          initialValues={supplier}
+          submitLabel="Save changes"
           submitError={submitError}
           onCancel={onCancel}
           onSubmit={async (values) => {
             setSubmitError(null);
             try {
-              await createSupplier(mapFormValuesToSupplierPatch(values));
+              await updateSupplier(supplier.id, mapFormValuesToSupplierPatch(values));
               onDone();
             } catch (err) {
-              setSubmitError(err instanceof Error ? err.message : 'Could not create supplier.');
+              setSubmitError(err instanceof Error ? err.message : 'Could not save supplier.');
             }
           }}
         />
-      </SectionCard>
-    </>
+      </FormPageLayout>
+    );
+  }
+
+  return (
+    <FormPageLayout title="Add supplier" description="Create a new accounts-payable vendor record.">
+      <SupplierForm
+        submitLabel="Create supplier"
+        submitError={submitError}
+        onCancel={onCancel}
+        onSubmit={async (values) => {
+          setSubmitError(null);
+          try {
+            await createSupplier(mapFormValuesToSupplierPatch(values));
+            onDone();
+          } catch (err) {
+            setSubmitError(err instanceof Error ? err.message : 'Could not create supplier.');
+          }
+        }}
+      />
+    </FormPageLayout>
   );
 }

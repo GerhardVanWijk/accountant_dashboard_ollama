@@ -6,9 +6,8 @@ import type { Warehouse } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
-import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { EnumSelect } from '@/components/app/combobox';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { CheckboxField, FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { CreateWarehouseDTO, UpdateWarehouseDTO } from '../services/warehouseService';
 
 const warehouseSchema = z.object({
@@ -79,7 +78,7 @@ export function WarehouseForm({ warehouse, onSubmit, onCancel, onDirtyChange }: 
   return (
     <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
       <FormBody>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="wh-name">Name</FieldLabel>
           <Input id="wh-name" {...register('name')} />
@@ -90,14 +89,14 @@ export function WarehouseForm({ warehouse, onSubmit, onCancel, onDirtyChange }: 
           <Input id="wh-code" {...register('code')} />
           <FieldError errors={[errors.code]} />
         </Field>
-      </div>
+      </FormGrid>
 
       <Field>
         <FieldLabel htmlFor="wh-line1">Address Line 1</FieldLabel>
         <Input id="wh-line1" {...register('line1')} />
       </Field>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <FormGrid columns={3}>
         <Field>
           <FieldLabel htmlFor="wh-city">City</FieldLabel>
           <Input id="wh-city" {...register('city')} />
@@ -110,17 +109,19 @@ export function WarehouseForm({ warehouse, onSubmit, onCancel, onDirtyChange }: 
           <FieldLabel htmlFor="wh-country">Country</FieldLabel>
           <Input id="wh-country" {...register('country')} />
         </Field>
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Controller
           control={control}
           name="isDefault"
           render={({ field }) => (
-            <Field orientation="horizontal">
-              <Checkbox id="wh-default" checked={field.value} onCheckedChange={(value) => field.onChange(value === true)} />
-              <FieldLabel htmlFor="wh-default">Default warehouse</FieldLabel>
-            </Field>
+            <CheckboxField
+              id="wh-default"
+              checked={Boolean(field.value)}
+              onCheckedChange={field.onChange}
+              label="Default warehouse"
+            />
           )}
         />
         <Field>
@@ -143,7 +144,7 @@ export function WarehouseForm({ warehouse, onSubmit, onCancel, onDirtyChange }: 
             )}
           />
         </Field>
-      </div>
+      </FormGrid>
       </FormBody>
 
       <FormFooter>

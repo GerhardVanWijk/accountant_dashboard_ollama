@@ -4,7 +4,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { RelatedParty, RelatedPartyTransaction } from '@/types/relatedParty';
 import { Button } from '@/components/ui/shadcn/button';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { Field, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -102,7 +102,7 @@ export function RelatedPartyTransactionForm({ transaction, relatedParties, onSub
         <FieldError errors={[errors.relatedPartyId]} />
       </Field>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="transactionDate">Transaction Date</FieldLabel>
           <Input id="transactionDate" type="date" {...register('transactionDate')} />
@@ -113,7 +113,7 @@ export function RelatedPartyTransactionForm({ transaction, relatedParties, onSub
           <Input id="amount" type="number" step="0.01" {...register('amount')} />
           <FieldError errors={[errors.amount]} />
         </Field>
-      </div>
+      </FormGrid>
 
       <Field>
         <FieldLabel htmlFor="natureOfTransaction">Nature of Transaction</FieldLabel>

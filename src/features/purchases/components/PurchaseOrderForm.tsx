@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { SupplierCombobox } from '@/components/app/combobox';
 import { FigureBlock } from '@/components/app/figure';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
 import type { CreatePurchaseOrderDTO } from '../services';
 import { LineItemsEditor } from './LineItemsEditor';
@@ -84,7 +84,7 @@ export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCanc
   return (
     <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
       <FormBody>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid className="max-w-3xl">
         <Field>
           <FieldLabel htmlFor="po-number">PO Number</FieldLabel>
           <Input id="po-number" className="font-mono" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} />
@@ -106,7 +106,7 @@ export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCanc
           <FieldLabel htmlFor="po-expected-date">Expected Date (optional)</FieldLabel>
           <Input id="po-expected-date" type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
         </Field>
-      </div>
+      </FormGrid>
 
       <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} products={products} warehouses={warehouses} />
 
@@ -116,7 +116,7 @@ export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCanc
         <FigureBlock label="Total" value={formatCurrency(total)} className="text-base" />
       </div>
 
-      <Field>
+      <Field className="max-w-3xl">
         <FieldLabel htmlFor="po-notes">Notes (optional)</FieldLabel>
         <Textarea id="po-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>

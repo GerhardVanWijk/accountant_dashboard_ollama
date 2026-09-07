@@ -5,7 +5,7 @@ import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { EnumSelect } from '@/components/app/combobox';
-import { FormFooter } from '@/components/app/form';
+import { FormFooter, FormGrid } from '@/components/app/form';
 import type { AllocationInput, CreateDirectTransactionInput, CreateTransferInput } from '../services';
 import { AllocationRows } from './AllocationRows';
 
@@ -117,7 +117,7 @@ export function TransactionForm({
             per-tab matching isn't meant to serve two distinct tab values from one panel. */}
         {mode !== 'transfer' && (
           <div className="app-scroll flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormGrid>
             <Field>
               <FieldLabel htmlFor="txn-account">Bank account</FieldLabel>
               <EnumSelect
@@ -144,7 +144,7 @@ export function TransactionForm({
               <FieldLabel htmlFor="txn-reference">Reference</FieldLabel>
               <Input id="txn-reference" className="figure" value={reference} onChange={(e) => setReference(e.target.value)} />
             </Field>
-            <Field className="sm:col-span-2">
+            <Field className="col-span-full">
               <FieldLabel htmlFor="txn-amount">Gross amount {mode === 'receipt' ? '(money in)' : '(money out)'}</FieldLabel>
               <Input
                 id="txn-amount"
@@ -154,14 +154,14 @@ export function TransactionForm({
                 onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
               />
             </Field>
-          </div>
+          </FormGrid>
 
           <AllocationRows allocations={allocations} onChange={setAllocations} glAccounts={glAccounts} taxRates={taxRates} grossAmount={amount} />
           </div>
         )}
 
         <TabsContent value="transfer" className="app-scroll flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormGrid>
             <Field>
               <FieldLabel htmlFor="txn-from">From account (source — credited)</FieldLabel>
               <EnumSelect
@@ -194,14 +194,14 @@ export function TransactionForm({
                 onChange={(e) => setTransferAmount(parseFloat(e.target.value) || 0)}
               />
             </Field>
-            <Field className="sm:col-span-2">
+            <Field className="col-span-full">
               <FieldLabel htmlFor="txn-transfer-description">Description (optional)</FieldLabel>
               <Input id="txn-transfer-description" value={description} onChange={(e) => setDescription(e.target.value)} />
             </Field>
             {fromAccountId && toAccountId && fromAccountId === toAccountId && (
-              <p className="text-xs text-destructive sm:col-span-2">Source and destination accounts must be different.</p>
+              <p className="col-span-full text-xs text-destructive">Source and destination accounts must be different.</p>
             )}
-          </div>
+          </FormGrid>
         </TabsContent>
       </Tabs>
 

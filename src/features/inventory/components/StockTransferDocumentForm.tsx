@@ -5,7 +5,7 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/shadcn/fiel
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { EnumSelect } from '@/components/app/combobox';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { CreateStockTransferDTO, UpdateStockTransferDTO } from '../services/stockTransferService';
 import { StockTransferLinesEditor } from './StockTransferLinesEditor';
 
@@ -103,7 +103,7 @@ export function StockTransferDocumentForm({
             {formError}
           </p>
         )}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <FormGrid>
           <Field>
             <FieldLabel htmlFor="st-from">From warehouse</FieldLabel>
             <EnumSelect
@@ -124,9 +124,9 @@ export function StockTransferDocumentForm({
               options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
             />
           </Field>
-        </div>
+        </FormGrid>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <FormGrid>
           <Field>
             <FieldLabel htmlFor="st-date">Transfer date</FieldLabel>
             <Input id="st-date" type="date" value={transferDate} onChange={(e) => markDirty(setTransferDate)(e.target.value)} />
@@ -135,7 +135,7 @@ export function StockTransferDocumentForm({
             <FieldLabel htmlFor="st-expected">Expected receipt date</FieldLabel>
             <Input id="st-expected" type="date" value={expectedReceiptDate} onChange={(e) => markDirty(setExpectedReceiptDate)(e.target.value)} />
           </Field>
-        </div>
+        </FormGrid>
 
         <Field>
           <FieldLabel htmlFor="st-notes">Notes</FieldLabel>

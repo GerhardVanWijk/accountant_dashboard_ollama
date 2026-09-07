@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { EnumSelect, SupplierCombobox } from '@/components/app/combobox';
 import { FigureBlock } from '@/components/app/figure';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import type { CreatePaymentDTO } from '../services';
 
@@ -122,7 +122,7 @@ export function PaymentForm({ suppliers, outstandingBills, defaultPaymentNumber,
   return (
     <div className="flex min-h-0 flex-1 flex-col" onInput={() => onDirtyChange?.(true)}>
       <FormBody>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid columns={3} className="max-w-4xl">
         <Field>
           <FieldLabel htmlFor="payment-number">Payment Number</FieldLabel>
           <Input id="payment-number" className="font-mono" value={paymentNumber} onChange={(e) => setPaymentNumber(e.target.value)} />
@@ -157,7 +157,7 @@ export function PaymentForm({ suppliers, outstandingBills, defaultPaymentNumber,
           <FieldLabel htmlFor="payment-amount">Payment Amount</FieldLabel>
           <Input id="payment-amount" type="number" min="0" step="0.01" value={amount || ''} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} />
         </Field>
-      </div>
+      </FormGrid>
 
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium">Allocate to Open Bills</span>

@@ -7,9 +7,8 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { CheckboxField, FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { UOM_OPTIONS, INVENTORY_CURRENCY } from '../constants';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProductCategories } from '../hooks/useProductCategories';
@@ -132,7 +131,7 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
   return (
     <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
       <FormBody>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="sku">SKU</FieldLabel>
           <Input id="sku" {...register('sku')} />
@@ -143,14 +142,14 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
           <Input id="name" {...register('name')} />
           <FieldError errors={[errors.name]} />
         </Field>
-      </div>
+      </FormGrid>
 
       <Field>
         <FieldLabel htmlFor="description">Description</FieldLabel>
         <Textarea id="description" rows={2} {...register('description')} />
       </Field>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <FormGrid columns={3}>
         <Field>
           <FieldLabel htmlFor="type">Type</FieldLabel>
           <Controller
@@ -202,9 +201,9 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
             )}
           />
         </Field>
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <FormGrid columns={3}>
         <Field>
           <FieldLabel htmlFor="costPrice">Cost Price ({INVENTORY_CURRENCY})</FieldLabel>
           <Input id="costPrice" type="number" step="0.01" {...register('costPrice')} />
@@ -231,9 +230,9 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
             )}
           />
         </Field>
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="barcode">Barcode</FieldLabel>
           <Input id="barcode" {...register('barcode')} />
@@ -256,18 +255,20 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
             )}
           />
         </Field>
-      </div>
+      </FormGrid>
 
       {type !== 'service' && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <FormGrid>
           <Controller
             control={control}
             name="trackInventory"
             render={({ field }) => (
-              <Field orientation="horizontal">
-                <Checkbox id="trackInventory" checked={field.value} onCheckedChange={(value) => field.onChange(value === true)} />
-                <FieldLabel htmlFor="trackInventory">Track inventory for this item</FieldLabel>
-              </Field>
+              <CheckboxField
+                id="trackInventory"
+                checked={Boolean(field.value)}
+                onCheckedChange={field.onChange}
+                label="Track inventory for this item"
+              />
             )}
           />
           <Field>
@@ -275,7 +276,7 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
             <Input id="reorderLevel" type="number" {...register('reorderLevel')} />
             <FieldError errors={[errors.reorderLevel]} />
           </Field>
-        </div>
+        </FormGrid>
       )}
 
       {type !== 'service' && trackInventoryWatched && (

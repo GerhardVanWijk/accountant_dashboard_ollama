@@ -292,7 +292,7 @@ function PreviewStep({
           <label className="flex items-center gap-2 font-normal text-foreground">
             <input
               type="checkbox"
-              className="size-4 rounded border-input"
+              className="size-4 rounded border-input accent-primary"
               checked={importAnyway}
               onChange={(e) => setImportAnyway(e.target.checked)}
             />

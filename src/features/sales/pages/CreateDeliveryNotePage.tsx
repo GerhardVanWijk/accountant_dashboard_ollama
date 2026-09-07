@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
+import { Field, FieldLabel } from '@/components/ui/shadcn/field';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { FormError, FormGrid, FormPageLayout } from '@/components/app/form';
 import { EnumSelect } from '@/components/app/combobox/EnumSelect';
 import { useSalesOrders } from '@/features/sales/hooks/useSalesOrders';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
@@ -15,7 +19,6 @@ import { computeSalesOrderFulfilment } from '@/features/sales/utils/salesOrderFu
 import type { CreateDeliveryNoteLineDTO } from '@/features/sales/services';
 
 const fmtQty = (n: number) => n.toLocaleString('en-ZA', { maximumFractionDigits: 3 });
-const inputClass = 'h-9 w-full rounded-md border border-input bg-background px-3 text-sm tabular-nums';
 
 /**
  * Full-page "Create delivery" form — route `/sales/orders/:orderId/deliver`
@@ -127,16 +130,18 @@ export function CreateDeliveryNotePage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title={`Create delivery — ${order.orderNumber}`}
-        description={`${customerName} · deliver against the remaining ordered quantity. Posting stock and cost happens later, from the delivery note itself.`}
-      />
-
+    <FormPageLayout
+      size="document"
+      surface="plain"
+      title={`Create delivery — ${order.orderNumber}`}
+      description={`${customerName} · deliver against the remaining ordered quantity. Posting stock and cost happens later, from the delivery note itself.`}
+      backTo={`/sales/orders/${order.id}`}
+      backLabel="Back to sales order"
+    >
       <SectionCard>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="dn-warehouse" className="text-sm font-medium">Warehouse</label>
+        <FormGrid>
+          <Field>
+            <FieldLabel htmlFor="dn-warehouse">Warehouse</FieldLabel>
             <EnumSelect
               id="dn-warehouse"
               options={warehouseOptions}
@@ -144,12 +149,12 @@ export function CreateDeliveryNotePage() {
               onValueChange={setWarehouseId}
               placeholder="Select warehouse…"
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="dn-date" className="text-sm font-medium">Delivery date</label>
-            <input id="dn-date" type="date" className={inputClass} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-          </div>
-        </div>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="dn-date">Delivery date</FieldLabel>
+            <Input id="dn-date" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+          </Field>
+        </FormGrid>
       </SectionCard>
 
       <SectionCard>
@@ -176,12 +181,12 @@ export function CreateDeliveryNotePage() {
                     <td className="py-2 pr-3 text-right tabular-nums">{fmtQty(l.deliveredQty)}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{fmtQty(l.remainingToDeliver)}</td>
                     <td className="py-2 text-right">
-                      <input
+                      <Input
                         type="number"
                         min={0}
                         max={l.remainingToDeliver}
                         step="0.001"
-                        className={`${inputClass} w-28 text-right`}
+                        className="ml-auto w-28 text-right tabular-nums"
                         value={quantities[l.id] ?? String(l.remainingToDeliver)}
                         onChange={(e) => setQty(l.id, e.target.value)}
                       />
@@ -195,22 +200,13 @@ export function CreateDeliveryNotePage() {
       </SectionCard>
 
       <SectionCard>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="dn-notes" className="text-sm font-medium">Notes (optional)</label>
-          <textarea
-            id="dn-notes"
-            className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
+        <Field>
+          <FieldLabel htmlFor="dn-notes">Notes (optional)</FieldLabel>
+          <Textarea id="dn-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
       </SectionCard>
 
-      {formError && (
-        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {formError}
-        </div>
-      )}
+      {formError && <FormError>{formError}</FormError>}
 
       <div className="flex items-center gap-2">
         <Button onClick={() => void handleSubmit()} disabled={submitting || deliverableLines.length === 0}>
@@ -220,6 +216,6 @@ export function CreateDeliveryNotePage() {
           Cancel
         </Button>
       </div>
-    </div>
+    </FormPageLayout>
   );
 }

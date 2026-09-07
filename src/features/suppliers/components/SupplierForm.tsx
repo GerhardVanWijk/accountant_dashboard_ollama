@@ -7,7 +7,7 @@ import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { EnumSelect, type EnumOption } from '@/components/app/combobox';
-import { FormFooter, FormSection, FormTabs, type FormTab } from '@/components/app/form';
+import { CheckboxField, FormFooter, FormGrid, FormSection, FormTabs, type FormTab } from '@/components/app/form';
 import { SUPPLIER_CATEGORIES } from '../types/supplier.types';
 import { supplierFormSchema, type SupplierFormSchema } from '../utils/supplierFormSchema';
 
@@ -133,7 +133,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
       label: TABS[0].label,
       hasError: tabHasError(TABS[0].fields, errors),
       content: (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <FormGrid>
           <Field>
             <FieldLabel htmlFor="supplier-number">Supplier number</FieldLabel>
             <Input id="supplier-number" {...register('supplierNumber')} />
@@ -188,13 +188,19 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
             <Input id="supplier-balance" type="number" step="0.01" {...register('balance', { valueAsNumber: true })} />
             <FieldError errors={[errors.balance]} />
           </Field>
-          <Field orientation="horizontal">
-            <input type="checkbox" id="supplier-on-hold" className="size-4 rounded border-input" {...register('onHold')} />
-            <FieldLabel htmlFor="supplier-on-hold" className="font-normal">
-              Place this supplier on hold
-            </FieldLabel>
-          </Field>
-        </div>
+          <Controller
+            control={control}
+            name="onHold"
+            render={({ field }) => (
+              <CheckboxField
+                id="supplier-on-hold"
+                checked={Boolean(field.value)}
+                onCheckedChange={field.onChange}
+                label="Place this supplier on hold"
+              />
+            )}
+          />
+        </FormGrid>
       ),
     },
     {
@@ -202,7 +208,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
       label: TABS[1].label,
       hasError: tabHasError(TABS[1].fields, errors),
       content: (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <FormGrid>
           <Field>
             <FieldLabel htmlFor="supplier-contact-person">Contact person</FieldLabel>
             <Input id="supplier-contact-person" {...register('contactPerson')} />
@@ -216,7 +222,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
             <FieldLabel htmlFor="supplier-phone">Phone</FieldLabel>
             <Input id="supplier-phone" {...register('phone')} />
           </Field>
-        </div>
+        </FormGrid>
       ),
     },
     {
@@ -226,7 +232,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
       content: (
         <>
           <FormSection title="Physical address">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <FormGrid>
               <Field>
                 <FieldLabel htmlFor="supplier-address-line1">Address line 1</FieldLabel>
                 <Input id="supplier-address-line1" {...register('address.line1')} />
@@ -251,11 +257,11 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
                 <FieldLabel htmlFor="supplier-address-country">Country</FieldLabel>
                 <Input id="supplier-address-country" {...register('address.country')} />
               </Field>
-            </div>
+            </FormGrid>
           </FormSection>
 
           <FormSection title="Remittance address (if different)">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <FormGrid>
               <Field>
                 <FieldLabel htmlFor="supplier-remit-line1">Address line 1</FieldLabel>
                 <Input id="supplier-remit-line1" {...register('remittanceAddress.line1')} />
@@ -280,7 +286,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
                 <FieldLabel htmlFor="supplier-remit-country">Country</FieldLabel>
                 <Input id="supplier-remit-country" {...register('remittanceAddress.country')} />
               </Field>
-            </div>
+            </FormGrid>
           </FormSection>
         </>
       ),
@@ -291,7 +297,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
       hasError: tabHasError(TABS[3].fields, errors),
       content: (
         <>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <FormGrid>
             <Field>
               <FieldLabel htmlFor="supplier-tax-number">Tax/VAT registration number</FieldLabel>
               <Input id="supplier-tax-number" {...register('taxNumber')} />
@@ -350,10 +356,10 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
               />
               <FieldError errors={[errors.settlementDiscountPercent]} />
             </Field>
-          </div>
+          </FormGrid>
 
           <FormSection title="Banking details">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <FormGrid columns={3}>
               <Field>
                 <FieldLabel htmlFor="supplier-bank-name">Bank name</FieldLabel>
                 <Input id="supplier-bank-name" {...register('bankDetails.bankName')} />
@@ -366,7 +372,7 @@ export function SupplierForm({ initialValues, onSubmit, onCancel, submitLabel = 
                 <FieldLabel htmlFor="supplier-bank-account">Account number</FieldLabel>
                 <Input id="supplier-bank-account" {...register('bankDetails.accountNumber')} />
               </Field>
-            </div>
+            </FormGrid>
           </FormSection>
 
           <Field>

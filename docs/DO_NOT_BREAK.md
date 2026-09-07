@@ -47,6 +47,11 @@ DO NOT:
 DO NOT:
 - Use inline styles (use Tailwind classes)
 - Create multiple CSS frameworks (we use Tailwind CSS)
+- Hand-roll a form field grid. Use `<FormGrid>` (`columns` 1/2/3) from
+  `@/components/app/form` — not a fresh `grid grid-cols-1 gap-4 md:grid-cols-2`.
+  A boolean option is `<CheckboxField>`; a page-hosted form is wrapped in
+  `<FormPageLayout size="standard"|"document">` (centred, width-capped), never
+  left to stretch the full content area. See `docs/GLOBAL_FORM_UX.md`.
 - Hardcode colors (use design tokens)
 - Break responsive design (test mobile, tablet, desktop)
 - Introduce new font families (use system fonts)

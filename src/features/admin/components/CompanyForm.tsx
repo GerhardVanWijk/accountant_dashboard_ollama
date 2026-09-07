@@ -7,7 +7,7 @@ import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect, type EnumOption } from '@/components/app/combobox';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { FormBody, FormFooter, FormSection } from '@/components/app/form';
+import { CheckboxField, FormBody, FormFooter, FormGrid, FormSection } from '@/components/app/form';
 import {
   companyFormSchema,
   companyToFormValues,
@@ -134,7 +134,7 @@ export function CompanyForm({
     >
       <FormBody>
       <FormSection title="Company details">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormGrid>
           <Field>
             <FieldLabel htmlFor="company-name">Company name</FieldLabel>
             <Input id="company-name" {...register('name')} />
@@ -161,29 +161,32 @@ export function CompanyForm({
               )}
             />
           </Field>
-          <Field orientation="horizontal">
-            <input type="checkbox" id="company-active" className="size-4 rounded border-input" {...register('isActive')} />
-            <FieldLabel htmlFor="company-active" className="font-normal">
-              Active
-            </FieldLabel>
-          </Field>
-          <Field orientation="horizontal">
-            <input type="checkbox" id="company-public" className="size-4 rounded border-input" {...register('isPublicCompany')} />
-            <FieldLabel htmlFor="company-public" className="font-normal">
-              Public company
-            </FieldLabel>
-          </Field>
-          <Field orientation="horizontal">
-            <input type="checkbox" id="company-listed" className="size-4 rounded border-input" {...register('isListed')} />
-            <FieldLabel htmlFor="company-listed" className="font-normal">
-              Listed
-            </FieldLabel>
-          </Field>
-        </div>
+          <Controller
+            control={control}
+            name="isActive"
+            render={({ field }) => (
+              <CheckboxField id="company-active" checked={Boolean(field.value)} onCheckedChange={field.onChange} label="Active" />
+            )}
+          />
+          <Controller
+            control={control}
+            name="isPublicCompany"
+            render={({ field }) => (
+              <CheckboxField id="company-public" checked={Boolean(field.value)} onCheckedChange={field.onChange} label="Public company" />
+            )}
+          />
+          <Controller
+            control={control}
+            name="isListed"
+            render={({ field }) => (
+              <CheckboxField id="company-listed" checked={Boolean(field.value)} onCheckedChange={field.onChange} label="Listed" />
+            )}
+          />
+        </FormGrid>
       </FormSection>
 
       <FormSection title="Financial year & accounting">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormGrid>
           <Field>
             <FieldLabel htmlFor="company-fye-month">Financial year-end month</FieldLabel>
             <Input id="company-fye-month" type="number" min={1} max={12} {...register('financialYearEndMonth', { valueAsNumber: true })} />
@@ -221,17 +224,23 @@ export function CompanyForm({
             <Input id="company-presentation-currency" {...register('presentationCurrency')} />
             <FieldError errors={[errors.presentationCurrency]} />
           </Field>
-        </div>
+        </FormGrid>
       </FormSection>
 
       <FormSection title="VAT & tax">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field orientation="horizontal">
-            <input type="checkbox" id="company-vat-registered" className="size-4 rounded border-input" {...register('isVatRegistered')} />
-            <FieldLabel htmlFor="company-vat-registered" className="font-normal">
-              VAT registered
-            </FieldLabel>
-          </Field>
+        <FormGrid>
+          <Controller
+            control={control}
+            name="isVatRegistered"
+            render={({ field }) => (
+              <CheckboxField
+                id="company-vat-registered"
+                checked={Boolean(field.value)}
+                onCheckedChange={field.onChange}
+                label="VAT registered"
+              />
+            )}
+          />
           <Field>
             <FieldLabel htmlFor="company-vat-number">VAT registration number</FieldLabel>
             <Input id="company-vat-number" {...register('vatRegistrationNumber')} />
@@ -274,7 +283,7 @@ export function CompanyForm({
             <FieldLabel htmlFor="company-income-tax-number">Income tax number</FieldLabel>
             <Input id="company-income-tax-number" {...register('incomeTaxNumber')} />
           </Field>
-        </div>
+        </FormGrid>
       </FormSection>
 
       <FormSection
@@ -282,12 +291,12 @@ export function CompanyForm({
         description="Shown on printed quotes, invoices, credit notes and purchase orders. Leave a field blank to omit it from the document."
       >
         <input type="hidden" {...register('logo')} />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormGrid>
           <Field>
             <FieldLabel htmlFor="company-trading-name">Trading name</FieldLabel>
             <Input id="company-trading-name" {...register('tradingName')} />
           </Field>
-          <Field className="sm:col-span-2">
+          <Field className="col-span-full">
             <FieldLabel htmlFor="company-logo">Logo</FieldLabel>
             <div className="flex flex-wrap items-center gap-3">
               {logo ? (
@@ -316,11 +325,11 @@ export function CompanyForm({
             <p className="text-xs text-muted-foreground">PNG, JPEG, WebP or SVG. Maximum 512 KB.</p>
             {logoError && <p className="text-xs text-destructive">{logoError}</p>}
           </Field>
-          <Field className="sm:col-span-2">
+          <Field className="col-span-full">
             <FieldLabel htmlFor="company-doc-line1">Address line 1</FieldLabel>
             <Input id="company-doc-line1" {...register('documentAddress.line1')} />
           </Field>
-          <Field className="sm:col-span-2">
+          <Field className="col-span-full">
             <FieldLabel htmlFor="company-doc-line2">Address line 2</FieldLabel>
             <Input id="company-doc-line2" {...register('documentAddress.line2')} />
           </Field>
@@ -377,11 +386,11 @@ export function CompanyForm({
               )}
             />
           </Field>
-          <Field className="sm:col-span-2">
+          <Field className="col-span-full">
             <FieldLabel htmlFor="company-document-terms">Default document terms</FieldLabel>
             <Textarea id="company-document-terms" rows={3} {...register('documentTerms')} />
           </Field>
-        </div>
+        </FormGrid>
       </FormSection>
       </FormBody>
 

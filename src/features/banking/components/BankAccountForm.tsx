@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
-import { FormBody, FormFooter } from '@/components/app/form';
+import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { BANK_ACCOUNT_TYPE_LABELS, SA_BANKS } from '../constants';
 
 const BANK_ACCOUNT_TYPE_OPTIONS = Object.entries(BANK_ACCOUNT_TYPE_LABELS).map(([value, label]) => ({ value, label }));
@@ -74,7 +74,7 @@ export function BankAccountForm({
       className="flex min-h-0 flex-1 flex-col"
     >
       <FormBody>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormGrid>
         <Field>
           <FieldLabel htmlFor="bank-account-name">Account name</FieldLabel>
           <Input id="bank-account-name" placeholder="e.g. FNB Business Current Account" {...register('name')} />
@@ -169,7 +169,7 @@ export function BankAccountForm({
           />
         </Field>
 
-        <Field className="sm:col-span-2">
+        <Field className="col-span-full">
           <FieldLabel htmlFor="bank-account-gl">Linked GL account (Chart of Accounts)</FieldLabel>
           <Controller
             control={control}
@@ -192,7 +192,7 @@ export function BankAccountForm({
           />
           <FieldError errors={[errors.glAccountId]} />
         </Field>
-      </div>
+      </FormGrid>
       </FormBody>
 
       <FormFooter error={submitError ?? undefined}>
