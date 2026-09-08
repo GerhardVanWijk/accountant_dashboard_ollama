@@ -2,6 +2,20 @@
 
 ---
 
+## REMOVE INTERNAL SPEC / DEVELOPER REFERENCES FROM USER-FACING UI (branch `remove-internal-spec-refs-2026-09-08`, commit `03cdce8`) — 2026-09-08
+
+**SHIPPED 2026-09-08** — on explicit user instruction ahead of human browser QA, `remove-internal-spec-refs-2026-09-08` was fast-forward-merged → `main` (`bdcad7f..03cdce8`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Presentation copy only — no migration, no DB write, **no accounting effect** (Trial Balance difference R0.00, GL1200 / journal count / stock-movement count unchanged; verified read-only).
+
+- Global audit of authenticated + public UI, Help Centre and runtime data definitions for internal engineering leakage. Removed from **15 rendered strings**: `SA_ACCOUNTING_MASTER_SPEC.md` citations, spec section signs (`§NN`), `docs/*.md` references, internal phase names ("Phase 9B", "Phase 14"), and a "run migration 0045" instruction. Traceability kept in code comments (Trial Balance subledger section now carries an `// Accounting basis: …§17/§18/§70/§71` comment).
+- Files: Trial Balance (subledger description), Balance Sheet / Income Statement / Cash Flow (page descriptions + out-of-scope notes), Tax Register, Tax Rate form, 4 inventory report footnotes, Inventory Reconciliation report, Credit Note detail, Capital Gains notes, Income Tax computation line, Compliance determination disclaimer, books-integrity / integrity-audit details, `reconcileInventory` diagnostic details, one Help article.
+- **Comments, tests and `docs/*.md` citations were NOT touched.** `mock-data/*` fixtures left as-is (test-only; live DB verified clean).
+- New guard tests: `TrialBalancePage.test.tsx` (subledger section renders plain copy, no `SA_ACCOUNTING_MASTER_SPEC` / `§NN`); `help/content/noInternalReferences.test.ts` (every Help article's rendered copy is free of spec filenames, `docs/*.md`, `§NN`, migration numbers, phase names, persistence jargon). One `reconcileInventory` assertion updated to the new wording.
+- **AP variance (R354,200.00) was investigated read-only and deliberately NOT changed** — classified as a *reconciliation-engine modelling gap*, not a books error: `useSubledgerReconciliation()` calls `reconcileAccountsPayable()` without the `nonBillApAdjustments` argument, so legitimate non-bill AP postings (R368,000 fixed-asset-on-credit JE-4001, R28,175 opening balance JE-0001, −R9,200 supplier return JE-4137) surface as a variance. Trial Balance still balances; AP genuinely owes the money.
+- Gate: type-check · lint(`--max-warnings 0`) · **3117 tests** · build ALL PASS.
+- **Post-deploy browser QA is now owed** — spot-check the accounting/report/reconciliation screens (Trial Balance subledger card, financial statements, inventory reports, Help Centre) show plain accounting language with no `SA_ACCOUNTING_MASTER_SPEC` / `§` / migration / phase references.
+
+---
+
 ## DATA IMPORT / MIGRATION + EXPORT CENTRE + LIGHT MODE (branch `import-export-light-mode-2026-09-08`) — 2026-09-08
 
 **SHIPPED 2026-09-08** — on explicit user instruction ahead of human browser QA, `import-export-light-mode-2026-09-08` was fast-forward-merged → `main` (`105ab10..11d0445`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Migrations `0077` (schema + 2 private buckets + 3 RPCs) and `0078` (`data_migration` permission feature) were **already applied to live**; the merge itself carries no further migration. The light-mode continuation has **no DB write and no accounting effect** (CSS design tokens + component classNames + Help content only). Trial Balance difference **R0.00**; current-data accounting integrity verified (248/248 posted entries balanced, stock cache == movement ledger, AR/deposit control accounts match the reconciled figures). **Post-deploy browser QA is now owed** — the 7 import pages + role gates, and the softened light mode at 1920/1440/1366/tablet/mobile with a re-confirm that dark mode is visually unchanged.
