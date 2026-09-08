@@ -170,6 +170,21 @@ const statusMap: Record<string, { tone: Tone; label: string }> = {
   completed: { tone: 'positive', label: 'Completed' },
   counting: { tone: 'info', label: 'Counting' },
   ready_for_review: { tone: 'warning', label: 'Ready for review' },
+
+  /* Data Import & Migration Centre — ImportBatchStatus
+   * (src/features/import/migration/types.ts). `cancelled`/`completed` above
+   * already cover two of these; the rest are import-batch-specific states. */
+  uploaded: { tone: 'info', label: 'Uploaded' },
+  mapping: { tone: 'info', label: 'Mapping' },
+  validation_failed: { tone: 'critical', label: 'Validation failed' },
+  ready: { tone: 'positive', label: 'Ready' },
+  importing: { tone: 'warning', label: 'Importing' },
+  completed_with_warnings: { tone: 'warning', label: 'Completed with warnings' },
+  failed: { tone: 'critical', label: 'Failed' },
+  /* bank_statements recon/import status (migration 0020) — underscore
+   * spelling, distinct from the hyphenated 'not-started'/'in-progress' pair. */
+  not_started: { tone: 'neutral', label: 'Not started' },
+  in_progress: { tone: 'warning', label: 'In progress' },
 };
 
 export function StatusBadge({

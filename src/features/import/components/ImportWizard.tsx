@@ -4,10 +4,15 @@ import { FormShell, FormHeader, FormBody } from '@/components/app/form';
 import { Button } from '@/components/ui/shadcn/button';
 import { EnumSelect } from '@/components/app/combobox';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
-import type { DuplicateStrategy, ImportAdapter, ImportRowResult } from '../types';
-import { useImportWizard } from '../hooks/useImportWizard';
+import type { AccountMappingChoice, AccountMappingSelections, DuplicateStrategy, ExternalAccountRef, ExternalTaxRef, ImportAdapter, ImportRowResult, TaxMappingSelections } from '../types';
+import { useImportWizard, type UseImportWizardOptions } from '../hooks/useImportWizard';
 import { hasAllRequiredMappings } from '../mapping';
 import { downloadErrorReportCSV } from '../errorReport';
+import { suggestAccountMappings, restoreAccountMappingSelections } from '../migration/accountMapping';
+import { suggestTaxMappings, restoreTaxMappingSelections } from '../migration/taxMapping';
+import { listMappingProfiles, saveMappingProfile } from '../migration/importMappingProfileService';
+import { downloadResultReport } from '../migration/reports';
+import type { ImportMappingProfile } from '../migration/types';
 
 export interface ImportWizardProps {
   /** One adapter opens the wizard straight to the File step; several offer an "Import type" chooser first. */
@@ -16,6 +21,10 @@ export interface ImportWizardProps {
   onClose: () => void;
   /** Fires once the import has actually written data — the caller should refetch its lists. */
   onImported: () => void;
+  /** Phase D — opts into persisted import-batch tracking (see useImportWizard's UseImportWizardOptions doc comment). Omitted by every pre-Phase-D caller, unchanged behavior. */
+  batch?: UseImportWizardOptions['batch'];
+  /** Phase D — pre-supplies a file (e.g. one section extracted from an Vertex Migration Package) instead of waiting for the user to pick one, skipping straight past the File step. */
+  initialFile?: File;
 }
 
 const SEVERITY_LABEL: Record<string, string> = { valid: 'Ready', warning: 'Warning', error: 'Error', duplicate: 'Duplicate', skipped: 'Skipped' };
@@ -34,9 +43,48 @@ const SEVERITY_TONE: Record<string, string> = {
  * adapter passed in; this component only drives the pipeline and renders
  * whatever the adapter's `fields`/`normalizeRow`/`detectDuplicates` produce.
  */
-export function ImportWizard({ adapters, onClose, onImported }: ImportWizardProps) {
-  const wizard = useImportWizard(adapters);
+export function ImportWizard({ adapters, onClose, onImported, batch, initialFile }: ImportWizardProps) {
+  const wizard = useImportWizard(adapters, batch ? { batch } : undefined);
   const [showAllRows, setShowAllRows] = useState(false);
+  const [savedProfiles, setSavedProfiles] = useState<ImportMappingProfile[]>([]);
+
+  useEffect(() => {
+    if (wizard.step === 'mapping' && batch) {
+      listMappingProfiles(batch.importType)
+        .then((profiles) => setSavedProfiles(profiles.filter((p) => p.isActive && (p.sourceSystem === batch.sourceSystem || p.sourceSystem === 'generic'))))
+        .catch(() => setSavedProfiles([]));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wizard.step, batch?.importType, batch?.sourceSystem]);
+
+  /**
+   * "Save mapping as profile" lives on the Review step, not Mapping — by
+   * Review, column mapping AND (when the adapter requires them) account/tax
+   * mapping are all finalized, so one save captures the complete picture the
+   * brief asks a profile to remember (column + account + tax), not just
+   * column headers.
+   */
+  function saveCurrentMappingAsProfile() {
+    if (!wizard.sheet || !batch) return;
+    const name = window.prompt('Name this mapping profile (e.g. "ABC Client — Pastel Chart of Accounts"):');
+    if (!name) return;
+    const columnMappings: Record<string, string> = {};
+    for (const [fieldKey, index] of Object.entries(wizard.mapping)) {
+      if (index !== undefined) columnMappings[fieldKey] = wizard.sheet.headers[index];
+    }
+    void saveMappingProfile({
+      name,
+      sourceSystem: batch.sourceSystem,
+      importType: batch.importType,
+      columnMappings,
+      accountMappings: wizard.accountMappingSelections,
+      taxMappings: wizard.taxMappingSelections,
+    })
+      .then((created) => setSavedProfiles((prev) => [...prev, created]))
+      .catch(() => {
+        // Non-fatal — the import itself doesn't depend on the profile save succeeding.
+      });
+  }
 
   useEffect(() => {
     if (wizard.step === 'mapping' && wizard.sheet && Object.keys(wizard.mapping).length === 0) {
@@ -44,6 +92,13 @@ export function ImportWizard({ adapters, onClose, onImported }: ImportWizardProp
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wizard.step, wizard.sheet]);
+
+  useEffect(() => {
+    if (initialFile && wizard.step === 'file' && !wizard.workbook) {
+      void wizard.uploadFile(initialFile);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile, wizard.step]);
 
   function handleClose() {
     wizard.reset();
@@ -72,14 +127,57 @@ export function ImportWizard({ adapters, onClose, onImported }: ImportWizardProp
           />
         )}
         {wizard.step === 'mapping' && wizard.adapter && wizard.sheet && (
-          <MappingStep
-            fields={wizard.adapter.fields}
-            headers={wizard.sheet.headers}
-            mapping={wizard.mapping}
-            onChange={wizard.setMapping}
-            onContinue={wizard.runValidation}
+          <>
+            {wizard.duplicateFileWarning && wizard.duplicateFileWarning.length > 0 && (
+              <DuplicateFileNote count={wizard.duplicateFileWarning.length} />
+            )}
+            {batch && savedProfiles.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Saved profile:</span>
+                <EnumSelect
+                  value=""
+                  onValueChange={(id) => {
+                    const profile = savedProfiles.find((p) => p.id === id);
+                    if (profile) wizard.applyMappingProfile(profile);
+                  }}
+                  options={[{ value: '', label: 'Apply a saved mapping…' }, ...savedProfiles.map((p) => ({ value: p.id, label: p.name }))]}
+                  className="w-64"
+                />
+              </div>
+            )}
+            <MappingStep
+              fields={wizard.adapter.fields}
+              headers={wizard.sheet.headers}
+              mapping={wizard.mapping}
+              onChange={wizard.setMapping}
+              onContinue={wizard.proceedFromMapping}
+              onBack={wizard.goBack}
+              onCancel={handleClose}
+            />
+          </>
+        )}
+        {wizard.step === 'accountMapping' && wizard.adapter && (
+          <AccountMappingStep
+            refs={wizard.accountRefs}
+            accounts={wizard.adapter.getMappableAccounts?.(wizard.ctx) ?? []}
+            restoredMappings={wizard.profileAccountMappings}
+            onContinue={wizard.confirmAccountMapping}
             onBack={wizard.goBack}
             onCancel={handleClose}
+            loading={wizard.loading}
+            error={wizard.error}
+          />
+        )}
+        {wizard.step === 'taxMapping' && wizard.adapter && (
+          <TaxMappingStep
+            refs={wizard.taxRefs}
+            treatments={wizard.adapter.getMappableTaxTreatments?.(wizard.ctx) ?? []}
+            restoredMappings={wizard.profileTaxMappings}
+            onContinue={wizard.confirmTaxMapping}
+            onBack={wizard.goBack}
+            onCancel={handleClose}
+            loading={wizard.loading}
+            error={wizard.error}
           />
         )}
         {wizard.step === 'review' && (
@@ -94,12 +192,14 @@ export function ImportWizard({ adapters, onClose, onImported }: ImportWizardProp
             onCancel={handleClose}
             loading={wizard.loading}
             error={wizard.error}
+            onSaveProfile={batch ? saveCurrentMappingAsProfile : undefined}
           />
         )}
         {wizard.step === 'result' && wizard.summary && wizard.workbook && (
           <ResultStep
             summary={wizard.summary}
             fileName={wizard.workbook.fileName}
+            recordType={wizard.adapter?.label ?? 'Record'}
             onClose={() => {
               onImported();
               handleClose();
@@ -257,12 +357,12 @@ function TargetStep({
   onBack,
   onCancel,
 }: {
-  fields: { key: string; label: string; required?: boolean; helpText?: string; options: { value: string; label: string }[] }[];
+  fields: { key: string; label: string; type?: 'enum' | 'date'; required?: boolean; helpText?: string; defaultValue?: string; options?: { value: string; label: string }[] }[];
   onContinue: (params: Record<string, unknown>) => void;
   onBack: () => void;
   onCancel: () => void;
 }) {
-  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((f) => [f.key, ''])));
+  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((f) => [f.key, f.defaultValue ?? ''])));
   const canContinue = fields.every((f) => !f.required || values[f.key]);
 
   return (
@@ -273,14 +373,24 @@ function TargetStep({
             {field.label}
             {field.required && ' *'}
           </label>
-          <EnumSelect
-            id={`target-${field.key}`}
-            value={values[field.key]}
-            onValueChange={(value) => setValues((prev) => ({ ...prev, [field.key]: value }))}
-            options={[{ value: '', label: 'Select…' }, ...field.options]}
-          />
+          {field.type === 'date' ? (
+            <input
+              id={`target-${field.key}`}
+              type="date"
+              value={values[field.key]}
+              onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            />
+          ) : (
+            <EnumSelect
+              id={`target-${field.key}`}
+              value={values[field.key]}
+              onValueChange={(value) => setValues((prev) => ({ ...prev, [field.key]: value }))}
+              options={[{ value: '', label: 'Select…' }, ...(field.options ?? [])]}
+            />
+          )}
           {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
-          {field.options.length === 0 && <p className="text-xs text-status-warning">None available — nothing eligible was found.</p>}
+          {field.type !== 'date' && (field.options?.length ?? 0) === 0 && <p className="text-xs text-status-warning">None available — nothing eligible was found.</p>}
         </div>
       ))}
       <div className="flex justify-between gap-2 border-t border-border pt-4">
@@ -359,6 +469,239 @@ function MappingStep({
   );
 }
 
+function DuplicateFileNote({ count }: { count: number }) {
+  return (
+    <p role="alert" className="flex items-start gap-2 rounded-lg border border-status-warning-outline bg-status-warning-surface px-3 py-2.5 text-sm text-status-warning">
+      <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      This file appears to have been imported previously ({count} prior batch{count === 1 ? '' : 'es'} with identical content). Review Import History before continuing if this wasn't intentional.
+    </p>
+  );
+}
+
+function AccountMappingStep({
+  refs,
+  accounts,
+  restoredMappings,
+  onContinue,
+  onBack,
+  onCancel,
+  loading,
+  error,
+}: {
+  refs: ExternalAccountRef[];
+  accounts: { id: string; code: string; name: string }[];
+  restoredMappings?: Record<string, unknown>;
+  onContinue: (selections: AccountMappingSelections) => void;
+  onBack: () => void;
+  onCancel: () => void;
+  loading: boolean;
+  error?: string;
+}) {
+  const suggestions = suggestAccountMappings(refs, accounts);
+  const restored = restoreAccountMappingSelections(restoredMappings ?? {}, refs, accounts);
+  const [selections, setSelections] = useState<AccountMappingSelections>(() =>
+    Object.fromEntries(
+      suggestions.map((s) => [
+        s.ref.code,
+        restored[s.ref.code] ??
+          (s.suggestedAccountId ? ({ action: 'existing', accountId: s.suggestedAccountId } as AccountMappingChoice) : ({ action: 'ignore' } as AccountMappingChoice)),
+      ]),
+    ),
+  );
+  const [newAccountTypes, setNewAccountTypes] = useState<Record<string, string>>({});
+
+  const unresolvedCount = suggestions.filter((s) => selections[s.ref.code]?.action === 'ignore').length;
+
+  function setChoice(code: string, action: 'existing' | 'create' | 'ignore', accountId?: string) {
+    setSelections((prev) => {
+      if (action === 'existing') return { ...prev, [code]: { action: 'existing', accountId: accountId ?? '' } };
+      if (action === 'create') {
+        const ref = suggestions.find((s) => s.ref.code === code)?.ref;
+        const type = (newAccountTypes[code] ?? 'expense') as 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
+        return { ...prev, [code]: { action: 'create', accountType: type, code, name: ref?.name ?? code } };
+      }
+      return { ...prev, [code]: { action: 'ignore' } };
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <p className="text-sm text-muted-foreground">
+        Map each external account to an existing Vertex account, or create a new one. Codes that exactly match an existing Vertex account code are pre-filled — review before continuing. Any account left "Requires review" will block this import.
+      </p>
+      {unresolvedCount > 0 && (
+        <p className="flex items-center gap-2 rounded-lg border border-status-warning-outline bg-status-warning-surface px-3 py-2 text-sm text-status-warning">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          {unresolvedCount} account{unresolvedCount === 1 ? '' : 's'} still require review.
+        </p>
+      )}
+      {/* max-h-96 + overflow-auto here (not just overflow-y) — FormBody clips overflow-x, so this grid's own fixed-width columns need their own horizontal scroll region on a narrow viewport, same pattern as the page-level tables (e.g. ImportHistoryPage's min-w-[860px] + overflow-x-auto). */}
+      <div className="max-h-96 overflow-auto rounded-xl border border-border">
+        <div className="sticky top-0 grid min-w-[620px] grid-cols-[110px_1fr_140px_1fr] gap-2 border-b border-border bg-muted/60 px-3 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <span>External Code</span>
+          <span>External Name</span>
+          <span>Action</span>
+          <span>Vertex Account</span>
+        </div>
+        {suggestions.map(({ ref, suggestedAccountId }) => {
+          const choice = selections[ref.code];
+          return (
+            <div key={ref.code} className="grid min-w-[620px] grid-cols-[110px_1fr_140px_1fr] items-center gap-2 border-b border-border/50 px-3 py-2 text-sm last:border-0">
+              <span className="font-mono text-xs">{ref.code}</span>
+              <span className="truncate text-muted-foreground">{ref.name ?? '—'}</span>
+              <EnumSelect
+                aria-label={`Action for ${ref.code}`}
+                value={choice?.action ?? 'ignore'}
+                onValueChange={(value) => setChoice(ref.code, value as 'existing' | 'create' | 'ignore', choice?.action === 'existing' ? choice.accountId : suggestedAccountId)}
+                options={[
+                  { value: 'existing', label: 'Map to existing' },
+                  { value: 'create', label: 'Create new' },
+                  { value: 'ignore', label: 'Requires review' },
+                ]}
+              />
+              {choice?.action === 'existing' && (
+                <EnumSelect
+                  aria-label={`Vertex account for ${ref.code}`}
+                  value={choice.accountId}
+                  onValueChange={(value) => setChoice(ref.code, 'existing', value)}
+                  options={[{ value: '', label: 'Select…' }, ...accounts.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }))]}
+                />
+              )}
+              {choice?.action === 'create' && (
+                <EnumSelect
+                  aria-label={`New account type for ${ref.code}`}
+                  value={newAccountTypes[ref.code] ?? 'expense'}
+                  onValueChange={(value) => {
+                    setNewAccountTypes((prev) => ({ ...prev, [ref.code]: value }));
+                    setChoice(ref.code, 'create');
+                  }}
+                  options={[
+                    { value: 'asset', label: 'New account — Asset' },
+                    { value: 'liability', label: 'New account — Liability' },
+                    { value: 'equity', label: 'New account — Equity' },
+                    { value: 'revenue', label: 'New account — Revenue' },
+                    { value: 'expense', label: 'New account — Expense' },
+                  ]}
+                />
+              )}
+              {choice?.action === 'ignore' && <span className="text-xs text-status-warning">Blocks this account's rows until resolved.</span>}
+            </div>
+          );
+        })}
+        {suggestions.length === 0 && <p className="px-3 py-4 text-sm text-muted-foreground">No external accounts were found in the mapped columns.</p>}
+      </div>
+
+      {error && <ErrorNote message={error} />}
+
+      <div className="flex justify-between gap-2 border-t border-border pt-4">
+        <Button variant="outline" type="button" onClick={onBack} disabled={loading}>
+          Back
+        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" type="button" onClick={onCancel} disabled={loading}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={() => onContinue(selections)} disabled={loading}>
+            {loading ? 'Applying…' : 'Continue'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaxMappingStep({
+  refs,
+  treatments,
+  restoredMappings,
+  onContinue,
+  onBack,
+  onCancel,
+  loading,
+  error,
+}: {
+  refs: ExternalTaxRef[];
+  treatments: { id: string; code: string; treatment: string; label: string; rate: number }[];
+  restoredMappings?: Record<string, unknown>;
+  onContinue: (selections: TaxMappingSelections) => void;
+  onBack: () => void;
+  onCancel: () => void;
+  loading: boolean;
+  error?: string;
+}) {
+  const suggestions = suggestTaxMappings(refs, treatments);
+  const restored = restoreTaxMappingSelections(restoredMappings ?? {}, refs, treatments);
+  const [selections, setSelections] = useState<TaxMappingSelections>(() =>
+    Object.fromEntries(
+      suggestions.map((s) => [
+        s.ref.code,
+        restored[s.ref.code] ?? (s.suggestedTaxRateId ? ({ action: 'mapped', taxRateId: s.suggestedTaxRateId } as const) : ({ action: 'ignore' } as const)),
+      ]),
+    ),
+  );
+
+  const unresolvedCount = suggestions.filter((s) => selections[s.ref.code]?.action === 'ignore').length;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <p className="text-sm text-muted-foreground">
+        Map each external tax/VAT code to an existing Vertex tax treatment, or mark it as legitimately non-taxable. Codes that exactly match a configured Vertex rate are pre-filled — review before continuing.
+      </p>
+      {unresolvedCount > 0 && (
+        <p className="flex items-center gap-2 rounded-lg border border-status-warning-outline bg-status-warning-surface px-3 py-2 text-sm text-status-warning">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          {unresolvedCount} tax code{unresolvedCount === 1 ? '' : 's'} marked "Ignore / non-taxable" — confirm this is correct before continuing.
+        </p>
+      )}
+      {/* overflow-auto (not just overflow-y) — see AccountMappingStep's identical note above. */}
+      <div className="max-h-96 overflow-auto rounded-xl border border-border">
+        <div className="sticky top-0 grid min-w-[520px] grid-cols-[110px_1fr_1fr] gap-2 border-b border-border bg-muted/60 px-3 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <span>External Code</span>
+          <span>External Description / Rate</span>
+          <span>Vertex Tax Treatment</span>
+        </div>
+        {suggestions.map(({ ref }) => {
+          const choice = selections[ref.code];
+          return (
+            <div key={ref.code} className="grid min-w-[520px] grid-cols-[110px_1fr_1fr] items-center gap-2 border-b border-border/50 px-3 py-2 text-sm last:border-0">
+              <span className="font-mono text-xs">{ref.code}</span>
+              <span className="truncate text-muted-foreground">{ref.description ?? '—'}{ref.rate !== undefined ? ` (${ref.rate}%)` : ''}</span>
+              <EnumSelect
+                aria-label={`Vertex tax treatment for ${ref.code}`}
+                value={choice?.action === 'mapped' ? choice.taxRateId : 'ignore'}
+                onValueChange={(value) =>
+                  setSelections((prev) => ({ ...prev, [ref.code]: value === 'ignore' ? { action: 'ignore' } : { action: 'mapped', taxRateId: value } }))
+                }
+                options={[
+                  { value: 'ignore', label: 'Ignore / non-taxable' },
+                  ...treatments.map((t) => ({ value: t.id, label: t.rate !== undefined ? `${t.label} (${t.rate}%)` : t.label })),
+                ]}
+              />
+            </div>
+          );
+        })}
+        {suggestions.length === 0 && <p className="px-3 py-4 text-sm text-muted-foreground">No external tax codes were found in the mapped columns.</p>}
+      </div>
+
+      {error && <ErrorNote message={error} />}
+
+      <div className="flex justify-between gap-2 border-t border-border pt-4">
+        <Button variant="outline" type="button" onClick={onBack} disabled={loading}>
+          Back
+        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" type="button" onClick={onCancel} disabled={loading}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={() => onContinue(selections)} disabled={loading}>
+            {loading ? 'Applying…' : 'Continue'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ROW_PREVIEW_LIMIT = 50;
 
 function ReviewStep({
@@ -372,6 +715,7 @@ function ReviewStep({
   onCancel,
   loading,
   error,
+  onSaveProfile,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rows: ImportRowResult<any>[];
@@ -384,6 +728,8 @@ function ReviewStep({
   onCancel: () => void;
   loading: boolean;
   error?: string;
+  /** Phase D — offered here (not on the Mapping step) because by Review every mapping decision this session made (column + account + tax) is final and can all be captured in one saved profile. */
+  onSaveProfile?: () => void;
 }) {
   const counts = rows.reduce(
     (acc, r) => {
@@ -453,6 +799,11 @@ function ReviewStep({
           Back
         </Button>
         <div className="flex gap-2">
+          {onSaveProfile && (
+            <Button variant="outline" type="button" onClick={onSaveProfile} disabled={loading}>
+              Save mapping as profile
+            </Button>
+          )}
           <Button variant="outline" type="button" onClick={onCancel} disabled={loading}>
             Cancel
           </Button>
@@ -477,11 +828,13 @@ function SummaryField({ label, value }: { label: string; value: string }) {
 function ResultStep({
   summary,
   fileName,
+  recordType,
   onClose,
   onImportAnother,
 }: {
   summary: import('../types').ImportExecutionSummary;
   fileName: string;
+  recordType: string;
   onClose: () => void;
   onImportAnother: () => void;
 }) {
@@ -501,6 +854,10 @@ function ResultStep({
         <SummaryField label="Skipped" value={String(summary.skipped)} />
         <SummaryField label="Errors" value={String(summary.errored)} />
       </dl>
+
+      <Button variant="outline" size="sm" type="button" className="w-fit" onClick={() => downloadResultReport(fileName, recordType, summary.rows)}>
+        Download full result report
+      </Button>
 
       {errorRows.length > 0 && (
         <div className="flex flex-col gap-2">

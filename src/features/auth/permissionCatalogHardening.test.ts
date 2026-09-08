@@ -221,6 +221,8 @@ describe('route gating — direct URL navigation', () => {
       'settings',
       'accounting_settings',
       'billing',
+      // Data Import & Migration Centre (migration 0078)
+      'data_migration',
     ]);
     for (const { feature } of Object.values(routePermissions)) {
       expect(known.has(feature), `unknown feature "${feature}" in routePermissions`).toBe(true);
