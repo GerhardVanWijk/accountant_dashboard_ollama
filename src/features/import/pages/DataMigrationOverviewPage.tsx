@@ -5,6 +5,7 @@ import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { StatusBadge } from '@/components/app/status-badge';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
+import { HelpLink } from '@/features/help/components/HelpLink';
 import { ImportWizard } from '../components/ImportWizard';
 import {
   chartOfAccountsImportAdapter,
@@ -95,6 +96,7 @@ export function DataMigrationOverviewPage() {
         description="Migrate accounting data from another system, or your own Vertex exports, into this company — with mapping, validation and reconciliation before anything is confirmed."
         actions={
           <>
+            <HelpLink article="data-migration" className="mr-1" />
             <Button variant="outline" size="sm" render={<Link to="/admin/imports/history" />}>
               Import History
             </Button>
@@ -205,7 +207,7 @@ export function DataMigrationOverviewPage() {
 
 function QuickLink({ to, icon: Icon, label, hint }: { to: string; icon: typeof Landmark; label: string; hint: string }) {
   return (
-    <Link to={to} className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-[0_1px_2px_rgb(7_20_40_/_4%)] transition-colors hover:border-primary/40">
+    <Link to={to} className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40">
       <Icon className="size-5 text-primary" aria-hidden="true" />
       <span className="text-sm font-medium text-foreground">{label}</span>
       <span className="text-xs text-muted-foreground">{hint}</span>

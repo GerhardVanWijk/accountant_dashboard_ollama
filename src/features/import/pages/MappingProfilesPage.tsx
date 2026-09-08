@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
+import { HelpLink } from '@/features/help/components/HelpLink';
 import { listMappingProfiles, setMappingProfileActive, duplicateMappingProfile } from '../migration/importMappingProfileService';
 import type { ImportMappingProfile } from '../migration/types';
 
@@ -53,9 +54,12 @@ export function MappingProfilesPage() {
         title="Mapping Profiles"
         description="Saved column, account and tax mappings — reused automatically the next time a file from the same source system is imported. System profiles (shared, evidence-based) cannot be edited; company profiles can."
         actions={
-          <Button variant="outline" size="sm" render={<Link to="/admin/imports" />}>
-            Back to overview
-          </Button>
+          <>
+            <HelpLink article="import-mapping-profiles" className="mr-1" />
+            <Button variant="outline" size="sm" render={<Link to="/admin/imports" />}>
+              Back to overview
+            </Button>
+          </>
         }
       />
 

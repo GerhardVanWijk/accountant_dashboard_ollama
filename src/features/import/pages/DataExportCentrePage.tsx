@@ -4,6 +4,7 @@ import { Download, FileJson, Loader2, Upload } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { useCompany } from '@/features/admin/hooks/useCompany';
+import { HelpLink } from '@/features/help/components/HelpLink';
 import { downloadCSV } from '@/features/export/csvExport';
 import { downloadXLSX } from '@/features/export/xlsxExport';
 import { accountService, journalEntryService } from '@/features/accounting/services';
@@ -185,9 +186,12 @@ export function DataExportCentrePage() {
         title="Data Export"
         description="Export accounting data as CSV/Excel, download blank import templates, or build/re-import a structured Vertex migration package."
         actions={
-          <Button variant="outline" size="sm" render={<Link to="/admin/imports" />}>
-            Back to overview
-          </Button>
+          <>
+            <HelpLink article="data-export" className="mr-1" />
+            <Button variant="outline" size="sm" render={<Link to="/admin/imports" />}>
+              Back to overview
+            </Button>
+          </>
         }
       />
 

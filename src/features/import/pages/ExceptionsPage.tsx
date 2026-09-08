@@ -4,6 +4,7 @@ import { Download, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { EnumSelect } from '@/components/app/combobox';
+import { HelpLink } from '@/features/help/components/HelpLink';
 import { listOpenIssues, resolveIssue } from '../migration/importBatchService';
 import { downloadExceptionReport } from '../migration/reports';
 import type { ImportBatchIssue } from '../migration/types';
@@ -61,6 +62,7 @@ export function ExceptionsPage() {
         description="Every unresolved issue across every import batch. Resolving one here does not require re-uploading the file — open the batch to remap and revalidate if needed."
         actions={
           <>
+            <HelpLink article="import-exceptions" className="mr-1" />
             <Button variant="outline" size="sm" disabled={filtered.length === 0} onClick={() => downloadExceptionReport('open-issues', filtered)}>
               <Download className="mr-1.5 size-3.5" aria-hidden="true" /> Download exception report
             </Button>
