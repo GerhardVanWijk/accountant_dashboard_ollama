@@ -2,9 +2,11 @@
 
 ---
 
-## DATA IMPORT / MIGRATION + EXPORT CENTRE — PORTED FROM SLC (branch `import-export-light-mode-2026-09-08`) — 2026-09-08
+## DATA IMPORT / MIGRATION + EXPORT CENTRE + LIGHT MODE (branch `import-export-light-mode-2026-09-08`) — 2026-09-08
 
-**NOT merged, NOT deployed.** Migrations `0077` (schema + 2 private buckets + 3 RPCs) and `0078` (`data_migration` permission feature) **applied to live**. Gate green: type-check / lint / 3029 tests / build all pass; Supabase advisors **0 ERROR**; Trial Balance difference **R0.00** (additive migration, GL untouched). Live-verified with a rolled-back transaction — 0 artifacts persisted.
+**SHIPPED 2026-09-08** — on explicit user instruction ahead of human browser QA, `import-export-light-mode-2026-09-08` was fast-forward-merged → `main` (`105ab10..11d0445`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Migrations `0077` (schema + 2 private buckets + 3 RPCs) and `0078` (`data_migration` permission feature) were **already applied to live**; the merge itself carries no further migration. The light-mode continuation has **no DB write and no accounting effect** (CSS design tokens + component classNames + Help content only). Trial Balance difference **R0.00**; current-data accounting integrity verified (248/248 posted entries balanced, stock cache == movement ledger, AR/deposit control accounts match the reconciled figures). **Post-deploy browser QA is now owed** — the 7 import pages + role gates, and the softened light mode at 1920/1440/1366/tablet/mobile with a re-confirm that dark mode is visually unchanged.
+
+Gate at ship: type-check / lint / **3045 tests** / build all pass; Supabase advisors **0 ERROR**. Import-schema live-verified with a rolled-back transaction — 0 artifacts persisted.
 
 Ported: the `src/features/import/migration/*` service layer, `chartOfAccountsImportAdapter`, the wizard extended to SLC's superset (Account/Tax Mapping steps — wired but unreachable until the deferred adapters land), 7 admin pages at `/admin/imports*` + `/admin/exports`, nav under Administration, `data_migration` route gate. Working import types: **Chart of Accounts, Customers, Suppliers, Products, Opening Stock**.
 
@@ -20,7 +22,7 @@ Ported: the `src/features/import/migration/*` service layer, `chartOfAccountsImp
 - **Help Centre**: 15 Administration articles for the data-migration/import/export subsystem (`docs/HELP_CENTRE.md`), all reflecting real behaviour (no native Pastel/Sage/Xero/Syspro connector claimed). Contextual `<HelpLink>` on 4 import page headers.
 - **Import pages**: removed the last SLC hardcoded style (a navy card shadow → `shadow-sm`). New `src/features/import/importPortIntegrity.test.ts` locks: 0 SLC branding, deferred adapters absent + labelled, honest source-system state, routes/nav wired.
 
-**Still owed:** browser QA of the softened light mode (1920/1440/1366/tablet/mobile) + a re-confirm dark mode is unchanged; browser QA of the 7 import pages. Then merge + deploy decision.
+**Shipped with the merge above.** Still owed: browser QA of the softened light mode (1920/1440/1366/tablet/mobile) + a re-confirm dark mode is unchanged; browser QA of the 7 import pages.
 
 ---
 
