@@ -395,6 +395,24 @@ gate). Migration writes 0 `user_roles` and 0 `profiles` rows.
 | `accounting_settings` | read | `/settings/accounting` | `finance_manager`, `accountant` (the read-heavy finance roles that also hold `audit` / `gl`) |
 | `billing` | read | `/settings/subscription` | **no system-role grant** — `admin` / `superuser` only |
 
+## Data Import & Migration Centre (migration 0078, 2026-09-08)
+
+Additive to the same Layer 2 catalog. One feature, 15 system-role grants,
+`<PermissionRoute feature="data_migration" action="read">` on seven routes
+(`/admin/imports`, `/admin/imports/history`, `/admin/imports/history/:batchId`,
+`/admin/imports/mappings`, `/admin/imports/exceptions`,
+`/admin/imports/documents`, `/admin/exports`). NO RLS change — the new
+`import_*` tables are company-scoped by their own policies (migration 0077).
+
+| Feature | Actions | Routes | Granted to |
+|---|---|---|---|
+| `data_migration` | read, import, create, update, export | the seven above | `accountant`, `finance_manager`, `bookkeeper` (full set each); `admin` / `superuser` bypass. No other role — migration source files can carry full customer/supplier/banking detail, so ordinary read access must not imply access to raw migration files. |
+
+Adapters gate their own availability with `permission: { feature:
+'data_migration', action: 'import' }`; the wizard hides an import type the
+user lacks `import` for. `/admin/imports` + `/admin/exports` are in
+`permissionRouteMap.ts`.
+
 `permissionForPath()` resolves each of the five routes;
 `permissionRouteMap.ts` documents which routes stay deliberately ungated
 (`/companies` — audited by the 0074 trigger; `/help` + `/help/:articleId`

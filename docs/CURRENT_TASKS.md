@@ -2,6 +2,20 @@
 
 ---
 
+## DATA IMPORT / MIGRATION + EXPORT CENTRE — PORTED FROM SLC (branch `import-export-light-mode-2026-09-08`) — 2026-09-08
+
+**NOT merged, NOT deployed.** Migrations `0077` (schema + 2 private buckets + 3 RPCs) and `0078` (`data_migration` permission feature) **applied to live**. Gate green: type-check / lint / 3029 tests / build all pass; Supabase advisors **0 ERROR**; Trial Balance difference **R0.00** (additive migration, GL untouched). Live-verified with a rolled-back transaction — 0 artifacts persisted.
+
+Ported: the `src/features/import/migration/*` service layer, `chartOfAccountsImportAdapter`, the wizard extended to SLC's superset (Account/Tax Mapping steps — wired but unreachable until the deferred adapters land), 7 admin pages at `/admin/imports*` + `/admin/exports`, nav under Administration, `data_migration` route gate. Working import types: **Chart of Accounts, Customers, Suppliers, Products, Opening Stock**.
+
+**Deferred:** Trial Balance / GL detail / AR & AP opening-balance imports — they need a manual-journal-draft lifecycle Vertex does not have. See `docs/SLC_IMPORT_PORT.md` + `docs/DATA_MIGRATION.md`.
+
+**Deferred to a follow-up session:** Part 2 of the brief — global light-mode design-token softening.
+
+**Owed:** human browser QA of all 7 pages + role-gate click-through (`accountant` / `finance_manager` / `bookkeeper` in, everyone else out, `admin`/`superuser` bypass); then merge + deploy decision.
+
+---
+
 ## ACCOUNTING REGISTER PAGES — VISIBLE STRUCTURAL REDESIGN (branch `accounting-registers-structural-redesign-2026-09-07`, commit `7519446`) — 2026-09-07
 
 **SHIPPED 2026-09-07** — on explicit user instruction ahead of human browser QA, `accounting-registers-structural-redesign-2026-09-07` was fast-forward-merged → `main` (`27c35a3..7519446`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Layout / composition / responsive presentation only — no migration, no DB write, no calculation / classification / posting / reconciliation / variance change. **Post-deploy browser QA (1920/1600/1440/1366/1024/tablet/mobile) of Bank Transactions, Chart of Accounts, General Ledger, Journal Entries and Trial Balance is now owed.**

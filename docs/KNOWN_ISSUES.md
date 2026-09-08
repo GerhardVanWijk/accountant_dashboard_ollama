@@ -7,6 +7,25 @@ each section.
 
 ## Open
 
+### 2026-09-08 (SLC IMPORT/EXPORT PORT) — migrations 0077/0078
+
+Branch `import-export-light-mode-2026-09-08`. Migrations **applied to live**;
+`main` untouched, NOT deployed.
+
+- **Trial Balance / GL detail / AR & AP opening-balance imports are deferred.**
+  All four SLC adapters create a *draft* manual journal, and Vertex's
+  `journalEntryService` has no `createManualDraft` / `postManualDraft` (SLC
+  added a whole manual-journal-draft lifecycle in its migration `0057` +
+  repo/service/type layers + a "post draft" UI). Porting that is its own task.
+  Shown honestly on `/admin/imports` under "Not available yet". The wizard's
+  Account Mapping / Tax Mapping steps are wired but unreachable until then.
+- **Part 2 of the brief (global light-mode token softening) not started** —
+  deferred to a follow-up session on user instruction.
+- **`migration/reconciliation.ts`** carries dead `trial_balance` / `ar_opening`
+  / `ap_opening` branches (compile clean, never hit) pending the deferred
+  adapters — left in place rather than deleted-then-restored.
+- Browser QA of all 7 pages + role-gate click-through still owed.
+
 ### 2026-09-07 (ADMINISTRATION MODULE · BLOCKS D–G) — migrations 0073/0073b/0074/0075/0075b
 
 Branch `administration-module-2026-09-06`. `main` untouched, NOT deployed.
