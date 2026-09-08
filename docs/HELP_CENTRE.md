@@ -7,7 +7,7 @@ exist, so none are faked.
 
 ## Content
 
-`src/features/help/content/` — 44 articles as typed data
+`src/features/help/content/` — 59 articles as typed data
 (`HelpArticle[]`), across 13 categories:
 
 Getting started · Sales · Purchasing · Banking · Inventory · Accounting ·
@@ -39,6 +39,21 @@ behaviour:
 `ts-invoice-wont-post` · `ts-journal-wont-post` · `ts-bank-wont-reconcile`
 · `ts-inventory-quantity-wrong` · `ts-vat-differs` · `ts-period-locked` ·
 `ts-document-upload-failed` · `ts-notification-wont-clear`
+
+## Data Import & Migration Centre (2026-09-08)
+
+15 Administration-category articles covering the ported import/export
+subsystem, each reflecting actual implemented behaviour (no native
+Pastel/Sage/Xero/Syspro connector is claimed anywhere):
+
+`data-migration` · `import-preparing-file` · `import-csv` · `import-excel` ·
+`import-mapping-profiles` · `import-validation` · `import-exceptions` ·
+`import-history` · `import-evidence-documents` · `data-export` ·
+`import-duplicate-files` · `import-no-fuzzy-mapping` ·
+`import-accounting-unavailable` · `import-bank-vs-migration` ·
+`import-security-isolation`
+
+Guarded by `src/features/help/content/dataMigrationArticles.test.ts`.
 
 ## Search — `searchHelp(query)` (`content/index.ts`)
 
@@ -74,6 +89,10 @@ Embedded in the page headers of the complex workflows the brief calls out:
 - Forecasting → `forecasting`
 - Users & roles → `users-roles`
 - Company documents → `documents`
+- Data Migration overview → `data-migration`
+- Mapping Profiles → `import-mapping-profiles`
+- Import Exceptions → `import-exceptions`
+- Data Export centre → `data-export`
 
 (Notifications guidance is on the Notifications page itself and in Settings
 → Notifications; the `notifications` article covers it.)

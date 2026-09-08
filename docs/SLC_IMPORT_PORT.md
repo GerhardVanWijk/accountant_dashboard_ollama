@@ -72,6 +72,9 @@ or any posted-accounting table.
 | `pages/DataExportCentrePage.tsx` | rebrand only. Export rows for Trial Balance / GL / AR / AP opening are **exports** (read-only, safe) and were kept; only the *re-import* section is limited to CoA/Customers/Suppliers/Products |
 | `components/status-badge.tsx` | added `ImportBatchStatus` + `bank_statements` status entries |
 | `lib/app/navigation.ts`, `features/auth/permissionRouteMap.ts`, `app/router.tsx`, `permissionCatalogHardening.test.ts` | 7 routes under `/admin/imports*` + `/admin/exports`, nav items under Administration, `data_migration` route gate |
+| `DataMigrationOverviewPage.tsx` (theme follow-up) | removed an SLC hardcoded navy shadow → design-system `shadow-sm` |
+| 4 page headers | `<HelpLink>` to the relevant Help article (Overview, Mapping Profiles, Exceptions, Data Export) |
+| `src/features/help/content/articles.ts` | +15 Administration-category Help articles (see docs/HELP_CENTRE.md) |
 
 ### Skipped / deferred
 
@@ -120,16 +123,20 @@ same services the rest of the app uses; none post to the GL directly.
 - Downloads are 60-second signed URLs only — no public URL, no raw path
   exposed.
 
-## Gate (2026-09-08)
+## Gate
 
-`type-check` PASS · `lint --max-warnings 0` PASS · `test` 3029 pass / 0 fail ·
-`build` PASS · Supabase advisors **0 ERROR** (import WARNs are the standard
-`security_definer` / `allow_anonymous_sign_ins` notices every table+RPC in the
-schema carries).
+- Import/export increment (2026-09-08): `type-check` PASS · `lint` PASS ·
+  `test` 3029/3029 · `build` PASS · advisors **0 ERROR**.
+- Theme + Help + tests continuation (2026-09-08): `type-check` PASS · `lint`
+  PASS · `test` **3045/3045** · `build` PASS. No new migration, **no DB
+  writes**, so advisors unchanged.
 
-Accounting baseline unchanged (additive migration): Trial Balance difference
-**R0.00**, GL 1200 Inventory R1,478,853.74, 247 journal entries, 343 stock
-movements.
+Accounting baseline: Trial Balance difference **R0.00** throughout. GL 1200
+Inventory / journal count / stock-movement count moved between the two runs
+(R1,478,853.74 → **R1,513,353.74**, 247 → **248** journals, 343 → **344**
+movements) purely from a concurrent operational bill posting (`JE-4177`,
+source `bill`) — none of this port's work (import feature wrote 0 rows; the
+continuation wrote 0 rows) touched accounting.
 
 Live verification: mapping profile + batch + issue + evidence document inserted
 against a real company inside a transaction and rolled back — all FKs, enums,
@@ -137,6 +144,12 @@ CHECK constraints and unique indexes satisfied, **0 artifacts persisted**.
 
 ## Not done
 
-- Merge to `main` — NO. Deploy — NO. Human browser QA required.
-- Part 2 of the brief (global light-mode token softening) — deferred to a
-  follow-up session.
+- Merge to `main` — NO. Deploy — NO. Human browser QA required (import/export
+  workspace **and** the softened light mode — see docs/LIGHT_MODE.md).
+- The `data_migration` grant covers the Chart of Accounts import and the
+  centre itself for accountant / finance_manager / bookkeeper. The shared
+  Customers / Suppliers / Products / Opening Stock adapters keep their own
+  domain `*:import` gate (none of which any system role holds), so within the
+  centre those types are admin/superuser-only until a small grant migration
+  is added. Noted in docs/KNOWN_ISSUES.md; out of scope for a theme/help
+  continuation.

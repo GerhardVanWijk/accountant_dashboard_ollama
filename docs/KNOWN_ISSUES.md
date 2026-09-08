@@ -25,6 +25,28 @@ Branch `import-export-light-mode-2026-09-08`. Migrations **applied to live**;
   / `ap_opening` branches (compile clean, never hit) pending the deferred
   adapters — left in place rather than deleted-then-restored.
 - Browser QA of all 7 pages + role-gate click-through still owed.
+- **Data Migration centre is Chart-of-Accounts-only for a plain finance role.**
+  The `data_migration` grant (accountant / finance_manager / bookkeeper) covers
+  the centre + the COA import. The shared Customers / Suppliers / Products /
+  Opening Stock adapters keep their existing domain gate
+  (`customer_management:import` / `supplier_management:import` /
+  `inventory:import`), and no system role holds those — so within the centre
+  those import types are admin/superuser-only. A small `role_permissions`
+  grant migration would open them to the finance roles; deferred (out of scope
+  for the theme/help continuation).
+
+### 2026-09-08 (LIGHT MODE + HELP — same branch, no migration)
+
+- **Status-colour tokens left as-is.** `--positive/-negative/-warning/-info`
+  and their `-surface`/`-muted` washes are shared between light and dark (no
+  `[data-theme="dark"]` override), so softening them for light risked dark.
+  They are already 10–15 % alpha — soft, not neon — so this was judged not
+  worth the risk. Revisit only if browser QA shows a specific neon surface.
+- **`--foreground` softened app-wide.** Page body text already used the legacy
+  `--color-text-primary` (#33363f) via `text-text-primary`; shadcn components
+  used the near-black v0 `--foreground`. The softening harmonises them, but any
+  component asserting an exact near-black colour visually should be spot-checked
+  in browser QA.
 
 ### 2026-09-07 (ADMINISTRATION MODULE · BLOCKS D–G) — migrations 0073/0073b/0074/0075/0075b
 

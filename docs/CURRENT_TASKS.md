@@ -10,9 +10,17 @@ Ported: the `src/features/import/migration/*` service layer, `chartOfAccountsImp
 
 **Deferred:** Trial Balance / GL detail / AR & AP opening-balance imports — they need a manual-journal-draft lifecycle Vertex does not have. See `docs/SLC_IMPORT_PORT.md` + `docs/DATA_MIGRATION.md`.
 
-**Deferred to a follow-up session:** Part 2 of the brief — global light-mode design-token softening.
-
 **Owed:** human browser QA of all 7 pages + role-gate click-through (`accountant` / `finance_manager` / `bookkeeper` in, everyone else out, `admin`/`superuser` bypass); then merge + deploy decision.
+
+### Continuation — light mode + Help Centre (same branch) — 2026-09-08
+
+**No DB writes. Gate: 3045/3045 tests, type-check / lint / build all pass. TB difference R0.00.**
+
+- **Global light-mode softening** (`docs/LIGHT_MODE.md`): softened ~12 LIGHT-only v0 `:root` tokens in `src/styles/tokens.css` (soft cool off-white canvas, white cards elevated against it, deeper muted surface, gentle cool borders, charcoal-navy text, better secondary-text contrast). Form primitives (`input`/`textarea`/`select`/`combobox` triggers) get a `bg-muted/55` soft fill in light. Chart tooltip → `bg-popover`. **Dark mode byte-identical** (guarded by `src/styles/light-mode-tokens.test.ts`). Marketing site untouched (no `.app-shell` → keeps legacy `--color-*`). Codebase audit: 0 hardcoded app surfaces to fix beyond 3 intentional paper-white ones (2 logo previews, 1 invoice preview).
+- **Help Centre**: 15 Administration articles for the data-migration/import/export subsystem (`docs/HELP_CENTRE.md`), all reflecting real behaviour (no native Pastel/Sage/Xero/Syspro connector claimed). Contextual `<HelpLink>` on 4 import page headers.
+- **Import pages**: removed the last SLC hardcoded style (a navy card shadow → `shadow-sm`). New `src/features/import/importPortIntegrity.test.ts` locks: 0 SLC branding, deferred adapters absent + labelled, honest source-system state, routes/nav wired.
+
+**Still owed:** browser QA of the softened light mode (1920/1440/1366/tablet/mobile) + a re-confirm dark mode is unchanged; browser QA of the 7 import pages. Then merge + deploy decision.
 
 ---
 

@@ -63,6 +63,30 @@ deactivated through their normal screens. Posted accounting is only ever
 corrected through normal reversal/correction mechanisms — an import is never
 "undone" by deleting posted entries.
 
+## Help
+
+15 Help Centre articles under **Administration** cover this subsystem end to
+end (`data-migration`, `import-preparing-file`, `import-csv`, `import-excel`,
+`import-mapping-profiles`, `import-validation`, `import-exceptions`,
+`import-history`, `import-evidence-documents`, `data-export`,
+`import-duplicate-files`, `import-no-fuzzy-mapping`,
+`import-accounting-unavailable`, `import-bank-vs-migration`,
+`import-security-isolation`). Contextual `<HelpLink>` chips sit in the page
+headers of the Overview, Mapping Profiles, Exceptions and Data Export pages.
+
 ## SEO
 
-All routes are authenticated admin routes: `noindex`, not in the sitemap.
+All routes are authenticated admin routes: `noindex` (via `<AppLayout>`'s
+`<Seo noindex />`), not in the sitemap.
+
+## Performance notes
+
+- `listBatches()` and `listOpenIssues()` are each a single server-ordered
+  query capped at `.limit(500)`. `listMappingProfiles()` is unbounded but the
+  table is small by nature (a company's own saved profiles). Batch detail is
+  3 parallel queries by id. No N+1, no per-row storage listing.
+- `useCanAccess` reads the already-loaded permission store (no network per
+  call); the Overview page's per-card gate is a store read.
+- Evidence/source files are only fetched as signed URLs on explicit click.
+- If batch volume ever grows past a few hundred, the list queries should move
+  to keyset pagination — noted, not needed at current scale.

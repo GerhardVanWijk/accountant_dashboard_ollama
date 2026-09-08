@@ -26,6 +26,13 @@ sidebar-heavy layouts.
 
 ## Theme
 
+> **Authenticated app light mode was softened on 2026-09-08** — see
+> [LIGHT_MODE.md](./LIGHT_MODE.md). The palette below is the legacy `--color-*`
+> system, which still drives the **marketing site**. Inside `.app-shell` the
+> v0 shadcn tokens (`--background`, `--card`, `--muted`, `--border`, …) take
+> over, and those light values are now a soft cool-neutral hierarchy rather
+> than pure white. Dark mode is unchanged.
+
 ### Light Mode (Default)
 
 ```
