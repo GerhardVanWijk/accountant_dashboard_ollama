@@ -198,7 +198,7 @@ export class AccountingIntegrityAuditService {
         results.push({
           check: 'Customer Deposits control (2600) vs unapplied customer receipts',
           status: 'WARNING',
-          detail: 'Unapplied customer receipts exist but no "2600 Customer Deposits" account is configured for this company — run migration 0045.',
+          detail: 'Unapplied customer receipts exist but no "2600 Customer Deposits" account is configured for this company. Add it to the Chart of Accounts, or contact support.',
         });
       }
     }

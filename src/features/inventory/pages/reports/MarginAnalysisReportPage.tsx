@@ -90,7 +90,7 @@ export function MarginAnalysisReportPage() {
           <FigureBlock label="Average margin %" value={avgMarginPercent === null ? '—' : `${avgMarginPercent.toFixed(1)}%`} />
         </ReportSummaryCard>
       }
-      footnote="This is CURRENT THEORETICAL margin (today's price vs today's WAC), not realised historical gross margin — invoice lines carry no product link in this system, so a past sale's actual margin cannot be reconstructed. See docs/INVENTORY_REPORTS.md §15."
+      footnote="This is CURRENT THEORETICAL margin (today's price vs today's WAC), not realised historical gross margin — invoice lines carry no product link in this system, so a past sale's actual margin cannot be reconstructed."
     >
       <SectionCard title="Margin by product" bodyClassName="p-4 sm:p-5">
         <DataTable

@@ -162,9 +162,13 @@ export function TrialBalancePage() {
             </span>
             <div>
               <h2 className="text-base font-semibold text-foreground">Subledger reconciliation</h2>
+              {/*
+               * Accounting basis: SA_ACCOUNTING_MASTER_SPEC.md §17, §18, §70, §71
+               * (AR/AP control-account vs subledger agreement).
+               */}
               <p className="max-w-2xl text-sm text-muted-foreground">
-                Confirms the Accounts Receivable and Accounts Payable control accounts agree with the sum of open
-                invoices and bills — SA_ACCOUNTING_MASTER_SPEC.md §17/§18/§70/§71.
+                Checks that the Accounts Receivable, Accounts Payable and Customer Deposits control accounts agree
+                with their underlying customer, supplier and deposit records.
               </p>
             </div>
           </div>

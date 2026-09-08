@@ -217,7 +217,7 @@ export function CreditNoteDetailPage({ recordId, embedded }: RecordPageProps = {
             />
             {creditNote.lineItems.some((l) => l.originalInvoiceLineId) && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Line credits are matched to specific lines on {linkedInvoice?.invoiceNumber ?? 'the original invoice'} — the return quantity is validated against that line (Phase 9B).
+                Line credits are matched to specific lines on {linkedInvoice?.invoiceNumber ?? 'the original invoice'} — the return quantity is validated against that line.
               </p>
             )}
           </RecordPageSection>

@@ -61,7 +61,7 @@ export function IncomeStatementPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Income statement"
-        description="Profit and loss for a chosen period (SA_ACCOUNTING_MASTER_SPEC.md §42)."
+        description="Profit and loss for a chosen period."
         actions={
           sortedFinancialYears.length > 0 ? (
             <div className="flex flex-wrap items-end gap-2">
@@ -154,7 +154,7 @@ export function IncomeStatementPage() {
       )}
 
       <p className="text-xs text-muted-foreground">
-        Not built (out of scope): Notes to the Financial Statements (§43), Statement of Changes in Equity,
+        Not built (out of scope): Notes to the Financial Statements, Statement of Changes in Equity,
         year-over-year/comparative columns, budget-vs-actual (no Budget entity exists in this app), export/PDF.
       </p>
     </div>

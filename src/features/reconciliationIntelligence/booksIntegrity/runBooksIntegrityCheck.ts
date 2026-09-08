@@ -70,7 +70,7 @@ export async function runBooksIntegrityCheck(
         key: 'customer_deposits_subledger',
         label: 'Customer Deposits',
         status: 'warning',
-        detail: 'No "2600 Customer Deposits" account is configured — run migration 0045.',
+        detail: 'No "2600 Customer Deposits" account is configured. Add it to the Chart of Accounts, or contact support.',
       });
     }
   }

@@ -396,7 +396,7 @@ export async function reconcileInventory(
           ...base,
           code: 'movement_missing_source',
           severity: 'warning',
-          detail: `Document-generated movement of type "${m.type}" (${m.id}) has neither a structured source_document link (type + id) nor a resolvable reference.`,
+          detail: `Document-generated movement of type "${m.type}" (${m.id}) is not linked to a source document and has no resolvable reference.`,
         });
         continue;
       }
@@ -405,7 +405,7 @@ export async function reconcileInventory(
           ...base,
           code: 'movement_missing_source',
           severity: 'warning',
-          detail: `Movement of type "${m.type}" (${m.id}) is linked to ${m.sourceDocumentType} ${m.sourceDocumentId} but carries no source_document_line_id, though a normalized line always exists for this type.`,
+          detail: `Movement of type "${m.type}" (${m.id}) is linked to ${m.sourceDocumentType} ${m.sourceDocumentId} but is not linked to a specific line on that document, though this type of movement always originates from one.`,
         });
       }
     }

@@ -65,7 +65,7 @@ export function CategoryAnalysisReportPage() {
           <FigureBlock label="Total inventory value" value={formatCurrency(totalValue)} />
         </ReportSummaryCard>
       }
-      footnote="Sales, COGS and gross margin are not shown here: invoice and bill line items in this system carry no product link, so historical sales cannot be attributed to a category without matching on free text — see docs/INVENTORY_REPORTS.md §12."
+      footnote="Sales, COGS and gross margin are not shown here: invoice and bill line items in this system carry no product link, so historical sales cannot be attributed to a category without matching on free text."
     >
       <SectionCard title="By category" bodyClassName="p-4 sm:p-5">
         <DataTable

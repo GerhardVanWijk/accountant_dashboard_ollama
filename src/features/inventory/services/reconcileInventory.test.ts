@@ -269,7 +269,7 @@ describe('reconcileInventory — movement source-evidence rules by type', () => 
 
   it('document movement with structured link but NO line id → warning', async () => {
     const r = await run([mv({ id: 'g2', type: 'goods_received', sourceDocumentType: 'bill', sourceDocumentId: 'b1' })]);
-    expect(missing(r, 'g2')?.detail).toMatch(/no source_document_line_id/i);
+    expect(missing(r, 'g2')?.detail).toMatch(/not linked to a specific line on that document/i);
   });
 
   it('document movement with neither structured link nor resolvable ref → warning', async () => {

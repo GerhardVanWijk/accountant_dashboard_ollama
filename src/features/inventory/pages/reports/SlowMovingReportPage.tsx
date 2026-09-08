@@ -116,7 +116,7 @@ export function SlowMovingReportPage() {
           <FigureBlock label="Total value shown" value={formatCurrency(totalValue)} />
         </ReportSummaryCard>
       }
-      footnote="'Movement' here excludes internal transfers (relocation, not consumption/replenishment) — see docs/INVENTORY_REPORTS.md §16. 'Last sale' is shown separately so recent purchase activity is never mistaken for recent sales."
+      footnote="'Movement' here excludes internal transfers (relocation, not consumption/replenishment). 'Last sale' is shown separately so recent purchase activity is never mistaken for recent sales."
     >
       <SectionCard title="Slow-moving stock" bodyClassName="p-4 sm:p-5">
         <DataTable

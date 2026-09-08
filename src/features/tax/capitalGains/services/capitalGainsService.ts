@@ -40,7 +40,7 @@ export function resolveEntityTypeBucket(legalEntityType: SALegalEntityType): Cgt
 
 const SIMPLIFICATION_NOTES: readonly string[] = [
   'Base cost uses the disposed asset\'s original cost only — capital improvements are not tracked on the ' +
-    'Fixed Asset Register in this app, so any capital improvement that should increase base cost per §55 is not ' +
+    'Fixed Asset Register in this app, so any capital improvement that should increase base cost is not ' +
     'reflected here.',
   'Sole proprietors and partnerships are both treated as natural-person-like for inclusion rate/annual exclusion ' +
     'purposes — a partnership itself is not really the CGT taxpayer (gains flow through to individual partners), ' +
@@ -50,8 +50,7 @@ const SIMPLIFICATION_NOTES: readonly string[] = [
   'A net capital loss for the period is floored to a taxable capital gain of zero and shown separately, but is ' +
     'not carried forward into any future period\'s computation — full assessed-capital-loss carryforward tracking ' +
     'is an open gap.',
-  'Every figure here requires professional/accounting review before being relied on for a real return ' +
-    '(SA_ACCOUNTING_MASTER_SPEC.md §110/§111).',
+  'Every figure here requires professional/accounting review before being relied on for a real return.',
 ];
 
 interface ComputeInputs {

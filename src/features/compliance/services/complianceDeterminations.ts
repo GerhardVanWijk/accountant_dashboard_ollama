@@ -25,7 +25,7 @@ import type {
 export const PUBLIC_INTEREST_SCORE_SOURCE_REFERENCE =
   'Companies Regulations, 2011 (GN R351), regulations 26-29 — cross-checked 2026-08-22 against cipc.co.za/?page_id=11891, ' +
   'rsm.global/southafrica (Public Interest Score), and independent secondary summaries. Requires professional/accounting ' +
-  'review before relying on any specific determination for statutory filing purposes (SA_ACCOUNTING_MASTER_SPEC.md §110/§111).';
+  'review before relying on any specific determination for statutory filing purposes.';
 
 export interface PublicInterestScorePoints {
   employeePoints: number;

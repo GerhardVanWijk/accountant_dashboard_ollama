@@ -112,7 +112,7 @@ export function TaxRateForm({ onSubmit, onCancel, isLoading = false, onDirtyChan
         <FieldLabel htmlFor="rate-source">Source Reference</FieldLabel>
         <Input id="rate-source" placeholder="e.g. VAT Act 89 of 1991 — pending professional verification" value={sourceReference} onChange={(e) => setSourceReference(e.target.value)} />
         <FieldDescription>
-          Required — every rate must be traceable to a source (SA_ACCOUNTING_MASTER_SPEC.md §109). If you haven't independently verified this rate/date against SARS or the VAT Act, say
+          Required — every rate must be traceable to a source. If you haven't independently verified this rate/date against SARS or the VAT Act, say
           so here rather than presenting it as confirmed.
         </FieldDescription>
       </Field>

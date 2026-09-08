@@ -86,6 +86,21 @@ describe('TrialBalancePage', () => {
     expect(screen.getByText(/total debits equal total credits/i)).toBeInTheDocument();
   });
 
+  it('describes subledger reconciliation in plain accounting language, with no internal spec citation', async () => {
+    mockedComputeTrialBalance.mockResolvedValue({ rows: [], totalDebits: 0, totalCredits: 0, balanced: true });
+    const { container } = renderPage();
+    await screen.findByText(/nothing posted yet/i);
+
+    expect(screen.getByRole('heading', { name: /subledger reconciliation/i })).toBeInTheDocument();
+    expect(
+      screen.getByText(/agree with their underlying customer, supplier and deposit records/i),
+    ).toBeInTheDocument();
+
+    // The internal engineering spec must never leak into this customer-facing screen.
+    expect(container.textContent).not.toMatch(/SA_ACCOUNTING_MASTER_SPEC/);
+    expect(container.textContent).not.toMatch(/§\d/);
+  });
+
   it('renders a clear out-of-balance indicator when balanced is false', async () => {
     mockedComputeTrialBalance.mockResolvedValue({
       rows: [{ accountId: 'acc_1000', code: '1000', name: 'Cash and Bank', debit: 100, credit: 0 }],

@@ -145,7 +145,7 @@ export function InventoryReconciliationReportPage() {
           <SectionCard title="F. Evidence" description="Movement source-document completeness.">
             <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               Not run. This check needs a resolved set of known document references built from real
-              invoices/bills/adjustments/etc — that resolution is a Phase 14 (Difference Investigator) concern,
+              invoices/bills/adjustments/etc — that resolution is a difference-investigation concern,
               not yet built. This is an honest "not run" state, not a fabricated pass.
             </p>
           </SectionCard>

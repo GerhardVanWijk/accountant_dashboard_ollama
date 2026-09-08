@@ -64,7 +64,7 @@ export function BalanceSheetPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Balance sheet"
-        description="Statement of financial position as of a chosen date (SA_ACCOUNTING_MASTER_SPEC.md §42)."
+        description="Statement of financial position as of a chosen date."
         actions={
           <Field className="w-40">
             <FieldLabel htmlFor="balanceSheetAsOfDate">As of date</FieldLabel>
@@ -158,7 +158,7 @@ export function BalanceSheetPage() {
       )}
 
       <p className="text-xs text-muted-foreground">
-        Not built (out of scope): Notes to the Financial Statements (§43), Statement of Changes in Equity,
+        Not built (out of scope): Notes to the Financial Statements, Statement of Changes in Equity,
         year-over-year/comparative columns, current/non-current classification (not carried by the Chart of
         Accounts), budget-vs-actual, export/PDF.
       </p>

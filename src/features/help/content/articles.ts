@@ -612,7 +612,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     route: '/documents',
     permissions: 'Any member of the company can upload and view. Permanent deletion is superuser-only.',
     sections: [
-      { heading: 'What this does', body: 'A tenant-isolated repository for administrative company records. Files live in a private storage bucket — never a public URL. Downloads are short-lived signed links. This is separate from your accounting documents (invoices, bills) which stay in their own modules.' },
+      { heading: 'What this does', body: 'A secure, private store for administrative company records, visible only to your company. Files are held in private storage — never a public link — and downloads use short-lived, single-use links. This is separate from your accounting documents (invoices, bills) which stay in their own modules.' },
       { heading: 'How to use it', body: [
         'Upload a file (PDF, Word, Excel, CSV, PNG, JPEG — max 25 MB), give it a title, category, and optionally a document date and an expiry date.',
         'Set an expiry date on things that lapse — a VAT certificate, a lease, insurance. Vertex raises a notification 30 days before, and again once expired.',

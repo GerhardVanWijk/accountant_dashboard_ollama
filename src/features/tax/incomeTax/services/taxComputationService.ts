@@ -222,7 +222,7 @@ export class TaxComputationService {
       );
       capitalGainAmount = cgtReport.taxableCapitalGain;
       capitalGainDescription =
-        'Taxable capital gain from Fixed Asset disposals this financial year, per the Capital Gains Tax module (/tax/capital-gains) — pre-filled, always editable (§55/§111).' +
+        'Taxable capital gain from Fixed Asset disposals this financial year, per the Capital Gains Tax module (/tax/capital-gains) — pre-filled, always editable.' +
         (cgtReport.netCapitalLossForPeriod > EPSILON
           ? ` Note: a net capital LOSS of ${cgtReport.netCapitalLossForPeriod.toFixed(2)} was also computed for the period — not carried forward automatically (see Capital Gains Tax module).`
           : '');

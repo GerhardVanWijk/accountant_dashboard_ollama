@@ -70,7 +70,7 @@ export function SupplierAnalysisReportPage() {
           <FigureBlock label="Total inventory value" value={formatCurrency(totalValue)} />
         </ReportSummaryCard>
       }
-      footnote="Purchase activity and profitability are not shown: no stock movement records which supplier a receipt came from, and bill line items carry no product link — this is inventory POSITION by preferred supplier only. See docs/INVENTORY_REPORTS.md §14."
+      footnote="Purchase activity and profitability are not shown: no stock movement records which supplier a receipt came from, and bill line items carry no product link — this is inventory POSITION by preferred supplier only."
     >
       <SectionCard title="By supplier" bodyClassName="p-4 sm:p-5">
         <DataTable

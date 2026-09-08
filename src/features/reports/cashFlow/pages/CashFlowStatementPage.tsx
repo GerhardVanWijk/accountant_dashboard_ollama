@@ -32,7 +32,7 @@ export function CashFlowStatementPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Statement of cash flows"
-        description="Operating, investing and financing activities — indirect method (§42)."
+        description="Operating, investing and financing activities — indirect method."
         actions={
           sortedFinancialYears.length > 0 ? (
             <Field className="w-44">
@@ -101,7 +101,7 @@ export function CashFlowStatementPage() {
 
       <p className="text-xs text-muted-foreground">
         Not built (out of scope): comparative/prior-year columns, cash flow forecasting, and a direct-method
-        presentation — this statement is indirect-method only (§42).
+        presentation — this statement is indirect-method only.
       </p>
     </div>
   );
