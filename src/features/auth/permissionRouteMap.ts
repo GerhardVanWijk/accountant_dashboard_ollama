@@ -117,6 +117,8 @@ export const routePermissions: Record<string, RoutePermission> = {
   '/leases/amortization': { feature: 'compliance', action: 'read' },
 
   // Administration
+  '/admin/imports': { feature: 'data_migration', action: 'read' },
+  '/admin/exports': { feature: 'data_migration', action: 'read' },
   '/admin/users': { feature: 'user_management', action: 'read' },
   '/admin/audit': { feature: 'audit', action: 'read' },
   '/admin/audit-trail': { feature: 'audit', action: 'read' },

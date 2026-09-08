@@ -50,6 +50,8 @@ import {
   WalletIcon,
   WarehouseIcon,
   BellIcon,
+  DatabaseIcon,
+  DownloadIcon,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -227,6 +229,8 @@ export const navGroups: NavGroup[] = [
     title: 'Administration',
     items: [
       { title: 'Users & Roles', href: '/admin/users', icon: UserCogIcon },
+      { title: 'Data Migration', href: '/admin/imports', icon: DatabaseIcon },
+      { title: 'Data Export', href: '/admin/exports', icon: DownloadIcon },
       { title: 'Audit Trail', href: '/admin/audit-trail', icon: ArchiveIcon },
       { title: 'Access Log', href: '/admin/audit', icon: KeyRoundIcon },
       { title: 'Documents', href: '/documents', icon: FolderOpenIcon },

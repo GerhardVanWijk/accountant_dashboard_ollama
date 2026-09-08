@@ -143,6 +143,13 @@ import { AccountingSettingsPage } from '@/features/settings/pages/AccountingSett
 import { HelpPage } from '@/features/help/pages/HelpPage';
 import { HelpArticlePage } from '@/features/help/pages/HelpArticlePage';
 import { DocumentsPage } from '@/features/documents/pages/DocumentsPage';
+import { DataMigrationOverviewPage } from '@/features/import/pages/DataMigrationOverviewPage';
+import { ImportHistoryPage } from '@/features/import/pages/ImportHistoryPage';
+import { ImportBatchDetailPage } from '@/features/import/pages/ImportBatchDetailPage';
+import { MappingProfilesPage } from '@/features/import/pages/MappingProfilesPage';
+import { ExceptionsPage } from '@/features/import/pages/ExceptionsPage';
+import { ImportDocumentsPage } from '@/features/import/pages/ImportDocumentsPage';
+import { DataExportCentrePage } from '@/features/import/pages/DataExportCentrePage';
 import { NotificationsPage } from '@/features/notifications/pages/NotificationsPage';
 import { NotFoundPage } from '@/features/admin/pages/NotFoundPage';
 
@@ -331,6 +338,13 @@ export const routes: RouteObject[] = [
           { path: 'foreign-exchange/calculator', element: <PermissionRoute feature="compliance" action="read"><FxCalculatorPage /></PermissionRoute> },
           { path: 'leases/register', element: <PermissionRoute feature="compliance" action="read"><LeaseRegisterPage /></PermissionRoute> },
           { path: 'leases/amortization', element: <PermissionRoute feature="compliance" action="read"><LeaseAmortizationPage /></PermissionRoute> },
+          { path: 'admin/imports', element: <PermissionRoute feature="data_migration" action="read"><DataMigrationOverviewPage /></PermissionRoute> },
+          { path: 'admin/imports/history', element: <PermissionRoute feature="data_migration" action="read"><ImportHistoryPage /></PermissionRoute> },
+          { path: 'admin/imports/history/:batchId', element: <PermissionRoute feature="data_migration" action="read"><ImportBatchDetailPage /></PermissionRoute> },
+          { path: 'admin/imports/mappings', element: <PermissionRoute feature="data_migration" action="read"><MappingProfilesPage /></PermissionRoute> },
+          { path: 'admin/imports/exceptions', element: <PermissionRoute feature="data_migration" action="read"><ExceptionsPage /></PermissionRoute> },
+          { path: 'admin/imports/documents', element: <PermissionRoute feature="data_migration" action="read"><ImportDocumentsPage /></PermissionRoute> },
+          { path: 'admin/exports', element: <PermissionRoute feature="data_migration" action="read"><DataExportCentrePage /></PermissionRoute> },
           { path: 'admin/users', element: <PermissionRoute feature="user_management" action="read"><UsersPage /></PermissionRoute> },
           { path: 'admin/audit', element: <PermissionRoute feature="audit" action="read"><AuditPage /></PermissionRoute> },
           { path: 'admin/audit-trail', element: <PermissionRoute feature="audit" action="read"><AuditTrailPage /></PermissionRoute> },
