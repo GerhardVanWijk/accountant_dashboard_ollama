@@ -99,23 +99,32 @@
    ========================================================================== */
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Light-mode surface hierarchy (light-mode-softening, 2026-09-08 — see
+     docs/LIGHT_MODE.md). The authenticated app runs inside `.app-shell`,
+     which remaps --color-background/-border/-primary/-secondary onto these
+     v0 tokens (bottom of this file), so softening the LIGHT values here is
+     what calms the whole product without touching the [data-theme="dark"]
+     block below or the marketing site (no `.app-shell` there). Direction:
+     a soft cool-neutral canvas, white cards that read as elevated against
+     it, a slightly deeper muted surface for table headers / nested panels,
+     gentle cool borders, and charcoal-navy text instead of near-black. */
+  --background: oklch(0.977 0.0018 250);
+  --foreground: oklch(0.248 0.014 262);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.248 0.014 262);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.248 0.014 262);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.955 0.0035 255);
+  --secondary-foreground: oklch(0.29 0.013 262);
+  --muted: oklch(0.957 0.003 255);
+  --muted-foreground: oklch(0.505 0.008 260);
+  --accent: oklch(0.949 0.0045 258);
+  --accent-foreground: oklch(0.29 0.013 262);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: oklch(0.906 0.004 258);
+  --input: oklch(0.888 0.005 258);
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
