@@ -4,13 +4,32 @@ import { MemoryRouter } from 'react-router-dom';
 import type { StockMovement } from '@/types';
 import { StockMovementsPage } from './StockMovementsPage';
 
-vi.mock('../hooks/useProducts', () => ({
-  useProducts: () => ({ products: [{ id: 'p1', sku: 'SKU-1', name: 'Widget' }] }),
-}));
-vi.mock('../hooks/useWarehouses', () => ({ useWarehouses: () => ({ warehouses: [{ id: 'w1', name: 'Main' }] }) }));
-
 const movHook = vi.fn();
 vi.mock('../hooks/useStockMovements', () => ({ useStockMovements: () => movHook() }));
+vi.mock('@/features/accounting/hooks/useFinancialYears', () => ({ useFinancialYears: () => ({ financialYears: [] }) }));
+vi.mock('@/features/auth/hooks/useCanAccess', () => ({ useCanAccess: () => true }));
+
+const products = [{ id: 'p1', sku: 'SKU-1', name: 'Widget', costPrice: 4 }];
+vi.mock('../hooks/useStockMovementResolvers', () => ({
+  useStockMovementResolvers: () => ({
+    resolveSource: (m: StockMovement) =>
+      m.sourceDocumentType === 'bill'
+        ? { label: 'Bill', number: 'BILL-2001', path: '/purchases/bills/b1', previewType: 'bill', id: 'b1', type: 'bill' }
+        : m.reference
+          ? { label: 'Reference', number: m.reference }
+          : undefined,
+    resolveAccounting: () => ({ inventoryAccount: '1200 Inventory', contraAccount: '5000 Cost of Goods Sold' }),
+    resolveParty: (m: StockMovement) => (m.sourceDocumentType === 'bill' ? 'Acme Supplies' : undefined),
+    warehouseName: (id: string) => (id === 'w1' ? 'Main DC' : id),
+    productName: () => 'Widget',
+    productSku: () => 'SKU-1',
+    knownDocumentRefs: new Set<string>(),
+    products,
+    warehouses: [{ id: 'w1', name: 'Main DC' }],
+    transfers: [],
+    loading: false,
+  }),
+}));
 
 const mv = (o: Partial<StockMovement>): StockMovement =>
   ({
@@ -48,33 +67,37 @@ describe('StockMovementsPage', () => {
   });
   afterEach(cleanup);
 
-  it('renders a row per movement with type, qty and source', () => {
+  it('renders a row per movement with resolved names, not raw UUIDs', () => {
     renderPage();
     expect(screen.getAllByText('Widget').length).toBe(3);
     expect(screen.getByText('Goods received')).toBeInTheDocument();
     expect(screen.getByText('Sale')).toBeInTheDocument();
     expect(screen.getByText('+10')).toBeInTheDocument();
     expect(screen.getByText('-3')).toBeInTheDocument();
-    expect(screen.getByText('bill')).toBeInTheDocument();
+    expect(screen.getByText('BILL-2001')).toBeInTheDocument();
+    expect(screen.getByText('Acme Supplies')).toBeInTheDocument();
+    expect(screen.queryByText('b1')).not.toBeInTheDocument();
   });
 
-  it('shows the reversal relationship', () => {
+  it('badges a movement with no source link and a reversal', () => {
     renderPage();
-    expect(screen.getByText(/reverses b/i)).toBeInTheDocument();
+    expect(screen.getByText('no source')).toBeInTheDocument(); // the correction movement
+    expect(screen.getByText('reversal')).toBeInTheDocument();
   });
 
-  it('offers type, direction and source filters', () => {
+  it('offers period, type, direction, product and source-type filters', () => {
     renderPage();
-    expect(screen.getByLabelText('All types')).toBeInTheDocument();
+    expect(screen.getByLabelText('Any date')).toBeInTheDocument();
+    expect(screen.getByLabelText('All movement types')).toBeInTheDocument();
     expect(screen.getByLabelText('Any direction')).toBeInTheDocument();
-    expect(screen.getByLabelText('Any source')).toBeInTheDocument();
+    expect(screen.getByLabelText('All products')).toBeInTheDocument();
+    expect(screen.getByLabelText('Any source type')).toBeInTheDocument();
   });
 
-  it('searches by reference', () => {
+  it('opens the evidence drawer on row click', () => {
     renderPage();
-    fireEvent.change(screen.getByLabelText(/search item, reference/i), { target: { value: 'INV-1001' } });
-    expect(screen.getByText('Sale')).toBeInTheDocument();
-    expect(screen.queryByText('Goods received')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Open evidence for Sale/i }));
+    expect(screen.getByText(/Unit cost applied/i)).toBeInTheDocument();
   });
 
   it('shows the empty state', () => {

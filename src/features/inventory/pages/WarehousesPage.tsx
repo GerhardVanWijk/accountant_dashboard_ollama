@@ -7,9 +7,14 @@ import { Button, buttonVariants } from '@/components/ui/shadcn/button';
 import { useWarehouses } from '../hooks/useWarehouses';
 import { useProducts } from '../hooks/useProducts';
 import { useStockMovements } from '../hooks/useStockMovements';
+import { useStockBalances } from '../hooks/useStockBalances';
+import { useStockCommitments } from '../hooks/useStockCommitments';
+import { useStockTransfers } from '../hooks/useStockTransfers';
 import { WarehouseFormModal } from '../components/WarehouseFormModal';
 import { WarehousesTable } from '../components/WarehousesTable';
+import { WarehouseSummaryTable } from '../components/WarehouseSummaryTable';
 import { StockByWarehouseTable } from '../components/StockByWarehouseTable';
+import { warehouseAggregates } from '../utils/warehouseAggregates';
 import type { CreateWarehouseDTO, UpdateWarehouseDTO } from '../services/warehouseService';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
@@ -38,6 +43,11 @@ export function WarehousesPage() {
   } = useWarehouses();
   const { products, loading: productsLoading, error: productsError } = useProducts();
   const { stockLevels, loading: movementsLoading, error: movementsError } = useStockMovements();
+  const { balances } = useStockBalances();
+  const { commitments } = useStockCommitments();
+  const { transfers } = useStockTransfers();
+
+  const warehouseRollup = warehouseAggregates(warehouses, balances, products, transfers, commitments);
 
   const [dialog, setDialog] = useState<DialogState>(null);
   const canCreate = useCanAccess('inventory', 'create');
@@ -114,6 +124,13 @@ export function WarehousesPage() {
               onEdit={canUpdate ? (warehouse) => setDialog({ mode: 'edit-warehouse', warehouse }) : undefined}
               onDelete={canDelete ? (warehouse) => void handleDeleteWarehouse(warehouse) : undefined}
             />
+          </SectionCard>
+
+          <SectionCard
+            title="Warehouse control"
+            description="On hand, committed, in-transit and stock value per location, with low / negative stock alerts."
+          >
+            <WarehouseSummaryTable rows={warehouseRollup} />
           </SectionCard>
 
           <SectionCard title="Stock by warehouse" description="Quantity on hand for every tracked product, per location.">

@@ -63,11 +63,13 @@ describe('InventoryOverviewPage', () => {
   });
   afterEach(cleanup);
 
-  it('renders the header and the summary strip', () => {
+  it('renders the header and the inventory control centre', () => {
     renderPage();
     expect(screen.getByRole('heading', { name: 'Inventory' })).toBeInTheDocument();
-    expect(screen.getByText('Items in stock')).toBeInTheDocument();
+    expect(screen.getByText('Inventory control')).toBeInTheDocument();
+    expect(screen.getByText('Products tracked')).toBeInTheDocument();
     expect(screen.getByText('Low stock')).toBeInTheDocument();
+    expect(screen.getByText('On order')).toBeInTheDocument();
     expect(screen.getByText('Activity (30 days)')).toBeInTheDocument();
   });
 

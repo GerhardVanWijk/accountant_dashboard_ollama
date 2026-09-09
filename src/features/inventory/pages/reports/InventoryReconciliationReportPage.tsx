@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { AlertTriangleIcon } from 'lucide-react';
 import { SectionCard } from '@/components/app/page-header';
 import { Amount, FigureBlock } from '@/components/app/figure';
@@ -5,8 +6,19 @@ import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatCurrency } from '@/lib/app/format';
 import { cn } from '@/lib/utils';
+import { useInvoices } from '@/features/sales/hooks/useInvoices';
+import { useCreditNotes } from '@/features/sales/hooks/useCreditNotes';
+import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
+import { useBills } from '@/features/purchases/hooks/useBills';
+import { usePurchaseOrders } from '@/features/purchases/hooks/usePurchaseOrders';
 import { InventoryReportShell, ReportSummaryCard } from '../../components/reports/InventoryReportShell';
 import { useInventoryReconciliation } from '../../hooks/useInventoryReconciliation';
+import { useStockAdjustments } from '../../hooks/useStockAdjustments';
+import { useStockTransfers } from '../../hooks/useStockTransfers';
+import { useStockTakes } from '../../hooks/useStockTakes';
+import { useSupplierReturns } from '../../hooks/useSupplierReturns';
+import { useOpeningStockBatches } from '../../hooks/useOpeningStockBatches';
+import { buildKnownDocumentRefs } from '../../services/knownDocumentRefs';
 import type { InventoryReconciliationFinding } from '../../services/reconcileInventory';
 
 const FINDING_EXPORT_COLUMNS: ExportColumn<InventoryReconciliationFinding>[] = [
@@ -60,15 +72,41 @@ function SectionBlock({ title, findings }: { title: string; findings: InventoryR
  * (`useInventoryReconciliation()`), never reproducing the math (spec: "Do
  * not reproduce reconciliation math in the page").
  *
- * Section F (movement source-evidence completeness) is NOT run here —
- * `reconcileInventory()`'s Check F needs a caller-built `knownDocumentRefs`
- * set resolved from real invoices/bills/adjustments/etc, which is
- * explicitly documented (`useInventoryReconciliation.ts`'s own doc comment)
- * as a Phase 14 Difference Investigator concern, not built in this phase.
- * Shown here as an honest "not run" state, never a fabricated pass.
+ * Section F (movement source-evidence completeness) runs against the set of
+ * references that resolve to a real posted document, built here from the
+ * loaded invoices / bills / credit notes / adjustments / transfers / stock
+ * takes / supplier returns / opening-stock batches / delivery notes.
  */
 export function InventoryReconciliationReportPage() {
-  const { result, loading, error, refetch } = useInventoryReconciliation();
+  const { invoices } = useInvoices();
+  const { bills } = useBills();
+  const { creditNotes } = useCreditNotes();
+  const { purchaseOrders } = usePurchaseOrders();
+  const { adjustments } = useStockAdjustments();
+  const { transfers } = useStockTransfers();
+  const { stockTakes } = useStockTakes();
+  const { supplierReturns } = useSupplierReturns();
+  const { batches } = useOpeningStockBatches();
+  const { deliveryNotes } = useDeliveryNotes();
+
+  const knownDocumentRefs = useMemo(
+    () =>
+      buildKnownDocumentRefs({
+        invoices,
+        bills,
+        creditNotes,
+        purchaseOrders,
+        adjustments,
+        transfers,
+        stockTakes,
+        supplierReturns,
+        openingStockBatches: batches,
+        deliveryNotes,
+      }),
+    [invoices, bills, creditNotes, purchaseOrders, adjustments, transfers, stockTakes, supplierReturns, batches, deliveryNotes],
+  );
+
+  const { result, loading, error, refetch } = useInventoryReconciliation({ knownDocumentRefs });
   const canExport = useCanAccess('inventory', 'export');
 
   const findings = result?.findings ?? [];
@@ -77,6 +115,7 @@ export function InventoryReconciliationReportPage() {
   const valuationFindings = findings.filter((f) => f.code === 'subledger_vs_gl');
   const transitFindings = findings.filter((f) => f.code === 'in_transit_vs_gl' || f.code === 'orphan_in_transit' || f.code === 'duplicate_transfer_receipt');
   const totalControlFindings = findings.filter((f) => f.code === 'total_inventory_vs_gl');
+  const evidenceFindings = findings.filter((f) => f.code === 'movement_missing_source');
   const roundingFindings = findings.filter((f) => f.toleranceBound !== undefined);
 
   const exportDataset: ExportDataset<InventoryReconciliationFinding> = {
@@ -142,12 +181,15 @@ export function InventoryReconciliationReportPage() {
             <SectionBlock title="Findings" findings={totalControlFindings} />
           </SectionCard>
 
-          <SectionCard title="F. Evidence" description="Movement source-document completeness.">
-            <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              Not run. This check needs a resolved set of known document references built from real
-              invoices/bills/adjustments/etc — that resolution is a difference-investigation concern,
-              not yet built. This is an honest "not run" state, not a fabricated pass.
-            </p>
+          <SectionCard title="F. Evidence" description="Movement source-document completeness — every movement traced to a real document, its own reversal, or a legitimate opening balance.">
+            {evidenceFindings.length === 0 ? (
+              <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                Every stock movement resolves to a source document, its own reversal, or a legitimate opening
+                balance.
+              </p>
+            ) : (
+              <SectionBlock title="Movements without valid source evidence" findings={evidenceFindings} />
+            )}
           </SectionCard>
 
           <SectionCard title="G. Rounding" description="Actual difference vs the allowed theoretical rounding bound.">

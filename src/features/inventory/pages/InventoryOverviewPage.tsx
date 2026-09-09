@@ -9,7 +9,6 @@ import {
   UploadIcon,
 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   DropdownMenu,
@@ -34,11 +33,14 @@ import { useWarehouses } from '../hooks/useWarehouses';
 import { useStockMovements } from '../hooks/useStockMovements';
 import { useStockBalances } from '../hooks/useStockBalances';
 import { useStockCommitments } from '../hooks/useStockCommitments';
+import { useStockOnOrder } from '../hooks/useStockOnOrder';
+import { useStockTransfers } from '../hooks/useStockTransfers';
 import { useProductCategories } from '../hooks/useProductCategories';
+import { useInventoryReconciliation } from '../hooks/useInventoryReconciliation';
 import { applyStockCommitments } from '../utils/applyStockCommitments';
+import { InventoryControlCentre } from '../components/InventoryControlCentre';
 import { InventoryTable } from '../components/InventoryTable';
 import { ProductFormModal } from '../components/ProductFormModal';
-import { calculateInventoryTotals } from '../utils/calculateInventoryTotals';
 import { STOCK_STATE_LABEL, type InventoryRow } from '../utils/buildInventoryRows';
 import type { CreateProductDTO, UpdateProductDTO } from '../services/productService';
 
@@ -85,7 +87,6 @@ const INVENTORY_EXPORT_COLUMNS: ExportColumn<InventoryRow>[] = [
 
 type Dialog = { kind: 'new-item' } | { kind: 'import' } | null;
 
-const RECENT_WINDOW_DAYS = 30;
 
 /**
  * Inventory module home — route `/inventory`. The operational landing page:
@@ -115,8 +116,15 @@ export function InventoryOverviewPage() {
   const { movements } = useStockMovements();
   const { balances } = useStockBalances();
   const { commitments } = useStockCommitments();
+  const { onOrder } = useStockOnOrder();
+  const { transfers } = useStockTransfers();
   const { categories } = useProductCategories();
   const { suppliers } = useSuppliers();
+  const {
+    result: reconResult,
+    loading: reconLoading,
+    error: reconError,
+  } = useInventoryReconciliation();
   const navigate = useNavigate();
 
   const canCreate = useCanAccess('inventory', 'create');
@@ -132,13 +140,6 @@ export function InventoryOverviewPage() {
   // quantity (Phase 5A) — storage still holds 0; `buildInventoryRows` reads
   // `quantityCommitted` off the rows it is given, no signature change.
   const hydratedBalances = useMemo(() => applyStockCommitments(balances, commitments), [balances, commitments]);
-
-  const totals = calculateInventoryTotals(products);
-  const trackedInStock = products.filter((p) => p.trackInventory && p.quantityOnHand > 0).length;
-  const recentActivity = useMemo(() => {
-    const cutoff = Date.now() - RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-    return movements.filter((m) => new Date(m.movementDate ?? m.createdAt).getTime() >= cutoff).length;
-  }, [movements]);
 
 
   async function handleItemSubmit(data: CreateProductDTO | UpdateProductDTO) {
@@ -256,33 +257,19 @@ export function InventoryOverviewPage() {
         }
       />
 
-      <SectionCard bodyClassName="p-4 sm:p-5">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <FigureBlock label="Inventory value" value={formatCurrency(totals.stockValueAtCost)} hint="At weighted-average cost" />
-          <FigureBlock
-            label="Items in stock"
-            value={String(trackedInStock)}
-            hint={`${warehouses.length} location${warehouses.length === 1 ? '' : 's'}`}
-          />
-          <FigureBlock
-            label="Low stock"
-            value={String(lowStock.length)}
-            hint="At or below reorder level"
-            tone={lowStock.length > 0 ? 'warning' : 'default'}
-          />
-          <FigureBlock
-            label="Out of stock"
-            value={String(outOfStock.length)}
-            hint="Nothing on hand"
-            tone={outOfStock.length > 0 ? 'negative' : 'default'}
-          />
-          <FigureBlock
-            label="Activity (30 days)"
-            value={String(recentActivity)}
-            hint="Stock movements recorded"
-          />
-        </div>
-      </SectionCard>
+      {!loading && !error && (
+        <InventoryControlCentre
+          products={products}
+          movements={movements}
+          transfers={transfers}
+          onOrder={onOrder}
+          lowStockCount={lowStock.length}
+          outOfStockCount={outOfStock.length}
+          result={reconResult}
+          loading={reconLoading}
+          error={reconError}
+        />
+      )}
 
       {loading ? (
         <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">

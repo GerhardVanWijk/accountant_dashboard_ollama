@@ -5,6 +5,16 @@ import { InventoryReconciliationReportPage } from './InventoryReconciliationRepo
 
 const reconciliationHook = vi.fn();
 vi.mock('../../hooks/useInventoryReconciliation', () => ({ useInventoryReconciliation: () => reconciliationHook() }));
+vi.mock('@/features/sales/hooks/useInvoices', () => ({ useInvoices: () => ({ invoices: [] }) }));
+vi.mock('@/features/sales/hooks/useCreditNotes', () => ({ useCreditNotes: () => ({ creditNotes: [] }) }));
+vi.mock('@/features/sales/hooks/useDeliveryNotes', () => ({ useDeliveryNotes: () => ({ deliveryNotes: [] }) }));
+vi.mock('@/features/purchases/hooks/useBills', () => ({ useBills: () => ({ bills: [] }) }));
+vi.mock('@/features/purchases/hooks/usePurchaseOrders', () => ({ usePurchaseOrders: () => ({ purchaseOrders: [] }) }));
+vi.mock('../../hooks/useStockAdjustments', () => ({ useStockAdjustments: () => ({ adjustments: [] }) }));
+vi.mock('../../hooks/useStockTransfers', () => ({ useStockTransfers: () => ({ transfers: [] }) }));
+vi.mock('../../hooks/useStockTakes', () => ({ useStockTakes: () => ({ stockTakes: [] }) }));
+vi.mock('../../hooks/useSupplierReturns', () => ({ useSupplierReturns: () => ({ supplierReturns: [] }) }));
+vi.mock('../../hooks/useOpeningStockBatches', () => ({ useOpeningStockBatches: () => ({ batches: [] }) }));
 
 function renderPage() {
   return render(
@@ -18,7 +28,7 @@ describe('InventoryReconciliationReportPage', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(cleanup);
 
-  it('renders every lettered section, including an honest "not run" evidence section', () => {
+  it('renders every lettered section, with the evidence check now run', () => {
     reconciliationHook.mockReturnValue({
       result: { subledgerValuation: 100, inventoryGlBalance: 100, subledgerVsGl: 0, inTransitValuation: 0, inTransitGlBalance: 0, inTransitVsGl: 0, totalInventoryVsGl: 0, isReconciled: true, findings: [] },
       loading: false,
@@ -32,8 +42,22 @@ describe('InventoryReconciliationReportPage', () => {
     expect(screen.getByText('D. Transit')).toBeInTheDocument();
     expect(screen.getByText('E. Total control')).toBeInTheDocument();
     expect(screen.getByText('F. Evidence')).toBeInTheDocument();
-    expect(screen.getByText(/not run/i)).toBeInTheDocument();
+    expect(screen.getByText(/Every stock movement resolves to a source document/i)).toBeInTheDocument();
     expect(screen.getByText('G. Rounding')).toBeInTheDocument();
+  });
+
+  it('lists movement source-evidence findings in section F', () => {
+    reconciliationHook.mockReturnValue({
+      result: {
+        subledgerValuation: 100, inventoryGlBalance: 100, subledgerVsGl: 0, inTransitValuation: 0, inTransitGlBalance: 0, inTransitVsGl: 0, totalInventoryVsGl: 0, isReconciled: true,
+        findings: [{ code: 'movement_missing_source', severity: 'warning', expected: 0, actual: 0, difference: 0, detail: 'Movement mv-9 is not linked to a source document.' }],
+      },
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByText('Movement mv-9 is not linked to a source document.')).toBeInTheDocument();
   });
 
   it('surfaces error-severity findings, not just the overall status', () => {

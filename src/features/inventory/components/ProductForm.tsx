@@ -8,7 +8,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
-import { CheckboxField, FormBody, FormFooter, FormGrid } from '@/components/app/form';
+import { CheckboxField, FormBody, FormFooter, FormGrid, FormSection } from '@/components/app/form';
 import { UOM_OPTIONS, INVENTORY_CURRENCY } from '../constants';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProductCategories } from '../hooks/useProductCategories';
@@ -131,6 +131,7 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
   return (
     <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
       <FormBody>
+      <FormSection title="General">
       <FormGrid>
         <Field>
           <FieldLabel htmlFor="sku">SKU</FieldLabel>
@@ -203,6 +204,33 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
         </Field>
       </FormGrid>
 
+      <FormGrid>
+        <Field>
+          <FieldLabel htmlFor="barcode">Barcode</FieldLabel>
+          <Input id="barcode" {...register('barcode')} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="status">Status</FieldLabel>
+          <Controller
+            control={control}
+            name="status"
+            render={({ field }) => (
+              <EnumSelect
+                id="status"
+                value={field.value ?? 'active'}
+                onValueChange={field.onChange}
+                options={[
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' },
+                ]}
+              />
+            )}
+          />
+        </Field>
+      </FormGrid>
+      </FormSection>
+
+      <FormSection title="Pricing">
       <FormGrid columns={3}>
         <Field>
           <FieldLabel htmlFor="costPrice">Cost Price ({INVENTORY_CURRENCY})</FieldLabel>
@@ -231,32 +259,9 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
           />
         </Field>
       </FormGrid>
+      </FormSection>
 
-      <FormGrid>
-        <Field>
-          <FieldLabel htmlFor="barcode">Barcode</FieldLabel>
-          <Input id="barcode" {...register('barcode')} />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="status">Status</FieldLabel>
-          <Controller
-            control={control}
-            name="status"
-            render={({ field }) => (
-              <EnumSelect
-                id="status"
-                value={field.value ?? 'active'}
-                onValueChange={field.onChange}
-                options={[
-                  { value: 'active', label: 'Active' },
-                  { value: 'inactive', label: 'Inactive' },
-                ]}
-              />
-            )}
-          />
-        </Field>
-      </FormGrid>
-
+      <FormSection title="Inventory">
       {type !== 'service' && (
         <FormGrid>
           <Controller
@@ -319,6 +324,7 @@ export function ProductForm({ product, onSubmit, onCancel, onDirtyChange }: Prod
           <FieldDescription>Read-only — record a Stock Adjustment or Transfer on the Warehouses page to change quantities.</FieldDescription>
         </Field>
       )}
+      </FormSection>
       </FormBody>
 
       <FormFooter>

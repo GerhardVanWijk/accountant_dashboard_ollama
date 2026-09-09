@@ -14,6 +14,12 @@ vi.mock('../hooks/useWarehouses', () => ({ useWarehouses: () => ({ warehouses: [
 vi.mock('../hooks/useStockBalances', () => ({ useStockBalances: () => ({ balances: [] }) }));
 vi.mock('../hooks/useStockCommitments', () => ({ useStockCommitments: () => ({ commitments: new Map(), loading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('../hooks/useProductCategories', () => ({ useProductCategories: () => ({ categories: [] }) }));
+vi.mock('../hooks/useInventoryReconciliation', () => ({
+  useInventoryReconciliation: () => ({ result: null, loading: false, error: null, refetch: vi.fn() }),
+}));
+vi.mock('../hooks/useStockOnOrder', () => ({
+  useStockOnOrder: () => ({ onOrder: new Map([['p_1__wh_1', 7]]), loading: false, error: null, refetch: vi.fn() }),
+}));
 
 const movementsMock = vi.fn<() => { movements: StockMovement[] }>();
 vi.mock('../hooks/useStockMovements', () => ({ useStockMovements: () => movementsMock() }));
@@ -59,9 +65,19 @@ describe('InventoryItemDetailPage', () => {
   it('renders the item record full-page with all eight tabs', () => {
     renderAt();
     expect(screen.getByRole('heading', { name: 'CON-001' })).toBeInTheDocument();
-    for (const label of ['Overview', 'Stock', 'Purchasing', 'Sales', 'Transactions', 'Accounting', 'Documents', 'Activity']) {
+    for (const label of ['Overview', 'Stock', 'Purchasing', 'Sales', 'Traceability', 'Accounting', 'Documents', 'Activity']) {
       expect(screen.getByRole('tab', { name: label })).toBeInTheDocument();
     }
+  });
+
+  it('shows the KPI hero strip for a stock-tracked item, including derived on order', () => {
+    renderAt();
+    // KPI tiles + the sections that repeat the figures — at least the tiles.
+    expect(screen.getAllByText('On hand').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('In transit').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('On hand − committed')).toBeInTheDocument(); // a KPI hint, tile-only
+    expect(screen.getAllByText('On order').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('7').length).toBeGreaterThanOrEqual(1); // the derived on-order qty
   });
 
   it('resolves the real tax rate — never "Unknown tax rate" for a valid id', () => {
@@ -71,13 +87,21 @@ describe('InventoryItemDetailPage', () => {
     expect(screen.queryByText('std')).not.toBeInTheDocument();
   });
 
-  it('shows the stock movement ledger with a human document number, linked, not a raw UUID', () => {
+  it('shows the traceability ledger with a human document number, linked, not a raw UUID', () => {
     renderAt();
-    fireEvent.click(screen.getByRole('tab', { name: 'Transactions' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Traceability' }));
+    // getByRole ignores the hidden (keepMounted) sibling panels.
     const ref = screen.getByRole('link', { name: 'INV-1061' });
     expect(ref).toHaveAttribute('href', expect.stringContaining('/sales/invoices'));
-    expect(screen.getByText('Riverside Traders')).toBeInTheDocument(); // resolved party
+    expect(screen.getAllByText('Riverside Traders').length).toBeGreaterThanOrEqual(1); // resolved party
     expect(screen.queryByText('inv_1')).not.toBeInTheDocument(); // raw id not the primary reference
+  });
+
+  it('opens the movement evidence drawer when a ledger row is clicked', () => {
+    renderAt();
+    fireEvent.click(screen.getByRole('tab', { name: 'Traceability' }));
+    fireEvent.click(screen.getByRole('button', { name: /Open evidence for Sale/i }));
+    expect(screen.getByText(/Unit cost applied/i)).toBeInTheDocument();
   });
 
   it('deep-link to an unknown id shows the not-found state', () => {
