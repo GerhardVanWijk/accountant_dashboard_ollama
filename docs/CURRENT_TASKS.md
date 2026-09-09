@@ -13,6 +13,7 @@
 - **AP variance (R354,200.00) was investigated read-only and deliberately NOT changed** — classified as a *reconciliation-engine modelling gap*, not a books error: `useSubledgerReconciliation()` calls `reconcileAccountsPayable()` without the `nonBillApAdjustments` argument, so legitimate non-bill AP postings (R368,000 fixed-asset-on-credit JE-4001, R28,175 opening balance JE-0001, −R9,200 supplier return JE-4137) surface as a variance. Trial Balance still balances; AP genuinely owes the money.
 - Gate: type-check · lint(`--max-warnings 0`) · **3117 tests** · build ALL PASS.
 - **Post-deploy browser QA is now owed** — spot-check the accounting/report/reconciliation screens (Trial Balance subledger card, financial statements, inventory reports, Help Centre) show plain accounting language with no `SA_ACCOUNTING_MASTER_SPEC` / `§` / migration / phase references.
+- **2026-09-09:** empty commit `721d0bf` (`chore: trigger Cloudflare Pages production rebuild of main`) pushed to `origin/main` on explicit user instruction to force a fresh Cloudflare Pages production build of the current HEAD. No code change; build green locally; site returns HTTP 200.
 
 ---
 
