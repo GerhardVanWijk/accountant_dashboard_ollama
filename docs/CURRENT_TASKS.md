@@ -2,6 +2,23 @@
 
 ---
 
+## INVENTORY WORKSPACE + STOCK INTEGRITY + DERIVED ON-ORDER (branch `inventory-workspace-integrity-2026-09-09`, commit `56ac5e8`) — 2026-09-09
+
+**SHIPPED 2026-09-09** — on explicit user instruction ahead of human browser QA, `inventory-workspace-integrity-2026-09-09` was fast-forward-merged → `main` (`8357d99..56ac5e8`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). **UI + read-side services only — no migration, no schema change, no accounting-posting change, no DB write.** Inventory reconciles at R0.00 on live data throughout; the reconciliation engine, WAC/valuation contract, posting engine and stock ledger are untouched.
+
+- **Product workspace** (`InventoryItemDetail`): KPI hero strip (on hand / available / committed / in transit / on order / stock value / WAC / gross margin); Overview regrouped into cards; tab **"Transactions" → "Traceability"** (internal value unchanged); ledger rebuilt on `DataTable` (type/direction/exception filters, `no source` + `reversal` badges, transfer-direction line) with a row-click **evidence drawer** (`RecordDetailSheet` over the page: movement / location / source + party / cost / accounting trace / audit); Purchasing + Sales tables gain Warehouse / Status / per-line Revenue-COGS-GP; Accounting tab gains a summary + per-account Debit/Credit related-journals table; Documents tab lists related source documents from the ledger.
+- **Derived `quantityOnOrder`** (`stockOnOrderService`, `useStockOnOrder`): read-side from OPEN purchase orders (`status 'sent'`, no bill, no receipt journal), keyed by `commitmentKey`. **Storage stays 0, never written; NOT folded into Available.** Documented limitation: PO receipt is all-or-nothing (`partially_received` never produced), draft POs excluded.
+- **Global Stock Movements page** — full rewrite: resolved product/warehouse/source names (no UUIDs), per-product running balance, evidence badge, filters (period / type / direction / warehouse / product / source type / exceptions), row-click evidence drawer.
+- **Company Inventory Control Centre** (Inventory overview): old FigureBlock strip replaced with 11 drill-down linked stat tiles + a reconciled / "N findings require investigation" banner, all from `reconcileInventory()`'s result (no fabricated counts).
+- **Warehouses page**: new "Warehouse control" rollup — per location on hand / committed / available / in-transit in / in-transit out / stock value + low/negative alert badges (`warehouseAggregates`, pure).
+- **Stock integrity**: per-product `productIntegrity.ts` slices the company `reconcileInventory()` result (incl. **Check F**, now wired via `buildKnownDocumentRefs`) to the findings naming a product → `reconciled` / `attention` / `investigate`. Inventory Reconciliation report Section F now runs.
+- Shared `useStockMovementResolvers` + `movementAccounting` remove duplicated resolution/accounting maps; `ProductForm` grouped into General / Pricing / Inventory `FormSection`s (no new fields). Operations registers + report pages inspected, already consistent, left untouched.
+- **Deferred (migration required, not authored):** partial transfer receipt (`received_quantity` / `partially_received`), persisted in-transit balances, real `stock_lots` / FIFO.
+- Gate: type-check · lint(`--max-warnings 0`) · **3141 tests** · build ALL PASS. 32 files, +3149 / −772, all under `src/features/inventory/`.
+- **Post-deploy browser QA is now owed** — the product workspace (8 tabs, KPI strip, evidence drawer), the rewritten Stock Movements page, the Inventory Control Centre, the Warehouses control rollup, and the on-order figures across all four surfaces.
+
+---
+
 ## REMOVE INTERNAL SPEC / DEVELOPER REFERENCES FROM USER-FACING UI (branch `remove-internal-spec-refs-2026-09-08`, commit `03cdce8`) — 2026-09-08
 
 **SHIPPED 2026-09-08** — on explicit user instruction ahead of human browser QA, `remove-internal-spec-refs-2026-09-08` was fast-forward-merged → `main` (`bdcad7f..03cdce8`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). Presentation copy only — no migration, no DB write, **no accounting effect** (Trial Balance difference R0.00, GL1200 / journal count / stock-movement count unchanged; verified read-only).
