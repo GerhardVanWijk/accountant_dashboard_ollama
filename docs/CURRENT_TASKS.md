@@ -2,9 +2,11 @@
 
 ---
 
-## ACCOUNTING DOCUMENT WORKSPACE UX + SA TERMINOLOGY + PO UUID FIX + FRIENDLY ERRORS (branch `accounting-document-workspace-ux-2026-09-09`) — 2026-09-09
+## ACCOUNTING DOCUMENT WORKSPACE UX + SA TERMINOLOGY + PO UUID FIX + FRIENDLY ERRORS (branch `accounting-document-workspace-ux-2026-09-09`, commit `84b0ea5`) — 2026-09-09
 
-**NOT pushed, NOT deployed.** Committed locally on `accounting-document-workspace-ux-2026-09-09` (branched from `main` `6f0dff1`). Option-2 scope: the PO→supplier-invoice UUID defect, the central accounting error mapper, the SA-terminology sweep for the affected purchasing surfaces, removal of the `Duplicate` action from posted/sensitive documents, a shared `RecordTabs` primitive, and the migration of the four high-traffic document pages (Customer Invoice, Purchase Order, Supplier Invoice, Sales Order) to a tabbed hero + KPI-strip + tabs structure. **No migration. No accounting-posting logic change** beyond the boundary sanitisation required to fix the defect.
+**SHIPPED 2026-09-10** (implemented 2026-09-09) — on explicit user instruction ahead of human browser QA, `accounting-document-workspace-ux-2026-09-09` was fast-forward-merged → `main` (`6f0dff1..84b0ea5`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). **No migration, no DB write, no accounting-posting logic change** beyond one boundary sanitisation (`InventoryPostingEngine.sanitizeSourceLineIds()` — a non-UUID `sourceDocumentLineId` is dropped to `null` before the RPC; GL/VAT/WAC/document-status behaviour unchanged). **Post-deploy browser QA is now owed** — the four migrated document pages (Customer Invoice, Purchase Order, Supplier Invoice, Sales Order): hero + KPI strip + `RecordTabs`, tab keyboard/scroll behaviour, no same-page status/party/total duplication, `Duplicate` gone; the SA terminology across the purchasing UI (nav "Supplier Invoices & Expenses", "Create supplier invoice", "Receive goods", supplier-invoice list/form/detail); a real PO "Create supplier invoice" run end-to-end; and that raw errors are now shown as friendly messages.
+
+Option-2 scope: the PO→supplier-invoice UUID defect, the central accounting error mapper, the SA-terminology sweep for the affected purchasing surfaces, removal of the `Duplicate` action from posted/sensitive documents, a shared `RecordTabs` primitive, and the migration of the four high-traffic document pages to a tabbed hero + KPI-strip + tabs structure.
 
 ### PO → Supplier Invoice UUID defect (`H`)
 
