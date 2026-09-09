@@ -119,12 +119,12 @@ describe('invoiceToBusinessDocument', () => {
     expect(vm.issuer.incomeTaxNumber).toBe('9012345678');
   });
 
-  it('is a plain INVOICE and hides amount paid when the issuer is not VAT-registered and nothing is paid', () => {
+  it('is a CUSTOMER INVOICE and hides amount paid when the issuer is not VAT-registered and nothing is paid', () => {
     const vm = invoiceToBusinessDocument(
       { ...fx.invoice, amountPaid: 0 },
       fx.ctx({ company: { ...fx.company, isVatRegistered: false } }),
     );
-    expect(vm.title).toBe('INVOICE');
+    expect(vm.title).toBe('CUSTOMER INVOICE');
     expect(vm.isTaxDocument).toBe(false);
     expect(vm.totals.map((t) => t.label)).toEqual(['Subtotal', 'VAT', 'Total']);
   });

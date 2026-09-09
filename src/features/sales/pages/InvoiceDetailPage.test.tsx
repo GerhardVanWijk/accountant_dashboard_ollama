@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import type { Invoice } from '@/types';
 import { InvoiceDetailPage } from './InvoiceDetailPage';
@@ -89,11 +89,20 @@ describe('InvoiceDetailPage', () => {
     expect(screen.getByText('Standard rate — 15%')).toBeInTheDocument();
   });
 
-  it('a posted invoice offers no Edit/Delete, and links to the journal entry', () => {
+  it('a posted invoice offers no Edit/Delete, and links to the journal entry from the Accounting tab', () => {
     renderAt();
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete draft' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Accounting/ }));
     expect(screen.getAllByRole('link', { name: /journal entry/i }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('organises the record into tabs (Overview, Line items, Payments, Accounting)', () => {
+    renderAt();
+    expect(screen.getByRole('tab', { name: /Overview/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Line items/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Payments/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Accounting/ })).toBeInTheDocument();
   });
 
   it('a draft invoice offers Mark as sent + Edit + Delete draft', () => {
@@ -109,9 +118,9 @@ describe('InvoiceDetailPage', () => {
     expect(screen.getByText(/could not be found/i)).toBeInTheDocument();
   });
 
-  it('offers "Print / PDF" and "Duplicate" document actions (Phase 4B)', () => {
+  it('offers a "Print / PDF" document action but no "Duplicate" on a posted accounting document', () => {
     renderAt();
     expect(screen.getByRole('button', { name: 'Print / PDF' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Duplicate' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Duplicate' })).not.toBeInTheDocument();
   });
 });

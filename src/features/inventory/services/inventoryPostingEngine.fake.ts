@@ -1,4 +1,5 @@
 import type { ID } from '@/types';
+import { isUuid } from '@/lib/uuid';
 import type {
   InventoryReversalRequest,
   InventoryTransactionExecutor,
@@ -201,6 +202,16 @@ export class FakeInventoryTransactionExecutor implements InventoryTransactionExe
 
     for (const line of request.lines) {
       if (line.nonStock) continue;
+      // Mirror the RPC's `nullif(...,'')::uuid` cast on
+      // `source_document_line_id` (migration 0035 line 109): a non-UUID
+      // value aborts `post_inventory_transaction` with exactly this error.
+      // `InventoryPostingEngine.sanitizeSourceLineIds()` is what keeps a
+      // stale client line id (`li_1788987659412`) from ever reaching here.
+      if (line.sourceDocumentLineId != null && !isUuid(line.sourceDocumentLineId)) {
+        throw new Error(
+          `post_inventory_transaction: invalid input syntax for type uuid: "${String(line.sourceDocumentLineId)}"`,
+        );
+      }
       const product = s.products.get(line.productId);
       if (!product || product.companyId !== s.companyId) {
         throw new Error(`FakeExecutor: product ${line.productId} not in company`);

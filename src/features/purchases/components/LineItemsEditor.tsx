@@ -6,6 +6,7 @@ import { EnumSelect, ProductCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { useProductCategories } from '@/features/inventory/hooks/useProductCategories';
 import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS } from '@/features/assets/constants';
+import { newUuid } from '@/lib/uuid';
 
 export interface LineItemsEditorProps {
   lineItems: DocumentLineItem[];
@@ -175,7 +176,7 @@ export function LineItemsEditor({
     onChange([
       ...lineItems,
       {
-        id: `li_${Date.now()}_${lineItems.length}`,
+        id: newUuid(),
         description: '',
         quantity: 1,
         unitPrice: 0,

@@ -49,7 +49,7 @@ export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
   const { taxRates, loading: taxRatesLoading, error: taxRatesError } = useAllTaxRates();
 
   const {
-    deleteQuote, markAsSent, markAsAccepted, markAsDeclined, convertToSalesOrder, duplicateQuote, isLoading: isBusy,
+    deleteQuote, markAsSent, markAsAccepted, markAsDeclined, convertToSalesOrder, isLoading: isBusy,
   } = useQuoteMutations({ onSuccess: () => refetch() });
 
   const [actionError, setActionError] = useState<string | null>(null);
@@ -137,15 +137,6 @@ export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
                 primary={primary}
                 secondary={[
                   { label: 'Print / PDF', icon: PrinterIcon, onClick: () => setPreviewOpen(true) },
-                  {
-                    label: 'Duplicate',
-                    onClick: () =>
-                      void act(() =>
-                        duplicateQuote(quote.id).then((copy) => {
-                          if (copy?.id) navigate(`/sales/quotes/${copy.id}`);
-                        }),
-                      ),
-                  },
                 ]}
                 danger={[
                   ...(quote.status === 'sent' ? [{ label: 'Mark as declined', onClick: () => void act(() => markAsDeclined(quote.id)) }] : []),

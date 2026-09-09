@@ -30,9 +30,9 @@ describe('Purchases FormModal layer (P3E — Purchases gains a shared shell)', (
     );
     expect(shell()).toBeInTheDocument();
     expect(shell().className).toContain('sm:max-w-[72rem]'); // size="lg" — shared business-document width
-    expect(screen.getByRole('heading', { name: 'New bill' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'New supplier invoice' })).toBeInTheDocument();
     // footer button sits outside the scroll region
-    const save = screen.getByRole('button', { name: 'Create Bill' });
+    const save = screen.getByRole('button', { name: 'Create supplier invoice' });
     expect(save.closest('[data-slot="form-footer"]')).not.toBeNull();
     expect(save.closest('[data-slot="form-body"]')).toBeNull();
   });

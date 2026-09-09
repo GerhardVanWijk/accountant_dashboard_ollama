@@ -8,6 +8,7 @@ import { SupplierCombobox } from '@/components/app/combobox';
 import { FigureBlock } from '@/components/app/figure';
 import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
+import { newUuid } from '@/lib/uuid';
 import type { CreatePurchaseOrderDTO } from '../services';
 import { LineItemsEditor } from './LineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
@@ -42,7 +43,7 @@ export function PurchaseOrderForm({ suppliers, defaultPoNumber, onSubmit, onCanc
   const [expectedDate, setExpectedDate] = useState('');
   const [notes, setNotes] = useState('');
   const [lineItems, setLineItems] = useState<CreatePurchaseOrderDTO['lineItems']>([
-    { id: `li_${Date.now()}`, description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 },
+    { id: newUuid(), description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);

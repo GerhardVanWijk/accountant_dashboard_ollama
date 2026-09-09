@@ -8,6 +8,7 @@ import { CustomerCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { CreateQuoteDTO } from '../services';
+import { newUuid } from '@/lib/uuid';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
@@ -48,7 +49,7 @@ export function QuoteForm({ customers, quote, defaultQuoteNumber, onSubmit, onCa
   const [expiryDate, setExpiryDate] = useState(quote ? quote.expiryDate.slice(0, 10) : plusDays(30));
   const [notes, setNotes] = useState(quote?.notes ?? '');
   const [lineItems, setLineItems] = useState<CreateQuoteDTO['lineItems']>(
-    quote?.lineItems ?? [{ id: `li_${Date.now()}`, description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 }],
+    quote?.lineItems ?? [{ id: newUuid(), description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 }],
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);

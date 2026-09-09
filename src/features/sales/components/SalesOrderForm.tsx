@@ -22,6 +22,7 @@ import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
 import { useReturnNotes } from '@/features/sales/hooks/useReturnNotes';
 import { sumPhysicallyIssuedBySalesOrderLine } from '@/features/sales/utils/salesOrderFulfilment';
+import { newUuid } from '@/lib/uuid';
 
 export interface SalesOrderFormProps {
   customers: Customer[];
@@ -94,7 +95,7 @@ export function SalesOrderForm({ customers, salesOrder, defaultOrderNumber, onSu
   const [orderDate, setOrderDate] = useState(salesOrder ? salesOrder.orderDate.slice(0, 10) : today());
   const [notes, setNotes] = useState(salesOrder?.notes ?? '');
   const [lineItems, setLineItems] = useState<CreateSalesOrderDTO['lineItems']>(
-    salesOrder?.lineItems ?? [{ id: `li_${Date.now()}`, description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 }],
+    salesOrder?.lineItems ?? [{ id: newUuid(), description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 }],
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);

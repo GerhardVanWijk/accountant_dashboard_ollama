@@ -231,9 +231,9 @@ export class PurchaseOrderService {
   }
 
   /**
-   * Converts a purchase order to a bill.
-   * Creates a new Bill record with the same line items and totals.
-   * In a real system, this would call billService.createBill().
+   * Builds a supplier-invoice draft ("Bill" in the data model) from a
+   * purchase order — same line items and totals. The caller
+   * (PurchaseOrderDetailPage) then creates + posts it via `billService`.
    * Rejects a PO that's already been converted (`billId` set) — enforced
    * here, not just in the UI, so it can't be bypassed by calling this
    * twice in quick succession.
@@ -244,7 +244,7 @@ export class PurchaseOrderService {
       throw new Error(`Purchase order "${poId}" not found`);
     }
     if (po.billId) {
-      throw new Error(`Purchase order "${poId}" has already been converted to a bill (${po.billId}).`);
+      throw new Error(`Purchase order "${poId}" has already been converted to a supplier invoice (${po.billId}).`);
     }
 
     // Generate bill number from PO number

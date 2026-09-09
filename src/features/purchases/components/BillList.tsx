@@ -34,7 +34,7 @@ export function BillList({ bills, suppliersMap = {}, onSelect, isLoading = false
   if (isLoading) {
     return (
       <div role="status" className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
-        Loading bills…
+        Loading supplier invoices…
       </div>
     );
   }
@@ -49,7 +49,7 @@ export function BillList({ bills, suppliersMap = {}, onSelect, isLoading = false
   const columns: DataTableColumn<Bill>[] = [
     {
       key: 'number',
-      header: 'Bill',
+      header: 'Supplier invoice',
       sortValue: (b) => b.billNumber,
       cell: (b) => (
         <RecordLink onClick={() => onSelect?.(b.id)} className="figure text-sm">
@@ -77,7 +77,7 @@ export function BillList({ bills, suppliersMap = {}, onSelect, isLoading = false
       columns={columns}
       getRowKey={(b) => b.id}
       searchable={(b) => [b.billNumber, suppliersMap[b.supplierId] ?? '', b.notes ?? ''].join(' ')}
-      searchPlaceholder="Search bill number, supplier or notes"
+      searchPlaceholder="Search supplier invoice number, supplier or notes"
       initialSortKey="date"
       initialSortDirection="desc"
       filters={[
@@ -88,11 +88,11 @@ export function BillList({ bills, suppliersMap = {}, onSelect, isLoading = false
           match: (b, value) => b.status === value,
         },
       ]}
-      emptyTitle="No bills found"
-      emptyDescription="Adjust the filters, or create a new bill."
-      caption="Supplier bill register"
+      emptyTitle="No supplier invoices found"
+      emptyDescription="Adjust the filters, or create a new supplier invoice."
+      caption="Supplier invoice register"
       onRowClick={onSelect ? (b) => onSelect(b.id) : undefined}
-      getRowAriaLabel={(b) => `Open bill ${b.billNumber}`}
+      getRowAriaLabel={(b) => `Open supplier invoice ${b.billNumber}`}
     />
   );
 }

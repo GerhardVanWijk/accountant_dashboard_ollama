@@ -1,4 +1,5 @@
 import type { AuditAction, ID, StockMovementType } from '@/types';
+import { coerceUuidOrNull } from '@/lib/uuid';
 import { newWeightedAverageCost, lineValue, roundMoney } from './inventoryValuation';
 
 /**
@@ -143,15 +144,47 @@ export class InventoryPostingEngine {
   ) {}
 
   async applyInventoryTransaction(request: InventoryTransactionRequest): Promise<InventoryTransactionResult> {
-    validateRequest(request);
-    if (this.periodGuard) await this.periodGuard.assertOpenForDate(request.movementDate);
-    return this.executor.execute(request);
+    const safe = sanitizeSourceLineIds(request);
+    validateRequest(safe);
+    if (this.periodGuard) await this.periodGuard.assertOpenForDate(safe.movementDate);
+    return this.executor.execute(safe);
   }
 
   async reverseInventoryTransaction(request: InventoryReversalRequest): Promise<InventoryTransactionResult> {
     if (this.periodGuard) await this.periodGuard.assertOpenForDate(request.movementDate);
     return this.executor.reverse(request);
   }
+}
+
+/**
+ * Boundary guard (docs/CURRENT_TASKS.md — "PO → Supplier Invoice UUID
+ * defect", 2026-09-09): every `sourceDocumentLineId` handed to the executor must
+ * be a real UUID or `null`, because `post_inventory_transaction` casts it
+ * with `::uuid` and a client-generated draft id (`li_1788987659412`,
+ * persisted into a jsonb `lineItems` array before document lines were
+ * minted as UUIDs) would abort the whole posting with `invalid input
+ * syntax for type uuid`. A non-UUID is dropped to `null` here — it could
+ * never be stored in the `uuid` column regardless, and the movement still
+ * carries `source_document_id`/`source_document_type` for traceability.
+ * Returns the same object when nothing needed sanitising (the common path).
+ */
+function sanitizeSourceLineIds(request: InventoryTransactionRequest): InventoryTransactionRequest {
+  let dirty = false;
+  const lines = request.lines.map((line) => {
+    if (line.sourceDocumentLineId == null) return line;
+    const safe = coerceUuidOrNull(line.sourceDocumentLineId);
+    if (safe === line.sourceDocumentLineId) return line;
+    dirty = true;
+    if (safe === null) {
+      console.warn(
+        `InventoryPostingEngine: dropped non-UUID sourceDocumentLineId "${String(line.sourceDocumentLineId)}" ` +
+          `on a ${request.sourceType} line (source ${request.sourceId}) — the movement keeps its document-level link. ` +
+          `Re-save the source document to mint proper line UUIDs.`,
+      );
+    }
+    return { ...line, sourceDocumentLineId: safe ?? undefined };
+  });
+  return dirty ? { ...request, lines } : request;
 }
 
 function validateRequest(request: InventoryTransactionRequest): void {

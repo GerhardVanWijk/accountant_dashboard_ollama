@@ -60,7 +60,7 @@ const RECORD_META: Record<
   delivery_note: { icon: PackageCheckIcon, label: 'Delivery note', heading: 'Delivery notes' },
   return_note: { icon: PackageXIcon, label: 'Return note', heading: 'Return notes' },
   invoice: { icon: FileTextIcon, label: 'Invoice', heading: 'Invoices' },
-  bill: { icon: CreditCardIcon, label: 'Bill', heading: 'Bills' },
+  bill: { icon: CreditCardIcon, label: 'Supplier invoice', heading: 'Supplier invoices' },
   quote: { icon: FileSignatureIcon, label: 'Quote', heading: 'Quotes' },
   sales_order: { icon: ClipboardListIcon, label: 'Sales order', heading: 'Sales orders' },
   purchase_order: { icon: ClipboardCheckIcon, label: 'Purchase order', heading: 'Purchase orders' },

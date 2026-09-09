@@ -15,11 +15,12 @@ import { nextDocumentNumber } from '../utils/nextDocumentNumber';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 
 /**
- * Supplier bills — route `/purchases/bills` (nav label "Expenses"), the
- * list only. A row click navigates to the full-page record at
- * `/purchases/bills/:billId` (BillDetailPage); legacy `?record=<id>` deep
- * links are redirected there. Post and Record Payment live on the record
- * page.
+ * Supplier invoices & expenses — route `/purchases/bills` (nav label
+ * "Supplier Invoices & Expenses"), the list only. A row click navigates to
+ * the full-page record at `/purchases/bills/:billId` (BillDetailPage);
+ * legacy `?record=<id>` deep links are redirected there. Post and Record
+ * Payment live on the record page. ("Supplier invoice" is the South African
+ * term for the record the data model still calls a `Bill`.)
  */
 export function BillsPage() {
   const navigate = useNavigate();
@@ -43,20 +44,20 @@ export function BillsPage() {
     await billMutations.createBill(data);
     await refetch();
     setShowCreate(false);
-    setNotice('Bill created as a draft.');
+    setNotice('Supplier invoice created as a draft.');
   }
 
   return (
     <>
       <div className="flex flex-col gap-6">
         <PageHeader
-          title="Expenses"
-          description="Supplier bills captured against the ledger, with VAT and payment state."
+          title="Supplier Invoices & Expenses"
+          description="Supplier invoices captured against the ledger, with VAT and payment state."
           actions={
             canCreate ? (
               <Button size="sm" onClick={() => setShowCreate(true)}>
                 <Plus data-icon="inline-start" />
-                New bill
+                New supplier invoice
               </Button>
             ) : undefined
           }
@@ -64,7 +65,7 @@ export function BillsPage() {
 
         <SectionCard>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <FigureBlock label="Total bills" value={String(bills.length)} />
+            <FigureBlock label="Total supplier invoices" value={String(bills.length)} />
             <FigureBlock label="Outstanding" value={formatCurrency(totalOutstanding)} tone={totalOutstanding > 0 ? 'warning' : 'default'} />
             <FigureBlock label="Overdue" value={String(overdueBills.length)} tone={overdueBills.length > 0 ? 'negative' : 'default'} />
             <FigureBlock label="Drafts" value={String(draftBills.length)} hint="Not yet posted" />
@@ -76,7 +77,7 @@ export function BillsPage() {
         {isLoading ? (
           <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
             <Loader2 className="size-5 animate-spin" aria-hidden="true" />
-            <p className="text-sm">Loading bills…</p>
+            <p className="text-sm">Loading supplier invoices…</p>
           </div>
         ) : error ? (
           <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">

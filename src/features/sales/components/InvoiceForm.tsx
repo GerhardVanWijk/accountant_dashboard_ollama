@@ -8,6 +8,7 @@ import { SearchableSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import type { CreateInvoiceDTO } from '@/services/invoiceService';
+import { newUuid } from '@/lib/uuid';
 import { SalesLineItemsEditor } from './SalesLineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
@@ -53,7 +54,7 @@ export const InvoiceForm = ({ invoice, customers, onSubmit, onCancel, isLoading 
   const [dueDate, setDueDate] = useState(invoice ? invoice.dueDate.slice(0, 10) : plusDays(30));
   const [notes, setNotes] = useState(invoice?.notes ?? '');
   const [lineItems, setLineItems] = useState<CreateInvoiceDTO['lineItems']>(
-    invoice?.lineItems ?? [{ id: `li_${Date.now()}`, description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 }],
+    invoice?.lineItems ?? [{ id: newUuid(), description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 }],
   );
   const [formError, setFormError] = useState<string | null>(null);
 

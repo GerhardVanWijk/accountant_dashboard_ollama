@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Link } from 'react-router-dom';
-import { PrinterIcon } from 'lucide-react';
+import { BoxesIcon, PrinterIcon, ReceiptTextIcon, TruckIcon } from 'lucide-react';
 import type { SalesOrder } from '@/types';
 import { BusinessDocumentPreviewModal, useBusinessDocument } from '@/features/businessDocuments';
 import {
@@ -13,15 +13,19 @@ import {
   RecordPageSection,
   RecordPageShell,
   RecordSummaryGrid,
+  RecordTabs,
   RelatedRecordPreview,
   RelatedRecordsSection,
   type DocumentLineColumn,
+  type RecordTab,
   type RelatedRecordItem,
   type RecordPageProps,
 } from '@/components/app/record-page';
+import { StatStrip, StatTile } from '@/components/app/stat-tile';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
+import { toAccountingErrorMessage } from '@/features/accounting/utils/accountingError';
 import { useSalesOrders } from '@/features/sales/hooks/useSalesOrders';
 import { useSalesOrderMutations } from '@/features/sales/hooks/useSalesOrderMutations';
 import { useQuotes } from '@/features/sales/hooks/useQuotes';
@@ -77,11 +81,8 @@ function lineColumns(
 }
 
 /**
- * Full-page Sales Order detail — route `/sales/orders/:orderId`. Replaces
- * the cramped right-hand RecordDetailSheet: the order number never
- * character-wraps, the customer name gets room, line items use the real
- * page width, related records and audit history get their own sections,
- * and the action hierarchy is explicit (Convert to invoice = primary).
+ * Full-page Sales Order detail — route `/sales/orders/:orderId`. The order,
+ * its line items and its fulfilment/invoicing progress on one tabbed page.
  * No accounting behaviour changes — the same
  * SalesOrderService.convertToInvoice()/confirmOrder()/cancelOrder()/
  * deleteSalesOrder() calls as before.
@@ -135,14 +136,11 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
         : [],
     [order, invoices],
   );
-  // Show the Ordered/Invoiced/Remaining detail only once there is line-level
-  // evidence, or the order is confirmed/pending (nothing invoiced yet) — a
-  // legacy full conversion has no trustworthy per-line numbers.
   const showProgress = Boolean(
     fulfilment && (fulfilment.hasLineLevelEvidence || linkedInvoices.length === 0),
   );
 
-  const { deleteSalesOrder, confirmOrder, cancelOrder, closeRemaining, createInvoiceFromSalesOrder, duplicateSalesOrder, isLoading: isBusy } = useSalesOrderMutations({
+  const { deleteSalesOrder, confirmOrder, cancelOrder, closeRemaining, createInvoiceFromSalesOrder, isLoading: isBusy } = useSalesOrderMutations({
     onSuccess: () => refetch(),
   });
 
@@ -156,7 +154,7 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
       setCreatedInvoice({ id: invoice.id, number: invoice.invoiceNumber });
       await Promise.all([refetch(), refetchInvoices()]);
     } catch (err) {
-      setPickerError(err instanceof Error ? err.message : 'Could not create the invoice.');
+      setPickerError(toAccountingErrorMessage(err, { reference: order.orderNumber, action: 'create the invoice' }));
     } finally {
       setPickerBusy(false);
     }
@@ -173,7 +171,6 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
     if (sourceQuote) {
       items.push({ label: 'Source quote', value: <Link className="font-medium text-brand hover:underline" to="/sales/quotes">{sourceQuote.quoteNumber}</Link> });
     }
-    // Invoices are shown in their own richer "Related invoices" table below.
     return items;
   }, [order, customerName, sourceQuote]);
 
@@ -183,7 +180,7 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
       await fn();
       after();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Could not update this sales order.');
+      setActionError(toAccountingErrorMessage(err, { reference: order?.orderNumber, action: 'update this sales order' }));
     }
   }
 
@@ -193,7 +190,6 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
   const someInvoiced = Boolean(
     fulfilment && (fulfilment.postedFulfilledQty > 0 || fulfilment.draftInvoicedQty > 0),
   );
-  // Cancel = the whole order, before any invoicing. Once invoiced, close the remainder instead.
   const canCancel =
     order != null &&
     (order.status === 'pending' || order.status === 'confirmed') &&
@@ -210,10 +206,6 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
     fulfilment.remainingToInvoiceQty > 0;
   const canDelete = order?.status === 'pending';
   const convertLabel = someInvoiced ? 'Invoice remaining' : 'Create invoice';
-  // Phase 5C, Part 10: an eligible confirmed order with something left to
-  // physically deliver gets a "Create delivery" action alongside invoicing —
-  // the two are independent (Part 13: invoicing without a prior delivery
-  // remains fully supported, unrestricted).
   const canDeliver = order != null && order.status === 'confirmed' && Boolean(fulfilment && fulfilment.remainingToDeliver > 1e-6);
   const abandonValue = fulfilment
     ? order!.lineItems.reduce((sum, l) => {
@@ -223,6 +215,197 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
         return sum + (l.lineTotal / orderedQty) * rem;
       }, 0)
     : 0;
+
+  const deliveryNotesTable =
+    linkedDeliveryNotes.length > 0 ? (
+      <RecordPageSection title="Delivery notes">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs tracking-wide text-muted-foreground uppercase">
+                <th className="py-2 pr-3 font-medium">DN number</th>
+                <th className="py-2 pr-3 font-medium">Date</th>
+                <th className="py-2 pr-3 font-medium">Warehouse</th>
+                <th className="py-2 pr-3 text-right font-medium">Quantity</th>
+                <th className="py-2 text-left font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linkedDeliveryNotes.map((dn) => (
+                <tr key={dn.id} className="border-b border-border/60 last:border-0">
+                  <td className="py-2 pr-3">
+                    <button type="button" className="font-medium text-brand hover:underline" onClick={() => setDeliveryNotePreviewId(dn.id)}>
+                      {dn.deliveryNoteNumber}
+                    </button>
+                  </td>
+                  <td className="py-2 pr-3 text-muted-foreground">{formatDate(dn.deliveryDate)}</td>
+                  <td className="py-2 pr-3 text-muted-foreground">{warehouseByIdMap.get(dn.warehouseId)?.name ?? '—'}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{fmtQty(dn.lineItems.reduce((s, l) => s + l.quantity, 0))}</td>
+                  <td className="py-2"><StatusBadge status={dn.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </RecordPageSection>
+    ) : null;
+
+  const relatedInvoicesTable =
+    linkedInvoices.length > 0 ? (
+      <RecordPageSection title="Related invoices">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs tracking-wide text-muted-foreground uppercase">
+                <th className="py-2 pr-3 font-medium">Invoice</th>
+                <th className="py-2 pr-3 font-medium">Issued</th>
+                <th className="py-2 pr-3 font-medium">Status</th>
+                <th className="py-2 pr-3 text-right font-medium">Total</th>
+                <th className="py-2 text-right font-medium">Outstanding</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linkedInvoices.map((inv) => (
+                <tr key={inv.id} className="border-b border-border/60 last:border-0">
+                  <td className="py-2 pr-3">
+                    <button type="button" className="font-medium text-brand hover:underline" onClick={() => setInvoicePreviewId(inv.id)}>
+                      {inv.invoiceNumber}
+                    </button>
+                  </td>
+                  <td className="py-2 pr-3 text-muted-foreground">{formatDate(inv.issueDate)}</td>
+                  <td className="py-2 pr-3"><StatusBadge status={inv.status} /></td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{formatCurrency(inv.total)}</td>
+                  <td className="py-2 text-right tabular-nums">{formatCurrency(Math.max(0, inv.total - inv.amountPaid))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </RecordPageSection>
+    ) : null;
+
+  const fulfilmentDetail =
+    fulfilment && showProgress ? (
+      <RecordPageSection title="Fulfilment & invoicing">
+        <RecordSummaryGrid>
+          <RecordField label="Ordered" value={<span className="tabular-nums">{fmtQty(fulfilment.orderedQty)}</span>} />
+          <RecordField label="Delivered" value={<span className="tabular-nums">{fmtQty(fulfilment.deliveredQty)}</span>} />
+          {fulfilment.returnedQty > 0 && (
+            <RecordField label="Returned (uninvoiced)" value={<span className="tabular-nums">{fmtQty(fulfilment.returnedQty)}</span>} />
+          )}
+          <RecordField label="Remaining to deliver" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToDeliver)}</span>} />
+          <RecordField label="Invoiced (posted)" value={<span className="tabular-nums">{fmtQty(fulfilment.postedFulfilledQty)}</span>} />
+          {fulfilment.draftInvoicedQty > 0 && (
+            <RecordField label="In draft invoices" value={<span className="tabular-nums">{fmtQty(fulfilment.draftInvoicedQty)}</span>} />
+          )}
+          <RecordField label="Remaining to invoice" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToInvoiceQty)}</span>} />
+          {order!.status === 'confirmed' && fulfilment.remainingToDeliver > 0 && (
+            <RecordField label="Stock committed" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToDeliver)} unit(s) reserved</span>} />
+          )}
+          {order!.status === 'closed' && (
+            <RecordField
+              label="Closed"
+              value={
+                <span className="tabular-nums">
+                  {fmtQty(fulfilment.remainingToFulfilQty)} un-invoiced unit(s) abandoned · commitment released
+                </span>
+              }
+            />
+          )}
+        </RecordSummaryGrid>
+      </RecordPageSection>
+    ) : null;
+
+  const hasFulfilmentTab = Boolean(fulfilmentDetail || deliveryNotesTable || relatedInvoicesTable);
+
+  const tabs: RecordTab[] = order
+    ? [
+        {
+          value: 'overview',
+          label: 'Overview',
+          content: (
+            <>
+              <RecordPageSection title="Order details">
+                <RecordSummaryGrid>
+                  <RecordField label="Order date" value={formatDate(order.orderDate)} />
+                  <RecordField label="Currency" value={order.currency} />
+                  {sourceQuote && (
+                    <RecordField
+                      label="Source quote"
+                      value={<Link className="text-brand hover:underline" to="/sales/quotes">{sourceQuote.quoteNumber}</Link>}
+                    />
+                  )}
+                  {fulfilment && showProgress && (
+                    <>
+                      <RecordField label="Invoicing" value={<StatusBadge status={displayInvoicingStatus(order, fulfilment)} />} />
+                      <RecordField label="Fulfilment" value={<StatusBadge status={displayFulfilmentStatus(order, fulfilment)} />} />
+                    </>
+                  )}
+                </RecordSummaryGrid>
+              </RecordPageSection>
+              {order.notes && (
+                <RecordPageSection title="Notes">
+                  <p className="text-sm whitespace-pre-wrap text-muted-foreground">{order.notes}</p>
+                </RecordPageSection>
+              )}
+            </>
+          ),
+        },
+        {
+          value: 'line-items',
+          label: 'Line items',
+          count: order.lineItems.length,
+          content: (
+            <RecordPageSection title="Line items">
+              <DocumentLineTable
+                columns={lineColumns(fulfilmentByLine, showProgress)}
+                rows={order.lineItems}
+                rowKey={(l) => l.id}
+                totals={[
+                  { label: 'Subtotal', value: formatCurrency(order.subtotal) },
+                  { label: 'Tax / VAT', value: formatCurrency(order.taxTotal) },
+                  { label: 'Total', value: formatCurrency(order.total), emphasis: true },
+                ]}
+              />
+            </RecordPageSection>
+          ),
+        },
+        ...(hasFulfilmentTab
+          ? [
+              {
+                value: 'fulfilment',
+                label: 'Fulfilment',
+                count: linkedInvoices.length + linkedDeliveryNotes.length,
+                content: (
+                  <>
+                    {fulfilmentDetail}
+                    {deliveryNotesTable}
+                    {relatedInvoicesTable}
+                  </>
+                ),
+              } as RecordTab,
+            ]
+          : []),
+        {
+          value: 'related',
+          label: 'Related records',
+          count: relatedItems.length,
+          content: <RelatedRecordsSection items={relatedItems} />,
+        },
+        {
+          value: 'activity',
+          label: 'Activity',
+          content: (
+            <RecordActivitySection
+              recordType="SalesOrder"
+              recordId={order.id}
+              title="Record activity"
+              subtitle="Changes and lifecycle events for this sales order."
+            />
+          ),
+        },
+      ]
+    : [];
 
   return (
     <RecordPageShell
@@ -262,17 +445,6 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
                 secondary={[
                   ...(canDeliver ? [{ label: 'Create delivery', onClick: () => navigate(`/sales/orders/${order.id}/deliver`) }] : []),
                   { label: 'Print / PDF', icon: PrinterIcon, onClick: () => setPreviewOpen(true) },
-                  {
-                    label: 'Duplicate',
-                    onClick: () =>
-                      void act(
-                        () =>
-                          duplicateSalesOrder(order.id).then((copy) => {
-                            if (copy?.id) navigate(`/sales/orders/${copy.id}`);
-                          }),
-                        () => {},
-                      ),
-                  },
                   ...(canConfirm ? [{ label: 'Confirm order', onClick: () => void act(() => confirmOrder(order.id), () => {}) }] : []),
                 ]}
                 danger={[
@@ -300,185 +472,37 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
                 invoice to move stock and the ledger.
               </span>
               <span className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  className="font-medium text-brand hover:underline"
-                  onClick={() => setInvoicePreviewId(createdInvoice.id)}
-                >
+                <button type="button" className="font-medium text-brand hover:underline" onClick={() => setInvoicePreviewId(createdInvoice.id)}>
                   View invoice
                 </button>
-                <button
-                  type="button"
-                  className="font-medium text-brand hover:underline"
-                  onClick={() => navigate(`/sales/invoices/${createdInvoice.id}`)}
-                >
+                <button type="button" className="font-medium text-brand hover:underline" onClick={() => navigate(`/sales/invoices/${createdInvoice.id}`)}>
                   Open full invoice
                 </button>
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={() => setCreatedInvoice(null)}
-                  aria-label="Dismiss"
-                >
+                <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => setCreatedInvoice(null)} aria-label="Dismiss">
                   ✕
                 </button>
               </span>
             </div>
           )}
 
-          <RecordPageSection title="Overview">
-            <RecordSummaryGrid>
-              <RecordField label="Customer" value={customerName} />
-              <RecordField label="Order date" value={formatDate(order.orderDate)} />
-              <RecordField label="Currency" value={order.currency} />
-              <RecordField label="Status" value={<StatusBadge status={order.status} />} />
-              {sourceQuote && <RecordField label="Source quote" value={sourceQuote.quoteNumber} />}
-              <RecordField label="Total" value={formatCurrency(order.total)} />
-              {fulfilment && showProgress && (
-                <>
-                  <RecordField
-                    label="Invoicing"
-                    value={<StatusBadge status={displayInvoicingStatus(order, fulfilment)} />}
-                  />
-                  <RecordField
-                    label="Fulfilment"
-                    value={<StatusBadge status={displayFulfilmentStatus(order, fulfilment)} />}
-                  />
-                  <RecordField label="Ordered" value={<span className="tabular-nums">{fmtQty(fulfilment.orderedQty)}</span>} />
-                  <RecordField label="Delivered" value={<span className="tabular-nums">{fmtQty(fulfilment.deliveredQty)}</span>} />
-                  {fulfilment.returnedQty > 0 && (
-                    <RecordField label="Returned (uninvoiced)" value={<span className="tabular-nums">{fmtQty(fulfilment.returnedQty)}</span>} />
-                  )}
-                  <RecordField label="Remaining to deliver" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToDeliver)}</span>} />
-                  <RecordField label="Invoiced (posted)" value={<span className="tabular-nums">{fmtQty(fulfilment.postedFulfilledQty)}</span>} />
-                  {fulfilment.draftInvoicedQty > 0 && (
-                    <RecordField label="In draft invoices" value={<span className="tabular-nums">{fmtQty(fulfilment.draftInvoicedQty)}</span>} />
-                  )}
-                  <RecordField label="Remaining to invoice" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToInvoiceQty)}</span>} />
-                  {order.status === 'confirmed' && fulfilment.remainingToDeliver > 0 && (
-                    <RecordField
-                      label="Stock committed"
-                      value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToDeliver)} unit(s) reserved</span>}
-                    />
-                  )}
-                  {order.status === 'closed' && (
-                    <RecordField
-                      label="Closed"
-                      value={
-                        <span className="tabular-nums">
-                          {fmtQty(fulfilment.remainingToFulfilQty)} un-invoiced unit(s) abandoned · commitment released
-                        </span>
-                      }
-                    />
-                  )}
-                </>
-              )}
-            </RecordSummaryGrid>
-          </RecordPageSection>
-
-          <RecordPageSection title="Line items">
-            <DocumentLineTable
-              columns={lineColumns(fulfilmentByLine, showProgress)}
-              rows={order.lineItems}
-              rowKey={(l) => l.id}
-              totals={[
-                { label: 'Subtotal', value: formatCurrency(order.subtotal) },
-                { label: 'Tax / VAT', value: formatCurrency(order.taxTotal) },
-                { label: 'Total', value: formatCurrency(order.total), emphasis: true },
-              ]}
+          <StatStrip columns={4}>
+            <StatTile icon={ReceiptTextIcon} label="Order total" value={formatCurrency(order.total)} />
+            <StatTile icon={BoxesIcon} label="Ordered" value={fmtQty(fulfilment?.orderedQty ?? order.lineItems.reduce((s, l) => s + l.quantity, 0))} />
+            <StatTile
+              icon={TruckIcon}
+              label="Delivered"
+              value={fmtQty(fulfilment?.deliveredQty ?? 0)}
+              tone={fulfilment && fulfilment.deliveredQty > 0 ? 'positive' : 'default'}
             />
-          </RecordPageSection>
+            <StatTile
+              icon={PrinterIcon}
+              label="Invoiced"
+              value={fmtQty(fulfilment?.postedFulfilledQty ?? 0)}
+              tone={fulfilment && fulfilment.remainingToInvoiceQty > 0 && showProgress ? 'warning' : 'default'}
+            />
+          </StatStrip>
 
-          {linkedDeliveryNotes.length > 0 && (
-            <RecordPageSection title="Delivery notes">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-xs tracking-wide text-muted-foreground uppercase">
-                      <th className="py-2 pr-3 font-medium">DN number</th>
-                      <th className="py-2 pr-3 font-medium">Date</th>
-                      <th className="py-2 pr-3 font-medium">Warehouse</th>
-                      <th className="py-2 pr-3 text-right font-medium">Quantity</th>
-                      <th className="py-2 text-left font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {linkedDeliveryNotes.map((dn) => (
-                      <tr key={dn.id} className="border-b border-border/60 last:border-0">
-                        <td className="py-2 pr-3">
-                          <button
-                            type="button"
-                            className="font-medium text-brand hover:underline"
-                            onClick={() => setDeliveryNotePreviewId(dn.id)}
-                          >
-                            {dn.deliveryNoteNumber}
-                          </button>
-                        </td>
-                        <td className="py-2 pr-3 text-muted-foreground">{formatDate(dn.deliveryDate)}</td>
-                        <td className="py-2 pr-3 text-muted-foreground">{warehouseByIdMap.get(dn.warehouseId)?.name ?? '—'}</td>
-                        <td className="py-2 pr-3 text-right tabular-nums">{fmtQty(dn.lineItems.reduce((s, l) => s + l.quantity, 0))}</td>
-                        <td className="py-2"><StatusBadge status={dn.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </RecordPageSection>
-          )}
-
-          {linkedInvoices.length > 0 && (
-            <RecordPageSection title="Related invoices">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-xs tracking-wide text-muted-foreground uppercase">
-                      <th className="py-2 pr-3 font-medium">Invoice</th>
-                      <th className="py-2 pr-3 font-medium">Issued</th>
-                      <th className="py-2 pr-3 font-medium">Status</th>
-                      <th className="py-2 pr-3 text-right font-medium">Total</th>
-                      <th className="py-2 text-right font-medium">Outstanding</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {linkedInvoices.map((inv) => (
-                      <tr key={inv.id} className="border-b border-border/60 last:border-0">
-                        <td className="py-2 pr-3">
-                          <button
-                            type="button"
-                            className="font-medium text-brand hover:underline"
-                            onClick={() => setInvoicePreviewId(inv.id)}
-                          >
-                            {inv.invoiceNumber}
-                          </button>
-                        </td>
-                        <td className="py-2 pr-3 text-muted-foreground">{formatDate(inv.issueDate)}</td>
-                        <td className="py-2 pr-3"><StatusBadge status={inv.status} /></td>
-                        <td className="py-2 pr-3 text-right tabular-nums">{formatCurrency(inv.total)}</td>
-                        <td className="py-2 text-right tabular-nums">
-                          {formatCurrency(Math.max(0, inv.total - inv.amountPaid))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </RecordPageSection>
-          )}
-
-          {order.notes && (
-            <RecordPageSection title="Notes">
-              <p className="text-sm whitespace-pre-wrap text-muted-foreground">{order.notes}</p>
-            </RecordPageSection>
-          )}
-
-          <RelatedRecordsSection items={relatedItems} />
-
-          <RecordActivitySection
-            recordType="SalesOrder"
-            recordId={order.id}
-            title="Record activity"
-            subtitle="Changes and lifecycle events for this sales order."
-          />
+          <RecordTabs urlParam="tab" embedded={embedded} ariaLabel="Sales order sections" tabs={tabs} />
 
           <ConfirmDialog
             open={confirmDelete}

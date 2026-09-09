@@ -132,7 +132,7 @@ export const navGroups: NavGroup[] = [
   {
     title: 'Purchases & Expenses',
     items: [
-      { title: 'Bills & Expenses', href: '/purchases/bills', icon: CreditCardIcon },
+      { title: 'Supplier Invoices & Expenses', href: '/purchases/bills', icon: CreditCardIcon },
       { title: 'Purchase Orders', href: '/purchases/orders', icon: ClipboardCheckIcon },
       { title: 'Supplier Payments', href: '/purchases/payments', icon: BanknoteIcon },
       { title: 'Vendor Aging', href: '/purchases/aging', icon: CalendarClockIcon },
@@ -270,7 +270,7 @@ export const segmentLabels: Record<string, string> = {
   banking: 'Banking',
   accounts: 'Bank Accounts',
   reconciliation: 'Bank Reconciliation',
-  bills: 'Bills & Expenses',
+  bills: 'Supplier Invoices & Expenses',
   tax: 'Tax',
   'vat-return': 'VAT',
   compliance: 'Compliance',

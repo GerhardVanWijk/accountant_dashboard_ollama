@@ -8,6 +8,7 @@ import { SupplierCombobox } from '@/components/app/combobox';
 import { FigureBlock } from '@/components/app/figure';
 import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { formatCurrency } from '@/lib/app/format';
+import { newUuid } from '@/lib/uuid';
 import type { CreateBillDTO } from '../services';
 import { LineItemsEditor } from './LineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
@@ -49,7 +50,7 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel, onD
   const [dueDate, setDueDate] = useState(plusDays(30));
   const [notes, setNotes] = useState('');
   const [lineItems, setLineItems] = useState<CreateBillDTO['lineItems']>([
-    { id: `li_${Date.now()}`, description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 },
+    { id: newUuid(), description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -60,7 +61,7 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel, onD
 
   async function handleSubmit() {
     setFormError(null);
-    if (!billNumber.trim()) return setFormError('Bill number is required.');
+    if (!billNumber.trim()) return setFormError('Supplier invoice number is required.');
     if (!supplierId) return setFormError('Select a supplier.');
     if (lineItems.length === 0 || lineItems.some((li) => !li.description.trim() || li.quantity <= 0)) {
       return setFormError('Every line item needs a description and a quantity greater than zero.');
@@ -83,7 +84,7 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel, onD
         notes: notes || undefined,
       });
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not save bill.');
+      setFormError(err instanceof Error ? err.message : 'Could not save supplier invoice.');
     } finally {
       setIsSubmitting(false);
     }
@@ -94,7 +95,7 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel, onD
       <FormBody>
       <FormGrid className="max-w-3xl">
         <Field>
-          <FieldLabel htmlFor="bill-number">Bill Number</FieldLabel>
+          <FieldLabel htmlFor="bill-number">Supplier Invoice Number</FieldLabel>
           <Input id="bill-number" className="font-mono" value={billNumber} onChange={(e) => setBillNumber(e.target.value)} />
         </Field>
         <Field>
@@ -135,7 +136,7 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel, onD
           Cancel
         </Button>
         <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
-          {isSubmitting ? 'Saving…' : 'Create Bill'}
+          {isSubmitting ? 'Saving…' : 'Create supplier invoice'}
         </Button>
       </FormFooter>
     </div>

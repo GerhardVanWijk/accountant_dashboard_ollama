@@ -6,6 +6,7 @@ import { EnumSelect, ProductCombobox } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
 import { useProductCategories } from '@/features/inventory/hooks/useProductCategories';
 import { computeLine } from '../utils/lineItemCalculations';
+import { newUuid } from '@/lib/uuid';
 
 export interface SalesLineItemsEditorProps {
   lineItems: DocumentLineItem[];
@@ -141,7 +142,7 @@ export function SalesLineItemsEditor({
     onChange([
       ...lineItems,
       {
-        id: `li_${Date.now()}_${lineItems.length}`,
+        id: newUuid(),
         description: '',
         quantity: 1,
         unitPrice: 0,

@@ -541,3 +541,70 @@ describe('InventoryPostingEngine — reversal', () => {
     expect(store.products.get('p1')!.quantityOnHand).toBe(10); // reversed once
   });
 });
+
+describe('InventoryPostingEngine — sourceDocumentLineId sanitisation (PO → supplier-invoice UUID defect)', () => {
+  // Regression (docs/CURRENT_TASKS.md, 2026-09-09): a purchase order line captured
+  // before document lines were minted as UUIDs carries a client id like
+  // `li_1788987659412`. On "Create supplier invoice" that id flowed through
+  // billService.postBill() → the engine → `post_inventory_transaction`,
+  // where `nullif(...,'')::uuid` aborted the whole posting with
+  // `invalid input syntax for type uuid`. The Fake executor now reproduces
+  // that exact cast failure.
+  const LEGACY_LINE_ID = 'li_1788987659412';
+  const REAL_LINE_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+
+  function receiptWith(sourceDocumentLineId: string | undefined) {
+    return {
+      postingKey: `bill:b_${sourceDocumentLineId ?? 'none'}:post`,
+      sourceType: 'bill',
+      sourceId: 'bill-uuid',
+      movementDate: '2026-09-09',
+      createdBy: 'u1',
+      lines: [
+        {
+          productId: 'p1',
+          warehouseId: 'w1',
+          quantityDelta: 5,
+          costingMode: 'receipt' as const,
+          unitCostIn: 20,
+          inventoryAccountId: INV,
+          contraAccountId: AP,
+          sourceDocumentLineId,
+        },
+      ],
+      journal: { source: 'bill' },
+    };
+  }
+
+  it('the Fake executor rejects a raw non-UUID line id, proving the failure is real', async () => {
+    const store = new FakeInventoryStore();
+    store.addProduct('p1', 0, 0);
+    const bareExecutor = new FakeInventoryTransactionExecutor(store);
+    await expect(bareExecutor.execute(receiptWith(LEGACY_LINE_ID))).rejects.toThrow(/invalid input syntax for type uuid/i);
+  });
+
+  it('the engine drops a non-UUID sourceDocumentLineId to null so the posting still completes', async () => {
+    const { store, engine } = setup();
+    store.addProduct('p1', 0, 0);
+
+    const result = await engine.applyInventoryTransaction(receiptWith(LEGACY_LINE_ID));
+
+    expect(result.journalEntryId).toBeTruthy();
+    const mv = store.movements[0];
+    expect(mv.sourceDocumentLineId).toBeUndefined();
+    // document-level traceability is preserved
+    expect(mv.sourceDocumentType).toBe('bill');
+    expect(mv.sourceDocumentId).toBe('bill-uuid');
+    // and the stock actually moved
+    expect(store.balance('p1', 'w1')).toBe(5);
+  });
+
+  it('a real UUID line id passes straight through and is retained on the movement', async () => {
+    const { store, engine } = setup();
+    store.addProduct('p1', 0, 0);
+
+    await engine.applyInventoryTransaction(receiptWith(REAL_LINE_ID));
+
+    expect(store.movements[0].sourceDocumentLineId).toBe(REAL_LINE_ID);
+  });
+});

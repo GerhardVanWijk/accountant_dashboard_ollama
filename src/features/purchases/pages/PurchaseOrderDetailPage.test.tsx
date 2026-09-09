@@ -61,17 +61,17 @@ describe('PurchaseOrderDetailPage', () => {
     expect(container.querySelector('[data-slot="sheet-content"]')).toBeNull();
   });
 
-  it('a sent PO offers "Record receipt" and "Convert to bill"', () => {
+  it('a sent PO offers "Receive goods" and "Create supplier invoice"', () => {
     renderAt();
-    expect(screen.getByRole('button', { name: 'Record receipt' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Convert to bill' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Receive goods' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create supplier invoice' })).toBeInTheDocument();
   });
 
-  it('a PO already converted to a bill offers no "Convert to bill"', () => {
+  it('a PO already converted to a supplier invoice offers no "Create supplier invoice"', () => {
     vi.mocked(usePurchaseOrders).mockReturnValue({ purchaseOrders: [po({ billId: 'b1' })], isLoading: false, error: null, refetch: vi.fn() } as never);
-    vi.mocked(useBills).mockReturnValue({ bills: [{ id: 'b1', billNumber: 'BILL-9', supplierId: 's1' }], isLoading: false, error: null, refetch: vi.fn() } as never);
+    vi.mocked(useBills).mockReturnValue({ bills: [{ id: 'b1', billNumber: 'BILL-9', supplierId: 's1', status: 'awaiting_payment', total: 575 }], isLoading: false, error: null, refetch: vi.fn() } as never);
     renderAt();
-    expect(screen.queryByRole('button', { name: 'Convert to bill' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create supplier invoice' })).not.toBeInTheDocument();
     expect(screen.getAllByText('BILL-9').length).toBeGreaterThanOrEqual(1);
   });
 
@@ -80,9 +80,17 @@ describe('PurchaseOrderDetailPage', () => {
     expect(screen.getByText(/could not be found/i)).toBeInTheDocument();
   });
 
-  it('offers "Print / PDF" and "Duplicate" document actions (Phase 4B)', () => {
+  it('offers a "Print / PDF" document action but no "Duplicate" on an accounting document', () => {
     renderAt();
     expect(screen.getByRole('button', { name: 'Print / PDF' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Duplicate' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Duplicate' })).not.toBeInTheDocument();
+  });
+
+  it('organises the record into tabs (Overview, Line items, Receiving, Supplier invoice)', () => {
+    renderAt();
+    expect(screen.getByRole('tab', { name: /Overview/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Line items/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Receiving/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Supplier invoice/ })).toBeInTheDocument();
   });
 });

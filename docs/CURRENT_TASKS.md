@@ -2,6 +2,78 @@
 
 ---
 
+## ACCOUNTING DOCUMENT WORKSPACE UX + SA TERMINOLOGY + PO UUID FIX + FRIENDLY ERRORS (branch `accounting-document-workspace-ux-2026-09-09`) — 2026-09-09
+
+**NOT pushed, NOT deployed.** Committed locally on `accounting-document-workspace-ux-2026-09-09` (branched from `main` `6f0dff1`). Option-2 scope: the PO→supplier-invoice UUID defect, the central accounting error mapper, the SA-terminology sweep for the affected purchasing surfaces, removal of the `Duplicate` action from posted/sensitive documents, a shared `RecordTabs` primitive, and the migration of the four high-traffic document pages (Customer Invoice, Purchase Order, Supplier Invoice, Sales Order) to a tabbed hero + KPI-strip + tabs structure. **No migration. No accounting-posting logic change** beyond the boundary sanitisation required to fix the defect.
+
+### PO → Supplier Invoice UUID defect (`H`)
+
+- **Malformed field:** `stock_movements.source_document_line_id` (a Postgres `uuid` column) — reached via `billService.postBill()` → `InventoryPostingEngine.applyInventoryTransaction()` → `post_inventory_transaction`'s `nullif(v_line->>'source_document_line_id','')::uuid` cast (migration 0035 line 109).
+- **Root cause:** every document line-item form minted the line `id` as `` `li_${Date.now()}` `` (e.g. `li_1788987659412`). That client string was persisted verbatim into the jsonb `lineItems` array and never replaced with a UUID. `convertToBill()` copies `po.lineItems` straight onto the supplier-invoice draft, so on "Create supplier invoice" the tracked-inventory lines carried `sourceDocumentLineId: "li_1788987659412"` into the RPC, where `::uuid` aborted the whole posting with `invalid input syntax for type uuid`.
+- **Fix (two layers, traceability preserved):**
+  1. **Real UUIDs at the source** — all 8 line-item forms/editors (`PurchaseOrderForm`, `BillForm`, `InvoiceForm`, `QuoteForm`, `SalesOrderForm`, `CreditNoteForm`, `LineItemsEditor`, `SalesLineItemsEditor`) now generate line ids with `newUuid()` (`crypto.randomUUID`).
+  2. **Boundary guard** — `src/lib/uuid.ts` gains `isUuid()` / `coerceUuidOrNull()`; `InventoryPostingEngine.applyInventoryTransaction()` runs `sanitizeSourceLineIds()` before the executor: a non-UUID `sourceDocumentLineId` is dropped to `null` (it can never be stored in the `uuid` column regardless) with a `console.warn`, and the movement keeps its document-level `source_document_id` / `source_document_type` link. Legacy POs already holding `li_` ids post cleanly; new documents keep full line-level traceability.
+- **Regression tests:** `src/lib/uuid.test.ts`; `inventoryPostingEngine.test.ts` new block — the Fake executor now reproduces the exact `invalid input syntax for type uuid` cast failure, then proves the engine drops the bad id and still completes the posting, and that a real UUID passes through untouched. `creditNoteService.test.ts` line-id-evidence test switched to a UUID fixture.
+
+### Central accounting error mapper (`I`)
+
+- **Location:** `src/features/accounting/utils/accountingError.ts` — `mapAccountingError(error, { reference, action })` → `{ title, message, reference?, technical, noChangesPosted, code }`; `toAccountingErrorMessage()` logs the technical detail via `console.error` and returns only the safe message string.
+- **Wired:** `PurchaseOrderDetailPage` (`Create supplier invoice`, all PO actions), `BillDetailPage` (`Post supplier invoice`), `InvoiceDetailPage` (`act()`), `SalesOrderDetailPage` (`handleCreateInvoice`, `act()`).
+- **Behaviour:** ordered rule list maps `invalid input syntax for type uuid`, `already posted` / `already converted`, locked / missing period, insufficient stock, missing warehouse, FK/`missing relationship`, duplicate document number, RLS/permission, network. A deliberately-worded domain message with no technical tokens (`"only 2 remain to invoice"`) passes through unchanged; anything that *looks* technical falls to a safe generic. `noChangesPosted` is only asserted where atomicity is known.
+- **Example:** `post_inventory_transaction: invalid input syntax for type uuid: "li_1788987659412"` → *"This document could not be processed. One of the document lines is stored in an old format and could not be linked to the ledger. No accounting entries were posted. Open the source document, re-save it, then try again. If the problem continues, contact support and quote PO-2026-0005."*
+
+### South African terminology (`A`) — implemented mapping
+
+| Surface | Old | New |
+| --- | --- | --- |
+| Sidebar nav + breadcrumb segment (`bills`) | Bills & Expenses | **Supplier Invoices & Expenses** |
+| PO detail primary action | Convert to bill | **Create supplier invoice** |
+| PO detail receiving action | Record receipt | **Receive goods** |
+| PO detail — related/overview | Converted to bill | **Supplier invoice** |
+| Supplier-invoice detail | Bill / Post bill / "Bill date" | **Supplier invoice / Post supplier invoice / Invoice date** |
+| Supplier-invoice list (`BillList`) | "Bill" column, "No bills found", "Open bill …", register caption | **Supplier invoice** equivalents |
+| Supplier-invoice create form/modal | New bill / Create Bill / Bill Number / "Bill created as a draft." | **New supplier invoice / Create supplier invoice / Supplier Invoice Number / "Supplier invoice created as a draft."** |
+| Global search entity | Bill / Bills | **Supplier invoice / Supplier invoices** |
+| BillsPage header + KPIs | Expenses / "Total bills" / "Loading bills…" | **Supplier Invoices & Expenses / "Total supplier invoices" / "Loading supplier invoices…"** |
+| Printed customer invoice (non-VAT issuer) | INVOICE | **CUSTOMER INVOICE** (VAT issuer stays **TAX INVOICE**) |
+| Help article (purchasing) | "convert the PO to a bill" | "create the supplier invoice from the PO" |
+| `convertToBill()` already-converted error | "…converted to a bill" | "…converted to a supplier invoice" |
+
+Kept: **Customer Receipt** (money in), **Credit Note**, **Delivery Note**, **Purchase Order**, **Sales Order**, **Quote/Quotes** nav. DB columns / types (`Bill`, `billNumber`, `bills` route, audit `recordType: "Bill"`) unchanged. `nextDocumentNumber(..., 'BILL')` prefix unchanged (document numbering).
+
+### `Duplicate` action removal (`G`)
+
+Removed from **Purchase Order, Customer Invoice, Quote, Sales Order** detail pages. Rationale: the user's explicit preference is removal from all four; a posted invoice/SO clone risks an accidental duplicate financial transaction, and PO/Quote cloning — while defensible on a non-posting document — was removed per that explicit instruction. The underlying service methods (`duplicatePurchaseOrder`, `copyInvoice`, `duplicateQuote`, `duplicateSalesOrder`) are **kept intact** for any future re-introduction; only the UI actions and their destructured hook references were removed.
+
+### `RecordTabs` shared primitive + four migrated pages (`5`–`9`)
+
+- **`src/components/app/record-page/RecordTabs.tsx`** — a Chrome-style workspace tab strip built on Vertex tokens: full-width `border-border` hairline, active tab = semibold `text-foreground` + 2px `border-brand` underline overlapping the strip, inactive = `text-muted-foreground` → `text-foreground` on hover; ARIA `tablist`/`tab`/`tabpanel` with roving `tabIndex`, `Arrow`/`Home`/`End` keys and a `focus-visible` ring; `overflow-x-auto` + `no-scrollbar` (scrolls only when tabs overflow, no stray track); optional per-tab count badge; panels kept mounted and toggled with `hidden`; optional `urlParam` mirrors the active tab to `?tab=` (skipped when `embedded`). Test: `RecordTabs.test.tsx`.
+- **Migrated (each: hero = number + status badge + party + concise date line + primary actions; then a 4-tile `StatStrip`; then `RecordTabs`; reuses `RecordPageShell` / `RecordPageHeader` / `RecordSummaryGrid` / `DocumentLineTable` / `RelatedRecordsSection` / `RecordActivitySection`):**
+  - **Customer Invoice** — Overview · Line items · Payments (posted only) · Accounting · Related records · Activity. KPIs: Total / Paid / Outstanding / Output VAT.
+  - **Purchase Order** — Overview · Line items · Receiving · Supplier invoice · Related records · Activity. KPIs: PO total / Ordered / Received / Remaining.
+  - **Supplier Invoice** — Overview · Line items · Payments · Accounting · Related records · Activity. KPIs: Total / Paid / Outstanding / Input VAT.
+  - **Sales Order** — Overview · Line items · Fulfilment (delivery notes + related invoices + qty breakdown, rendered only when there is evidence) · Related records · Activity. KPIs: Order total / Ordered / Delivered / Invoiced.
+- **Same-page duplication removed:** the standalone `Status` field is gone from every Overview grid (status lives once, in the hero badge); the bare customer/supplier name is no longer repeated as an Overview field (hero shows it; Related Records links it); document totals appear once in the line-items footer + once as KPI tiles (distinct purpose) rather than also in an Overview grid; the Sales Order Invoicing/Fulfilment status badges render once (Overview), not again in the Fulfilment tab; the PO/Bill journal-entry link sits in Accounting and Related Records only (relationship index), not also inline in Overview.
+
+### Validation
+
+- type-check — **PASS**
+- lint (`--max-warnings 0`) — **PASS**
+- focused tests — **PASS** (`uuid`, `accountingError`, `inventoryPostingEngine`, `RecordTabs`, all four detail pages, `QuoteDetailPage`, `PurchasesListPages`, `PurchasesFormModals`, `adapters`, `creditNoteService`)
+- full suite — **PASS** (384 files, **3171 tests**)
+- production build — **PASS**
+
+### Database
+
+- Migrations authored? **No.** Migrations applied? **No.** The defect was pure client line-id generation + a posting-boundary guard; the RPC's `::uuid` cast is correct and unchanged.
+- Accounting posting logic changed? **No** — only `sanitizeSourceLineIds()` was added at the engine boundary (drops an un-storable non-UUID to `null`; GL, VAT, WAC, document-status behaviour all unchanged).
+
+### Deferred (explicitly out of scope for this run)
+
+Full Customer / Supplier / Product workspace rebuilds; global forms redesign; the remaining document types (Quotation, Delivery Note, Return Note, Credit Note, Customer Receipt, Supplier Payment, Journal Entry, inventory documents); broad PDF/template redesign beyond the terminology directly touched here.
+
+---
+
 ## INVENTORY WORKSPACE + STOCK INTEGRITY + DERIVED ON-ORDER (branch `inventory-workspace-integrity-2026-09-09`, commit `56ac5e8`) — 2026-09-09
 
 **SHIPPED 2026-09-09** — on explicit user instruction ahead of human browser QA, `inventory-workspace-integrity-2026-09-09` was fast-forward-merged → `main` (`8357d99..56ac5e8`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). **UI + read-side services only — no migration, no schema change, no accounting-posting change, no DB write.** Inventory reconciles at R0.00 on live data throughout; the reconciliation engine, WAC/valuation contract, posting engine and stock ledger are untouched.

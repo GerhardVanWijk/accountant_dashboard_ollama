@@ -218,7 +218,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     permissions: 'Read: everyone. Create: Stock controller, Accountant, Admin. Confirm: Accountant, Admin.',
     accountingImpact: 'Confirming a PO posts nothing. Receiving goods debits Inventory (1200) and credits Goods received not invoiced. Posting the bill clears GRNI against Accounts payable.',
     sections: [
-      { heading: 'How to use it', body: ['Create the PO, confirm it, then record the goods receipt when stock arrives.', 'Convert the PO to a bill when the supplier invoice comes in.', 'Goods receipt is currently all-or-nothing per PO.'] },
+      { heading: 'How to use it', body: ['Create the PO, confirm it, then receive the goods when stock arrives.', 'Create the supplier invoice from the PO when the supplier’s tax invoice comes in.', 'Goods receipt is currently all-or-nothing per PO.'] },
     ],
     related: ['bills', 'suppliers', 'inventory-overview'],
   },

@@ -19,8 +19,8 @@ import {
 /**
  * Invoice → printable view model. Consumes the stored
  * subtotal / taxTotal / total / amountPaid — nothing is recomputed. A
- * VAT-registered issuer produces a "TAX INVOICE"; otherwise a plain
- * "INVOICE".
+ * VAT-registered issuer produces a "TAX INVOICE" (the SA statutory
+ * heading); otherwise a "CUSTOMER INVOICE".
  */
 export function invoiceToBusinessDocument(
   invoice: Invoice,
@@ -52,7 +52,7 @@ export function invoiceToBusinessDocument(
 
   return {
     kind: isTax ? 'tax_invoice' : 'invoice',
-    title: isTax ? 'TAX INVOICE' : 'INVOICE',
+    title: isTax ? 'TAX INVOICE' : 'CUSTOMER INVOICE',
     documentNumber: invoice.invoiceNumber,
     issuedOnLabel: 'Invoice date',
     issuedOn: formatDate(invoice.issueDate),

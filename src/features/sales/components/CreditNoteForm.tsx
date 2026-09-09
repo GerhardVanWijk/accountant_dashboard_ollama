@@ -73,7 +73,7 @@ export function CreditNoteForm({ customers, invoices, creditNotes = [], defaultC
   const [reasonDetail, setReasonDetail] = useState('');
   const [notes, setNotes] = useState('');
   const [lineItems, setLineItems] = useState<CreateCreditNoteDTO['lineItems']>([
-    { id: `li_${Date.now()}`, description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 },
+    { id: newUuid(), description: '', quantity: 1, unitPrice: 0, taxAmount: 0, lineTotal: 0 },
   ]);
   /** Draft quantities in the "credit this specific invoice line" picker, keyed by invoice line id — reset whenever the selected invoice changes. */
   const [pickerQty, setPickerQty] = useState<Record<string, string>>({});

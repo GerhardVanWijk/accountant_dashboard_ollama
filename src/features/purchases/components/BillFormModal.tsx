@@ -12,7 +12,7 @@ export function BillFormModal({ onClose, ...formProps }: BillFormModalProps) {
   const [dirty, setDirty] = useState(false);
   return (
     <FormShell open onClose={onClose} size="lg" mode="create" isDirty={dirty}>
-      <FormHeader title="New bill" />
+      <FormHeader title="New supplier invoice" />
       <BillForm {...formProps} onCancel={onClose} onDirtyChange={setDirty} />
     </FormShell>
   );

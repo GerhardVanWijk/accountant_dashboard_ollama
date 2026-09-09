@@ -63,10 +63,18 @@ describe('BillDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Record payment' })).toBeInTheDocument();
   });
 
-  it('a draft bill offers "Post bill"', () => {
+  it('a draft supplier invoice offers "Post supplier invoice"', () => {
     vi.mocked(useBills).mockReturnValue({ bills: [bill({ status: 'draft', journalEntryId: undefined })], isLoading: false, error: null, refetch: vi.fn() } as never);
     renderAt();
-    expect(screen.getByRole('button', { name: 'Post bill' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Post supplier invoice' })).toBeInTheDocument();
+  });
+
+  it('organises the record into tabs (Overview, Line items, Payments, Accounting)', () => {
+    renderAt();
+    expect(screen.getByRole('tab', { name: /Overview/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Line items/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Payments/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Accounting/ })).toBeInTheDocument();
   });
 
   it('deep-links: an unknown id shows the not-found state', () => {

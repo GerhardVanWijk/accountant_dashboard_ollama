@@ -695,6 +695,7 @@ describe('CreditNoteService', () => {
     });
 
     it('records the credit note line id (not the original invoice line id) as the stock movement source evidence', async () => {
+      const CN_LINE_ID = '11111111-1111-4111-8111-111111111111';
       const { service, invoiceService, store } = await setup({ products: { prod_1: {} } });
       const invoice = await invoiceWithTwoLinesSameProduct(invoiceService);
 
@@ -705,7 +706,7 @@ describe('CreditNoteService', () => {
         issueDate: '2026-08-05T00:00:00.000Z',
         reason: 'return',
         lineItems: [
-          { id: 'cn_li_1', productId: 'prod_1', originalInvoiceLineId: 'il_a', description: 'Widget', quantity: 2, unitPrice: 100, taxAmount: 30, lineTotal: 200 },
+          { id: CN_LINE_ID, productId: 'prod_1', originalInvoiceLineId: 'il_a', description: 'Widget', quantity: 2, unitPrice: 100, taxAmount: 30, lineTotal: 200 },
         ],
         subtotal: 200,
         taxTotal: 30,
@@ -717,7 +718,7 @@ describe('CreditNoteService', () => {
       });
       await service.issueCreditNote(draft.id);
       const movement = store.movements.find((m) => m.type === 'sales_return');
-      expect(movement?.sourceDocumentLineId).toBe('cn_li_1');
+      expect(movement?.sourceDocumentLineId).toBe(CN_LINE_ID);
       expect(movement?.sourceDocumentType).toBe('credit_note');
     });
   });

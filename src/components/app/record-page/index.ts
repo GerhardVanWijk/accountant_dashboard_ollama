@@ -1,6 +1,7 @@
 export { RecordPageShell, type RecordCrumb, type RecordPageShellProps } from './RecordPageShell';
 export { RecordPageHeader, RecordActionBar, type RecordAction, type RecordActionBarProps, type RecordPageHeaderProps } from './RecordPageHeader';
 export { RecordSummaryGrid, RecordField } from './RecordSummaryGrid';
+export { RecordTabs, type RecordTab, type RecordTabsProps } from './RecordTabs';
 export {
   DocumentLineTable,
   type DocumentLineColumn,

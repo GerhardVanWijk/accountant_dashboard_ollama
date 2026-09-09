@@ -107,10 +107,17 @@ describe('SalesOrderDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'Confirm order' })).not.toBeInTheDocument();
   });
 
-  it('offers "Print / PDF" and "Duplicate" document actions (Phase 4B)', () => {
+  it('offers a "Print / PDF" document action but no "Duplicate" on an accounting document', () => {
     renderAt();
     expect(screen.getByRole('button', { name: 'Print / PDF' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Duplicate' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Duplicate' })).not.toBeInTheDocument();
+  });
+
+  it('organises the record into tabs (Overview, Line items, Related records)', () => {
+    renderAt();
+    expect(screen.getByRole('tab', { name: /Overview/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Line items/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Related records/ })).toBeInTheDocument();
   });
 
   describe('Phase 5B.1 — fulfilment progress', () => {
@@ -149,6 +156,7 @@ describe('SalesOrderDetailPage', () => {
       vi.mocked(useInvoices).mockReturnValue({ invoices: [partialInvoice()], refetch: vi.fn() } as never);
       renderAt();
       expect(screen.getByText('Partially invoiced')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('tab', { name: /Line items/ }));
       expect(screen.getByRole('columnheader', { name: 'Invoiced' })).toBeInTheDocument();
       expect(screen.getByRole('columnheader', { name: 'Remaining' })).toBeInTheDocument();
       // Overview summary fields
@@ -166,6 +174,7 @@ describe('SalesOrderDetailPage', () => {
       vi.mocked(useSalesOrders).mockReturnValue({ salesOrders: [confirmedOrder()], isLoading: false, error: null, refetch: vi.fn() });
       vi.mocked(useInvoices).mockReturnValue({ invoices: [partialInvoice()], refetch: vi.fn() } as never);
       renderAt();
+      fireEvent.click(screen.getByRole('tab', { name: /Fulfilment/ }));
       const section = screen.getByRole('heading', { name: 'Related invoices' });
       expect(section).toBeInTheDocument();
       const link = screen.getAllByRole('button', { name: 'INV-2026-0001' })[0];
