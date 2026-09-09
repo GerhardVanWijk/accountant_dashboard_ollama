@@ -97,7 +97,8 @@ describe('StockMovementsPage', () => {
   it('opens the evidence drawer on row click', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /Open evidence for Sale/i }));
-    expect(screen.getByText(/Unit cost applied/i)).toBeInTheDocument();
+    // drawer open — a stock-out sale reads "Stock out" in the Movement block (unique to the drawer)
+    expect(screen.getByText('Stock out')).toBeInTheDocument();
   });
 
   it('shows the empty state', () => {

@@ -133,6 +133,7 @@ export function useStockMovementResolvers(): StockMovementResolvers {
     const invoiceById = new Map(invoices.map((i) => [i.id, i]));
     const billById = new Map(bills.map((b) => [b.id, b]));
     const creditNoteById = new Map(creditNotes.map((c) => [c.id, c]));
+    const poById = new Map(purchaseOrders.map((p) => [p.id, p]));
 
     return {
       resolveSource: (m) =>
@@ -155,6 +156,10 @@ export function useStockMovementResolvers(): StockMovementResolvers {
           const bill = m.sourceDocumentId ? billById.get(m.sourceDocumentId) : undefined;
           return bill ? supplierById.get(bill.supplierId) : undefined;
         }
+        if (m.sourceDocumentType === 'purchase_order') {
+          const po = m.sourceDocumentId ? poById.get(m.sourceDocumentId) : undefined;
+          return po ? supplierById.get(po.supplierId) : undefined;
+        }
         return undefined;
       },
       warehouseName: (id) => warehouseById.get(id)?.name ?? id,
@@ -167,7 +172,7 @@ export function useStockMovementResolvers(): StockMovementResolvers {
       loading: productsLoading || warehousesLoading || invoicesLoading || billsLoading,
     };
   }, [
-    warehouses, products, suppliers, customers, invoices, bills, creditNotes,
+    warehouses, products, suppliers, customers, invoices, bills, creditNotes, purchaseOrders,
     numberById, journalEntryIdBySource, journalNumberById, knownDocumentRefs, transfers,
     productsLoading, warehousesLoading, invoicesLoading, billsLoading,
   ]);

@@ -33,14 +33,23 @@ export function documentLineColumns<T extends DocumentLineItem>(
     columns.push({
       key: 'item',
       header: 'Item',
-      className: 'w-[22%] min-w-[160px]',
+      className: 'w-[26%] min-w-[180px]',
       cell: (line) => {
         const product = resolveProduct?.(line.productId);
-        if (!product) return <span className="text-muted-foreground">—</span>;
+        // No product → this is a service / free-text line: the description
+        // IS the item, so name it here (the Description column then shows a
+        // dash rather than repeating it).
+        if (!product) {
+          return line.description ? (
+            <span className="font-medium [overflow-wrap:anywhere]">{line.description}</span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          );
+        }
         return (
           <span className="flex flex-col">
-            <span className="font-medium tabular-nums">{product.sku}</span>
-            <span className="text-xs text-muted-foreground">{product.name}</span>
+            <span className="font-medium [overflow-wrap:anywhere]">{product.name}</span>
+            <span className="figure text-xs text-muted-foreground tabular-nums">{product.sku}</span>
           </span>
         );
       },
@@ -50,8 +59,19 @@ export function documentLineColumns<T extends DocumentLineItem>(
   columns.push({
     key: 'description',
     header: 'Description',
-    className: 'min-w-[220px]',
-    cell: (line) => <span className="[overflow-wrap:anywhere]">{line.description}</span>,
+    className: 'min-w-[200px]',
+    cell: (line) => {
+      const product = hideItem ? undefined : resolveProduct?.(line.productId);
+      const description = line.description?.trim() ?? '';
+      // Only a genuinely different transactional description earns this
+      // column: a product line whose description is empty or merely repeats
+      // the product name shows a dash (the name is already in the Item
+      // column). A service line's description lives in the Item column.
+      const isEcho =
+        !description || (product ? description.toLowerCase() === product.name.trim().toLowerCase() : true);
+      if (!hideItem && isEcho) return <span className="text-muted-foreground">—</span>;
+      return <span className="[overflow-wrap:anywhere]">{line.description}</span>;
+    },
   });
   columns.push({ key: 'qty', header: 'Qty', align: 'right', className: 'w-20', cell: (line) => line.quantity.toFixed(2) });
   columns.push({ key: 'unit', header: 'Unit price', align: 'right', className: 'w-28', cell: (line) => formatCurrency(line.unitPrice) });

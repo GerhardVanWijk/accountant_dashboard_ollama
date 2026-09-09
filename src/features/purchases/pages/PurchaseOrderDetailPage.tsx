@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { BoxesIcon, PackageCheckIcon, PackageXIcon, PrinterIcon, ReceiptTextIcon } from 'lucide-react';
+import { AlertTriangleIcon, BoxesIcon, PackageCheckIcon, PackageXIcon, PrinterIcon, ReceiptTextIcon } from 'lucide-react';
 import type { PurchaseOrder } from '@/types';
 import { BusinessDocumentPreviewModal, useBusinessDocument } from '@/features/businessDocuments';
 import {
@@ -24,6 +24,7 @@ import { StatusBadge } from '@/components/app/status-badge';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { toAccountingErrorMessage } from '@/features/accounting/utils/accountingError';
 import { getTaxRateLabel, MOVEMENT_TYPE_LABELS } from '@/features/inventory/constants';
+import { movementsForSource } from '@/features/inventory/utils/movementSource';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { usePurchaseOrders, usePurchaseOrderMutations, useBills, useBillMutations } from '@/features/purchases/hooks';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
@@ -35,11 +36,10 @@ const fmtQty = (n: number) => n.toLocaleString('en-ZA', { maximumFractionDigits:
 
 /**
  * Full-page Purchase Order detail — route
- * `/purchases/orders/:purchaseOrderId`. Makes the purchasing chain
- * legible: supplier → PO → goods received (stock movements + GRNI journal)
- * → supplier invoice. Only links that actually exist are shown — there is
- * no supplier-invoice→PO line relationship (Phase 9B), so the supplier
- * invoice is linked at document level only. Same
+ * `/purchases/orders/:purchaseOrderId`. A tabbed workspace: Overview (what
+ * this PO is and where it stands), Line items, Receiving (goods-receipt
+ * events + procurement state), Supplier invoice (the downstream document),
+ * Related records, Activity. Same
  * purchaseOrderService.sendPurchaseOrder()/recordReceipt()/convertToBill()
  * calls as before.
  */
@@ -71,11 +71,11 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
   const supplierName = po ? suppliersMap.get(po.supplierId) ?? 'Unknown supplier' : '';
   const convertedBill = po?.billId ? bills.find((b) => b.id === po.billId) : undefined;
 
-  const poMovements = useMemo(
-    () =>
-      po ? movements.filter((m) => m.sourceDocumentType === 'purchase_order' && m.sourceDocumentId === po.id) : [],
-    [po, movements],
-  );
+  // Attribute receipt movements to this PO by structured source columns OR a
+  // parsed legacy `purchase_order:<uuid>` reference — a naive
+  // `sourceDocumentType === 'purchase_order'` filter used to miss them all,
+  // which is why a received PO showed "Received 0".
+  const poMovements = useMemo(() => movementsForSource(movements, 'purchase_order', po?.id), [movements, po?.id]);
 
   const orderedQty = useMemo(() => (po ? po.lineItems.reduce((s, l) => s + (l.quantity ?? 0), 0) : 0), [po]);
   const receivedQty = useMemo(
@@ -83,6 +83,8 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
     [poMovements],
   );
   const remainingQty = Math.max(0, orderedQty - receivedQty);
+  // "Status says received but nothing is attributable" — a genuine integrity gap, called out rather than glossed.
+  const receivingIntegrityGap = Boolean(po?.receivedDate && poMovements.length === 0);
 
   const lineColumns = useMemo(
     () =>
@@ -148,13 +150,26 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
   const canCancel = po != null && po.status !== 'received' && po.status !== 'cancelled';
   const canConvert = po != null && po.status !== 'draft' && po.status !== 'cancelled' && !po.billId;
 
-  const goodsReceivedTable =
+  const supplierInvoiceState = convertedBill
+    ? `${convertedBill.billNumber} · ${convertedBill.status.replace(/_/g, ' ')}`
+    : canConvert
+      ? 'Not created yet'
+      : '—';
+
+  const receivingEvents =
     poMovements.length === 0 ? (
-      <p className="text-sm text-muted-foreground">
-        {po?.receivedDate
-          ? 'Goods received posted, but no stock movements are attributed to this purchase order.'
-          : 'No goods received against this purchase order yet.'}
-      </p>
+      receivingIntegrityGap ? (
+        <div className="flex items-start gap-2 rounded-lg border border-status-warning-outline bg-status-warning-surface/40 px-4 py-3 text-sm">
+          <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-status-warning" aria-hidden="true" />
+          <p className="text-muted-foreground">
+            This purchase order is marked received on {formatDate(po!.receivedDate!)}, but no stock movements are
+            attributed to it. The goods receipt may have been recorded against the supplier invoice instead, or the
+            movement predates structured source links. Check the Supplier invoice tab and the product ledger.
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">No goods have been received against this purchase order yet.</p>
+      )
     ) : (
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[640px] border-collapse text-sm">
@@ -176,7 +191,7 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
                 <tr key={m.id} className="border-b border-border last:border-0">
                   <td className="px-4 py-2 text-muted-foreground">{formatDate(m.movementDate ?? m.createdAt)}</td>
                   <td className="px-4 py-2">
-                    {product ? <Link className="text-brand hover:underline" to={`/inventory/products/${product.id}`}>{product.sku}</Link> : m.productId}
+                    {product ? <Link className="text-brand hover:underline" to={`/inventory/products/${product.id}`}>{product.name}</Link> : m.productId}
                   </td>
                   <td className="px-4 py-2 text-muted-foreground">{MOVEMENT_TYPE_LABELS[m.type]}</td>
                   <td className="px-4 py-2 text-muted-foreground">{warehouseMap.get(m.warehouseId) ?? m.warehouseId}</td>
@@ -198,22 +213,20 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
           label: 'Overview',
           content: (
             <>
-              <RecordPageSection title="Purchase order details">
+              <RecordPageSection title="Order details">
                 <RecordSummaryGrid>
                   <RecordField label="Order date" value={formatDate(po.orderDate)} />
                   {po.expectedDate && <RecordField label="Expected date" value={formatDate(po.expectedDate)} />}
                   {po.receivedDate && <RecordField label="Received date" value={formatDate(po.receivedDate)} />}
                   <RecordField label="Currency" value={po.currency} />
-                  <RecordField
-                    label="Supplier invoice"
-                    value={
-                      convertedBill ? (
-                        <Link className="text-brand hover:underline" to={`/purchases/bills/${convertedBill.id}`}>{convertedBill.billNumber}</Link>
-                      ) : (
-                        'Not created yet'
-                      )
-                    }
-                  />
+                </RecordSummaryGrid>
+              </RecordPageSection>
+              <RecordPageSection title="Amounts">
+                <RecordSummaryGrid>
+                  <RecordField label="Subtotal" value={formatCurrency(po.subtotal)} />
+                  <RecordField label="VAT" value={formatCurrency(po.taxTotal)} />
+                  <RecordField label="Total" value={formatCurrency(po.total)} />
+                  <RecordField label="Supplier invoice" value={supplierInvoiceState} />
                 </RecordSummaryGrid>
               </RecordPageSection>
               {po.notes && (
@@ -249,23 +262,30 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
           label: 'Receiving',
           count: poMovements.length,
           content: (
-            <RecordPageSection title="Goods received">
-              {goodsReceivedTable}
-              <RecordSummaryGrid className="mt-4">
-                <RecordField label="Ordered" value={<span className="tabular-nums">{fmtQty(orderedQty)}</span>} />
-                <RecordField label="Received" value={<span className="tabular-nums">{fmtQty(receivedQty)}</span>} />
-                <RecordField label="Remaining" value={<span className="tabular-nums">{fmtQty(remainingQty)}</span>} />
-                <RecordField
-                  label="Goods received posting"
-                  value={po.journalEntryId ? 'Posted — DR Inventory / CR GRNI' : 'Not yet posted'}
-                />
-              </RecordSummaryGrid>
-              {po.journalEntryId && (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  A linked supplier invoice clears GRNI rather than debiting Inventory again, and does not re-record the stock movement (docs/LEDGER_ARCHITECTURE.md).
-                </p>
-              )}
-            </RecordPageSection>
+            <>
+              <RecordPageSection title="Procurement state">
+                <RecordSummaryGrid>
+                  <RecordField label="Ordered" value={<span className="tabular-nums">{fmtQty(orderedQty)}</span>} />
+                  <RecordField label="Received" value={<span className="tabular-nums">{fmtQty(receivedQty)}</span>} />
+                  <RecordField label="Remaining" value={<span className="tabular-nums">{fmtQty(remainingQty)}</span>} />
+                  <RecordField
+                    label="Goods received posting"
+                    value={po.journalEntryId ? 'Posted — DR Inventory / CR GRNI' : 'Not yet posted'}
+                  />
+                </RecordSummaryGrid>
+              </RecordPageSection>
+              <RecordPageSection title="Goods received">
+                {receivedQty > 0 && remainingQty === 0 && (
+                  <p className="mb-3 text-sm text-status-positive">All ordered goods have been received.</p>
+                )}
+                {receivingEvents}
+                {po.journalEntryId && (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    A linked supplier invoice clears GRNI rather than debiting Inventory again, and does not re-record the stock movement.
+                  </p>
+                )}
+              </RecordPageSection>
+            </>
           ),
         },
         {
@@ -281,11 +301,12 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
                   />
                   <RecordField label="Status" value={<StatusBadge status={convertedBill.status} />} />
                   <RecordField label="Total" value={formatCurrency(convertedBill.total)} />
+                  <RecordField label="Outstanding" value={formatCurrency(Math.max(0, convertedBill.total - convertedBill.amountPaid))} />
                 </RecordSummaryGrid>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   No supplier invoice has been created from this purchase order yet.
-                  {canConvert ? ' Use "Create supplier invoice" above once the supplier\'s tax invoice arrives.' : ''}
+                  {canConvert ? ' Use “Create supplier invoice” once the supplier’s tax invoice arrives.' : ''}
                 </p>
               )}
             </RecordPageSection>
@@ -294,7 +315,6 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
         {
           value: 'related',
           label: 'Related records',
-          count: relatedItems.length,
           content: <RelatedRecordsSection items={relatedItems} />,
         },
         {
@@ -345,10 +365,11 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
           )}
 
           <StatStrip columns={4}>
-            <StatTile icon={ReceiptTextIcon} label="PO total" value={formatCurrency(po.total)} />
-            <StatTile icon={BoxesIcon} label="Ordered" value={fmtQty(orderedQty)} />
-            <StatTile icon={PackageCheckIcon} label="Received" value={fmtQty(receivedQty)} tone={receivedQty > 0 ? 'positive' : 'default'} />
+            <StatTile size="compact" icon={ReceiptTextIcon} label="PO total" value={formatCurrency(po.total)} />
+            <StatTile size="compact" icon={BoxesIcon} label="Ordered" value={fmtQty(orderedQty)} />
+            <StatTile size="compact" icon={PackageCheckIcon} label="Received" value={fmtQty(receivedQty)} tone={receivedQty > 0 ? 'positive' : 'default'} />
             <StatTile
+              size="compact"
               icon={PackageXIcon}
               label="Remaining"
               value={fmtQty(remainingQty)}

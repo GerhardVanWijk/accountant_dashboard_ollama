@@ -23,6 +23,7 @@ import { StatusBadge } from '@/components/app/status-badge';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { toAccountingErrorMessage } from '@/features/accounting/utils/accountingError';
 import { getTaxRateLabel, MOVEMENT_TYPE_LABELS } from '@/features/inventory/constants';
+import { movementsForSource } from '@/features/inventory/utils/movementSource';
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers';
 import { useBills, useBillMutations, usePayments, usePaymentMutations, usePurchaseOrders } from '@/features/purchases/hooks';
 import { PaymentFormModal } from '@/features/purchases/components/PaymentFormModal';
@@ -74,11 +75,10 @@ export function BillDetailPage({ recordId, embedded }: RecordPageProps = {}) {
   const billMovements = useMemo(
     () =>
       bill
-        ? movements.filter(
-            (m) =>
-              (m.sourceDocumentType === 'bill' && m.sourceDocumentId === bill.id) ||
-              (sourcePo != null && m.sourceDocumentType === 'purchase_order' && m.sourceDocumentId === sourcePo.id),
-          )
+        ? [
+            ...movementsForSource(movements, 'bill', bill.id),
+            ...(sourcePo ? movementsForSource(movements, 'purchase_order', sourcePo.id) : []),
+          ]
         : [],
     [bill, sourcePo, movements],
   );
@@ -361,15 +361,15 @@ export function BillDetailPage({ recordId, embedded }: RecordPageProps = {}) {
           )}
 
           <StatStrip columns={4}>
-            <StatTile icon={ReceiptTextIcon} label="Total" value={formatCurrency(bill.total)} />
-            <StatTile icon={WalletIcon} label="Paid" value={formatCurrency(bill.amountPaid)} tone={bill.amountPaid > 0 ? 'positive' : 'default'} />
-            <StatTile
+            <StatTile size="compact" icon={ReceiptTextIcon} label="Total" value={formatCurrency(bill.total)} />
+            <StatTile size="compact" icon={WalletIcon} label="Paid" value={formatCurrency(bill.amountPaid)} tone={bill.amountPaid > 0 ? 'positive' : 'default'} />
+            <StatTile size="compact"
               icon={BanknoteIcon}
               label="Outstanding"
               value={formatCurrency(outstanding)}
               tone={outstanding > 0.01 && bill.status !== 'void' ? 'warning' : 'default'}
             />
-            <StatTile icon={PackageIcon} label="Input VAT" value={formatCurrency(bill.taxTotal)} />
+            <StatTile size="compact" icon={PackageIcon} label="Input VAT" value={formatCurrency(bill.taxTotal)} />
           </StatStrip>
 
           <RecordTabs urlParam="tab" embedded={embedded} ariaLabel="Supplier invoice sections" tabs={tabs} />

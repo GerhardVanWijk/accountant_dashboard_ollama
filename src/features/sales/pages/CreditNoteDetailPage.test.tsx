@@ -102,4 +102,12 @@ describe('CreditNoteDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Print / PDF' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Duplicate' })).not.toBeInTheDocument();
   });
+
+  it('is a tabbed workspace (Overview / Line items / Allocations / Accounting)', () => {
+    renderAt();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Line items/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Allocations/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Accounting' })).toBeInTheDocument();
+  });
 });

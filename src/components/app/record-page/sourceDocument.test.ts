@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { isOpaqueReference, resolveSourceDocument } from './sourceDocument';
+import { isOpaqueReference, parseLegacyReference, resolveSourceDocument } from './sourceDocument';
 
 describe('isOpaqueReference', () => {
   it('flags the September seed machine reference format "<type>:<uuid>"', () => {
     expect(isOpaqueReference('bill:5eed0000-0000-4000-8000-700000000001')).toBe(true);
     expect(isOpaqueReference('invoice:5eed0000-0000-4000-8000-100000000009')).toBe(true);
+    expect(isOpaqueReference('purchase_order:3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f')).toBe(true);
   });
 
   it('flags a bare UUID', () => {
@@ -22,15 +23,39 @@ describe('isOpaqueReference', () => {
   });
 });
 
+describe('parseLegacyReference', () => {
+  it('recovers { type, id } from a "<prefix>:<uuid>" reference', () => {
+    expect(parseLegacyReference('purchase_order:3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f')).toEqual({
+      type: 'purchase_order',
+      id: '3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f',
+    });
+    expect(parseLegacyReference('bill:5eed0000-0000-4000-8000-700000000001')).toEqual({
+      type: 'bill',
+      id: '5eed0000-0000-4000-8000-700000000001',
+    });
+  });
+
+  it('maps alternate prefixes to the canonical source type', () => {
+    expect(parseLegacyReference('supplier_invoice:3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f')?.type).toBe('bill');
+    expect(parseLegacyReference('purchase_order_receipt:3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f')?.type).toBe('purchase_order');
+  });
+
+  it('returns undefined for a real document number or unknown prefix', () => {
+    expect(parseLegacyReference('GRN-0007')).toBeUndefined();
+    expect(parseLegacyReference('mystery:3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f')).toBeUndefined();
+    expect(parseLegacyReference(undefined)).toBeUndefined();
+  });
+});
+
 describe('resolveSourceDocument', () => {
   it('resolves the real document number from the caller lookup, never the UUID', () => {
     const resolved = resolveSourceDocument(
       { type: 'bill', id: 'bill-uuid', reference: 'bill:bill-uuid' },
-      (type, id) => (type === 'bill' && id === 'bill-uuid' ? 'BILL-2031' : undefined),
+      (type, id) => (type === 'bill' && id === 'bill-uuid' ? 'SI-2031' : undefined),
     );
     expect(resolved).toMatchObject({
-      label: 'Bill',
-      number: 'BILL-2031',
+      label: 'Supplier invoice',
+      number: 'SI-2031',
       path: '/purchases/bills/bill-uuid',
       previewType: 'bill',
     });
@@ -55,9 +80,32 @@ describe('resolveSourceDocument', () => {
     expect(resolved?.previewType).toBeUndefined();
   });
 
-  it('handles a legacy movement with only a free-text reference and no structured type', () => {
-    expect(resolveSourceDocument({ reference: 'GRN-0007' })).toEqual({ label: 'Reference', number: 'GRN-0007' });
-    expect(resolveSourceDocument({ reference: 'bill:5eed0000-0000-4000-8000-700000000001' })).toBeUndefined();
+  it('recovers a linkable source from a legacy "purchase_order:<uuid>" reference with no structured type', () => {
+    const resolved = resolveSourceDocument(
+      { reference: 'purchase_order:3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f' },
+      (type, id) => (type === 'purchase_order' && id === '3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f' ? 'PO-2026-0005' : undefined),
+    );
+    expect(resolved).toMatchObject({
+      type: 'purchase_order',
+      id: '3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f',
+      label: 'Purchase order',
+      number: 'PO-2026-0005',
+      path: '/purchases/orders/3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f',
+      fromLegacyReference: true,
+    });
+  });
+
+  it('keeps a plain free-text reference visible when no structured type can be recovered', () => {
+    expect(resolveSourceDocument({ reference: 'GRN-0007' })).toMatchObject({ label: 'Reference', number: 'GRN-0007' });
+  });
+
+  it('exposes the raw reference only as technicalReference, never as the primary number', () => {
+    const resolved = resolveSourceDocument(
+      { type: 'purchase_order', id: '3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f', reference: 'purchase_order:3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f' },
+      () => undefined,
+    );
+    expect(resolved?.number).toBeUndefined();
+    expect(resolved?.technicalReference).toBe('purchase_order:3dcf3f9d-1f9b-4b1e-bb5f-b84ea37fd23f');
   });
 
   it('maps reversal to a label with no route', () => {

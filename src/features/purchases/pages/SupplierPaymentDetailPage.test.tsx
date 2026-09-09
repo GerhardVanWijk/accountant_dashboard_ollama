@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import type { Payment } from '@/types';
 import { SupplierPaymentDetailPage } from './SupplierPaymentDetailPage';
@@ -40,10 +40,11 @@ function renderAt(path = '/purchases/payments/pay1') {
 }
 
 describe('SupplierPaymentDetailPage', () => {
-  it('renders a full page with an allocation table linking each bill; no sheet', () => {
+  it('renders a tabbed page; the Allocations tab links each supplier invoice; no sheet', () => {
     const { container } = renderAt();
     expect(screen.getByRole('heading', { name: 'PAY-2026-0001' })).toBeInTheDocument();
-    expect(screen.getByText('Document')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Allocations/ }));
+    expect(screen.getByRole('columnheader', { name: 'Supplier invoice' })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'BILL-2005' }).length).toBeGreaterThanOrEqual(1);
     expect(container.querySelector('[data-slot="sheet-content"]')).toBeNull();
   });

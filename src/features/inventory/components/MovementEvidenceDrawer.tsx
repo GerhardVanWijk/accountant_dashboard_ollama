@@ -35,6 +35,9 @@ export function MovementEvidenceDrawer({
         ? `Out of ${context?.warehouseName}`
         : undefined;
 
+  const directionLabel = m == null ? '' : m.quantityDelta > 0 ? 'Stock in' : m.quantityDelta < 0 ? 'Stock out' : 'No change';
+  const hasCost = m != null && (m.unitCost != null || m.totalCost != null || context?.currentWac != null);
+
   return (
     <RecordDetailSheet
       open={open}
@@ -45,7 +48,7 @@ export function MovementEvidenceDrawer({
       titleAdornment={
         context?.missingEvidence ? (
           <span className="rounded-md border border-status-warning-outline bg-status-warning-surface/50 px-1.5 py-0.5 text-[0.7rem] font-medium text-status-warning">
-            No source link
+            Source unavailable
           </span>
         ) : undefined
       }
@@ -61,13 +64,13 @@ export function MovementEvidenceDrawer({
                 <RecordDetailField label="Item" value={context.productLabel} className="col-span-2" />
               )}
               <RecordDetailField label="Type" value={MOVEMENT_TYPE_LABELS[m.type]} />
-              <RecordDetailField label="Date" value={formatDate(m.movementDate ?? m.createdAt)} />
+              <RecordDetailField label="Direction" value={directionLabel} />
               <RecordDetailField
                 label="Quantity"
                 value={m.quantityDelta > 0 ? `+${m.quantityDelta}` : String(m.quantityDelta)}
               />
               {context?.runningQuantity != null && (
-                <RecordDetailField label="On hand after" value={String(context.runningQuantity)} />
+                <RecordDetailField label="Balance after" value={String(context.runningQuantity)} />
               )}
               {m.notes && <RecordDetailField label="Notes" value={m.notes} className="col-span-2" />}
             </div>
@@ -86,16 +89,16 @@ export function MovementEvidenceDrawer({
             </div>
           </RecordDetailSection>
 
-          <RecordDetailSection title="Source">
-            {src && (src.number || src.label) ? (
+          <RecordDetailSection title="Source document">
+            {src && (src.number || (src.label && src.path)) ? (
               <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                <RecordDetailField label="Document type" value={src.label} />
+                <RecordDetailField label="Type" value={src.label} />
                 <RecordDetailField
                   label="Document"
                   value={
                     src.path ? (
                       <Link to={src.path} className="font-medium text-brand hover:underline">
-                        {src.number ?? src.label}
+                        {src.number ?? `Open ${src.label.toLowerCase()}`}
                       </Link>
                     ) : (
                       src.number ?? src.label
@@ -103,30 +106,38 @@ export function MovementEvidenceDrawer({
                   }
                 />
                 {context?.party && <RecordDetailField label="Party" value={context.party} />}
+                {src.fromLegacyReference && (
+                  <p className="col-span-2 text-xs text-muted-foreground">
+                    Recovered from a historical reference — the document number may be all that can be shown.
+                  </p>
+                )}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                This movement is not linked to a source document
-                {m.reference ? ` (reference: ${m.reference})` : ''}.
-              </p>
+              <div className="text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Source document unavailable</p>
+                <p className="mt-0.5">
+                  This movement carries historical source information, but the original record could not be resolved.
+                  The technical reference is in Technical details below.
+                </p>
+              </div>
             )}
           </RecordDetailSection>
 
-          <RecordDetailSection title="Cost">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-              <RecordDetailField
-                label="Unit cost applied"
-                value={m.unitCost != null ? formatCurrency(m.unitCost) : '—'}
-              />
-              <RecordDetailField
-                label="Movement value"
-                value={m.totalCost != null ? formatCurrency(m.totalCost) : '—'}
-              />
-              {context?.currentWac != null && (
-                <RecordDetailField label="Current WAC" value={formatCurrency(context.currentWac)} />
-              )}
-            </div>
-          </RecordDetailSection>
+          {hasCost && (
+            <RecordDetailSection title="Costing">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                {m.unitCost != null && (
+                  <RecordDetailField label="Unit cost" value={formatCurrency(m.unitCost)} />
+                )}
+                {m.totalCost != null && (
+                  <RecordDetailField label="Movement value" value={formatCurrency(m.totalCost)} />
+                )}
+                {context?.currentWac != null && (
+                  <RecordDetailField label="Current WAC" value={formatCurrency(context.currentWac)} />
+                )}
+              </div>
+            </RecordDetailSection>
+          )}
 
           <RecordDetailSection title="Accounting">
             {acc ? (
@@ -175,25 +186,36 @@ export function MovementEvidenceDrawer({
 
           <RecordDetailSection title="Audit">
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-              <RecordDetailField label="Recorded by" value={m.createdBy ?? '—'} />
+              <RecordDetailField label="Recorded by" value={m.createdBy ?? 'System'} />
               <RecordDetailField label="Recorded at" value={formatDate(m.createdAt)} />
-              {m.reference && <RecordDetailField label="Reference" value={m.reference} className="col-span-2" />}
             </div>
             <details className="mt-1 text-xs">
               <summary className="cursor-pointer text-muted-foreground">Technical details</summary>
-              <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 font-mono text-[11px] text-muted-foreground">
-                <dt>Movement UUID</dt>
+              <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 font-mono text-[11px] break-all text-muted-foreground">
+                <dt>Movement ID</dt>
                 <dd>{m.id}</dd>
+                {m.sourceDocumentType && (
+                  <>
+                    <dt>Source type</dt>
+                    <dd>{m.sourceDocumentType}</dd>
+                  </>
+                )}
                 {m.sourceDocumentId && (
                   <>
-                    <dt>Source UUID</dt>
+                    <dt>Source ID</dt>
                     <dd>{m.sourceDocumentId}</dd>
                   </>
                 )}
                 {m.sourceDocumentLineId && (
                   <>
-                    <dt>Line UUID</dt>
+                    <dt>Source line ID</dt>
                     <dd>{m.sourceDocumentLineId}</dd>
+                  </>
+                )}
+                {m.reference && (
+                  <>
+                    <dt>Raw reference</dt>
+                    <dd>{m.reference}</dd>
                   </>
                 )}
                 {m.reversalOfMovementId && (

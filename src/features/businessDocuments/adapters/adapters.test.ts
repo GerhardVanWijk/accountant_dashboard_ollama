@@ -41,7 +41,7 @@ describe('vertexFooter', () => {
 describe('quoteToBusinessDocument', () => {
   it('maps title, number, dates and stored totals verbatim', () => {
     const vm = quoteToBusinessDocument(fx.quote, fx.ctx());
-    expect(vm.title).toBe('QUOTE');
+    expect(vm.title).toBe('QUOTATION');
     expect(vm.documentNumber).toBe('QUO-2026-0004');
     expect(vm.secondaryDateLabel).toBe('Valid until');
     expect(vm.totals.map((t) => t.value)).toEqual([

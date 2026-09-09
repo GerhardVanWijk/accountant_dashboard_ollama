@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import type { CustomerReceipt } from '@/types';
 import { CustomerReceiptDetailPage } from './CustomerReceiptDetailPage';
@@ -45,18 +45,20 @@ function renderAt(path = '/sales/receipts/r1') {
 }
 
 describe('CustomerReceiptDetailPage', () => {
-  it('renders as a full page with an allocation table; no sheet', () => {
+  it('renders as a tabbed page with an Allocations tab; no sheet', () => {
     const { container } = renderAt();
     expect(screen.getByRole('heading', { name: 'RCT-2026-0001' })).toBeInTheDocument();
-    expect(screen.getByText('Document')).toBeInTheDocument();
-    expect(screen.getByText('Remaining')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Allocations/ }));
+    expect(screen.getByRole('columnheader', { name: 'Customer invoice' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Still outstanding' })).toBeInTheDocument();
     expect(container.querySelector('[data-slot="sheet-content"]')).toBeNull();
   });
 
   it('links each allocated invoice and offers "Apply deposit to invoice" while unapplied', () => {
     renderAt();
-    expect(screen.getAllByRole('link', { name: 'INV-1001' }).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole('button', { name: 'Apply deposit to invoice' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Allocations/ }));
+    expect(screen.getAllByRole('link', { name: 'INV-1001' }).length).toBeGreaterThanOrEqual(1);
   });
 
   it('a fully allocated receipt offers no allocate action', () => {

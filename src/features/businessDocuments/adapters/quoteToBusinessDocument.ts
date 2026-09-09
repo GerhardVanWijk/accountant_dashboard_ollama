@@ -24,7 +24,7 @@ export function quoteToBusinessDocument(
 
   return {
     kind: 'quote',
-    title: 'QUOTE',
+    title: 'QUOTATION',
     documentNumber: quote.quoteNumber,
     issuedOnLabel: 'Date',
     issuedOn: formatDate(quote.issueDate),

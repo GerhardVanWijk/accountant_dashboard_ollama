@@ -2,6 +2,83 @@
 
 ---
 
+## ACCOUNTING RECORD WORKSPACE COMPLETION — REAL TABS, STOCK SOURCE-LINK REPAIR, MORE MIGRATIONS (branch `accounting-record-workspace-completion-2026-09-10`) — 2026-09-10
+
+**NOT pushed, NOT deployed.** Committed locally on `accounting-record-workspace-completion-2026-09-10` (branched from `main` `94ee487`). Follow-up to the previous workspace run after browser QA exposed that the tabs were decorative, stock-movement source links were broken, and several document types were still un-migrated. **No migration. No accounting-posting logic change.** One read-side repository mapping was corrected (it had been dropping columns); the DB and all historical rows are untouched.
+
+### RecordTabs — the tabs now actually switch content (`B`)
+
+- **Why the old tabs looked broken:** each tab panel was rendered with `hidden={!active}` AND `className="flex …"`. The HTML `hidden` attribute's `display:none` comes from the UA stylesheet (specificity 0), and Tailwind's `.flex` (`display:flex`) beat it — so *every* panel stayed visible, stacked, and the strip was purely cosmetic. Tests passed because Testing Library's role queries honour the `hidden` attribute regardless of CSS.
+- **Fix:** a one-line base reset in `src/styles/globals.css` — `[hidden] { display: none !important; }` (attribute selector only; the `.hidden` class and `print:block` are untouched). RecordTabs itself was already correct. Panels stay mounted (so the audit-history fetch and find-in-page still work) but only the active one renders.
+- URL: `?tab=<value>` still mirrors the active tab (`replace`, cleared on the default tab), `?tab=` on first load opens that tab, an unknown value falls back to the first. Keyboard `Arrow`/`Home`/`End` + roving `tabIndex` + focus ring retained.
+- Tests: `RecordTabs.test.tsx` extended — clicking tab A hides panel A / shows only panel B (asserted on the `hidden` attribute), `?tab=` resolution, invalid-tab fallback, no-URL-write when `urlParam` omitted.
+
+### Stock movement source-link defect (`D`) + Purchase Order "Received 0" (`F`)
+
+- **Exact root cause:** `SupabaseStockMovementRepository.rowToStockMovement()` mapped only `id / product_id / warehouse_id / type / quantity_delta / reference / notes`. It **silently dropped `source_document_type`, `source_document_id`, `source_document_line_id`, `unit_cost`, `total_cost`, `movement_date`, `created_by`, `reversal_of_movement_id`** — all present in the DB since migration 0022. So every `StockMovement` object in the running app had `sourceDocumentType === undefined`.
+  - Drawer showed *"not linked to a source document (reference: purchase_order:f3a439af-…)"* — `hasNoSourceEvidence` fell through to the opaque `reference`.
+  - PO `Received` metric was `0` — `movements.filter(m => m.sourceDocumentType === 'purchase_order' && …)` never matched, even though the DB row for PO-2026-0005 correctly has `source_document_type='purchase_order'`, `source_document_id='3dcf3f9d-…'`, `quantity_delta=40`.
+- **Fix (read-side only, no migration, no history mutation):**
+  1. `SupabaseStockMovementRepository` now maps all migration-0022 columns (both directions). Test: `SupabaseStockMovementRepository.test.ts`.
+  2. `resolveSourceDocument()` (`src/components/app/record-page/sourceDocument.ts`) gains `parseLegacyReference()` — recovers `{ type, id }` from a `"<prefix>:<uuid>"` free-text `reference` (with a prefix→canonical-type map covering `purchase_order` / `supplier_invoice` / `goods_received` / `bill` / …) for any movement whose structured columns were never populated. Adds `fromLegacyReference` + `technicalReference` to the result.
+  3. `movementsForSource(movements, type, id)` (`src/features/inventory/utils/movementSource.ts`) — the shared filter used by the PO / Supplier-Invoice / Credit-Note pages: matches structured columns first, then a parsed legacy reference. Regression tests cover the exact `purchase_order:<uuid>` production shape.
+  4. `useStockMovementResolvers` — `resolveParty` now covers `purchase_order` (→ supplier name).
+- **Result:** PO-2026-0005 now reads `Ordered 40 / Received 40 / Remaining 0`, the Receiving tab lists the +40 movement, and the drawer links "Purchase Order PO-2026-0005". Where a movement genuinely can't be resolved, the drawer shows *"Source document unavailable — this movement carries historical source information, but the original record could not be resolved"* with the raw reference confined to Technical details.
+
+### Stock movement drawer redesign (`E`)
+
+`MovementEvidenceDrawer` sections reworked: **Movement** (Type / Direction "Stock in|out" / Quantity / Balance after — Date dropped, it's in the header), **Location**, **Source document** (typed link, or the calm "unavailable" message), **Costing** (only rendered when there is at least one real cost value — no wall of `—`), **Accounting**, **Audit** (Recorded by / at only), **Technical details** (collapsed — Movement ID, Source type/ID/line ID, raw reference, reversal-of). Raw identifiers never appear outside Technical details.
+
+### Documents migrated to the tabbed workspace this run
+
+| Document | Tabs |
+| --- | --- |
+| **Quotation** (was old long-page, "Quote" wording) | Overview · Line items · Related records · Activity — no Accounting tab (never posts). Breadcrumb + not-found + confirm copy → "Quotation"; printed heading `QUOTE` → `QUOTATION`. |
+| **Credit Note** | Overview · Line items · Allocations · Accounting (posting + inventory restock) · Related records · Activity |
+| **Customer Receipt** | Overview · Allocations · Accounting (cash/bank · AR/Customer Deposits · journal) · Related records · Activity |
+| **Supplier Payment** | Overview · Allocations · Accounting (bank · AP · journal) · Related records · Activity |
+
+Plus **Purchase Order** rebuilt (see `C`). Running total: **8 of 11 document types** now tabbed (Invoice, PO, Supplier Invoice, Sales Order from the prior run + these four).
+
+### Duplicate-content & density (`N` / `O` / `Q` / `R`)
+
+- **`DocumentLineTable` item/description** — the Item column now shows the **product name** as primary with the **SKU** beneath it (was SKU-primary). The Description column renders a dash when the line description is empty or merely echoes the product name; a genuinely different transactional description ("Printer supplied with on-site installation") still shows. A service line with no product is named in the Item column, dashed in Description. Test: `documentLineColumns.test.tsx`.
+- **`StatTile` / `StatStrip`** — new `size="compact"` (lower, denser tile; icon optional) and `columns` widened to `2 | 3 | 4 | 5` so a strip shows exactly as many metrics as are meaningful (Quotation: 3, PO: 4). All migrated pages use `size="compact"`.
+- Per-page: status shows once (hero badge, never repeated in an Overview grid); the bare party name is not repeated as an Overview field; totals live in the line-items footer + the KPI strip (distinct purpose), not also in an Overview grid.
+
+### Terminology (`U`)
+
+`bill` stock-movement source label → "Supplier invoice"; allocation-table headers "Document" → "Customer invoice" / "Supplier invoice"; Supplier Payment "Applied to bill" → "Applied to supplier invoice"; `QUOTE` printed heading → `QUOTATION`.
+
+### Error handling (`X`)
+
+`toAccountingErrorMessage` now also wired into Quotation, Credit Note, Customer Receipt and the Sales Order invoice picker paths.
+
+### Validation
+
+- type-check — **PASS**
+- lint (`--max-warnings 0`) — **PASS**
+- full suite — **PASS** (386 files, **3190 tests**)
+- production build — **PASS**
+
+### Database
+
+- Migrations authored? **No.** Applied? **No.** Historical accounting data altered? **No.** Posting logic changed? **No.** The only data-layer change is `SupabaseStockMovementRepository` reading columns it should always have read.
+
+### Deferred / not done this run
+
+Delivery Note (`H`) and Return Note (`I`) tabbed migrations; Journal Entry (`M`) tabbed migration; the global forms organisation pass (`W`); the Customer / Supplier / Product workspace de-duplication pass (`V`). The `RecordTabs`, `movementsForSource`, `documentLineColumns` and `StatTile` primitives are all in place for those.
+
+### Post-deploy browser-QA checklist (owed — no browser automation in-session)
+
+1. Every migrated document page: click each tab → only that tab's content shows, `?tab=` in the URL, browser back/forward, arrow-key tab nav.
+2. PO-2026-0005 (and any other received PO): `Received` matches `Ordered`, Receiving tab lists the movement, "Open purchase order" works from the product ledger drawer.
+3. Stock Movements page → open a drawer: "Source document" shows a typed link (not `purchase_order:<uuid>`); Technical details holds the raw ids; no `—`-only Costing section.
+4. Line-item tables: product name is primary, SKU secondary, no name shown twice.
+5. Quotation: "Quotation" wording throughout; printed PDF heading reads QUOTATION.
+
+---
+
 ## ACCOUNTING DOCUMENT WORKSPACE UX + SA TERMINOLOGY + PO UUID FIX + FRIENDLY ERRORS (branch `accounting-document-workspace-ux-2026-09-09`, commit `84b0ea5`) — 2026-09-09
 
 **SHIPPED 2026-09-10** (implemented 2026-09-09) — on explicit user instruction ahead of human browser QA, `accounting-document-workspace-ux-2026-09-09` was fast-forward-merged → `main` (`6f0dff1..84b0ea5`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). **No migration, no DB write, no accounting-posting logic change** beyond one boundary sanitisation (`InventoryPostingEngine.sanitizeSourceLineIds()` — a non-UUID `sourceDocumentLineId` is dropped to `null` before the RPC; GL/VAT/WAC/document-status behaviour unchanged). **Post-deploy browser QA is now owed** — the four migrated document pages (Customer Invoice, Purchase Order, Supplier Invoice, Sales Order): hero + KPI strip + `RecordTabs`, tab keyboard/scroll behaviour, no same-page status/party/total duplication, `Duplicate` gone; the SA terminology across the purchasing UI (nav "Supplier Invoices & Expenses", "Create supplier invoice", "Receive goods", supplier-invoice list/form/detail); a real PO "Create supplier invoice" run end-to-end; and that raw errors are now shown as friendly messages.

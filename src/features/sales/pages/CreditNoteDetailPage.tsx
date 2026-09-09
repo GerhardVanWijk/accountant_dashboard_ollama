@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { PrinterIcon } from 'lucide-react';
+import { PercentIcon, PrinterIcon, ReceiptTextIcon, WalletIcon } from 'lucide-react';
 import type { CreditNote } from '@/types';
 import { BusinessDocumentPreviewModal, useBusinessDocument } from '@/features/businessDocuments';
 import {
@@ -13,14 +13,19 @@ import {
   RecordPageSection,
   RecordPageShell,
   RecordSummaryGrid,
+  RecordTabs,
   RelatedRecordsSection,
+  type RecordTab,
   type RelatedRecordItem,
   type RecordPageProps,
 } from '@/components/app/record-page';
+import { StatStrip, StatTile } from '@/components/app/stat-tile';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
+import { toAccountingErrorMessage } from '@/features/accounting/utils/accountingError';
 import { getTaxRateLabel, MOVEMENT_TYPE_LABELS } from '@/features/inventory/constants';
+import { movementsForSource } from '@/features/inventory/utils/movementSource';
 import { useCreditNotes } from '@/features/sales/hooks/useCreditNotes';
 import { useCreditNoteMutations } from '@/features/sales/hooks/useCreditNoteMutations';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
@@ -82,11 +87,8 @@ export function CreditNoteDetailPage({ recordId, embedded }: RecordPageProps = {
   const remaining = creditNote ? creditNote.total - creditNote.amountAllocated : 0;
 
   const cnMovements = useMemo(
-    () =>
-      creditNote
-        ? movements.filter((m) => m.sourceDocumentType === 'credit_note' && m.sourceDocumentId === creditNote.id)
-        : [],
-    [creditNote, movements],
+    () => movementsForSource(movements, 'credit_note', creditNote?.id),
+    [creditNote?.id, movements],
   );
 
   const lineColumns = useMemo(
@@ -134,12 +136,195 @@ export function CreditNoteDetailPage({ recordId, embedded }: RecordPageProps = {
       await fn();
       after();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Could not update this credit note.');
+      setActionError(toAccountingErrorMessage(err, { reference: creditNote?.creditNoteNumber, action: 'update this credit note' }));
     }
   }
 
   const state = isLoading ? 'loading' : error ? 'error' : creditNote ? 'ready' : 'not-found';
   const canAllocate = creditNote != null && (creditNote.status === 'issued' || creditNote.status === 'allocated') && remaining > EPSILON;
+
+  const tabs: RecordTab[] = creditNote
+    ? [
+        {
+          value: 'overview',
+          label: 'Overview',
+          content: (
+            <>
+              <RecordPageSection title="Credit note details">
+                <RecordSummaryGrid>
+                  <RecordField label="Issue date" value={formatDate(creditNote.issueDate)} />
+                  <RecordField label="Reason" value={REASON_LABELS[creditNote.reason] ?? creditNote.reason} />
+                  <RecordField label="Currency" value={creditNote.currency} />
+                  <RecordField
+                    label="Original invoice"
+                    value={
+                      linkedInvoice ? (
+                        <Link className="text-brand hover:underline" to={`/sales/invoices/${linkedInvoice.id}`}>{linkedInvoice.invoiceNumber}</Link>
+                      ) : (
+                        'Standalone account credit'
+                      )
+                    }
+                  />
+                  {company?.vatRegistrationNumber && <RecordField label="VAT reg. no." value={company.vatRegistrationNumber} />}
+                  {creditNote.reasonDetails && (
+                    <RecordField label="Reason detail" value={<span className="whitespace-pre-wrap">{creditNote.reasonDetails}</span>} className="sm:col-span-2 lg:col-span-3" />
+                  )}
+                </RecordSummaryGrid>
+              </RecordPageSection>
+              {creditNote.notes && (
+                <RecordPageSection title="Notes">
+                  <p className="text-sm whitespace-pre-wrap text-muted-foreground">{creditNote.notes}</p>
+                </RecordPageSection>
+              )}
+            </>
+          ),
+        },
+        {
+          value: 'line-items',
+          label: 'Line items',
+          count: creditNote.lineItems.length,
+          content: (
+            <RecordPageSection title="Line items">
+              <DocumentLineTable
+                columns={lineColumns}
+                rows={creditNote.lineItems}
+                rowKey={(l) => l.id}
+                minWidthClassName="min-w-[860px]"
+                totals={[
+                  { label: 'Subtotal', value: formatCurrency(creditNote.subtotal) },
+                  { label: 'VAT reversed', value: formatCurrency(creditNote.taxTotal) },
+                  { label: 'Total credit', value: formatCurrency(creditNote.total), emphasis: true },
+                ]}
+              />
+              {creditNote.lineItems.some((l) => l.originalInvoiceLineId) && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Line credits are matched to specific lines on {linkedInvoice?.invoiceNumber ?? 'the original invoice'} — the return quantity is validated against that line.
+                </p>
+              )}
+            </RecordPageSection>
+          ),
+        },
+        {
+          value: 'allocations',
+          label: 'Allocations',
+          count: creditNote.allocations.length,
+          content: (
+            <RecordPageSection title="Allocation">
+              <RecordSummaryGrid>
+                <RecordField label="Allocated" value={formatCurrency(creditNote.amountAllocated)} />
+                <RecordField label="Remaining" value={formatCurrency(remaining)} />
+              </RecordSummaryGrid>
+              {creditNote.allocations.length === 0 ? (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  This credit note has not been applied to any invoice yet.
+                </p>
+              ) : (
+                <div className="mt-3 overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full min-w-[420px] border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/40 text-left text-xs tracking-wide text-muted-foreground uppercase">
+                        <th className="px-4 py-2">Invoice</th>
+                        <th className="px-4 py-2">Allocated on</th>
+                        <th className="px-4 py-2 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {creditNote.allocations.map((a, i) => (
+                        <tr key={i} className="border-b border-border last:border-0">
+                          <td className="px-4 py-2">
+                            {invoiceNumbers.has(a.invoiceId) ? (
+                              <Link className="text-brand hover:underline" to={`/sales/invoices/${a.invoiceId}`}>{invoiceNumbers.get(a.invoiceId)}</Link>
+                            ) : (
+                              a.invoiceId
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-muted-foreground">{formatDate(a.allocatedAt)}</td>
+                          <td className="figure px-4 py-2 text-right tabular-nums">{formatCurrency(a.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </RecordPageSection>
+          ),
+        },
+        {
+          value: 'accounting',
+          label: 'Accounting',
+          content: (
+            <>
+              <RecordPageSection title="Posting">
+                <RecordSummaryGrid>
+                  <RecordField
+                    label="Posting state"
+                    value={creditNote.journalEntryId ? 'Posted to the general ledger' : creditNote.status === 'draft' ? 'Not posted — still a draft' : 'Not posted'}
+                  />
+                  <RecordField
+                    label="Journal entry"
+                    value={
+                      creditNote.journalEntryId ? (
+                        <Link className="text-brand hover:underline" to={`/accounting/journals?record=${creditNote.journalEntryId}`}>View journal entry</Link>
+                      ) : (
+                        '—'
+                      )
+                    }
+                  />
+                  <RecordField label="Output VAT reversed" value={formatCurrency(creditNote.taxTotal)} />
+                </RecordSummaryGrid>
+              </RecordPageSection>
+              {cnMovements.length > 0 && (
+                <RecordPageSection title="Inventory restock">
+                  <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full min-w-[600px] border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/40 text-left text-xs tracking-wide text-muted-foreground uppercase">
+                          <th className="px-4 py-2">Date</th>
+                          <th className="px-4 py-2">Product</th>
+                          <th className="px-4 py-2">Type</th>
+                          <th className="px-4 py-2">Warehouse</th>
+                          <th className="px-4 py-2 text-right">Qty</th>
+                          <th className="px-4 py-2 text-right">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cnMovements.map((m) => {
+                          const product = productMap.get(m.productId);
+                          return (
+                            <tr key={m.id} className="border-b border-border last:border-0">
+                              <td className="px-4 py-2 text-muted-foreground">{formatDate(m.movementDate ?? m.createdAt)}</td>
+                              <td className="px-4 py-2">
+                                {product ? <Link className="text-brand hover:underline" to={`/inventory/products/${product.id}`}>{product.name}</Link> : m.productId}
+                              </td>
+                              <td className="px-4 py-2 text-muted-foreground">{MOVEMENT_TYPE_LABELS[m.type]}</td>
+                              <td className="px-4 py-2 text-muted-foreground">{warehouseMap.get(m.warehouseId) ?? m.warehouseId}</td>
+                              <td className="figure px-4 py-2 text-right tabular-nums">{m.quantityDelta.toFixed(2)}</td>
+                              <td className="figure px-4 py-2 text-right tabular-nums">{m.totalCost != null ? formatCurrency(m.totalCost) : '—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </RecordPageSection>
+              )}
+            </>
+          ),
+        },
+        {
+          value: 'related',
+          label: 'Related records',
+          content: <RelatedRecordsSection items={relatedItems} />,
+        },
+        {
+          value: 'activity',
+          label: 'Activity',
+          content: (
+            <RecordActivitySection recordType="CreditNote" recordId={creditNote.id} title="Record activity" subtitle="Changes and lifecycle events for this credit note." />
+          ),
+        },
+      ]
+    : [];
 
   return (
     <RecordPageShell
@@ -179,149 +364,19 @@ export function CreditNoteDetailPage({ recordId, embedded }: RecordPageProps = {
             </div>
           )}
 
-          <RecordPageSection title="Overview">
-            <RecordSummaryGrid>
-              <RecordField label="Customer" value={customerName} />
-              <RecordField label="Issue date" value={formatDate(creditNote.issueDate)} />
-              <RecordField label="Reason" value={REASON_LABELS[creditNote.reason] ?? creditNote.reason} />
-              <RecordField label="Status" value={<StatusBadge status={creditNote.status} />} />
-              <RecordField label="Currency" value={creditNote.currency} />
-              <RecordField
-                label="Original invoice"
-                value={
-                  linkedInvoice ? (
-                    <Link className="text-brand hover:underline" to={`/sales/invoices/${linkedInvoice.id}`}>{linkedInvoice.invoiceNumber}</Link>
-                  ) : (
-                    'Standalone account credit'
-                  )
-                }
-              />
-              {creditNote.reasonDetails && (
-                <RecordField label="Reason detail" value={<span className="whitespace-pre-wrap">{creditNote.reasonDetails}</span>} className="sm:col-span-2 lg:col-span-3" />
-              )}
-              {company?.vatRegistrationNumber && <RecordField label="VAT reg. no." value={company.vatRegistrationNumber} />}
-            </RecordSummaryGrid>
-          </RecordPageSection>
-
-          <RecordPageSection title="Line items">
-            <DocumentLineTable
-              columns={lineColumns}
-              rows={creditNote.lineItems}
-              rowKey={(l) => l.id}
-              minWidthClassName="min-w-[860px]"
-              totals={[
-                { label: 'Subtotal', value: formatCurrency(creditNote.subtotal) },
-                { label: 'VAT reversed', value: formatCurrency(creditNote.taxTotal) },
-                { label: 'Total credit', value: formatCurrency(creditNote.total), emphasis: true },
-              ]}
+          <StatStrip columns={3}>
+            <StatTile size="compact" icon={ReceiptTextIcon} label="Total credit" value={formatCurrency(creditNote.total)} />
+            <StatTile size="compact" icon={PercentIcon} label="VAT reversed" value={formatCurrency(creditNote.taxTotal)} />
+            <StatTile
+              size="compact"
+              icon={WalletIcon}
+              label="Remaining to apply"
+              value={formatCurrency(remaining)}
+              tone={remaining > EPSILON ? 'warning' : 'default'}
             />
-            {creditNote.lineItems.some((l) => l.originalInvoiceLineId) && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Line credits are matched to specific lines on {linkedInvoice?.invoiceNumber ?? 'the original invoice'} — the return quantity is validated against that line.
-              </p>
-            )}
-          </RecordPageSection>
+          </StatStrip>
 
-          <RecordPageSection title="Allocation status">
-            <RecordSummaryGrid>
-              <RecordField label="Allocated" value={formatCurrency(creditNote.amountAllocated)} />
-              <RecordField label="Remaining" value={formatCurrency(remaining)} />
-            </RecordSummaryGrid>
-            {creditNote.allocations.length > 0 && (
-              <div className="mt-3 overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[420px] border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/40 text-left text-xs tracking-wide text-muted-foreground uppercase">
-                      <th className="px-4 py-2">Invoice</th>
-                      <th className="px-4 py-2">Allocated on</th>
-                      <th className="px-4 py-2 text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {creditNote.allocations.map((a, i) => (
-                      <tr key={i} className="border-b border-border last:border-0">
-                        <td className="px-4 py-2">
-                          {invoiceNumbers.has(a.invoiceId) ? (
-                            <Link className="text-brand hover:underline" to={`/sales/invoices/${a.invoiceId}`}>{invoiceNumbers.get(a.invoiceId)}</Link>
-                          ) : (
-                            a.invoiceId
-                          )}
-                        </td>
-                        <td className="px-4 py-2 text-muted-foreground">{formatDate(a.allocatedAt)}</td>
-                        <td className="figure px-4 py-2 text-right tabular-nums">{formatCurrency(a.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </RecordPageSection>
-
-          {cnMovements.length > 0 && (
-            <RecordPageSection title="Inventory restock">
-              <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[600px] border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/40 text-left text-xs tracking-wide text-muted-foreground uppercase">
-                      <th className="px-4 py-2">Date</th>
-                      <th className="px-4 py-2">Product</th>
-                      <th className="px-4 py-2">Type</th>
-                      <th className="px-4 py-2">Warehouse</th>
-                      <th className="px-4 py-2 text-right">Qty</th>
-                      <th className="px-4 py-2 text-right">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cnMovements.map((m) => {
-                      const product = productMap.get(m.productId);
-                      return (
-                        <tr key={m.id} className="border-b border-border last:border-0">
-                          <td className="px-4 py-2 text-muted-foreground">{formatDate(m.movementDate ?? m.createdAt)}</td>
-                          <td className="px-4 py-2">
-                            {product ? <Link className="text-brand hover:underline" to={`/inventory/products/${product.id}`}>{product.sku}</Link> : m.productId}
-                          </td>
-                          <td className="px-4 py-2 text-muted-foreground">{MOVEMENT_TYPE_LABELS[m.type]}</td>
-                          <td className="px-4 py-2 text-muted-foreground">{warehouseMap.get(m.warehouseId) ?? m.warehouseId}</td>
-                          <td className="figure px-4 py-2 text-right tabular-nums">{m.quantityDelta.toFixed(2)}</td>
-                          <td className="figure px-4 py-2 text-right tabular-nums">{m.totalCost != null ? formatCurrency(m.totalCost) : '—'}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </RecordPageSection>
-          )}
-
-          <RecordPageSection title="Accounting">
-            <RecordSummaryGrid>
-              <RecordField
-                label="Posting state"
-                value={creditNote.journalEntryId ? 'Posted to the general ledger' : creditNote.status === 'draft' ? 'Not posted — still a draft' : 'Not posted'}
-              />
-              <RecordField
-                label="Journal entry"
-                value={
-                  creditNote.journalEntryId ? (
-                    <Link className="text-brand hover:underline" to={`/accounting/journals?record=${creditNote.journalEntryId}`}>View journal entry</Link>
-                  ) : (
-                    '—'
-                  )
-                }
-              />
-              <RecordField label="Output VAT reversed" value={formatCurrency(creditNote.taxTotal)} />
-            </RecordSummaryGrid>
-          </RecordPageSection>
-
-          {creditNote.notes && (
-            <RecordPageSection title="Notes">
-              <p className="text-sm whitespace-pre-wrap text-muted-foreground">{creditNote.notes}</p>
-            </RecordPageSection>
-          )}
-
-          <RelatedRecordsSection items={relatedItems} />
-
-          <RecordActivitySection recordType="CreditNote" recordId={creditNote.id} title="Record activity" subtitle="Changes and lifecycle events for this credit note." />
+          <RecordTabs urlParam="tab" embedded={embedded} ariaLabel="Credit note sections" tabs={tabs} />
 
           <ConfirmDialog
             open={confirmVoid}

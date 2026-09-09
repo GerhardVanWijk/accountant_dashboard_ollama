@@ -14,6 +14,7 @@ export type { RecordPageProps } from './recordPageProps';
 export {
   resolveSourceDocument,
   isOpaqueReference,
+  parseLegacyReference,
   type ResolvedSourceDocument,
   type RelatedRecordType,
 } from './sourceDocument';

@@ -81,4 +81,19 @@ describe('QuoteDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Print / PDF' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Duplicate' })).not.toBeInTheDocument();
   });
+
+  it('is a tabbed workspace (Overview / Line items / Related records / Activity) with no Accounting tab', () => {
+    renderAt();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Line items/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Related records' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Activity' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Accounting' })).not.toBeInTheDocument();
+  });
+
+  it('uses formal "Quotation" wording in the breadcrumb', () => {
+    renderAt();
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(nav).toHaveTextContent('Quotations');
+  });
 });

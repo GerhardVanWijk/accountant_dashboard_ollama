@@ -49,31 +49,50 @@ export function StatTile({
   value,
   hint,
   tone = 'default',
+  size = 'default',
   className,
 }: {
-  icon: LucideIcon;
+  icon?: LucideIcon;
   label: string;
   value: string;
   hint?: ReactNode;
   tone?: StatTone;
+  /** `compact` — a lower, denser tile for record-detail summary strips where 4-5 metrics must not dominate the page. */
+  size?: 'default' | 'compact';
   className?: string;
 }) {
+  const compact = size === 'compact';
   return (
     <div
       className={cn(
-        'flex items-start gap-3.5 rounded-xl border bg-card p-4 sm:p-5',
+        'flex items-start rounded-xl border bg-card',
+        compact ? 'gap-3 p-3 sm:p-3.5' : 'gap-3.5 p-4 sm:p-5',
         frameClass[tone],
         className,
       )}
     >
-      <span className={cn('grid size-10 shrink-0 place-items-center rounded-lg', chipClass[tone])}>
-        <Icon className="size-5" aria-hidden="true" />
-      </span>
+      {Icon ? (
+        <span
+          className={cn(
+            'grid shrink-0 place-items-center rounded-lg',
+            compact ? 'size-8' : 'size-10',
+            chipClass[tone],
+          )}
+        >
+          <Icon className={compact ? 'size-4' : 'size-5'} aria-hidden="true" />
+        </span>
+      ) : null}
       <div className="flex min-w-0 flex-col">
         <span className="text-[0.7rem] font-semibold tracking-wider text-muted-foreground uppercase">
           {label}
         </span>
-        <span className={cn('figure mt-1 text-2xl font-semibold tabular-nums tracking-tight', valueToneClass[tone])}>
+        <span
+          className={cn(
+            'figure font-semibold tabular-nums tracking-tight',
+            compact ? 'mt-0.5 text-lg' : 'mt-1 text-2xl',
+            valueToneClass[tone],
+          )}
+        >
           {value}
         </span>
         {hint ? <span className="mt-1 text-xs leading-relaxed text-muted-foreground">{hint}</span> : null}
@@ -87,24 +106,22 @@ export function StatTile({
  * layout; tiles collapse to two-up then one-up so a four-metric strip is
  * never crushed into four tiny boxes on a laptop.
  */
+const stripColumns: Record<2 | 3 | 4 | 5, string> = {
+  2: 'sm:grid-cols-2',
+  3: 'sm:grid-cols-2 lg:grid-cols-3',
+  4: 'sm:grid-cols-2 xl:grid-cols-4',
+  5: 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5',
+};
+
 export function StatStrip({
   columns = 3,
   className,
   children,
 }: {
-  columns?: 3 | 4;
+  /** Cap on the widest layout — pass the actual number of tiles (2-5); don't pad to four. */
+  columns?: 2 | 3 | 4 | 5;
   className?: string;
   children: ReactNode;
 }) {
-  return (
-    <div
-      className={cn(
-        'grid gap-3 sm:gap-4',
-        columns === 4 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'sm:grid-cols-2 lg:grid-cols-3',
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
+  return <div className={cn('grid gap-3 sm:gap-4', stripColumns[columns], className)}>{children}</div>;
 }

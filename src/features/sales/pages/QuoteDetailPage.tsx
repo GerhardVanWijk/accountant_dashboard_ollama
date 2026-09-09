@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { PrinterIcon } from 'lucide-react';
+import { CalendarClockIcon, PercentIcon, PrinterIcon, ReceiptTextIcon } from 'lucide-react';
 import type { Quote } from '@/types';
 import { BusinessDocumentPreviewModal, useBusinessDocument } from '@/features/businessDocuments';
 import {
@@ -13,13 +13,17 @@ import {
   RecordPageSection,
   RecordPageShell,
   RecordSummaryGrid,
+  RecordTabs,
   RelatedRecordsSection,
+  type RecordTab,
   type RelatedRecordItem,
   type RecordPageProps,
 } from '@/components/app/record-page';
+import { StatStrip, StatTile } from '@/components/app/stat-tile';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
+import { toAccountingErrorMessage } from '@/features/accounting/utils/accountingError';
 import { getTaxRateLabel } from '@/features/inventory/constants';
 import { useQuotes } from '@/features/sales/hooks/useQuotes';
 import { useQuoteMutations } from '@/features/sales/hooks/useQuoteMutations';
@@ -29,12 +33,12 @@ import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
 
 /**
- * Full-page Quote detail — route `/sales/quotes/:quoteId`. Replaces the
- * right-hand sheet: line items get the page width, and the pre-sale chain
- * (quote → sales order) is a clickable related record. Quotes never post to
- * the GL, so there is no accounting section. Same
- * quoteService.markAsSent()/markAsAccepted()/markAsDeclined()/
- * convertToSalesOrder()/deleteQuote() calls as before.
+ * Full-page Quotation detail — route `/sales/quotes/:quoteId`. A tabbed
+ * workspace (Overview / Line items / Related records / Activity) in the same
+ * family as the other document pages. A quotation never posts to the GL, so
+ * there is no Accounting tab. Same quoteService.markAsSent()/
+ * markAsAccepted()/markAsDeclined()/convertToSalesOrder()/deleteQuote()
+ * calls as before.
  */
 export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
   const params = useParams<{ quoteId: string }>();
@@ -93,11 +97,74 @@ export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
       await fn();
       after();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Could not update this quote.');
+      setActionError(toAccountingErrorMessage(err, { reference: quote?.quoteNumber, action: 'update this quotation' }));
     }
   }
 
   const state = isLoading ? 'loading' : error ? 'error' : quote ? 'ready' : 'not-found';
+
+  const tabs: RecordTab[] = quote
+    ? [
+        {
+          value: 'overview',
+          label: 'Overview',
+          content: (
+            <>
+              <RecordPageSection title="Quotation details">
+                <RecordSummaryGrid>
+                  <RecordField label="Issue date" value={formatDate(quote.issueDate)} />
+                  <RecordField label="Expiry date" value={formatDate(quote.expiryDate)} />
+                  <RecordField label="Currency" value={quote.currency} />
+                  {convertedOrder && (
+                    <RecordField
+                      label="Sales order"
+                      value={<Link className="text-brand hover:underline" to={`/sales/orders/${convertedOrder.id}`}>{convertedOrder.orderNumber}</Link>}
+                    />
+                  )}
+                </RecordSummaryGrid>
+              </RecordPageSection>
+              {quote.notes && (
+                <RecordPageSection title="Notes & terms">
+                  <p className="text-sm whitespace-pre-wrap text-muted-foreground">{quote.notes}</p>
+                </RecordPageSection>
+              )}
+            </>
+          ),
+        },
+        {
+          value: 'line-items',
+          label: 'Line items',
+          count: quote.lineItems.length,
+          content: (
+            <RecordPageSection title="Line items">
+              <DocumentLineTable
+                columns={lineColumns}
+                rows={quote.lineItems}
+                rowKey={(l) => l.id}
+                minWidthClassName="min-w-[860px]"
+                totals={[
+                  { label: 'Subtotal', value: formatCurrency(quote.subtotal) },
+                  { label: 'VAT', value: formatCurrency(quote.taxTotal) },
+                  { label: 'Total', value: formatCurrency(quote.total), emphasis: true },
+                ]}
+              />
+            </RecordPageSection>
+          ),
+        },
+        {
+          value: 'related',
+          label: 'Related records',
+          content: <RelatedRecordsSection items={relatedItems} />,
+        },
+        {
+          value: 'activity',
+          label: 'Activity',
+          content: (
+            <RecordActivitySection recordType="Quote" recordId={quote.id} title="Record activity" subtitle="Changes and lifecycle events for this quotation." />
+          ),
+        },
+      ]
+    : [];
 
   const primary =
     quote?.status === 'accepted'
@@ -116,13 +183,13 @@ export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
 
   return (
     <RecordPageShell
-      breadcrumbs={[{ label: 'Sales' }, { label: 'Quotes', to: '/sales/quotes' }, { label: quote?.quoteNumber ?? 'Quote' }]}
+      breadcrumbs={[{ label: 'Sales' }, { label: 'Quotations', to: '/sales/quotes' }, { label: quote?.quoteNumber ?? 'Quotation' }]}
       backTo="/sales/quotes"
-      backLabel="Quotes"
+      backLabel="Quotations"
       embedded={embedded}
       state={state}
       errorMessage={error?.message}
-      notFoundMessage="This quote could not be found — it may have been deleted."
+      notFoundMessage="This quotation could not be found — it may have been deleted."
     >
       {quote && (
         <>
@@ -152,46 +219,19 @@ export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
             </div>
           )}
 
-          <RecordPageSection title="Overview">
-            <RecordSummaryGrid>
-              <RecordField label="Customer" value={customerName} />
-              <RecordField label="Issue date" value={formatDate(quote.issueDate)} />
-              <RecordField label="Expiry date" value={formatDate(quote.expiryDate)} />
-              <RecordField label="Status" value={<StatusBadge status={quote.status} />} />
-              <RecordField label="Currency" value={quote.currency} />
-              {convertedOrder && <RecordField label="Converted to" value={convertedOrder.orderNumber} />}
-            </RecordSummaryGrid>
-          </RecordPageSection>
+          <StatStrip columns={3}>
+            <StatTile size="compact" icon={ReceiptTextIcon} label="Quotation total" value={formatCurrency(quote.total)} />
+            <StatTile size="compact" icon={PercentIcon} label="VAT" value={formatCurrency(quote.taxTotal)} />
+            <StatTile size="compact" icon={CalendarClockIcon} label="Expires" value={formatDate(quote.expiryDate)} />
+          </StatStrip>
 
-          <RecordPageSection title="Line items">
-            <DocumentLineTable
-              columns={lineColumns}
-              rows={quote.lineItems}
-              rowKey={(l) => l.id}
-              minWidthClassName="min-w-[860px]"
-              totals={[
-                { label: 'Subtotal', value: formatCurrency(quote.subtotal) },
-                { label: 'VAT', value: formatCurrency(quote.taxTotal) },
-                { label: 'Total', value: formatCurrency(quote.total), emphasis: true },
-              ]}
-            />
-          </RecordPageSection>
-
-          {quote.notes && (
-            <RecordPageSection title="Notes">
-              <p className="text-sm whitespace-pre-wrap text-muted-foreground">{quote.notes}</p>
-            </RecordPageSection>
-          )}
-
-          <RelatedRecordsSection items={relatedItems} />
-
-          <RecordActivitySection recordType="Quote" recordId={quote.id} title="Record activity" subtitle="Changes and lifecycle events for this quote." />
+          <RecordTabs urlParam="tab" embedded={embedded} ariaLabel="Quotation sections" tabs={tabs} />
 
           <ConfirmDialog
             open={confirmDelete}
             onOpenChange={setConfirmDelete}
             title={`Delete ${quote.quoteNumber}?`}
-            description="This permanently removes the draft quote. Once sent, a quote is customer-facing and must be declined or left to expire instead."
+            description="This permanently removes the draft quotation. Once sent, a quotation is customer-facing and must be declined or left to expire instead."
             confirmLabel="Delete draft"
             destructive
             onConfirm={() => {

@@ -14,6 +14,24 @@ interface StockMovementRow {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  // Inventory Accounting Module (migration 0022) columns. Present on every
+  // row since Phase 2, but were silently dropped by this mapper until
+  // 2026-09-10 — which left every StockMovement in the app with an
+  // undefined structured source link, cost, movement date and creator, so
+  // the movement-evidence resolver, the stock-movement drawer and the
+  // Purchase Order "Received" metric all failed to attribute movements.
+  unit_cost: number | string | null;
+  total_cost: number | string | null;
+  movement_date: string | null;
+  source_document_type: string | null;
+  source_document_id: string | null;
+  source_document_line_id: string | null;
+  created_by: string | null;
+  reversal_of_movement_id: string | null;
+}
+
+function numOrUndef(value: number | string | null): number | undefined {
+  return value == null ? undefined : Number(value);
 }
 
 function rowToStockMovement(row: StockMovementRow): StockMovement {
@@ -27,6 +45,14 @@ function rowToStockMovement(row: StockMovementRow): StockMovement {
     quantityDelta: Number(row.quantity_delta),
     reference: row.reference ?? undefined,
     notes: row.notes ?? undefined,
+    unitCost: numOrUndef(row.unit_cost),
+    totalCost: numOrUndef(row.total_cost),
+    movementDate: row.movement_date ?? undefined,
+    sourceDocumentType: (row.source_document_type as StockMovement['sourceDocumentType']) ?? undefined,
+    sourceDocumentId: row.source_document_id ?? undefined,
+    sourceDocumentLineId: row.source_document_line_id ?? undefined,
+    createdBy: row.created_by ?? undefined,
+    reversalOfMovementId: row.reversal_of_movement_id ?? undefined,
   };
 }
 
@@ -38,6 +64,13 @@ function stockMovementToRow(entity: StockMovement): Record<string, unknown> {
     quantity_delta: entity.quantityDelta,
     reference: entity.reference ?? null,
     notes: entity.notes ?? null,
+    unit_cost: entity.unitCost ?? null,
+    total_cost: entity.totalCost ?? null,
+    movement_date: entity.movementDate ?? null,
+    source_document_type: entity.sourceDocumentType ?? null,
+    source_document_id: entity.sourceDocumentId ?? null,
+    source_document_line_id: entity.sourceDocumentLineId ?? null,
+    reversal_of_movement_id: entity.reversalOfMovementId ?? null,
   };
 }
 

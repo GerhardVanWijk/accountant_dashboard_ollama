@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { RecordTabs, type RecordTab } from './RecordTabs';
 
 afterEach(cleanup);
@@ -11,10 +11,15 @@ const tabs: RecordTab[] = [
   { value: 'accounting', label: 'Accounting', content: <p>accounting body</p> },
 ];
 
-function renderTabs(props: Partial<React.ComponentProps<typeof RecordTabs>> = {}) {
+function Search() {
+  return <output data-testid="search">{useLocation().search}</output>;
+}
+
+function renderTabs(props: Partial<React.ComponentProps<typeof RecordTabs>> = {}, entries = ['/x']) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={entries}>
       <RecordTabs tabs={tabs} {...props} />
+      <Search />
     </MemoryRouter>,
   );
 }
@@ -27,19 +32,33 @@ describe('RecordTabs', () => {
     expect(screen.getByRole('tab', { name: /Line items/ })).toHaveAttribute('aria-selected', 'false');
   });
 
-  it('only the active panel is visible; the others are hidden but still mounted', () => {
-    renderTabs();
-    // text query finds hidden content (kept mounted)…
+  it('only the active panel is shown; every other panel carries the hidden attribute', () => {
+    const { container } = renderTabs();
+    const panels = Array.from(container.querySelectorAll('[role="tabpanel"]'));
+    expect(panels).toHaveLength(3);
+    const visible = panels.filter((p) => !p.hasAttribute('hidden'));
+    expect(visible).toHaveLength(1);
+    expect(visible[0]).toHaveTextContent('overview body');
+    // panels are kept mounted (find-in-page / anchors still reach them)…
     expect(screen.getByText('accounting body')).toBeInTheDocument();
-    // …but role queries only see the visible panel
+    // …but only the active one is in the accessibility tree
     expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
   });
 
-  it('clicking a tab switches the visible panel', () => {
-    renderTabs();
+  it('clicking tab A hides panel A and shows only panel B', () => {
+    const { container } = renderTabs();
     fireEvent.click(screen.getByRole('tab', { name: 'Accounting' }));
+
     expect(screen.getByRole('tab', { name: 'Accounting' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'false');
+
     expect(screen.getByRole('tabpanel')).toHaveTextContent('accounting body');
+    const panels = Array.from(container.querySelectorAll('[role="tabpanel"]'));
+    const shown = panels.filter((p) => !p.hasAttribute('hidden'));
+    expect(shown).toHaveLength(1);
+    expect(shown[0]).toHaveTextContent('accounting body');
+    // the previously-active Overview panel is now hidden
+    expect(panels.find((p) => p.textContent?.includes('overview body'))).toHaveAttribute('hidden');
   });
 
   it('arrow keys move between tabs (roving focus)', () => {
@@ -60,8 +79,27 @@ describe('RecordTabs', () => {
   it('syncs the active tab to the URL when urlParam is set', () => {
     renderTabs({ urlParam: 'tab' });
     fireEvent.click(screen.getByRole('tab', { name: 'Accounting' }));
-    // jsdom MemoryRouter — assert via a re-render reading the same param
     expect(screen.getByRole('tab', { name: 'Accounting' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('search')).toHaveTextContent('tab=accounting');
+    // switching back to the default tab clears the param rather than pinning it
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    expect(screen.getByTestId('search')).not.toHaveTextContent('tab=');
+  });
+
+  it('opens the tab named in ?tab= on first render', () => {
+    renderTabs({ urlParam: 'tab' }, ['/x?tab=line-items']);
+    expect(screen.getByRole('tab', { name: /Line items/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('falls back to the first tab when ?tab= names an unknown tab', () => {
+    renderTabs({ urlParam: 'tab' }, ['/x?tab=nonsense']);
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('does not touch the URL when urlParam is omitted', () => {
+    renderTabs();
+    fireEvent.click(screen.getByRole('tab', { name: 'Accounting' }));
+    expect(screen.getByTestId('search')).toHaveTextContent('');
   });
 
   it('renders nothing for an empty tab list', () => {

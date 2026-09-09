@@ -10,6 +10,20 @@
     outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
   }
 
+  /*
+   * The HTML `hidden` attribute must win over a `display:` utility class on
+   * the same element. Tailwind v3's Preflight does not reset `[hidden]`, so
+   * a `<div hidden className="flex …">` (e.g. an inactive RecordTabs panel)
+   * kept rendering because `.flex { display:flex }` beat the UA
+   * `[hidden] { display:none }` on specificity. This restores the expected
+   * "hidden means hidden" semantics app-wide. It targets the ATTRIBUTE
+   * only — the Tailwind `.hidden` class and `print:block` etc. are
+   * unaffected.
+   */
+  [hidden] {
+    display: none !important;
+  }
+
   html {
     color-scheme: light;
   }

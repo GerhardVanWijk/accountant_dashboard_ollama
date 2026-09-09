@@ -1,5 +1,5 @@
 import type { StockMovement } from '@/types';
-import { isOpaqueReference, type ResolvedSourceDocument } from '@/components/app/record-page';
+import { isOpaqueReference, parseLegacyReference, type ResolvedSourceDocument } from '@/components/app/record-page';
 import type { MovementAccounting } from '../services/movementAccounting';
 import type { StockMovementResolvers } from '../hooks/useStockMovementResolvers';
 
@@ -24,9 +24,10 @@ export interface MovementEvidenceContext {
   productLabel?: string;
 }
 
-/** True when a movement has neither a structured source link nor a usable free-text reference. */
+/** True when a movement has neither a structured source link, a recoverable legacy reference, nor a usable free-text reference. */
 export function hasNoSourceEvidence(m: StockMovement): boolean {
   if (m.sourceDocumentType && m.sourceDocumentId) return false;
+  if (parseLegacyReference(m.reference)) return false;
   return isOpaqueReference(m.reference);
 }
 

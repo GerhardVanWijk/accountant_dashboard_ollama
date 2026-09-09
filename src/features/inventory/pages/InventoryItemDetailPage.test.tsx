@@ -101,7 +101,7 @@ describe('InventoryItemDetailPage', () => {
     renderAt();
     fireEvent.click(screen.getByRole('tab', { name: 'Traceability' }));
     fireEvent.click(screen.getByRole('button', { name: /Open evidence for Sale/i }));
-    expect(screen.getByText(/Unit cost applied/i)).toBeInTheDocument();
+    expect(screen.getByText(/Movement value/i)).toBeInTheDocument();
   });
 
   it('deep-link to an unknown id shows the not-found state', () => {
