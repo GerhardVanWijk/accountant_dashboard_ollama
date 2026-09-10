@@ -5,7 +5,9 @@ export interface AdjustmentReportRow {
   lineId: string;
   date: string;
   adjustmentNumber: string;
+  warehouse?: Warehouse;
   warehouseName: string;
+  warehouseCode?: string;
   productSku: string;
   productName: string;
   reason: StockAdjustment['reason'];
@@ -38,12 +40,15 @@ export function buildAdjustmentReportRows(
   for (const adjustment of adjustments) {
     for (const line of adjustment.lineItems) {
       const product = productById.get(line.productId);
+      const warehouse = warehouseById.get(line.warehouseId) ?? warehouseById.get(adjustment.warehouseId);
       rows.push({
         adjustment,
         lineId: line.id,
         date: adjustment.adjustmentDate,
         adjustmentNumber: adjustment.adjustmentNumber,
-        warehouseName: warehouseById.get(line.warehouseId)?.name ?? warehouseById.get(adjustment.warehouseId)?.name ?? '—',
+        warehouse,
+        warehouseName: warehouse?.name ?? '—',
+        warehouseCode: warehouse?.code,
         productSku: product?.sku ?? line.productId,
         productName: product?.name ?? line.productId,
         reason: adjustment.reason,

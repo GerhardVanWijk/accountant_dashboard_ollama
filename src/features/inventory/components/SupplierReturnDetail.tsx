@@ -1,5 +1,6 @@
 import type { Account, Product, Supplier, SupplierReturn, Warehouse } from '@/types';
 import { SectionCard } from '@/components/app/page-header';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { Amount } from '@/components/app/figure';
 import { StatTileGrid } from '@/components/app/stat-tile';
 import { CalendarIcon, CircleDollarSignIcon, PercentIcon, WalletCardsIcon } from 'lucide-react';
@@ -32,7 +33,6 @@ export function SupplierReturnDetail({
   onOpenJournal,
 }: SupplierReturnDetailProps) {
   const productName = (id: string) => products.find((p) => p.id === id)?.name ?? id;
-  const warehouseName = (id?: string) => (id ? (warehouses.find((w) => w.id === id)?.name ?? id) : '—');
   const supplierName = suppliers.find((s) => s.id === supplierReturn.supplierId)?.name ?? supplierReturn.supplierId;
   const resolveAccountLabel = (accountId: string) => {
     const account = accounts.find((a) => a.id === accountId);
@@ -75,7 +75,7 @@ export function SupplierReturnDetail({
               {supplierReturn.lineItems.map((line) => (
                 <tr key={line.id} className="border-b border-border last:border-0">
                   <td className="px-4 py-2">{productName(line.productId)}</td>
-                  <td className="px-4 py-2">{warehouseName(line.warehouseId)}</td>
+                  <td className="px-4 py-2"><WarehouseReference id={line.warehouseId} warehouses={warehouses} /></td>
                   <td className="px-4 py-2 text-right tabular-nums">{line.quantity}</td>
                   <td className="px-4 py-2 text-right">
                     <Amount value={line.unitPrice} plain />

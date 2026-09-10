@@ -1,4 +1,5 @@
 import type { OpeningStockBatch, Warehouse } from '@/types';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
 import { RecordLink } from '@/components/app/record-link';
@@ -35,7 +36,7 @@ export function OpeningStockBatchesTable({ batches, warehouses, onSelect, onDele
       header: 'Warehouse',
       hideBelowMd: true,
       sortValue: (b) => warehouseName(b.warehouseId),
-      cell: (b) => <span className="text-xs">{warehouseName(b.warehouseId)}</span>,
+      cell: (b) => <WarehouseReference id={b.warehouseId} warehouses={warehouses} className="text-xs" />,
     },
     {
       key: 'date',

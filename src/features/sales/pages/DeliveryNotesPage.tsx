@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BoxesIcon, FileTextIcon, ListIcon, Loader2, TruckIcon } from 'lucide-react';
 import { PageHeader } from '@/components/app/page-header';
 import { StatTileGrid } from '@/components/app/stat-tile';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatDate } from '@/lib/app/format';
 import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
@@ -138,7 +139,7 @@ export function DeliveryNotesPage() {
                     <td className="px-4 py-2 text-muted-foreground">{formatDate(dn.deliveryDate)}</td>
                     <td className="px-4 py-2">{customerMap.get(dn.customerId) ?? 'Unknown customer'}</td>
                     <td className="px-4 py-2 text-muted-foreground">{so?.orderNumber ?? '—'}</td>
-                    <td className="px-4 py-2 text-muted-foreground">{warehouse?.name ?? '—'}</td>
+                    <td className="px-4 py-2 text-muted-foreground"><WarehouseReference warehouse={warehouse} /></td>
                     <td className="px-4 py-2 text-right tabular-nums">{fmtQty(qty)}</td>
                     <td className="px-4 py-2"><StatusBadge status={dn.status} /></td>
                   </tr>

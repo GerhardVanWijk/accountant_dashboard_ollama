@@ -37,6 +37,7 @@ import { RecordAuditHistorySection } from '@/components/app/record-audit-history
 import { StatusBadge } from '@/components/app/status-badge';
 import { StatStrip, StatTile, type StatTone } from '@/components/app/stat-tile';
 import { SEMANTIC_ICONS } from '@/components/app/semantic-icons';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
 import { cn } from '@/lib/utils';
@@ -278,6 +279,7 @@ function SourceCell({
 interface LedgerRow {
   movement: StockMovement;
   warehouseName: string;
+  warehouse?: Warehouse;
   party?: string;
   src?: ResolvedSourceDocument;
   balanceAfter?: number;
@@ -295,12 +297,14 @@ interface LedgerRow {
 function TraceabilityLedger({
   movements,
   warehouseName,
+  resolveWarehouse,
   resolveParty,
   helpers,
   onSelect,
 }: {
   movements: StockMovement[];
   warehouseName: (id: string) => string;
+  resolveWarehouse: (id: string) => Warehouse | undefined;
   resolveParty: (m: StockMovement) => string | undefined;
   helpers: MovementLedgerHelpers;
   onSelect: (m: StockMovement, balanceAfter?: number) => void;
@@ -320,12 +324,13 @@ function TraceabilityLedger({
     return movements.map((m) => ({
       movement: m,
       warehouseName: warehouseName(m.warehouseId),
+      warehouse: resolveWarehouse(m.warehouseId),
       party: resolveParty(m),
       src: helpers.resolveSource?.(m),
       balanceAfter: balanceAfter.get(m.id),
       missingEvidence: hasNoSourceEvidence(m),
     }));
-  }, [movements, warehouseName, resolveParty, helpers]);
+  }, [movements, warehouseName, resolveWarehouse, resolveParty, helpers]);
 
   if (movements.length === 0) {
     return <p className="text-sm text-muted-foreground">This item has no stock movements.</p>;
@@ -342,11 +347,12 @@ function TraceabilityLedger({
       key: 'movement',
       header: 'Movement',
       cell: (r) => {
+        const whRef = r.warehouse?.code?.trim() || r.warehouseName;
         const dir =
           r.movement.type === 'transfer_in'
-            ? `→ ${r.warehouseName}`
+            ? `→ ${whRef}`
             : r.movement.type === 'transfer_out'
-              ? `${r.warehouseName} →`
+              ? `${whRef} →`
               : undefined;
         return (
           <div className="flex flex-col gap-0.5">
@@ -399,8 +405,8 @@ function TraceabilityLedger({
     {
       key: 'warehouse',
       header: 'Warehouse',
-      cell: (r) => r.warehouseName,
-      sortValue: (r) => r.warehouseName,
+      cell: (r) => <WarehouseReference warehouse={r.warehouse} fallback={r.warehouseName} />,
+      sortValue: (r) => r.warehouse?.code ?? r.warehouseName,
       hideBelowLg: true,
     },
     {
@@ -950,7 +956,7 @@ export function InventoryItemDetail({
                     <SubTable head={['Warehouse', 'On hand', 'Committed', 'Available', 'Value']}>
                       {productBalances.map((b) => (
                         <tr key={b.id} className="border-b border-border last:border-0">
-                          <td className="px-3 py-2">{warehouseName(b.warehouseId)}</td>
+                          <td className="px-3 py-2"><WarehouseReference id={b.warehouseId} warehouses={warehouses} /></td>
                           <td className="figure px-3 py-2 text-right tabular-nums">{b.quantityOnHand}</td>
                           <td className="figure px-3 py-2 text-right tabular-nums text-muted-foreground">{b.quantityCommitted}</td>
                           <td className="figure px-3 py-2 text-right tabular-nums">{b.quantityOnHand - b.quantityCommitted + b.quantityOnOrder}</td>
@@ -1027,7 +1033,7 @@ export function InventoryItemDetail({
                   const onO = onOrderAtWarehouse(b.warehouseId);
                   return (
                     <tr key={b.id} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2">{wh?.name ?? b.warehouseId}</td>
+                      <td className="px-3 py-2"><WarehouseReference warehouse={wh} /></td>
                       <td className="figure px-3 py-2 text-right tabular-nums">{b.quantityOnHand}</td>
                       <td className="figure px-3 py-2 text-right tabular-nums text-muted-foreground">{b.quantityCommitted}</td>
                       <td className="figure px-3 py-2 text-right tabular-nums text-muted-foreground">{onO}</td>
@@ -1060,8 +1066,8 @@ export function InventoryItemDetail({
                         {leg.transferNumber}
                       </Link>
                     </td>
-                    <td className="px-3 py-2 text-right">{warehouseName(leg.fromWarehouseId)}</td>
-                    <td className="px-3 py-2 text-right">{warehouseName(leg.toWarehouseId)}</td>
+                    <td className="px-3 py-2 text-right"><WarehouseReference id={leg.fromWarehouseId} warehouses={warehouses} /></td>
+                    <td className="px-3 py-2 text-right"><WarehouseReference id={leg.toWarehouseId} warehouses={warehouses} /></td>
                     <td className="figure px-3 py-2 text-right tabular-nums">{leg.quantity}</td>
                     <td className="figure px-3 py-2 text-right tabular-nums">{formatCurrency(leg.value)}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">{formatDate(leg.transferDate)}</td>
@@ -1118,7 +1124,7 @@ export function InventoryItemDetail({
                     <td className="figure px-3 py-2 text-right tabular-nums">{m.quantityDelta}</td>
                     <td className="figure px-3 py-2 text-right tabular-nums">{m.unitCost != null ? formatCurrency(m.unitCost) : '—'}</td>
                     <td className="figure px-3 py-2 text-right tabular-nums">{m.totalCost != null ? formatCurrency(m.totalCost) : '—'}</td>
-                    <td className="px-3 py-2 text-right text-xs text-muted-foreground">{warehouseName(m.warehouseId)}</td>
+                    <td className="px-3 py-2 text-right text-xs text-muted-foreground"><WarehouseReference id={m.warehouseId} warehouses={warehouses} /></td>
                     <td className="px-3 py-2 text-right">{movementStatus(m) ? <StatusBadge status={movementStatus(m)!} /> : <span className="text-xs text-muted-foreground">—</span>}</td>
                   </tr>
                 ))}
@@ -1175,7 +1181,7 @@ export function InventoryItemDetail({
                     <td className="figure px-3 py-2 text-right tabular-nums">{revenue != null ? formatCurrency(revenue) : '—'}</td>
                     <td className="figure px-3 py-2 text-right tabular-nums">{m.totalCost != null ? formatCurrency(cogs) : '—'}</td>
                     <td className="figure px-3 py-2 text-right tabular-nums">{gp != null ? formatCurrency(gp) : '—'}</td>
-                    <td className="px-3 py-2 text-right text-xs text-muted-foreground">{warehouseName(m.warehouseId)}</td>
+                    <td className="px-3 py-2 text-right text-xs text-muted-foreground"><WarehouseReference id={m.warehouseId} warehouses={warehouses} /></td>
                     <td className="px-3 py-2 text-right">{movementStatus(m) ? <StatusBadge status={movementStatus(m)!} /> : <span className="text-xs text-muted-foreground">—</span>}</td>
                   </tr>
                   );
@@ -1198,6 +1204,7 @@ export function InventoryItemDetail({
           <TraceabilityLedger
             movements={productMovements}
             warehouseName={warehouseName}
+            resolveWarehouse={(id) => warehouseById.get(id)}
             resolveParty={resolveParty}
             helpers={ledgerHelpers}
             onSelect={openMovement}

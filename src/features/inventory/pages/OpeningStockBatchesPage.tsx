@@ -20,9 +20,11 @@ import { OpeningStockBatchDocumentFormModal } from '../components/OpeningStockBa
 import type { CreateOpeningStockBatchDTO, UpdateOpeningStockBatchDTO } from '../services/openingStockBatchService';
 
 function buildOpeningStockExportColumns(warehouses: Warehouse[]): ExportColumn<OpeningStockBatch>[] {
-  const warehouseName = (id: string) => warehouses.find((w) => w.id === id)?.name ?? id;
+  const warehouseById = new Map(warehouses.map((w) => [w.id, w]));
+  const warehouseName = (id: string) => warehouseById.get(id)?.name ?? id;
   return [
     { key: 'number', header: 'Batch Number', accessor: (b) => b.batchNumber },
+    { key: 'warehouseCode', header: 'Warehouse Code', accessor: (b) => warehouseById.get(b.warehouseId)?.code ?? '' },
     { key: 'warehouse', header: 'Warehouse', accessor: (b) => warehouseName(b.warehouseId) },
     { key: 'date', header: 'Effective Date', accessor: (b) => new Date(b.effectiveDate) },
     {

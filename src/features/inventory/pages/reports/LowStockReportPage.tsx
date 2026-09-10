@@ -4,6 +4,7 @@ import { SectionCard } from '@/components/app/page-header';
 import { BoxesIcon, PackageXIcon, TriangleAlertIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { InventoryReportShell, ReportSummaryCard } from '../../components/reports/InventoryReportShell';
 import { useStockOnHandData } from '../../hooks/useStockOnHandData';
 import { useWarehouses } from '../../hooks/useWarehouses';
@@ -13,6 +14,7 @@ const LOW_STOCK_EXPORT_COLUMNS: ExportColumn<LowStockRow>[] = [
   { key: 'sku', header: 'SKU', accessor: (r) => r.product.sku },
   { key: 'product', header: 'Product', accessor: (r) => r.product.name },
   { key: 'category', header: 'Category', accessor: (r) => r.categoryName },
+  { key: 'warehouseCode', header: 'Warehouse Code', accessor: (r) => r.warehouse.code },
   { key: 'warehouse', header: 'Warehouse', accessor: (r) => r.warehouse.name },
   { key: 'onHand', header: 'On Hand', accessor: (r) => r.onHand, align: 'right' },
   { key: 'available', header: 'Available', accessor: (r) => r.available, align: 'right' },
@@ -61,7 +63,7 @@ export function LowStockReportPage() {
       ),
       sortValue: (r) => r.product.name,
     },
-    { key: 'warehouse', header: 'Warehouse', cell: (r) => r.warehouse.name, sortValue: (r) => r.warehouse.name },
+    { key: 'warehouse', header: 'Warehouse', cell: (r) => <WarehouseReference warehouse={r.warehouse} />, sortValue: (r) => r.warehouse.name },
     { key: 'onHand', header: 'On hand', align: 'right', cell: (r) => <span className="figure tabular-nums">{r.onHand}</span>, sortValue: (r) => r.onHand },
     { key: 'reorderLevel', header: 'Reorder level', align: 'right', cell: (r) => <span className="figure tabular-nums">{r.reorderLevel ?? '—'}</span>, sortValue: (r) => r.reorderLevel ?? -1 },
     { key: 'supplier', header: 'Preferred supplier', cell: (r) => r.supplierName, sortValue: (r) => r.supplierName, hideBelowMd: true },

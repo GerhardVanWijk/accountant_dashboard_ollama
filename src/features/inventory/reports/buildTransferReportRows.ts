@@ -4,8 +4,12 @@ export interface TransferReportRow {
   transfer: StockTransfer;
   transferNumber: string;
   transferDate: string;
+  fromWarehouse?: Warehouse;
+  toWarehouse?: Warehouse;
   fromWarehouseName: string;
   toWarehouseName: string;
+  fromWarehouseCode?: string;
+  toWarehouseCode?: string;
   status: StockTransfer['status'];
   itemCount: number;
   quantity: number;
@@ -28,6 +32,8 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 export function buildTransferReportRows(transfers: StockTransfer[], warehouses: Warehouse[]): TransferReportRow[] {
   const warehouseById = new Map(warehouses.map((w) => [w.id, w]));
   return transfers.map((transfer) => {
+    const fromWarehouse = warehouseById.get(transfer.fromWarehouseId);
+    const toWarehouse = warehouseById.get(transfer.toWarehouseId);
     const quantity = transfer.lineItems.reduce((sum, l) => sum + l.quantity, 0);
     const dispatchDate = transfer.transferDate;
     const receiptDate = transfer.receivedDate;
@@ -40,8 +46,12 @@ export function buildTransferReportRows(transfers: StockTransfer[], warehouses: 
       transfer,
       transferNumber: transfer.transferNumber,
       transferDate: transfer.transferDate,
-      fromWarehouseName: warehouseById.get(transfer.fromWarehouseId)?.name ?? transfer.fromWarehouseId,
-      toWarehouseName: warehouseById.get(transfer.toWarehouseId)?.name ?? transfer.toWarehouseId,
+      fromWarehouse,
+      toWarehouse,
+      fromWarehouseName: fromWarehouse?.name ?? transfer.fromWarehouseId,
+      toWarehouseName: toWarehouse?.name ?? transfer.toWarehouseId,
+      fromWarehouseCode: fromWarehouse?.code,
+      toWarehouseCode: toWarehouse?.code,
       status: transfer.status,
       itemCount: transfer.lineItems.length,
       quantity,

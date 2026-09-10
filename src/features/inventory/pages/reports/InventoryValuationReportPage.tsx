@@ -7,6 +7,7 @@ import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatCurrency } from '@/lib/app/format';
 import { sumMoney } from '../../services/inventoryValuation';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { InventoryReportShell, ReportSummaryCard } from '../../components/reports/InventoryReportShell';
 import { InventoryReconciliationCard } from '../../components/InventoryReconciliationCard';
 import { useInventoryReconciliation } from '../../hooks/useInventoryReconciliation';
@@ -18,6 +19,7 @@ const VALUATION_EXPORT_COLUMNS: ExportColumn<StockOnHandRow>[] = [
   { key: 'sku', header: 'SKU', accessor: (r) => r.product.sku },
   { key: 'product', header: 'Product', accessor: (r) => r.product.name },
   { key: 'category', header: 'Category', accessor: (r) => r.categoryName },
+  { key: 'warehouseCode', header: 'Warehouse Code', accessor: (r) => r.warehouse.code },
   { key: 'warehouse', header: 'Warehouse', accessor: (r) => r.warehouse.name },
   { key: 'quantity', header: 'Quantity', accessor: (r) => r.onHand, align: 'right' },
   { key: 'wac', header: 'WAC', accessor: (r) => r.wac, align: 'right' },
@@ -70,7 +72,7 @@ export function InventoryValuationReportPage() {
       sortValue: (r) => r.product.name,
     },
     { key: 'category', header: 'Category', cell: (r) => r.categoryName, sortValue: (r) => r.categoryName, hideBelowMd: true },
-    { key: 'warehouse', header: 'Warehouse', cell: (r) => r.warehouse.name, sortValue: (r) => r.warehouse.name },
+    { key: 'warehouse', header: 'Warehouse', cell: (r) => <WarehouseReference warehouse={r.warehouse} />, sortValue: (r) => r.warehouse.name },
     { key: 'quantity', header: 'Quantity', align: 'right', cell: (r) => <span className="figure tabular-nums">{r.onHand}</span>, sortValue: (r) => r.onHand },
     { key: 'wac', header: 'WAC', align: 'right', cell: (r) => <Amount value={r.wac} />, sortValue: (r) => r.wac },
     { key: 'value', header: 'Inventory value', align: 'right', cell: (r) => <Amount value={r.inventoryValue} />, sortValue: (r) => r.inventoryValue },

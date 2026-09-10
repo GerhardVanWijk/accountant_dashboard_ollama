@@ -33,6 +33,7 @@ const ADJUSTMENT_REASON_LABELS: Record<StockAdjustmentReason, string> = {
 const ADJUSTMENT_REPORT_EXPORT_COLUMNS: ExportColumn<AdjustmentReportRow>[] = [
   { key: 'date', header: 'Date', accessor: (r) => new Date(r.date) },
   { key: 'number', header: 'Adjustment Number', accessor: (r) => r.adjustmentNumber },
+  { key: 'warehouseCode', header: 'Warehouse Code', accessor: (r) => r.warehouseCode ?? '' },
   { key: 'warehouse', header: 'Warehouse', accessor: (r) => r.warehouseName },
   { key: 'product', header: 'Product', accessor: (r) => r.productName },
   { key: 'reason', header: 'Reason', accessor: (r) => ADJUSTMENT_REASON_LABELS[r.reason] },
@@ -139,7 +140,7 @@ export function StockAdjustmentReportPage() {
             rows={rows}
             columns={columns}
             getRowKey={(r) => r.lineId}
-            searchable={(r) => `${r.productName} ${r.productSku} ${r.adjustmentNumber} ${r.warehouseName}`}
+            searchable={(r) => `${r.productName} ${r.productSku} ${r.adjustmentNumber} ${r.warehouseName} ${r.warehouseCode ?? ''}`}
             searchPlaceholder="Search product, adjustment number"
             filters={filters}
             initialSortKey="date"

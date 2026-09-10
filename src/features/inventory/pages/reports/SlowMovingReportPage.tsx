@@ -7,6 +7,7 @@ import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { sumMoney } from '../../services/inventoryValuation';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { InventoryReportShell, ReportSummaryCard } from '../../components/reports/InventoryReportShell';
 import { useStockOnHandData } from '../../hooks/useStockOnHandData';
 import { useStockMovements } from '../../hooks/useStockMovements';
@@ -15,6 +16,7 @@ import { buildSlowMovingRows, SLOW_MOVING_BUCKET_LABEL, type SlowMovingBucket, t
 const SLOW_MOVING_EXPORT_COLUMNS: ExportColumn<SlowMovingRow>[] = [
   { key: 'sku', header: 'SKU', accessor: (r) => r.product.sku },
   { key: 'product', header: 'Product', accessor: (r) => r.product.name },
+  { key: 'warehouseCode', header: 'Warehouse Code', accessor: (r) => r.warehouse.code },
   { key: 'warehouse', header: 'Warehouse', accessor: (r) => r.warehouse.name },
   { key: 'lastMovement', header: 'Last Movement Date', accessor: (r) => (r.lastMovementAt ? new Date(r.lastMovementAt) : null) },
   { key: 'lastSale', header: 'Last Sale Date', accessor: (r) => (r.lastSaleAt ? new Date(r.lastSaleAt) : null) },
@@ -69,7 +71,7 @@ export function SlowMovingReportPage() {
       ),
       sortValue: (r) => r.product.name,
     },
-    { key: 'warehouse', header: 'Warehouse', cell: (r) => r.warehouse.name, sortValue: (r) => r.warehouse.name, hideBelowMd: true },
+    { key: 'warehouse', header: 'Warehouse', cell: (r) => <WarehouseReference warehouse={r.warehouse} />, sortValue: (r) => r.warehouse.name, hideBelowMd: true },
     {
       key: 'lastMovement',
       header: 'Last movement',

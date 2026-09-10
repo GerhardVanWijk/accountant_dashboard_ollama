@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
 import { Amount } from '@/components/app/figure';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { CircleCheckIcon, TruckIcon, WalletCardsIcon } from 'lucide-react';
 import { StatusBadge } from '@/components/app/status-badge';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
@@ -27,7 +28,9 @@ const TRANSFER_STATUS_LABEL: Record<TransferReportRow['status'], string> = {
 const TRANSFER_REPORT_EXPORT_COLUMNS: ExportColumn<TransferReportRow>[] = [
   { key: 'number', header: 'Transfer Number', accessor: (r) => r.transferNumber },
   { key: 'date', header: 'Date', accessor: (r) => new Date(r.transferDate) },
+  { key: 'fromCode', header: 'From Code', accessor: (r) => r.fromWarehouseCode ?? '' },
   { key: 'from', header: 'From', accessor: (r) => r.fromWarehouseName },
+  { key: 'toCode', header: 'To Code', accessor: (r) => r.toWarehouseCode ?? '' },
   { key: 'to', header: 'To', accessor: (r) => r.toWarehouseName },
   { key: 'status', header: 'Status', accessor: (r) => TRANSFER_STATUS_LABEL[r.status] },
   { key: 'items', header: 'Items', accessor: (r) => r.itemCount, align: 'right' },
@@ -78,8 +81,8 @@ export function TransferReportPage() {
   const columns: DataTableColumn<TransferReportRow>[] = [
     { key: 'number', header: 'Transfer', cell: (r) => <span className="figure text-xs">{r.transferNumber}</span>, sortValue: (r) => r.transferNumber },
     { key: 'date', header: 'Date', cell: (r) => formatDate(r.transferDate), sortValue: (r) => r.transferDate },
-    { key: 'from', header: 'From', cell: (r) => r.fromWarehouseName, sortValue: (r) => r.fromWarehouseName },
-    { key: 'to', header: 'To', cell: (r) => r.toWarehouseName, sortValue: (r) => r.toWarehouseName },
+    { key: 'from', header: 'From', cell: (r) => <WarehouseReference warehouse={r.fromWarehouse} fallback={r.fromWarehouseName} />, sortValue: (r) => r.fromWarehouseCode ?? r.fromWarehouseName },
+    { key: 'to', header: 'To', cell: (r) => <WarehouseReference warehouse={r.toWarehouse} fallback={r.toWarehouseName} />, sortValue: (r) => r.toWarehouseCode ?? r.toWarehouseName },
     { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} />, sortValue: (r) => r.status },
     { key: 'quantity', header: 'Quantity', align: 'right', cell: (r) => <span className="figure tabular-nums">{r.quantity}</span>, sortValue: (r) => r.quantity, hideBelowMd: true },
     { key: 'value', header: 'Value', align: 'right', cell: (r) => <Amount value={r.value} />, sortValue: (r) => r.value },
@@ -130,7 +133,7 @@ export function TransferReportPage() {
             rows={rows}
             columns={columns}
             getRowKey={(r) => r.transfer.id}
-            searchable={(r) => `${r.transferNumber} ${r.fromWarehouseName} ${r.toWarehouseName}`}
+            searchable={(r) => `${r.transferNumber} ${r.fromWarehouseName} ${r.toWarehouseName} ${r.fromWarehouseCode ?? ''} ${r.toWarehouseCode ?? ''}`}
             searchPlaceholder="Search transfer number, warehouse"
             filters={filters}
             initialSortKey="date"

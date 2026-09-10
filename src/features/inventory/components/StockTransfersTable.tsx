@@ -1,6 +1,7 @@
 import type { Product, StockTransfer, Warehouse } from '@/types';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
+import { WarehouseRoute, warehouseRefText } from '@/components/app/warehouse-reference';
 import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatDate } from '@/lib/app/format';
@@ -18,7 +19,9 @@ export interface StockTransfersTableProps {
 
 /** Stock transfer register — mirrors `StockAdjustmentsTable`'s shape. */
 export function StockTransfersTable({ transfers, products, warehouses, onSelect, onDelete, onVisibleRowsChange }: StockTransfersTableProps) {
+  const warehouseById = new Map(warehouses.map((w) => [w.id, w]));
   const warehouseName = (id: string) => warehouses.find((w) => w.id === id)?.name ?? id;
+  const warehouseRef = (id: string) => warehouseRefText(warehouseById.get(id), id);
   const productNames = (transfer: StockTransfer) =>
     transfer.lineItems.map((l) => products.find((p) => p.id === l.productId)?.name ?? l.productId).join(', ');
 
@@ -39,11 +42,14 @@ export function StockTransfersTable({ transfers, products, warehouses, onSelect,
     {
       key: 'route',
       header: 'Route',
-      sortValue: (t) => `${warehouseName(t.fromWarehouseId)} → ${warehouseName(t.toWarehouseId)}`,
+      sortValue: (t) => `${warehouseRef(t.fromWarehouseId)} → ${warehouseRef(t.toWarehouseId)}`,
       cell: (t) => (
-        <span className="text-xs">
-          {warehouseName(t.fromWarehouseId)} → {warehouseName(t.toWarehouseId)}
-        </span>
+        <WarehouseRoute
+          from={warehouseById.get(t.fromWarehouseId)}
+          to={warehouseById.get(t.toWarehouseId)}
+          stackBelow="sm"
+          className="text-xs"
+        />
       ),
     },
     {

@@ -7,6 +7,7 @@ import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatCurrency } from '@/lib/app/format';
 import { sumMoney } from '../../services/inventoryValuation';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { InventoryReportShell, ReportSummaryCard } from '../../components/reports/InventoryReportShell';
 import { useStockOnHandData } from '../../hooks/useStockOnHandData';
 import { useProductCategories } from '../../hooks/useProductCategories';
@@ -18,6 +19,7 @@ const STOCK_ON_HAND_EXPORT_COLUMNS: ExportColumn<StockOnHandRow>[] = [
   { key: 'sku', header: 'SKU', accessor: (r) => r.product.sku },
   { key: 'product', header: 'Product', accessor: (r) => r.product.name },
   { key: 'category', header: 'Category', accessor: (r) => r.categoryName },
+  { key: 'warehouseCode', header: 'Warehouse Code', accessor: (r) => r.warehouse.code },
   { key: 'warehouse', header: 'Warehouse', accessor: (r) => r.warehouse.name },
   { key: 'onHand', header: 'On Hand', accessor: (r) => r.onHand, align: 'right' },
   { key: 'available', header: 'Available', accessor: (r) => r.available, align: 'right' },
@@ -78,7 +80,7 @@ export function StockOnHandReportPage() {
       sortValue: (r) => r.product.name,
     },
     { key: 'category', header: 'Category', cell: (r) => r.categoryName, sortValue: (r) => r.categoryName, hideBelowMd: true },
-    { key: 'warehouse', header: 'Warehouse', cell: (r) => r.warehouse.name, sortValue: (r) => r.warehouse.name },
+    { key: 'warehouse', header: 'Warehouse', cell: (r) => <WarehouseReference warehouse={r.warehouse} />, sortValue: (r) => r.warehouse.name },
     { key: 'onHand', header: 'On hand', align: 'right', cell: (r) => <span className="figure tabular-nums">{r.onHand}</span>, sortValue: (r) => r.onHand },
     { key: 'available', header: 'Available', align: 'right', cell: (r) => <span className="figure tabular-nums">{r.available}</span>, sortValue: (r) => r.available, hideBelowMd: true },
     { key: 'reorderLevel', header: 'Reorder level', align: 'right', cell: (r) => <span className="figure tabular-nums">{r.reorderLevel ?? '—'}</span>, sortValue: (r) => r.reorderLevel ?? -1, hideBelowMd: true },

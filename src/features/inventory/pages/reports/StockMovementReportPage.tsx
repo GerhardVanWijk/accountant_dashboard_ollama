@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
 import { Amount } from '@/components/app/figure';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { ArrowLeftRightIcon, RouteIcon, TrendingDownIcon, TrendingUpIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
@@ -23,6 +24,7 @@ interface MovementReportRow {
   productName: string;
   productSku: string;
   warehouseName: string;
+  warehouseCode?: string;
   when: string;
 }
 
@@ -30,6 +32,7 @@ const MOVEMENT_REPORT_EXPORT_COLUMNS: ExportColumn<MovementReportRow>[] = [
   { key: 'when', header: 'Date', accessor: (r) => new Date(r.when) },
   { key: 'sku', header: 'SKU', accessor: (r) => r.productSku },
   { key: 'product', header: 'Product', accessor: (r) => r.productName },
+  { key: 'warehouseCode', header: 'Warehouse Code', accessor: (r) => r.warehouseCode ?? '' },
   { key: 'warehouse', header: 'Warehouse', accessor: (r) => r.warehouseName },
   { key: 'type', header: 'Movement', accessor: (r) => MOVEMENT_TYPE_LABELS[r.movement.type] },
   { key: 'qty', header: 'Quantity', accessor: (r) => r.movement.quantityDelta, align: 'right' },
@@ -77,6 +80,7 @@ export function StockMovementReportPage() {
         productName: productById.get(movement.productId)?.name ?? movement.productId,
         productSku: productById.get(movement.productId)?.sku ?? '',
         warehouseName: warehouseById.get(movement.warehouseId)?.name ?? movement.warehouseId,
+        warehouseCode: warehouseById.get(movement.warehouseId)?.code,
         when: movement.movementDate ?? movement.createdAt,
       }));
   }, [movements, productById, warehouseById, dateRange.range]);
@@ -107,7 +111,7 @@ export function StockMovementReportPage() {
       ),
       sortValue: (r) => r.productName,
     },
-    { key: 'warehouse', header: 'Warehouse', cell: (r) => r.warehouseName, sortValue: (r) => r.warehouseName, hideBelowMd: true },
+    { key: 'warehouse', header: 'Warehouse', cell: (r) => <WarehouseReference code={r.warehouseCode} name={r.warehouseName} fallback={r.warehouseName} />, sortValue: (r) => r.warehouseCode ?? r.warehouseName, hideBelowMd: true },
     { key: 'type', header: 'Movement', cell: (r) => MOVEMENT_TYPE_LABELS[r.movement.type], sortValue: (r) => r.movement.type },
     {
       key: 'qty',
@@ -158,7 +162,7 @@ export function StockMovementReportPage() {
             rows={rows}
             columns={columns}
             getRowKey={(r) => r.movement.id}
-            searchable={(r) => `${r.productName} ${r.productSku} ${r.movement.reference ?? ''} ${r.warehouseName}`}
+            searchable={(r) => `${r.productName} ${r.productSku} ${r.movement.reference ?? ''} ${r.warehouseName} ${r.warehouseCode ?? ''}`}
             searchPlaceholder="Search item, reference, warehouse"
             filters={filters}
             initialSortKey="when"

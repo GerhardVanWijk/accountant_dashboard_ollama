@@ -4,6 +4,7 @@ import { Amount } from '@/components/app/figure';
 import { StatTileGrid, type StatMetric } from '@/components/app/stat-tile';
 import { CalendarCheckIcon, CalendarClockIcon, CalendarIcon, ListIcon } from 'lucide-react';
 import { RecordLink } from '@/components/app/record-link';
+import { warehouseRefText } from '@/components/app/warehouse-reference';
 import { formatDate } from '@/lib/app/format';
 import type { AccountingEffectPreview } from '../types/accountingPreview';
 import { AccountingPreview } from './AccountingPreview';
@@ -32,7 +33,9 @@ export function StockTransferDetail({
   onOpenJournal,
 }: StockTransferDetailProps) {
   const productName = (id: string) => products.find((p) => p.id === id)?.name ?? id;
-  const warehouseName = (id: string) => warehouses.find((w) => w.id === id)?.name ?? id;
+  const warehouseById = new Map(warehouses.map((w) => [w.id, w]));
+  const warehouseName = (id: string) => warehouseById.get(id)?.name ?? id;
+  const warehouseRef = (id: string) => warehouseRefText(warehouseById.get(id), id);
   const resolveAccountLabel = (accountId: string) => {
     const account = accounts.find((a) => a.id === accountId);
     return account ? `${account.code} — ${account.name}` : accountId;
@@ -40,7 +43,10 @@ export function StockTransferDetail({
 
   return (
     <>
-      <SectionCard title={`${warehouseName(transfer.fromWarehouseId)} → ${warehouseName(transfer.toWarehouseId)}`}>
+      <SectionCard
+        title={`${warehouseRef(transfer.fromWarehouseId)} → ${warehouseRef(transfer.toWarehouseId)}`}
+        description={`${warehouseName(transfer.fromWarehouseId)} → ${warehouseName(transfer.toWarehouseId)}`}
+      >
         <StatTileGrid
           columns={3}
           metrics={[

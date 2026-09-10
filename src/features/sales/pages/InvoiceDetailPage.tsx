@@ -21,6 +21,7 @@ import {
   type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatStrip, StatTile } from '@/components/app/stat-tile';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
@@ -89,7 +90,7 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
 
   const customerName = invoice ? customerMap.get(invoice.customerId) || 'Unknown customer' : '';
   const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
-  const warehouseMap = useMemo(() => new Map(warehouses.map((w) => [w.id, w.name])), [warehouses]);
+  const warehouseMap = useMemo(() => new Map(warehouses.map((w) => [w.id, w])), [warehouses]);
 
   const relatedCreditNotes = useMemo(
     () => (invoice ? creditNotes.filter((cn) => cn.invoiceId === invoice.id) : []),
@@ -373,7 +374,7 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
                                 )}
                               </td>
                               <td className="px-4 py-2 text-muted-foreground">{MOVEMENT_TYPE_LABELS[m.type]}</td>
-                              <td className="px-4 py-2 text-muted-foreground">{warehouseMap.get(m.warehouseId) ?? m.warehouseId}</td>
+                              <td className="px-4 py-2 text-muted-foreground"><WarehouseReference warehouse={warehouseMap.get(m.warehouseId)} /></td>
                               <td className="figure px-4 py-2 text-right tabular-nums">{m.quantityDelta.toFixed(2)}</td>
                               <td className="figure px-4 py-2 text-right tabular-nums">{m.unitCost != null ? formatCurrency(m.unitCost) : '—'}</td>
                               <td className="figure px-4 py-2 text-right tabular-nums">{m.totalCost != null ? formatCurrency(m.totalCost) : '—'}</td>

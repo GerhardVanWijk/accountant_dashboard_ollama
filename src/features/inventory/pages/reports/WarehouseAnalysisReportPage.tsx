@@ -12,6 +12,7 @@ import { useWarehouses } from '../../hooks/useWarehouses';
 import { buildWarehouseAnalysisRows, type WarehouseAnalysisRow } from '../../reports/buildWarehouseAnalysisRows';
 
 const WAREHOUSE_ANALYSIS_EXPORT_COLUMNS: ExportColumn<WarehouseAnalysisRow>[] = [
+  { key: 'warehouseCode', header: 'Warehouse Code', accessor: (r) => r.warehouse.code },
   { key: 'warehouse', header: 'Warehouse', accessor: (r) => r.warehouse.name },
   { key: 'items', header: 'Items', accessor: (r) => r.itemCount, align: 'right' },
   { key: 'units', header: 'Units', accessor: (r) => r.units, align: 'right' },
@@ -43,7 +44,17 @@ export function WarehouseAnalysisReportPage() {
   const totalValue = sumMoney(rows.map((r) => r.inventoryValue));
 
   const columns: DataTableColumn<WarehouseAnalysisRow>[] = [
-    { key: 'warehouse', header: 'Warehouse', cell: (r) => r.warehouse.name, sortValue: (r) => r.warehouse.name },
+    {
+      key: 'warehouse',
+      header: 'Warehouse',
+      cell: (r) => (
+        <div className="flex flex-col">
+          <span className="font-medium text-foreground">{r.warehouse.name}</span>
+          <span className="figure text-xs text-muted-foreground tabular-nums">{r.warehouse.code}</span>
+        </div>
+      ),
+      sortValue: (r) => r.warehouse.name,
+    },
     { key: 'items', header: 'Items', align: 'right', cell: (r) => <span className="figure tabular-nums">{r.itemCount}</span>, sortValue: (r) => r.itemCount },
     { key: 'units', header: 'Units', align: 'right', cell: (r) => <span className="figure tabular-nums">{r.units}</span>, sortValue: (r) => r.units },
     { key: 'value', header: 'Inventory value', align: 'right', cell: (r) => <Amount value={r.inventoryValue} />, sortValue: (r) => r.inventoryValue },

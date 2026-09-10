@@ -20,12 +20,13 @@ vi.mock('../hooks/useStockMovementResolvers', () => ({
           : undefined,
     resolveAccounting: () => ({ inventoryAccount: '1200 Inventory', contraAccount: '5000 Cost of Goods Sold' }),
     resolveParty: (m: StockMovement) => (m.sourceDocumentType === 'bill' ? 'Acme Supplies' : undefined),
+    warehouse: (id: string) => (id === 'w1' ? { id: 'w1', code: 'WH-001', name: 'Main DC' } : undefined),
     warehouseName: (id: string) => (id === 'w1' ? 'Main DC' : id),
     productName: () => 'Widget',
     productSku: () => 'SKU-1',
     knownDocumentRefs: new Set<string>(),
     products,
-    warehouses: [{ id: 'w1', name: 'Main DC' }],
+    warehouses: [{ id: 'w1', code: 'WH-001', name: 'Main DC' }],
     transfers: [],
     loading: false,
   }),
@@ -77,6 +78,15 @@ describe('StockMovementsPage', () => {
     expect(screen.getByText('BILL-2001')).toBeInTheDocument();
     expect(screen.getByText('Acme Supplies')).toBeInTheDocument();
     expect(screen.queryByText('b1')).not.toBeInTheDocument();
+  });
+
+  it('shows the warehouse code in the dense table, with the full name kept accessible; never a raw id', () => {
+    renderPage();
+    expect(screen.getAllByText('WH-001').length).toBeGreaterThanOrEqual(1);
+    // full name is not printed into the row — it lives on the tooltip / aria-label
+    expect(screen.queryByText('Main DC', { exact: true })).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText(/WH-001 — Main DC/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('w1')).not.toBeInTheDocument();
   });
 
   it('badges a movement with no source link and a reversal', () => {

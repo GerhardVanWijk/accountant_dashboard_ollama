@@ -31,6 +31,8 @@ export interface StockMovementResolvers {
   resolveAccounting: (m: StockMovement) => MovementAccounting | undefined;
   /** Customer / supplier behind the movement, where derivable. */
   resolveParty: (m: StockMovement) => string | undefined;
+  /** The resolved warehouse (for `<WarehouseReference>` / `<WarehouseRoute>`); undefined for an unknown id. */
+  warehouse: (id: ID) => Warehouse | undefined;
   warehouseName: (id: ID) => string;
   productName: (id: ID) => string;
   productSku: (id: ID) => string;
@@ -162,6 +164,7 @@ export function useStockMovementResolvers(): StockMovementResolvers {
         }
         return undefined;
       },
+      warehouse: (id) => warehouseById.get(id),
       warehouseName: (id) => warehouseById.get(id)?.name ?? id,
       productName: (id) => productById.get(id)?.name ?? id,
       productSku: (id) => productById.get(id)?.sku ?? '',

@@ -5,6 +5,7 @@ import { BoxesIcon, PackageXIcon, PowerOffIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatDateTime } from '@/lib/app/format';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { InventoryReportShell, ReportSummaryCard } from '../../components/reports/InventoryReportShell';
 import { useStockOnHandData } from '../../hooks/useStockOnHandData';
 import { useStockMovements } from '../../hooks/useStockMovements';
@@ -15,6 +16,7 @@ const OUT_OF_STOCK_EXPORT_COLUMNS: ExportColumn<OutOfStockRow>[] = [
   { key: 'sku', header: 'SKU', accessor: (r) => r.product.sku },
   { key: 'product', header: 'Product', accessor: (r) => r.product.name },
   { key: 'category', header: 'Category', accessor: (r) => r.categoryName },
+  { key: 'warehouseCode', header: 'Warehouse Code', accessor: (r) => r.warehouse.code },
   { key: 'warehouse', header: 'Warehouse', accessor: (r) => r.warehouse.name },
   { key: 'supplier', header: 'Preferred Supplier', accessor: (r) => r.supplierName },
   { key: 'reorderLevel', header: 'Reorder Level', accessor: (r) => r.reorderLevel ?? null, align: 'right' },
@@ -65,7 +67,7 @@ export function OutOfStockReportPage() {
       ),
       sortValue: (r) => r.product.name,
     },
-    { key: 'warehouse', header: 'Warehouse', cell: (r) => r.warehouse.name, sortValue: (r) => r.warehouse.name },
+    { key: 'warehouse', header: 'Warehouse', cell: (r) => <WarehouseReference warehouse={r.warehouse} />, sortValue: (r) => r.warehouse.name },
     { key: 'supplier', header: 'Preferred supplier', cell: (r) => r.supplierName, sortValue: (r) => r.supplierName, hideBelowMd: true },
     {
       key: 'lastMovement',

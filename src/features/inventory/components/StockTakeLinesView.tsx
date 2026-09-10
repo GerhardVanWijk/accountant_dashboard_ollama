@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Product, StockTakeLine, Warehouse } from '@/types';
 import { Amount } from '@/components/app/figure';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import type { StockTakeCountInput } from '../services/stockTakeService';
@@ -23,7 +24,6 @@ export function StockTakeLinesView({ lines, products, warehouses, onSaveCounts }
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const productName = (id: string) => products.find((p) => p.id === id)?.name ?? id;
-  const warehouseName = (id: string) => warehouses.find((w) => w.id === id)?.name ?? id;
   const editable = Boolean(onSaveCounts);
 
   const countedFor = (line: StockTakeLine) => (line.id in edits ? edits[line.id] : (line.countedQty?.toString() ?? ''));
@@ -60,7 +60,7 @@ export function StockTakeLinesView({ lines, products, warehouses, onSaveCounts }
             {lines.map((line) => (
               <tr key={line.id} className="border-b border-border last:border-0">
                 <td className="px-4 py-2">{productName(line.productId)}</td>
-                <td className="px-4 py-2">{warehouseName(line.warehouseId)}</td>
+                <td className="px-4 py-2"><WarehouseReference id={line.warehouseId} warehouses={warehouses} /></td>
                 <td className="px-4 py-2 text-right tabular-nums">{line.expectedQty}</td>
                 <td className="px-4 py-2 text-right">
                   {editable ? (

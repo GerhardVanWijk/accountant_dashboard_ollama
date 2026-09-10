@@ -1,5 +1,6 @@
 import type { Account, Product, StockAdjustment, StockAdjustmentReason, Warehouse } from '@/types';
 import { SectionCard } from '@/components/app/page-header';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { Amount } from '@/components/app/figure';
 import { StatTileGrid } from '@/components/app/stat-tile';
 import { ArrowLeftRightIcon, CalendarIcon, ListIcon } from 'lucide-react';
@@ -85,7 +86,7 @@ export function StockAdjustmentDetail({
               {adjustment.lineItems.map((line) => (
                 <tr key={line.id} className="border-b border-border last:border-0">
                   <td className="px-4 py-2">{productName(line.productId)}</td>
-                  <td className="px-4 py-2">{warehouseName(line.warehouseId)}</td>
+                  <td className="px-4 py-2"><WarehouseReference id={line.warehouseId} warehouses={warehouses} /></td>
                   <td className="px-4 py-2 text-right tabular-nums">{line.quantityDelta}</td>
                   <td className="px-4 py-2 text-right">
                     <Amount value={line.unitCost} plain />

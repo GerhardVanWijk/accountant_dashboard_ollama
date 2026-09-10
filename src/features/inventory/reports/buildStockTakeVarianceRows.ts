@@ -4,7 +4,9 @@ export interface StockTakeVarianceRow {
   stockTake: StockTake;
   lineId: string;
   stockTakeNumber: string;
+  warehouse?: Warehouse;
   warehouseName: string;
+  warehouseCode?: string;
   countDate: string;
   productSku: string;
   productName: string;
@@ -36,11 +38,14 @@ export function buildStockTakeVarianceRows(stockTakes: StockTake[], products: Pr
     for (const line of stockTake.lineItems) {
       if (line.countedQty === undefined) continue;
       const product = productById.get(line.productId);
+      const warehouse = warehouseById.get(line.warehouseId) ?? warehouseById.get(stockTake.warehouseId);
       rows.push({
         stockTake,
         lineId: line.id,
         stockTakeNumber: stockTake.stockTakeNumber,
-        warehouseName: warehouseById.get(line.warehouseId)?.name ?? warehouseById.get(stockTake.warehouseId)?.name ?? '—',
+        warehouse,
+        warehouseName: warehouse?.name ?? '—',
+        warehouseCode: warehouse?.code,
         countDate: stockTake.countDate,
         productSku: product?.sku ?? line.productId,
         productName: product?.name ?? line.productId,

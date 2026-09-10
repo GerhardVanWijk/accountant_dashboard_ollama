@@ -1,4 +1,5 @@
 import type { Product, StockAdjustment, StockAdjustmentReason, Warehouse } from '@/types';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
 import { RecordLink } from '@/components/app/record-link';
@@ -57,7 +58,7 @@ export function StockAdjustmentsTable({ adjustments, products, warehouses, onSel
       header: 'Warehouse',
       hideBelowMd: true,
       sortValue: (a) => warehouseName(a.warehouseId),
-      cell: (a) => <span className="text-xs">{warehouseName(a.warehouseId)}</span>,
+      cell: (a) => <WarehouseReference id={a.warehouseId} warehouses={warehouses} className="text-xs" />,
     },
     {
       key: 'date',

@@ -1,4 +1,5 @@
 import type { StockTake, Warehouse } from '@/types';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
 import { RecordLink } from '@/components/app/record-link';
@@ -38,7 +39,7 @@ export function StockTakesTable({ stockTakes, warehouses, onSelect, onDelete }: 
       header: 'Warehouse',
       hideBelowMd: true,
       sortValue: (s) => warehouseName(s.warehouseId),
-      cell: (s) => <span className="text-xs">{warehouseName(s.warehouseId)}</span>,
+      cell: (s) => <WarehouseReference id={s.warehouseId} warehouses={warehouses} className="text-xs" />,
     },
     {
       key: 'date',

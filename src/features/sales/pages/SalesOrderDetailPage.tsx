@@ -22,6 +22,7 @@ import {
   type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatStrip, StatTile } from '@/components/app/stat-tile';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
 import { formatCurrency, formatDate } from '@/lib/app/format';
@@ -332,7 +333,7 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
                     </button>
                   </td>
                   <td className="py-2 pr-3 text-muted-foreground">{formatDate(dn.deliveryDate)}</td>
-                  <td className="py-2 pr-3 text-muted-foreground">{warehouseByIdMap.get(dn.warehouseId)?.name ?? '—'}</td>
+                  <td className="py-2 pr-3 text-muted-foreground"><WarehouseReference warehouse={warehouseByIdMap.get(dn.warehouseId)} /></td>
                   <td className="py-2 pr-3 text-right tabular-nums">{fmtQty(dn.lineItems.reduce((s, l) => s + l.quantity, 0))}</td>
                   <td className="py-2"><StatusBadge status={dn.status} /></td>
                 </tr>

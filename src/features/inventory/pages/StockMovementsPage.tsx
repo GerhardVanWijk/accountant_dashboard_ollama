@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import type { StockMovement } from '@/types';
+import type { StockMovement, Warehouse } from '@/types';
 import { RouteIcon, TrendingDownIcon, TrendingUpIcon, TriangleAlertIcon } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { StatTileGrid } from '@/components/app/stat-tile';
+import { WarehouseReference, WarehouseRoute } from '@/components/app/warehouse-reference';
 import { Button } from '@/components/ui/shadcn/button';
 import { Amount } from '@/components/app/figure';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
@@ -29,6 +30,9 @@ interface MovementRow {
   productName: string;
   productSku: string;
   warehouseName: string;
+  warehouse?: Warehouse;
+  fromWarehouse?: Warehouse;
+  toWarehouse?: Warehouse;
   fromTo: string;
   sourceLabel: string;
   sourceNumber?: string;
@@ -43,6 +47,7 @@ const MOVEMENT_EXPORT_COLUMNS: ExportColumn<MovementRow>[] = [
   { key: 'when', header: 'Date', accessor: (r) => new Date(r.when) },
   { key: 'sku', header: 'SKU', accessor: (r) => r.productSku },
   { key: 'product', header: 'Product', accessor: (r) => r.productName },
+  { key: 'warehouseCode', header: 'Warehouse Code', accessor: (r) => r.warehouse?.code ?? '' },
   { key: 'warehouse', header: 'Warehouse', accessor: (r) => r.warehouseName },
   { key: 'type', header: 'Movement', accessor: (r) => MOVEMENT_TYPE_LABELS[r.movement.type] },
   { key: 'in', header: 'Qty In', accessor: (r) => (r.movement.quantityDelta > 0 ? r.movement.quantityDelta : null), align: 'right' },
@@ -97,9 +102,13 @@ export function StockMovementsPage() {
       .map((movement) => {
         const src = resolvers.resolveSource(movement);
         let fromTo = '';
+        let fromWarehouse: Warehouse | undefined;
+        let toWarehouse: Warehouse | undefined;
         if ((movement.type === 'transfer_in' || movement.type === 'transfer_out') && movement.sourceDocumentId) {
           const t = resolvers.transfers.find((tr) => tr.id === movement.sourceDocumentId);
           if (t) {
+            fromWarehouse = resolvers.warehouse(t.fromWarehouseId);
+            toWarehouse = resolvers.warehouse(t.toWarehouseId);
             fromTo = `${resolvers.warehouseName(t.fromWarehouseId)} → ${resolvers.warehouseName(t.toWarehouseId)}`;
           }
         }
@@ -108,6 +117,9 @@ export function StockMovementsPage() {
           productName: resolvers.productName(movement.productId),
           productSku: resolvers.productSku(movement.productId),
           warehouseName: resolvers.warehouseName(movement.warehouseId),
+          warehouse: resolvers.warehouse(movement.warehouseId),
+          fromWarehouse,
+          toWarehouse,
           fromTo,
           sourceLabel: src?.label ?? (movement.sourceDocumentType ?? '—'),
           sourceNumber: src?.number,
@@ -177,7 +189,9 @@ export function StockMovementsPage() {
               <span className="rounded border border-border bg-muted px-1 py-px text-[0.65rem] text-muted-foreground">reversal</span>
             )}
           </span>
-          {r.fromTo && <span className="text-xs text-muted-foreground">{r.fromTo}</span>}
+          {(r.fromWarehouse || r.toWarehouse) && (
+            <WarehouseRoute from={r.fromWarehouse} to={r.toWarehouse} stackBelow="sm" className="text-xs text-muted-foreground" />
+          )}
         </div>
       ),
       sortValue: (r) => r.movement.type,
@@ -207,8 +221,8 @@ export function StockMovementsPage() {
     {
       key: 'warehouse',
       header: 'Warehouse',
-      cell: (r) => <span className="text-sm text-muted-foreground">{r.warehouseName}</span>,
-      sortValue: (r) => r.warehouseName,
+      cell: (r) => <WarehouseReference warehouse={r.warehouse} fallback={r.warehouseName} className="text-sm text-muted-foreground" />,
+      sortValue: (r) => r.warehouse?.code ?? r.warehouseName,
       hideBelowMd: true,
     },
     {
@@ -345,7 +359,7 @@ export function StockMovementsPage() {
             rows={rows}
             columns={columns}
             getRowKey={(r) => r.movement.id}
-            searchable={(r) => `${r.productName} ${r.productSku} ${r.sourceNumber ?? ''} ${r.sourceLabel} ${r.party ?? ''} ${r.warehouseName} ${r.movement.reference ?? ''}`}
+            searchable={(r) => `${r.productName} ${r.productSku} ${r.sourceNumber ?? ''} ${r.sourceLabel} ${r.party ?? ''} ${r.warehouseName} ${r.warehouse?.code ?? ''} ${r.fromTo} ${r.movement.reference ?? ''}`}
             searchPlaceholder="Search item, SKU, document, party, warehouse"
             filters={filters}
             initialSortKey="when"

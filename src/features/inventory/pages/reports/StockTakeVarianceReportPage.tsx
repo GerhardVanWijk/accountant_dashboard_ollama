@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
 import { Amount } from '@/components/app/figure';
+import { WarehouseReference } from '@/components/app/warehouse-reference';
 import { ArrowLeftRightIcon, PackageXIcon, TrendingDownIcon, TrendingUpIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
@@ -18,6 +19,7 @@ import { isWithinDateRange } from '../../reports/dateRange';
 
 const STOCK_TAKE_VARIANCE_EXPORT_COLUMNS: ExportColumn<StockTakeVarianceRow>[] = [
   { key: 'stockTake', header: 'Stock Take', accessor: (r) => r.stockTakeNumber },
+  { key: 'warehouseCode', header: 'Warehouse Code', accessor: (r) => r.warehouseCode ?? '' },
   { key: 'warehouse', header: 'Warehouse', accessor: (r) => r.warehouseName },
   { key: 'date', header: 'Date', accessor: (r) => new Date(r.countDate) },
   { key: 'sku', header: 'SKU', accessor: (r) => r.productSku },
@@ -80,7 +82,7 @@ export function StockTakeVarianceReportPage() {
       ),
       sortValue: (r) => r.productName,
     },
-    { key: 'warehouse', header: 'Warehouse', cell: (r) => r.warehouseName, sortValue: (r) => r.warehouseName, hideBelowMd: true },
+    { key: 'warehouse', header: 'Warehouse', cell: (r) => <WarehouseReference warehouse={r.warehouse} fallback={r.warehouseName} />, sortValue: (r) => r.warehouseCode ?? r.warehouseName, hideBelowMd: true },
     { key: 'expected', header: 'Expected', align: 'right', cell: (r) => <span className="figure tabular-nums">{r.expectedQty}</span>, sortValue: (r) => r.expectedQty, hideBelowMd: true },
     { key: 'counted', header: 'Counted', align: 'right', cell: (r) => <span className="figure tabular-nums">{r.countedQty}</span>, sortValue: (r) => r.countedQty },
     { key: 'varianceQty', header: 'Variance', align: 'right', cell: (r) => <span className={`figure tabular-nums ${r.varianceQty < 0 ? 'text-negative' : r.varianceQty > 0 ? 'text-positive' : ''}`}>{r.varianceQty > 0 ? `+${r.varianceQty}` : r.varianceQty}</span>, sortValue: (r) => r.varianceQty },
@@ -127,7 +129,7 @@ export function StockTakeVarianceReportPage() {
             rows={rows}
             columns={columns}
             getRowKey={(r) => r.lineId}
-            searchable={(r) => `${r.productName} ${r.productSku} ${r.stockTakeNumber} ${r.warehouseName}`}
+            searchable={(r) => `${r.productName} ${r.productSku} ${r.stockTakeNumber} ${r.warehouseName} ${r.warehouseCode ?? ''}`}
             searchPlaceholder="Search product, stock take"
             filters={filters}
             initialSortKey="date"
