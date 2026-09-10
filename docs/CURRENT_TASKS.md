@@ -2,6 +2,23 @@
 
 ---
 
+## GLOBAL UX / TERMINOLOGY / RECORD-RELATIONSHIPS / CLICKABILITY / DENSITY PASS (branch `global-ux-terminology-relationships-2026-09-10`) — 2026-09-10
+
+**SHIPPED 2026-09-10** — on explicit user instruction ahead of human browser QA, `global-ux-terminology-relationships-2026-09-10` was fast-forward-merged → `main` (`161bae7..eef042a`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). **No migration, no DB write, no accounting-posting / GL / WAC / inventory-valuation / reconciliation / lifecycle change** — this is UI, presentation-mapping and read-side relationship resolution only (`fulfilled`→"Completed" and `partially_paid`→"Partially Paid" are display labels over unchanged persisted enums; the SO "Fulfilled … via posted invoice" figure is presentation over unchanged fulfilment logic; account-mapping drilldowns read existing `product.*AccountId` / `category.*AccountId` fields and standard CoA codes). **Post-deploy browser QA is now owed.**
+
+Two runs on one branch: (1) shared-component pass — terminology via `status-badge.tsx`, warning-amber contrast tokens in `tokens.css`, `StatTile`/`StatStrip` density + clickable drill-down + wrapping, Sales Order Related Records rebuilt, Inventory product KPI→tab drilldowns + `?tab=` + tab counts; (2) continuation — Product Overview reorganised into form-style two-column sections, `InventoryItemDetail` migrated off shadcn `Tabs` onto shared `RecordTabs`, product Accounting-tab account/figure drilldowns, SO "Delivered 0 / Completed" → "Fulfilled … via posted invoice" (both DN and invoice-dispatch paths tested), Related Records pass across Quote / Invoice / Delivery Note / Return Note / Credit Note / Customer Receipt / Purchase Order / Supplier Invoice / Supplier Payment / Supplier Return (unique labels — fixes a React-key collision that hid repeated rows — real counts, whole-row `onActivate`, `?record=<id>` party links), `RelatedRecordsSection` row wrapping. 3208 tests.
+
+### Post-deploy browser-QA checklist (owed — no browser automation in-session)
+
+1. Sales Order badge reads "Completed" (lists, detail, filters, search); Invoice/Bill statuses read "Partially Paid".
+2. Inventory reconciliation findings + warning badges/tiles are readable (dark amber on white; bright amber in dark mode); re-confirm dark mode.
+3. Inventory Product: compact KPI strip, KPI tiles open the right tab, `?tab=` survives refresh + browser back/forward, tab counts, Overview reads as compact form-style sections at all widths, Accounting-tab account links open the CoA record, summary figures drill.
+4. Every migrated document page: Related Records lists the real chain with correct count, each row is whole-row clickable to the right destination, no UUIDs, no clipped long names.
+5. Sales Order with a fully-posted invoice and no delivery note: KPI reads "Fulfilled / Via posted invoice", not "Delivered 0"; one with a posted Delivery Note still shows "Delivered".
+6. No horizontal page scroll at narrow-desktop / tablet / mobile widths on any of the above.
+
+---
+
 ## ACCOUNTING RECORD WORKSPACE COMPLETION — REAL TABS, STOCK SOURCE-LINK REPAIR, MORE MIGRATIONS (branch `accounting-record-workspace-completion-2026-09-10`) — 2026-09-10
 
 **SHIPPED 2026-09-10** — on explicit user instruction ahead of human browser QA, `accounting-record-workspace-completion-2026-09-10` was fast-forward-merged → `main` (`94ee487..39abb22`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). **No migration, no DB write, no accounting-posting logic change** — one read-side repository mapping was corrected (`SupabaseStockMovementRepository` had been dropping migration-0022 columns); the DB and all historical rows are untouched. **Post-deploy browser QA is now owed** (see checklist below).
