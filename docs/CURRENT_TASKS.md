@@ -4,7 +4,9 @@
 
 ## ACCOUNTING RECORD WORKSPACE COMPLETION — REAL TABS, STOCK SOURCE-LINK REPAIR, MORE MIGRATIONS (branch `accounting-record-workspace-completion-2026-09-10`) — 2026-09-10
 
-**NOT pushed, NOT deployed.** Committed locally on `accounting-record-workspace-completion-2026-09-10` (branched from `main` `94ee487`). Follow-up to the previous workspace run after browser QA exposed that the tabs were decorative, stock-movement source links were broken, and several document types were still un-migrated. **No migration. No accounting-posting logic change.** One read-side repository mapping was corrected (it had been dropping columns); the DB and all historical rows are untouched.
+**SHIPPED 2026-09-10** — on explicit user instruction ahead of human browser QA, `accounting-record-workspace-completion-2026-09-10` was fast-forward-merged → `main` (`94ee487..39abb22`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). **No migration, no DB write, no accounting-posting logic change** — one read-side repository mapping was corrected (`SupabaseStockMovementRepository` had been dropping migration-0022 columns); the DB and all historical rows are untouched. **Post-deploy browser QA is now owed** (see checklist below).
+
+Follow-up to the previous workspace run after browser QA exposed that the tabs were decorative, stock-movement source links were broken, and several document types were still un-migrated.
 
 ### RecordTabs — the tabs now actually switch content (`B`)
 
