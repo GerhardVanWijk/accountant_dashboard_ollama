@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
+import { StatTileGrid, type StatMetric } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { ExportMenu } from '@/features/export/components/ExportMenu';
 import { PrintableReport } from '@/features/export/components/PrintableReport';
@@ -87,8 +88,22 @@ export function InventoryReportShell<T>({
   );
 }
 
-/** A plain `SectionCard`-wrapped grid of summary figures — the shape every report's summary slot uses. */
-export function ReportSummaryCard({ children }: { children: ReactNode }) {
+/**
+ * The summary strip every report's summary slot uses. Prefer the data-driven
+ * `metrics` form — it renders the shared compact `StatTile` grid (icons,
+ * branded tooltips, responsive collapse, no card-in-card). The `children`
+ * form is kept for the few summaries that aren't a plain figure row.
+ */
+export function ReportSummaryCard({
+  metrics,
+  columns,
+  children,
+}: {
+  metrics?: StatMetric[];
+  columns?: 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  children?: ReactNode;
+}) {
+  if (metrics) return <StatTileGrid metrics={metrics} columns={columns} />;
   return (
     <SectionCard>
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{children}</div>

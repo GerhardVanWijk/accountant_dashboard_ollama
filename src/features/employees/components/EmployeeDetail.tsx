@@ -1,6 +1,8 @@
+import { CalendarIcon, CalendarOffIcon, RepeatIcon, WalletCardsIcon } from 'lucide-react';
 import type { Employee } from '@/types';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid, type StatMetric } from '@/components/app/stat-tile';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { EMPLOYMENT_TYPE_LABELS, PAY_FREQUENCY_LABELS } from '../constants';
 
@@ -25,12 +27,17 @@ export function EmployeeDetail({ employee }: EmployeeDetailProps) {
   return (
     <>
       <SectionCard title={`${employee.firstName} ${employee.lastName}`} description={EMPLOYMENT_TYPE_LABELS[employee.employmentType]}>
-        <div className="grid grid-cols-2 gap-4">
-          <FigureBlock label="Basic salary" value={formatCurrency(employee.basicSalary)} />
-          <FigureBlock label="Pay frequency" value={PAY_FREQUENCY_LABELS[employee.payFrequency]} />
-          <FigureBlock label="Started" value={formatDate(employee.startDate)} />
-          {employee.terminationDate && <FigureBlock label="Terminated" value={formatDate(employee.terminationDate)} />}
-        </div>
+        <StatTileGrid
+          columns={employee.terminationDate ? 4 : 3}
+          metrics={[
+            { label: 'Basic salary', value: formatCurrency(employee.basicSalary), icon: WalletCardsIcon },
+            { label: 'Pay frequency', value: PAY_FREQUENCY_LABELS[employee.payFrequency], icon: RepeatIcon },
+            { label: 'Started', value: formatDate(employee.startDate), icon: CalendarIcon },
+            ...(employee.terminationDate
+              ? [{ label: 'Terminated', value: formatDate(employee.terminationDate), tone: 'negative', icon: CalendarOffIcon } as StatMetric]
+              : []),
+          ]}
+        />
       </SectionCard>
 
       {(employee.standardAllowances.length > 0 || employee.standardDeductions.length > 0) && (

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Plus } from 'lucide-react';
+import { CircleCheckIcon, FileTextIcon, HourglassIcon, Loader2, Plus, WalletCardsIcon } from 'lucide-react';
 import type { Invoice } from '@/types';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { PageHeader } from '@/components/app/page-header';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
@@ -77,14 +77,15 @@ export function InvoicesPage() {
           }
         />
 
-        <SectionCard>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <FigureBlock label="Outstanding" value={formatCurrency(outstandingTotal)} hint={`${outstandingInvoices.length} invoices awaiting payment`} />
-            <FigureBlock label="Overdue" value={formatCurrency(overdueTotal)} hint={`${overdueInvoices.length} past their due date`} tone="negative" />
-            <FigureBlock label="Collected" value={formatCurrency(paidTotal)} hint="Fully settled invoices" tone="positive" />
-            <FigureBlock label="In draft" value={String(drafts.length)} hint="Not yet sent to customers" tone={drafts.length > 0 ? 'warning' : 'default'} />
-          </div>
-        </SectionCard>
+        <StatTileGrid
+          columns={4}
+          metrics={[
+            { label: 'Outstanding', value: formatCurrency(outstandingTotal), hint: `${outstandingInvoices.length} invoices awaiting payment`, icon: WalletCardsIcon },
+            { label: 'Overdue', value: formatCurrency(overdueTotal), hint: `${overdueInvoices.length} past their due date`, tone: 'negative', icon: HourglassIcon },
+            { label: 'Collected', value: formatCurrency(paidTotal), hint: 'Fully settled invoices', tone: 'positive', icon: CircleCheckIcon },
+            { label: 'In draft', value: String(drafts.length), hint: 'Not yet sent to customers', tone: drafts.length > 0 ? 'warning' : 'default', icon: FileTextIcon },
+          ]}
+        />
 
         {loading ? (
           <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">

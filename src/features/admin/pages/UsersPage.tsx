@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Plus, UserPlus, Copy, Check } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { HelpLink } from '@/features/help/components/HelpLink';
-import { FigureBlock } from '@/components/app/figure';
+import { CircleCheckIcon, ShieldIcon, UsersIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Avatar, AvatarFallback } from '@/components/ui/shadcn/avatar';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -722,13 +723,14 @@ export function UsersPage() {
 
       {!loading && (
         <>
-          <SectionCard>
-            <div className="grid gap-6 sm:grid-cols-3">
-              <FigureBlock label="Total users" value={String(users.length)} />
-              <FigureBlock label="Active" value={String(activeCount)} tone="positive" />
-              <FigureBlock label="Custom roles" value={String(roles.filter((r) => r.isCustom).length)} />
-            </div>
-          </SectionCard>
+          <StatTileGrid
+            columns={3}
+            metrics={[
+              { label: 'Total users', value: String(users.length), icon: UsersIcon },
+              { label: 'Active', value: String(activeCount), tone: 'positive', icon: CircleCheckIcon },
+              { label: 'Custom roles', value: String(roles.filter((r) => r.isCustom).length), icon: ShieldIcon },
+            ]}
+          />
 
           <SectionCard title="Users">
             <UsersTable

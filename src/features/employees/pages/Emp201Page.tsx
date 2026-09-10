@@ -2,7 +2,9 @@
 import { Loader2 } from 'lucide-react';
 import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock, Amount } from '@/components/app/figure';
+import { CircleDollarSignIcon, LandmarkIcon, ShieldIcon, UsersIcon } from 'lucide-react';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { formatCurrency } from '@/lib/app/format';
 import { cn } from '@/lib/utils';
@@ -127,14 +129,15 @@ export function Emp201Page() {
 
       {!loading && !error && report && (
         <>
-          <SectionCard>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              <FigureBlock label="PAYE" value={formatCurrency(report.paye)} />
-              <FigureBlock label="UIF (Employee + Employer)" value={formatCurrency(report.totalUif)} />
-              <FigureBlock label="SDL" value={formatCurrency(report.sdl)} />
-              <FigureBlock label="Statutory Liability Due" value={formatCurrency(report.statutoryLiability)} tone="warning" />
-            </div>
-          </SectionCard>
+          <StatTileGrid
+            columns={4}
+            metrics={[
+              { label: 'PAYE', value: formatCurrency(report.paye), icon: LandmarkIcon },
+              { label: 'UIF (Employee + Employer)', value: formatCurrency(report.totalUif), icon: UsersIcon },
+              { label: 'SDL', value: formatCurrency(report.sdl), icon: ShieldIcon },
+              { label: 'Statutory Liability Due', value: formatCurrency(report.statutoryLiability), tone: 'warning', icon: CircleDollarSignIcon },
+            ]}
+          />
 
           <SectionCard title="Detail">
             <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">

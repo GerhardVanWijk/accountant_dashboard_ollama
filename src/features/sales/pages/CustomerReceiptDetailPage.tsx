@@ -249,10 +249,10 @@ export function CustomerReceiptDetailPage({ recordId, embedded }: RecordPageProp
           )}
 
           <StatStrip columns={3}>
-            <StatTile size="compact" icon={BanknoteIcon} label="Amount received" value={formatCurrency(receipt.amount)} />
-            <StatTile size="compact" icon={WalletIcon} label="Applied to invoices" value={formatCurrency(allocated)} tone={allocated > 0 ? 'positive' : 'default'} />
+            <StatTile variant="compact" icon={BanknoteIcon} label="Amount received" value={formatCurrency(receipt.amount)} />
+            <StatTile variant="compact" icon={WalletIcon} label="Applied to invoices" value={formatCurrency(allocated)} tone={allocated > 0 ? 'positive' : 'default'} />
             <StatTile
-              size="compact"
+              variant="compact"
               icon={PiggyBankIcon}
               label="Customer deposit"
               value={formatCurrency(receipt.unallocatedAmount)}

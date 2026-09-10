@@ -1,7 +1,8 @@
 ﻿import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { CircleDollarSignIcon, MinusCircleIcon, PercentIcon, TrendingUpIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
@@ -125,22 +126,25 @@ export function CapitalGainsPage() {
             </p>
           )}
 
-          <SectionCard>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <FigureBlock
-                label="Net Capital Gain / Loss"
-                value={formatCurrency(report.netCapitalGainLoss)}
-                hint={report.netCapitalLossForPeriod > 0 ? `Net capital loss of ${formatCurrency(report.netCapitalLossForPeriod)} for the period — not carried forward by this app` : undefined}
-              />
-              <FigureBlock
-                label={`Annual Exclusion ${report.annualExclusionEligible ? 'Applied' : '(N/A)'}`}
-                value={formatCurrency(report.annualExclusionApplied)}
-                hint={report.annualExclusionEligible ? `Of ${formatCurrency(report.annualExclusionAvailable)} available` : undefined}
-              />
-              <FigureBlock label="Inclusion Rate" value={`${report.inclusionRatePercent}%`} hint={ENTITY_BUCKET_LABELS[report.entityTypeBucket]} />
-              <FigureBlock label="Taxable Capital Gain" value={formatCurrency(report.taxableCapitalGain)} />
-            </div>
-          </SectionCard>
+          <StatTileGrid
+            columns={4}
+            metrics={[
+              {
+                label: 'Net Capital Gain / Loss',
+                value: formatCurrency(report.netCapitalGainLoss),
+                hint: report.netCapitalLossForPeriod > 0 ? `Net capital loss of ${formatCurrency(report.netCapitalLossForPeriod)} for the period — not carried forward by this app` : undefined,
+                icon: TrendingUpIcon,
+              },
+              {
+                label: `Annual Exclusion ${report.annualExclusionEligible ? 'Applied' : '(N/A)'}`,
+                value: formatCurrency(report.annualExclusionApplied),
+                hint: report.annualExclusionEligible ? `Of ${formatCurrency(report.annualExclusionAvailable)} available` : undefined,
+                icon: MinusCircleIcon,
+              },
+              { label: 'Inclusion Rate', value: `${report.inclusionRatePercent}%`, hint: ENTITY_BUCKET_LABELS[report.entityTypeBucket], icon: PercentIcon },
+              { label: 'Taxable Capital Gain', value: formatCurrency(report.taxableCapitalGain), icon: CircleDollarSignIcon },
+            ]}
+          />
 
           <SectionCard>
             {report.disposals.length === 0 ? (

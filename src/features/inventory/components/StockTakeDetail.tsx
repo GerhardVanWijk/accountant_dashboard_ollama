@@ -1,6 +1,7 @@
 import type { Account, Product, StockTake, Warehouse } from '@/types';
 import { SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { StatTileGrid, type StatMetric } from '@/components/app/stat-tile';
+import { ArrowLeftRightIcon, CalendarIcon, SnowflakeIcon } from 'lucide-react';
 import { RecordLink } from '@/components/app/record-link';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import type { AccountingEffectPreview } from '../types/accountingPreview';
@@ -42,15 +43,21 @@ export function StockTakeDetail({
   return (
     <>
       <SectionCard title={warehouseName(stockTake.warehouseId)} description={SCOPE_LABEL[stockTake.scope]}>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <FigureBlock label="Count date" value={formatDate(stockTake.countDate)} />
-          {stockTake.frozenAt && <FigureBlock label="Frozen" value={formatDate(stockTake.frozenAt)} />}
-          <FigureBlock
-            label="Net variance value"
-            value={formatCurrency(stockTake.totalVarianceValue)}
-            tone={stockTake.totalVarianceValue < 0 ? 'negative' : stockTake.totalVarianceValue > 0 ? 'positive' : 'default'}
-          />
-        </div>
+        <StatTileGrid
+          columns={3}
+          metrics={[
+            { label: 'Count date', value: formatDate(stockTake.countDate), icon: CalendarIcon },
+            ...(stockTake.frozenAt
+              ? [{ label: 'Frozen', value: formatDate(stockTake.frozenAt), icon: SnowflakeIcon } as StatMetric]
+              : []),
+            {
+              label: 'Net variance value',
+              value: formatCurrency(stockTake.totalVarianceValue),
+              tone: stockTake.totalVarianceValue < 0 ? 'negative' : stockTake.totalVarianceValue > 0 ? 'positive' : 'default',
+              icon: ArrowLeftRightIcon,
+            },
+          ]}
+        />
         {stockTake.notes && <p className="mt-4 text-sm text-muted-foreground">{stockTake.notes}</p>}
         {stockTake.journalEntryId && (
           <p className="mt-4 text-xs">

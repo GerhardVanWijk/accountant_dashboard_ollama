@@ -202,10 +202,10 @@ export function SupplierPaymentDetailPage({ recordId, embedded }: RecordPageProp
           />
 
           <StatStrip columns={3}>
-            <StatTile size="compact" icon={BanknoteIcon} label="Amount paid" value={formatCurrency(payment.amount)} />
-            <StatTile size="compact" icon={WalletIcon} label="Allocated" value={formatCurrency(allocated)} tone={allocated > 0 ? 'positive' : 'default'} />
+            <StatTile variant="compact" icon={BanknoteIcon} label="Amount paid" value={formatCurrency(payment.amount)} />
+            <StatTile variant="compact" icon={WalletIcon} label="Allocated" value={formatCurrency(allocated)} tone={allocated > 0 ? 'positive' : 'default'} />
             <StatTile
-              size="compact"
+              variant="compact"
               icon={WalletIcon}
               label="On account"
               value={formatCurrency(payment.unallocatedAmount)}

@@ -65,6 +65,8 @@ describe('VatReturnPage', () => {
     expect(screen.getAllByText('Output VAT').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/150[,.]00/).length).toBeGreaterThan(0);
     expect(screen.getByText('Net VAT payable')).toBeInTheDocument();
+    // compact StatTileGrid summary — money shows "R", never the "ZAR" ISO code
+    expect(document.body.textContent).not.toMatch(/ZAR\s?\d/);
   });
 
   it('shows the real posted document behind the VAT figures (transaction traceability)', () => {

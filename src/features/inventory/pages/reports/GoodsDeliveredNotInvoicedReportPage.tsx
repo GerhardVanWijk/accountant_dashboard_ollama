@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { CircleCheckIcon, TriangleAlertIcon, WalletCardsIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatCurrency } from '@/lib/app/format';
@@ -56,12 +56,20 @@ export function GoodsDeliveredNotInvoicedReportPage() {
       exportDataset={exportDataset}
       summary={
         result && (
-          <ReportSummaryCard>
-            <FigureBlock label="Outstanding delivered cost" value={formatCurrency(result.totalOutstandingCost)} />
-            <FigureBlock label="GL 1220 — Goods Delivered Not Invoiced" value={formatCurrency(result.glBalance)} />
-            <FigureBlock label="Difference" value={formatCurrency(result.difference)} />
-            <FigureBlock label="Status" value={result.isReconciled ? 'Reconciled' : 'Investigate'} tone={result.isReconciled ? 'positive' : 'negative'} />
-          </ReportSummaryCard>
+          <ReportSummaryCard
+            columns={4}
+            metrics={[
+              { label: 'Outstanding delivered cost', value: formatCurrency(result.totalOutstandingCost), icon: WalletCardsIcon },
+              { label: 'GL 1220 — Goods Delivered Not Invoiced', value: formatCurrency(result.glBalance), icon: WalletCardsIcon },
+              { label: 'Difference', value: formatCurrency(result.difference), icon: WalletCardsIcon },
+              {
+                label: 'Status',
+                value: result.isReconciled ? 'Reconciled' : 'Investigate',
+                tone: result.isReconciled ? 'positive' : 'negative',
+                icon: result.isReconciled ? CircleCheckIcon : TriangleAlertIcon,
+              },
+            ]}
+          />
         )
       }
     >

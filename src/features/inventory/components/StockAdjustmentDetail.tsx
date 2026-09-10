@@ -1,6 +1,8 @@
 import type { Account, Product, StockAdjustment, StockAdjustmentReason, Warehouse } from '@/types';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
+import { ArrowLeftRightIcon, CalendarIcon, ListIcon } from 'lucide-react';
 import { RecordLink } from '@/components/app/record-link';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import type { AccountingEffectPreview } from '../types/accountingPreview';
@@ -46,15 +48,19 @@ export function StockAdjustmentDetail({
   return (
     <>
       <SectionCard title={REASON_LABEL[adjustment.reason]} description={warehouseName(adjustment.warehouseId)}>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <FigureBlock label="Adjustment date" value={formatDate(adjustment.adjustmentDate)} />
-          <FigureBlock
-            label="Net cost effect"
-            value={formatCurrency(adjustment.totalCostEffect)}
-            tone={adjustment.totalCostEffect < 0 ? 'negative' : adjustment.totalCostEffect > 0 ? 'positive' : 'default'}
-          />
-          <FigureBlock label="Lines" value={String(adjustment.lineItems.length)} />
-        </div>
+        <StatTileGrid
+          columns={3}
+          metrics={[
+            { label: 'Adjustment date', value: formatDate(adjustment.adjustmentDate), icon: CalendarIcon },
+            {
+              label: 'Net cost effect',
+              value: formatCurrency(adjustment.totalCostEffect),
+              tone: adjustment.totalCostEffect < 0 ? 'negative' : adjustment.totalCostEffect > 0 ? 'positive' : 'default',
+              icon: ArrowLeftRightIcon,
+            },
+            { label: 'Lines', value: String(adjustment.lineItems.length), icon: ListIcon },
+          ]}
+        />
         {adjustment.notes && <p className="mt-4 text-sm text-muted-foreground">{adjustment.notes}</p>}
         {adjustment.journalEntryId && (
           <p className="mt-4 text-xs">

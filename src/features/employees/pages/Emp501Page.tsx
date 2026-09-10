@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock, Amount } from '@/components/app/figure';
+import { CircleDollarSignIcon, LandmarkIcon, ShieldIcon, UsersIcon } from 'lucide-react';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { formatCurrency } from '@/lib/app/format';
 import { useEmp501Report } from '../hooks/useEmp501Report';
@@ -66,14 +68,15 @@ export function Emp501Page() {
 
       {!loading && !error && report && (
         <>
-          <SectionCard>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              <FigureBlock label="PAYE" value={formatCurrency(report.totals.paye)} />
-              <FigureBlock label="UIF (Employee + Employer)" value={formatCurrency(report.totals.uifEmployee + report.totals.uifEmployer)} />
-              <FigureBlock label="SDL" value={formatCurrency(report.totals.sdl)} />
-              <FigureBlock label="Total Statutory Liability" value={formatCurrency(report.totals.statutoryLiability)} tone="warning" />
-            </div>
-          </SectionCard>
+          <StatTileGrid
+            columns={4}
+            metrics={[
+              { label: 'PAYE', value: formatCurrency(report.totals.paye), icon: LandmarkIcon },
+              { label: 'UIF (Employee + Employer)', value: formatCurrency(report.totals.uifEmployee + report.totals.uifEmployer), icon: UsersIcon },
+              { label: 'SDL', value: formatCurrency(report.totals.sdl), icon: ShieldIcon },
+              { label: 'Total Statutory Liability', value: formatCurrency(report.totals.statutoryLiability), tone: 'warning', icon: CircleDollarSignIcon },
+            ]}
+          />
 
           <SectionCard>
             <div className="overflow-x-auto rounded-lg border border-border">

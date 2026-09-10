@@ -226,9 +226,9 @@ export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
           )}
 
           <StatStrip columns={3}>
-            <StatTile size="compact" icon={ReceiptTextIcon} label="Quotation total" value={formatCurrency(quote.total)} />
-            <StatTile size="compact" icon={PercentIcon} label="VAT" value={formatCurrency(quote.taxTotal)} />
-            <StatTile size="compact" icon={CalendarClockIcon} label="Expires" value={formatDate(quote.expiryDate)} />
+            <StatTile variant="compact" icon={ReceiptTextIcon} label="Quotation total" value={formatCurrency(quote.total)} />
+            <StatTile variant="compact" icon={PercentIcon} label="VAT" value={formatCurrency(quote.taxTotal)} />
+            <StatTile variant="compact" icon={CalendarClockIcon} label="Expires" value={formatDate(quote.expiryDate)} />
           </StatStrip>
 
           <RecordTabs urlParam="tab" embedded={embedded} ariaLabel="Quotation sections" tabs={tabs} />

@@ -1,7 +1,9 @@
 ﻿import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { LandmarkIcon, PercentIcon } from 'lucide-react';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { HelpLink } from '@/features/help/components/HelpLink';
 import { Button } from '@/components/ui/shadcn/button';
 import { formatCurrency } from '@/lib/app/format';
@@ -164,22 +166,25 @@ export function VatReturnPage() {
 
       {!loading && !error && report && (
         <>
-          <SectionCard>
-            <div className="grid gap-6 sm:grid-cols-3">
-              <FigureBlock label="Output VAT" value={formatCurrency(report.outputVat.total)} hint="Charged on sales" />
-              <FigureBlock
-                label="Input VAT (claimable)"
-                value={formatCurrency(report.inputVat.total)}
-                hint={report.inputVat.nonDeductibleTotal > 0 ? `+${formatCurrency(report.inputVat.nonDeductibleTotal)} paid but not claimable` : 'Claimed on purchases'}
-              />
-              <FigureBlock
-                label={report.netVatPayable >= 0 ? 'Net VAT payable' : 'Net VAT refundable'}
-                value={formatCurrency(Math.abs(report.netVatPayable))}
-                hint="Output less input VAT"
-                tone={report.netVatPayable >= 0 ? 'warning' : 'positive'}
-              />
-            </div>
-          </SectionCard>
+          <StatTileGrid
+            columns={3}
+            metrics={[
+              { label: 'Output VAT', value: formatCurrency(report.outputVat.total), hint: 'Charged on sales', icon: PercentIcon },
+              {
+                label: 'Input VAT (claimable)',
+                value: formatCurrency(report.inputVat.total),
+                hint: report.inputVat.nonDeductibleTotal > 0 ? `+${formatCurrency(report.inputVat.nonDeductibleTotal)} paid but not claimable` : 'Claimed on purchases',
+                icon: PercentIcon,
+              },
+              {
+                label: report.netVatPayable >= 0 ? 'Net VAT payable' : 'Net VAT refundable',
+                value: formatCurrency(Math.abs(report.netVatPayable)),
+                hint: 'Output less input VAT',
+                tone: report.netVatPayable >= 0 ? 'warning' : 'positive',
+                icon: LandmarkIcon,
+              },
+            ]}
+          />
 
           {report.unresolvedLineCount > 0 && (
             <p role="alert" className="rounded-lg border border-status-warning-outline bg-status-warning-surface px-4 py-2.5 text-sm text-status-warning">

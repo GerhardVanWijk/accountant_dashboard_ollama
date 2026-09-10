@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { BoxesIcon, PackageXIcon, PowerOffIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatDateTime } from '@/lib/app/format';
@@ -103,11 +103,14 @@ export function OutOfStockReportPage() {
       canExport={canExport}
       exportDataset={exportDataset}
       summary={
-        <ReportSummaryCard>
-          <FigureBlock label="Out-of-stock items" value={String(rows.length)} tone={rows.length > 0 ? 'negative' : 'default'} />
-          <FigureBlock label="Filtered items" value={String(visibleRows.length)} />
-          <FigureBlock label="Inactive products among these" value={String(inactiveCount)} />
-        </ReportSummaryCard>
+        <ReportSummaryCard
+          columns={3}
+          metrics={[
+            { label: 'Out-of-stock items', value: String(rows.length), tone: rows.length > 0 ? 'negative' : 'default', icon: PackageXIcon },
+            { label: 'Filtered items', value: String(visibleRows.length), icon: BoxesIcon },
+            { label: 'Inactive products among these', value: String(inactiveCount), icon: PowerOffIcon },
+          ]}
+        />
       }
     >
       <SectionCard title="Out of stock" bodyClassName="p-4 sm:p-5">

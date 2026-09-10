@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Loader2, Plus, Truck, UploadIcon } from 'lucide-react';
-import { FigureBlock } from '@/components/app/figure';
+import { CircleCheckIcon, HourglassIcon, PauseIcon, WalletCardsIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -111,33 +112,15 @@ export function SupplierListPage({ suppliersState, onView, onEdit, onCreate }: S
       />
 
       {!loading && !error && (
-        <SectionCard>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <FigureBlock
-              label="Total payable"
-              value={formatCurrency(fleetSummary.totalPayable)}
-              hint={`Across ${suppliers.length} accounts`}
-            />
-            <FigureBlock
-              label="Due for release"
-              value={formatCurrency(fleetSummary.totalOutstanding)}
-              hint="Approved and awaiting payment"
-              tone="warning"
-            />
-            <FigureBlock
-              label="Active accounts"
-              value={String(fleetSummary.activeCount)}
-              hint="Currently trading"
-              tone="positive"
-            />
-            <FigureBlock
-              label="On hold"
-              value={String(fleetSummary.onHoldCount)}
-              hint="Purchasing frozen"
-              tone={fleetSummary.onHoldCount > 0 ? 'warning' : 'default'}
-            />
-          </div>
-        </SectionCard>
+        <StatTileGrid
+          columns={4}
+          metrics={[
+            { label: 'Total payable', value: formatCurrency(fleetSummary.totalPayable), hint: `Across ${suppliers.length} accounts`, icon: WalletCardsIcon },
+            { label: 'Due for release', value: formatCurrency(fleetSummary.totalOutstanding), hint: 'Approved and awaiting payment', tone: 'warning', icon: HourglassIcon },
+            { label: 'Active accounts', value: String(fleetSummary.activeCount), hint: 'Currently trading', tone: 'positive', icon: CircleCheckIcon },
+            { label: 'On hold', value: String(fleetSummary.onHoldCount), hint: 'Purchasing frozen', tone: fleetSummary.onHoldCount > 0 ? 'warning' : 'default', icon: PauseIcon },
+          ]}
+        />
       )}
 
       {loading && (

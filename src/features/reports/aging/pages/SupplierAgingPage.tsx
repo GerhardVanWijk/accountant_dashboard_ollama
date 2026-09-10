@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { HourglassIcon, TriangleAlertIcon, UsersIcon, WalletCardsIcon } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
@@ -71,14 +72,15 @@ export function SupplierAgingPage() {
         }
       />
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <FigureBlock label="Suppliers with balance" value={String(withBalanceCount)} />
-          <FigureBlock label="Total payable" value={formatCurrency(totals.total)} />
-          <FigureBlock label="Current" value={formatCurrency(totals.current)} />
-          <FigureBlock label="90+ days overdue" value={formatCurrency(totals.days90Plus)} tone={totals.days90Plus > 0 ? 'negative' : 'default'} />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={4}
+        metrics={[
+          { label: 'Suppliers with balance', value: String(withBalanceCount), icon: UsersIcon },
+          { label: 'Total payable', value: formatCurrency(totals.total), icon: WalletCardsIcon },
+          { label: 'Current', value: formatCurrency(totals.current), icon: HourglassIcon },
+          { label: '90+ days overdue', value: formatCurrency(totals.days90Plus), tone: totals.days90Plus > 0 ? 'negative' : 'default', icon: TriangleAlertIcon },
+        ]}
+      />
 
       <label className="flex items-center gap-2 text-sm text-muted-foreground">
         <Checkbox checked={showAll} onCheckedChange={(value) => setShowAll(value === true)} />

@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { ArrowLeftRightIcon, BanknoteIcon, TrendingUpIcon } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
@@ -75,11 +77,14 @@ export function CashFlowStatementPage() {
       {!loading && !error && statement && activeFinancialYear && (
         <>
           <SectionCard title={activeFinancialYear.name} description={`${formatDate(activeFinancialYear.startDate)} – ${formatDate(activeFinancialYear.endDate)}`}>
-            <div className="grid gap-6 sm:grid-cols-3">
-              <FigureBlock label="Net profit (period)" value={formatCurrency(statement.netProfit)} />
-              <FigureBlock label="Net cash movement" value={formatCurrency(statement.netCashMovement)} />
-              <FigureBlock label="Actual cash and bank movement" value={formatCurrency(statement.actualCashMovement)} />
-            </div>
+            <StatTileGrid
+              columns={3}
+              metrics={[
+                { label: 'Net profit (period)', value: formatCurrency(statement.netProfit), icon: TrendingUpIcon },
+                { label: 'Net cash movement', value: formatCurrency(statement.netCashMovement), icon: ArrowLeftRightIcon },
+                { label: 'Actual cash and bank movement', value: formatCurrency(statement.actualCashMovement), icon: BanknoteIcon },
+              ]}
+            />
           </SectionCard>
 
           <SectionCard>

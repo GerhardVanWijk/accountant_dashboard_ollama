@@ -166,6 +166,11 @@
      — see that block's comment for why a bare var() can't take a Tailwind
      opacity modifier under this project's Tailwind v3. */
   --brand-outline: oklch(0.76 0.15 166 / 30%);
+  /* Deep Vertex green — high-contrast branded surface for tooltips/popovers
+     that must read as deliberate chrome, not a status wash. Paired with a
+     near-white foreground. Global UX pass (icon-led KPI/tab tooltips). */
+  --brand-deep: oklch(0.34 0.06 166);
+  --brand-deep-foreground: oklch(0.98 0.01 166);
   --panel: oklch(0.19 0.004 240);
   --positive: oklch(0.76 0.15 166);
   --negative: oklch(0.68 0.19 22);
@@ -256,6 +261,10 @@
   /* Restore a bright amber for status text/badges on the near-black panel —
      the light-surface value set on :root is too dark to read here. */
   --warning: oklch(0.83 0.13 82);
+  /* Deep green needs a touch more lightness to separate from the near-black
+     surface behind it in dark mode. */
+  --brand-deep: oklch(0.4 0.07 166);
+  --brand-deep-foreground: oklch(0.99 0.01 166);
 }
 
 /* The brand green is the single primary action colour across the v0

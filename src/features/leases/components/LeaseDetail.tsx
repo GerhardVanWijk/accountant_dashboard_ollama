@@ -1,6 +1,8 @@
+import { CalendarIcon, CircleDollarSignIcon, ClockIcon, PercentIcon, WalletCardsIcon } from 'lucide-react';
 import type { LeaseAmortizationEntry, LeaseContract } from '@/types/lease';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { RecordLink } from '@/components/app/record-link';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 
@@ -17,14 +19,17 @@ export function LeaseDetail({ lease, amortizationHistory, onOpenJournal }: Lease
   return (
     <>
       <SectionCard title={lease.assetDescription} description={lease.lessorName}>
-        <div className="grid grid-cols-2 gap-4">
-          <FigureBlock label="Outstanding liability" value={formatCurrency(lease.outstandingLeaseLiability)} />
-          <FigureBlock label="ROU carrying value" value={formatCurrency(rouCarryingValue)} tone="positive" />
-          <FigureBlock label="Monthly payment" value={formatCurrency(lease.monthlyPayment)} />
-          <FigureBlock label="Commenced" value={formatDate(lease.commencementDate)} />
-          <FigureBlock label="Term" value={`${lease.leaseTermMonths} months`} />
-          <FigureBlock label="Discount rate" value={`${lease.discountRatePercent}%`} />
-        </div>
+        <StatTileGrid
+          columns={3}
+          metrics={[
+            { label: 'Outstanding liability', value: formatCurrency(lease.outstandingLeaseLiability), icon: WalletCardsIcon },
+            { label: 'ROU carrying value', value: formatCurrency(rouCarryingValue), icon: CircleDollarSignIcon },
+            { label: 'Monthly payment', value: formatCurrency(lease.monthlyPayment), icon: WalletCardsIcon },
+            { label: 'Commenced', value: formatDate(lease.commencementDate), icon: CalendarIcon },
+            { label: 'Term', value: `${lease.leaseTermMonths} months`, icon: ClockIcon },
+            { label: 'Discount rate', value: `${lease.discountRatePercent}%`, icon: PercentIcon },
+          ]}
+        />
         {lease.status === 'terminated' && lease.terminationDate && <p className="mt-4 text-xs text-muted-foreground">Terminated {formatDate(lease.terminationDate)}.</p>}
       </SectionCard>
 

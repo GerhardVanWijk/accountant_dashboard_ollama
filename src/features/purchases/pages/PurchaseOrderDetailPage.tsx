@@ -383,11 +383,11 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
           )}
 
           <StatStrip columns={4}>
-            <StatTile size="compact" icon={ReceiptTextIcon} label="PO total" value={formatCurrency(po.total)} />
-            <StatTile size="compact" icon={BoxesIcon} label="Ordered" value={fmtQty(orderedQty)} />
-            <StatTile size="compact" icon={PackageCheckIcon} label="Received" value={fmtQty(receivedQty)} tone={receivedQty > 0 ? 'positive' : 'default'} />
+            <StatTile variant="compact" icon={ReceiptTextIcon} label="PO total" value={formatCurrency(po.total)} />
+            <StatTile variant="compact" icon={BoxesIcon} label="Ordered" value={fmtQty(orderedQty)} />
+            <StatTile variant="compact" icon={PackageCheckIcon} label="Received" value={fmtQty(receivedQty)} tone={receivedQty > 0 ? 'positive' : 'default'} />
             <StatTile
-              size="compact"
+              variant="compact"
               icon={PackageXIcon}
               label="Remaining"
               value={fmtQty(remainingQty)}

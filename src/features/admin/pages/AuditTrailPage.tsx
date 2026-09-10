@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import type { AuditLogEntry } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { HistoryIcon, RotateCcwIcon, ShieldIcon, WalletCardsIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect } from '@/components/app/combobox';
@@ -145,14 +146,15 @@ export function AuditTrailPage() {
         }
       />
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <FigureBlock label="Events (30 days)" value={kpis ? String(kpis.events) : '—'} hint="All logged changes" />
-          <FigureBlock label="Financial postings" value={kpis ? String(kpis.financialPostings) : '—'} hint="Last 30 days" />
-          <FigureBlock label="Security & admin" value={kpis ? String(kpis.securityAdmin) : '—'} hint="Users, roles, company" />
-          <FigureBlock label="Reversals & corrections" value={kpis ? String(kpis.reversals) : '—'} hint="Last 30 days" />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={4}
+        metrics={[
+          { label: 'Events (30 days)', value: kpis ? String(kpis.events) : '—', hint: 'All logged changes', icon: HistoryIcon },
+          { label: 'Financial postings', value: kpis ? String(kpis.financialPostings) : '—', hint: 'Last 30 days', icon: WalletCardsIcon },
+          { label: 'Security & admin', value: kpis ? String(kpis.securityAdmin) : '—', hint: 'Users, roles, company', icon: ShieldIcon },
+          { label: 'Reversals & corrections', value: kpis ? String(kpis.reversals) : '—', hint: 'Last 30 days', icon: RotateCcwIcon },
+        ]}
+      />
 
       <SectionCard title="Events" bodyClassName="flex flex-col gap-4 p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-2">

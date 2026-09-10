@@ -380,10 +380,10 @@ export function CreditNoteDetailPage({ recordId, embedded }: RecordPageProps = {
           )}
 
           <StatStrip columns={3}>
-            <StatTile size="compact" icon={ReceiptTextIcon} label="Total credit" value={formatCurrency(creditNote.total)} />
-            <StatTile size="compact" icon={PercentIcon} label="VAT reversed" value={formatCurrency(creditNote.taxTotal)} />
+            <StatTile variant="compact" icon={ReceiptTextIcon} label="Total credit" value={formatCurrency(creditNote.total)} />
+            <StatTile variant="compact" icon={PercentIcon} label="VAT reversed" value={formatCurrency(creditNote.taxTotal)} />
             <StatTile
-              size="compact"
+              variant="compact"
               icon={WalletIcon}
               label="Remaining to apply"
               value={formatCurrency(remaining)}

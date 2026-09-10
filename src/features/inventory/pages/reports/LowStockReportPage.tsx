@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { BoxesIcon, PackageXIcon, TriangleAlertIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { InventoryReportShell, ReportSummaryCard } from '../../components/reports/InventoryReportShell';
@@ -83,11 +83,14 @@ export function LowStockReportPage() {
       canExport={canExport}
       exportDataset={exportDataset}
       summary={
-        <ReportSummaryCard>
-          <FigureBlock label="Low-stock items" value={String(rows.length)} tone={rows.length > 0 ? 'warning' : 'default'} />
-          <FigureBlock label="Filtered items" value={String(visibleRows.length)} />
-          <FigureBlock label="Suggested reorder units" value={totalSuggestedQty.toLocaleString('en-ZA')} />
-        </ReportSummaryCard>
+        <ReportSummaryCard
+          columns={3}
+          metrics={[
+            { label: 'Low-stock items', value: String(rows.length), tone: rows.length > 0 ? 'warning' : 'default', icon: TriangleAlertIcon },
+            { label: 'Filtered items', value: String(visibleRows.length), icon: BoxesIcon },
+            { label: 'Suggested reorder units', value: totalSuggestedQty.toLocaleString('en-ZA'), icon: PackageXIcon },
+          ]}
+        />
       }
     >
       <SectionCard title="Low stock" bodyClassName="p-4 sm:p-5">

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Plus } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { CircleDollarSignIcon, FileTextIcon, Loader2, PercentIcon, Plus, WalletCardsIcon } from 'lucide-react';
+import { PageHeader } from '@/components/app/page-header';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
@@ -63,14 +63,15 @@ export function CreditNotesPage() {
           }
         />
 
-        <SectionCard>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <FigureBlock label="Credited" value={formatCurrency(credited)} hint={`${applied.length} allocated notes`} />
-            <FigureBlock label="Output VAT reversed" value={formatCurrency(vatReversed)} hint="Recovered on the VAT201 return" tone="positive" />
-            <FigureBlock label="In draft" value={String(drafts.length)} hint="Not yet issued" tone={drafts.length > 0 ? 'warning' : 'default'} />
-            <FigureBlock label="Average credit" value={formatCurrency(applied.length > 0 ? credited / applied.length : 0)} hint="Per allocated note" />
-          </div>
-        </SectionCard>
+        <StatTileGrid
+          columns={4}
+          metrics={[
+            { label: 'Credited', value: formatCurrency(credited), hint: `${applied.length} allocated notes`, icon: WalletCardsIcon },
+            { label: 'Output VAT reversed', value: formatCurrency(vatReversed), hint: 'Recovered on the VAT201 return', tone: 'positive', icon: PercentIcon },
+            { label: 'In draft', value: String(drafts.length), hint: 'Not yet issued', tone: drafts.length > 0 ? 'warning' : 'default', icon: FileTextIcon },
+            { label: 'Average credit', value: formatCurrency(applied.length > 0 ? credited / applied.length : 0), hint: 'Per allocated note', icon: CircleDollarSignIcon },
+          ]}
+        />
 
         {notice && (
           <p className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">{notice}</p>

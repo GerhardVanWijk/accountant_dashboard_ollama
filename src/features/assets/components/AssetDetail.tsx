@@ -1,6 +1,8 @@
+import { CalendarIcon, CircleDollarSignIcon, ClockIcon, CoinsIcon, TrendingDownIcon, WalletCardsIcon } from 'lucide-react';
 import type { DepreciationEntry, FixedAsset } from '@/types';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { RecordLink } from '@/components/app/record-link';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { CATEGORY_LABELS } from '../constants';
@@ -18,14 +20,17 @@ export function AssetDetail({ asset, depreciationHistory, onOpenJournal }: Asset
   return (
     <>
       <SectionCard title={asset.name} description={CATEGORY_LABELS[asset.category]}>
-        <div className="grid grid-cols-2 gap-4">
-          <FigureBlock label="Cost" value={formatCurrency(asset.cost)} />
-          <FigureBlock label="Accumulated depreciation" value={formatCurrency(asset.accumulatedDepreciation)} />
-          <FigureBlock label="Carrying value" value={formatCurrency(carryingValue)} tone="positive" />
-          <FigureBlock label="Acquired" value={formatDate(asset.acquisitionDate)} />
-          <FigureBlock label="Useful life" value={`${asset.usefulLifeYears} years`} />
-          <FigureBlock label="Residual value" value={formatCurrency(asset.residualValue)} />
-        </div>
+        <StatTileGrid
+          columns={3}
+          metrics={[
+            { label: 'Cost', value: formatCurrency(asset.cost), icon: WalletCardsIcon },
+            { label: 'Accumulated depreciation', value: formatCurrency(asset.accumulatedDepreciation), icon: TrendingDownIcon },
+            { label: 'Carrying value', value: formatCurrency(carryingValue), icon: CircleDollarSignIcon },
+            { label: 'Acquired', value: formatDate(asset.acquisitionDate), icon: CalendarIcon },
+            { label: 'Useful life', value: `${asset.usefulLifeYears} years`, icon: ClockIcon },
+            { label: 'Residual value', value: formatCurrency(asset.residualValue), icon: CoinsIcon },
+          ]}
+        />
         {asset.status === 'disposed' && asset.disposalDate && (
           <p className="mt-4 text-xs text-muted-foreground">
             Disposed {formatDate(asset.disposalDate)}

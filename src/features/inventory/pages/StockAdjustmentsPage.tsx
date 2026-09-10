@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { StockAdjustment } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { ArrowLeftRightIcon, CircleCheckIcon, FileTextIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
@@ -109,13 +110,14 @@ export function StockAdjustmentsPage() {
         </p>
       )}
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-3">
-          <FigureBlock label="Drafts awaiting action" value={String(draftCount)} hint="Draft or pending approval" />
-          <FigureBlock label="Posted this month" value={String(postedThisMonth.length)} />
-          <FigureBlock label="Net cost effect this month" value={formatCurrency(netEffectThisMonth)} />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={3}
+        metrics={[
+          { label: 'Drafts awaiting action', value: String(draftCount), hint: 'Draft or pending approval', icon: FileTextIcon },
+          { label: 'Posted this month', value: String(postedThisMonth.length), icon: CircleCheckIcon },
+          { label: 'Net cost effect this month', value: formatCurrency(netEffectThisMonth), icon: ArrowLeftRightIcon },
+        ]}
+      />
 
       {busy && (
         <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">

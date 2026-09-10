@@ -90,6 +90,13 @@ beforeEach(() => {
 });
 
 describe('UsersPage', () => {
+  it('renders the compact KPI strip (StatTileGrid) once users load', async () => {
+    render(<UsersPage />);
+    await screen.findByText('Bookkeeper');
+    expect(screen.getByText('Total users')).toBeInTheDocument();
+    expect(screen.getByText('Custom roles')).toBeInTheDocument();
+  });
+
   it('assigns a real fine-grained role to a user via userRoleService.assign()', async () => {
     mockedAssign.mockResolvedValue({ userId: 'user_1', roleId: 'role_1', companyId: 'company_1', assignedAt: '2026-08-01T00:00:00.000Z' });
     render(<UsersPage />);

@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { CheckCircle2, Download, Loader2, XCircle } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { StatusBadge } from '@/components/app/status-badge';
-import { FigureBlock } from '@/components/app/figure';
+import { CircleCheckIcon, ListIcon, TriangleAlertIcon } from 'lucide-react';
+import { StatTile } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { getBatch, getBatchIssues, getSourceFileUrl } from '../migration/importBatchService';
 import { reconcileImportBatch, isFullyReconciled, type ReconciliationLine } from '../migration/reconciliation';
@@ -94,14 +95,14 @@ export function ImportBatchDetailPage() {
       {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
 
       <SectionCard title="Status">
-        <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-          <div className="flex flex-col gap-1.5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-card p-2.5 sm:p-3">
             <span className="text-[0.6875rem] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Status</span>
             <StatusBadge status={batch.status} />
           </div>
-          <FigureBlock label="Rows" value={String(batch.rowCount)} />
-          <FigureBlock label="Imported / Updated" value={`${batch.importedCount} / ${batch.updatedCount}`} />
-          <FigureBlock label="Errors" value={String(batch.errorCount)} tone={batch.errorCount > 0 ? 'negative' : 'default'} />
+          <StatTile variant="compact" icon={ListIcon} label="Rows" value={String(batch.rowCount)} />
+          <StatTile variant="compact" icon={CircleCheckIcon} label="Imported / Updated" value={`${batch.importedCount} / ${batch.updatedCount}`} />
+          <StatTile variant="compact" icon={TriangleAlertIcon} label="Errors" value={String(batch.errorCount)} tone={batch.errorCount > 0 ? 'negative' : 'default'} />
         </div>
       </SectionCard>
 

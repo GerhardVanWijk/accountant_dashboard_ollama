@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { CircleCheckIcon, TruckIcon, WalletCardsIcon } from 'lucide-react';
 import { StatusBadge } from '@/components/app/status-badge';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
-import { formatDate } from '@/lib/app/format';
+import { formatCurrency, formatDate } from '@/lib/app/format';
 import { sumMoney } from '../../services/inventoryValuation';
 import { InventoryReportShell, ReportSummaryCard } from '../../components/reports/InventoryReportShell';
 import { DateRangeControl } from '../../components/reports/DateRangeControl';
@@ -106,12 +107,15 @@ export function TransferReportPage() {
       exportDataset={exportDataset}
       headerExtra={<DateRangeControl idPrefix="transfer-report" preset={dateRange.preset} onPresetChange={dateRange.setPreset} start={dateRange.customStart} end={dateRange.customEnd} onCustomChange={dateRange.setCustom} />}
       summary={
-        <ReportSummaryCard>
-          <FigureBlock label="Transfers" value={String(visibleRows.length)} />
-          <FigureBlock label="In transit" value={String(inTransitCount)} tone={inTransitCount > 0 ? 'warning' : 'default'} />
-          <FigureBlock label="Completed" value={String(completedCount)} tone="positive" />
-          <FigureBlock label="Total value" value={new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(totalValue)} />
-        </ReportSummaryCard>
+        <ReportSummaryCard
+          columns={4}
+          metrics={[
+            { label: 'Transfers', value: String(visibleRows.length), icon: TruckIcon },
+            { label: 'In transit', value: String(inTransitCount), tone: inTransitCount > 0 ? 'warning' : 'default', icon: TruckIcon },
+            { label: 'Completed', value: String(completedCount), tone: 'positive', icon: CircleCheckIcon },
+            { label: 'Total value', value: formatCurrency(totalValue), icon: WalletCardsIcon },
+          ]}
+        />
       }
     >
       {!dateRange.range ? (

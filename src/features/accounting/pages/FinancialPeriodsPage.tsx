@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { CalendarClockIcon, LockIcon, LockOpenIcon, Loader2 } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import type { AccountingPeriod, ID } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { formatDate } from '@/lib/app/format';
@@ -149,16 +149,20 @@ export function FinancialPeriodsPage() {
               )
             }
           >
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <FigureBlock
-                label="Current period"
-                value={currentPeriod?.name ?? '—'}
-                hint={currentPeriod ? `Closes ${formatDate(currentPeriod.endDate)}` : 'No period covers today'}
-              />
-              <FigureBlock label="Open" value={String(counts.open ?? 0)} hint="Still accepting postings" />
-              <FigureBlock label="Closed" value={String(counts.closed ?? 0)} hint="Reconciled and signed off" />
-              <FigureBlock label="Locked" value={String(counts.locked ?? 0)} hint="Sealed against reopening" />
-            </div>
+            <StatTileGrid
+              columns={4}
+              metrics={[
+                {
+                  label: 'Current period',
+                  value: currentPeriod?.name ?? '—',
+                  hint: currentPeriod ? `Closes ${formatDate(currentPeriod.endDate)}` : 'No period covers today',
+                  icon: CalendarClockIcon,
+                },
+                { label: 'Open', value: String(counts.open ?? 0), hint: 'Still accepting postings', icon: LockOpenIcon },
+                { label: 'Closed', value: String(counts.closed ?? 0), hint: 'Reconciled and signed off', icon: LockIcon },
+                { label: 'Locked', value: String(counts.locked ?? 0), hint: 'Sealed against reopening', icon: LockIcon },
+              ]}
+            />
           </SectionCard>
 
           <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

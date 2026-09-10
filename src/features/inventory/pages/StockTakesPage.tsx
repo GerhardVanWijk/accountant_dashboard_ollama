@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { StockTake } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { ClipboardListIcon, FileTextIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { useStockTakes } from '../hooks/useStockTakes';
@@ -74,12 +75,13 @@ export function StockTakesPage() {
         </p>
       )}
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-2">
-          <FigureBlock label="Drafts" value={String(draftCount)} />
-          <FigureBlock label="In progress" value={String(activeCount)} hint="Counting or ready for review" />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={2}
+        metrics={[
+          { label: 'Drafts', value: String(draftCount), icon: FileTextIcon },
+          { label: 'In progress', value: String(activeCount), hint: 'Counting or ready for review', icon: ClipboardListIcon },
+        ]}
+      />
 
       {busy && (
         <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { ArrowLeftRightIcon, TargetIcon, TrendingUpIcon, WalletCardsIcon } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { HelpLink } from '@/features/help/components/HelpLink';
-import { FigureBlock } from '@/components/app/figure';
 import { Amount } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
@@ -198,19 +199,21 @@ export function ForecastingPage() {
             <p className="text-sm text-muted-foreground">{summarySentence}</p>
           </SectionCard>
 
-          <SectionCard>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              <FigureBlock label="Budget" value={formatCurrency(totals.budget)} hint="Selected range" />
-              <FigureBlock label="Forecast" value={formatCurrency(totals.forecast)} hint="Selected range" />
-              <FigureBlock label="Actual" value={formatCurrency(totals.actual)} hint="From posted journals" />
-              <FigureBlock
-                label="Variance"
-                value={formatCurrency(totals.variance)}
-                hint={`vs ${varianceBaseline}`}
-                tone={totals.variance === 0 ? 'default' : totals.variance > 0 ? 'warning' : 'positive'}
-              />
-            </div>
-          </SectionCard>
+          <StatTileGrid
+            columns={4}
+            metrics={[
+              { label: 'Budget', value: formatCurrency(totals.budget), hint: 'Selected range', icon: TargetIcon },
+              { label: 'Forecast', value: formatCurrency(totals.forecast), hint: 'Selected range', icon: TrendingUpIcon },
+              { label: 'Actual', value: formatCurrency(totals.actual), hint: 'From posted journals', icon: WalletCardsIcon },
+              {
+                label: 'Variance',
+                value: formatCurrency(totals.variance),
+                hint: `vs ${varianceBaseline}`,
+                tone: totals.variance === 0 ? 'default' : totals.variance > 0 ? 'warning' : 'positive',
+                icon: ArrowLeftRightIcon,
+              },
+            ]}
+          />
 
           <div className="grid gap-6 lg:grid-cols-2">
             <SectionCard>

@@ -102,6 +102,20 @@ describe('RecordTabs', () => {
     expect(screen.getByTestId('search')).toHaveTextContent('');
   });
 
+  it('every tab carries an icon (explicit or derived) and keeps its full label in the a11y tree', () => {
+    renderTabs({ labels: 'icon' });
+    // icon-only mode: the label is still the accessible name …
+    const overview = screen.getByRole('tab', { name: 'Overview' });
+    expect(overview.querySelector('svg')).not.toBeNull();
+    // … even though it is visually hidden
+    expect(screen.getByText('Overview')).toHaveClass('sr-only');
+  });
+
+  it('exposes a tooltip trigger per tab for the hidden wording', () => {
+    const { container } = renderTabs();
+    expect(container.querySelectorAll('[data-slot="tooltip-trigger"]')).toHaveLength(tabs.length);
+  });
+
   it('renders nothing for an empty tab list', () => {
     const { container } = render(
       <MemoryRouter>

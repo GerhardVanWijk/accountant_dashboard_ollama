@@ -2,7 +2,8 @@
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { ArrowLeftRightIcon, ScaleIcon, TrendingDownIcon, TrendingUpIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { RecordLink } from '@/components/app/record-link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
@@ -132,17 +133,21 @@ export function DeferredTaxPage() {
             title={`${selectedComputation.financialYearLabel} — ${selectedComputation.status === 'draft' ? 'Draft' : 'Posted'}`}
             description={`As of ${formatDate(selectedComputation.asOfDate)} · ${selectedComputation.taxRatePercent}% rate (${selectedComputation.taxConfigTaxYearLabel})`}
           >
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <FigureBlock label="Deferred Tax Liability" value={formatCurrency(selectedComputation.totalDeferredTaxLiability)} />
-              <FigureBlock label="Deferred Tax Asset" value={formatCurrency(selectedComputation.totalDeferredTaxAsset)} />
-              <FigureBlock label="Net Position" value={formatCurrency(selectedComputation.netDeferredTaxLiability)} tone="warning" />
-              <FigureBlock
-                label={selectedComputation.status === 'draft' ? 'Movement Preview' : 'Movement Posted'}
-                value={formatCurrency(selectedComputation.status === 'draft' ? previewMovement : (selectedComputation.movementAmount ?? 0))}
-                hint={priorComputation ? `vs. ${priorComputation.financialYearLabel} (posted)` : 'vs. R0.00 (first computation for this company)'}
-                tone="warning"
-              />
-            </div>
+            <StatTileGrid
+              columns={4}
+              metrics={[
+                { label: 'Deferred Tax Liability', value: formatCurrency(selectedComputation.totalDeferredTaxLiability), icon: TrendingUpIcon },
+                { label: 'Deferred Tax Asset', value: formatCurrency(selectedComputation.totalDeferredTaxAsset), icon: TrendingDownIcon },
+                { label: 'Net Position', value: formatCurrency(selectedComputation.netDeferredTaxLiability), tone: 'warning', icon: ScaleIcon },
+                {
+                  label: selectedComputation.status === 'draft' ? 'Movement Preview' : 'Movement Posted',
+                  value: formatCurrency(selectedComputation.status === 'draft' ? previewMovement : (selectedComputation.movementAmount ?? 0)),
+                  hint: priorComputation ? `vs. ${priorComputation.financialYearLabel} (posted)` : 'vs. R0.00 (first computation for this company)',
+                  tone: 'warning',
+                  icon: ArrowLeftRightIcon,
+                },
+              ]}
+            />
           </SectionCard>
 
           <SectionCard title="Temporary Differences">

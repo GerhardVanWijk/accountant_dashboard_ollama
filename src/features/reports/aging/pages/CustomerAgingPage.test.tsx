@@ -69,6 +69,10 @@ describe('CustomerAgingPage', () => {
     // Locale-agnostic regex (en-ZA formatCurrency uses a non-breaking space
     // thousands separator and comma decimal) rather than an exact string.
     expect(screen.getAllByText(/1.?000,00/).length).toBeGreaterThanOrEqual(2);
+    // the summary strip is the shared compact StatTile grid — labelled, no "ZAR" prefix
+    expect(screen.getByText('Total receivable')).toBeInTheDocument();
+    expect(screen.getByText('Customers with balance')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/ZAR\s?\d/);
 
     // Toggle "show all" — the zero-balance customer should now appear.
     fireEvent.click(screen.getByRole('checkbox', { name: /show customers with a zero balance/i }));

@@ -365,15 +365,15 @@ export function BillDetailPage({ recordId, embedded }: RecordPageProps = {}) {
           )}
 
           <StatStrip columns={4}>
-            <StatTile size="compact" icon={ReceiptTextIcon} label="Total" value={formatCurrency(bill.total)} />
-            <StatTile size="compact" icon={WalletIcon} label="Paid" value={formatCurrency(bill.amountPaid)} tone={bill.amountPaid > 0 ? 'positive' : 'default'} />
-            <StatTile size="compact"
+            <StatTile variant="compact" icon={ReceiptTextIcon} label="Total" value={formatCurrency(bill.total)} />
+            <StatTile variant="compact" icon={WalletIcon} label="Paid" value={formatCurrency(bill.amountPaid)} tone={bill.amountPaid > 0 ? 'positive' : 'default'} />
+            <StatTile variant="compact"
               icon={BanknoteIcon}
               label="Outstanding"
               value={formatCurrency(outstanding)}
               tone={outstanding > 0.01 && bill.status !== 'void' ? 'warning' : 'default'}
             />
-            <StatTile size="compact" icon={PackageIcon} label="Input VAT" value={formatCurrency(bill.taxTotal)} />
+            <StatTile variant="compact" icon={PackageIcon} label="Input VAT" value={formatCurrency(bill.taxTotal)} />
           </StatStrip>
 
           <RecordTabs urlParam="tab" embedded={embedded} ariaLabel="Supplier invoice sections" tabs={tabs} />

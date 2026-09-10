@@ -1,6 +1,7 @@
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { BoxesIcon, WalletCardsIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatCurrency } from '@/lib/app/format';
@@ -60,10 +61,12 @@ export function CategoryAnalysisReportPage() {
       canExport={canExport}
       exportDataset={exportDataset}
       summary={
-        <ReportSummaryCard>
-          <FigureBlock label="Categories" value={String(rows.length)} />
-          <FigureBlock label="Total inventory value" value={formatCurrency(totalValue)} />
-        </ReportSummaryCard>
+        <ReportSummaryCard
+          metrics={[
+            { label: 'Categories', value: String(rows.length), icon: BoxesIcon },
+            { label: 'Total inventory value', value: formatCurrency(totalValue), icon: WalletCardsIcon },
+          ]}
+        />
       }
       footnote="Sales, COGS and gross margin are not shown here: invoice and bill line items in this system carry no product link, so historical sales cannot be attributed to a category without matching on free text."
     >

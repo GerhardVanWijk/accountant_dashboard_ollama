@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { BoxesIcon, MoonIcon, TriangleAlertIcon, WalletCardsIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatCurrency, formatDate } from '@/lib/app/format';
@@ -109,12 +110,15 @@ export function SlowMovingReportPage() {
       canExport={canExport}
       exportDataset={exportDataset}
       summary={
-        <ReportSummaryCard>
-          <FigureBlock label="Items with stock" value={String(visibleRows.length)} />
-          <FigureBlock label="Never moved" value={String(neverMovedCount)} tone={neverMovedCount > 0 ? 'negative' : 'default'} />
-          <FigureBlock label="180+ day value" value={formatCurrency(deadStockValue)} tone={deadStockValue > 0 ? 'warning' : 'default'} />
-          <FigureBlock label="Total value shown" value={formatCurrency(totalValue)} />
-        </ReportSummaryCard>
+        <ReportSummaryCard
+          columns={4}
+          metrics={[
+            { label: 'Items with stock', value: String(visibleRows.length), icon: BoxesIcon },
+            { label: 'Never moved', value: String(neverMovedCount), tone: neverMovedCount > 0 ? 'negative' : 'default', icon: MoonIcon },
+            { label: '180+ day value', value: formatCurrency(deadStockValue), tone: deadStockValue > 0 ? 'warning' : 'default', icon: TriangleAlertIcon },
+            { label: 'Total value shown', value: formatCurrency(totalValue), icon: WalletCardsIcon },
+          ]}
+        />
       }
       footnote="'Movement' here excludes internal transfers (relocation, not consumption/replenishment). 'Last sale' is shown separately so recent purchase activity is never mistaken for recent sales."
     >

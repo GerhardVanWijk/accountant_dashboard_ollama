@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import { FileQuestion, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { ArrowLeftRightIcon, CircleDollarSignIcon, LandmarkIcon, TrendingUpIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { FormShell, FormHeader } from '@/components/app/form';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
@@ -161,12 +162,15 @@ export function IncomeTaxPage() {
             title={`${selectedComputation.financialYearLabel} — ${selectedComputation.status === 'draft' ? 'Draft' : 'Posted'}`}
             description={`Tax year of assessment: ${selectedComputation.taxConfigTaxYearLabel} · ${selectedComputation.isSbcEligible ? 'SBC brackets applied' : 'Standard corporate rate applied'}`}
           >
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <FigureBlock label="Accounting Profit" value={formatCurrency(selectedComputation.accountingProfit)} />
-              <FigureBlock label="Net Adjustments" value={formatCurrency(selectedComputation.taxableIncome - selectedComputation.accountingProfit)} />
-              <FigureBlock label="Taxable Income" value={formatCurrency(selectedComputation.taxableIncome)} />
-              <FigureBlock label="Tax Liability" value={formatCurrency(selectedComputation.taxLiability)} tone="warning" />
-            </div>
+            <StatTileGrid
+              columns={4}
+              metrics={[
+                { label: 'Accounting Profit', value: formatCurrency(selectedComputation.accountingProfit), icon: TrendingUpIcon },
+                { label: 'Net Adjustments', value: formatCurrency(selectedComputation.taxableIncome - selectedComputation.accountingProfit), icon: ArrowLeftRightIcon },
+                { label: 'Taxable Income', value: formatCurrency(selectedComputation.taxableIncome), icon: CircleDollarSignIcon },
+                { label: 'Tax Liability', value: formatCurrency(selectedComputation.taxLiability), tone: 'warning', icon: LandmarkIcon },
+              ]}
+            />
           </SectionCard>
 
           <SectionCard title="Tax Adjustments">

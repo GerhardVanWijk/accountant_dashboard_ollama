@@ -2,7 +2,8 @@
 import { Loader2 } from 'lucide-react';
 import type { ReportingFramework } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { BookOpenIcon, GaugeIcon, ScrollTextIcon, ShieldCheckIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { FormShell, FormHeader } from '@/components/app/form';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
@@ -123,18 +124,20 @@ export function PublicInterestScorePage() {
             </SectionCard>
           ) : (
             <>
-              <SectionCard>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <FigureBlock label="Public Interest Score" value={String(latest.totalScore)} hint={financialYearName(latest.financialYearId)} />
-                  <FigureBlock label="Assurance Requirement" value={ASSURANCE_LABELS[latest.suggestedAssuranceLevel]} />
-                  <FigureBlock
-                    label="Suggested Framework"
-                    value={FRAMEWORK_LABELS[latest.suggestedReportingFramework]}
-                    hint={latest.reportingFrameworkConfidence === 'requires_professional_review' ? 'Requires professional review' : undefined}
-                  />
-                  <FigureBlock label="Current Framework" value={company ? FRAMEWORK_LABELS[company.reportingFramework] : '—'} />
-                </div>
-              </SectionCard>
+              <StatTileGrid
+                columns={4}
+                metrics={[
+                  { label: 'Public Interest Score', value: String(latest.totalScore), hint: financialYearName(latest.financialYearId), icon: GaugeIcon },
+                  { label: 'Assurance Requirement', value: ASSURANCE_LABELS[latest.suggestedAssuranceLevel], icon: ShieldCheckIcon },
+                  {
+                    label: 'Suggested Framework',
+                    value: FRAMEWORK_LABELS[latest.suggestedReportingFramework],
+                    hint: latest.reportingFrameworkConfidence === 'requires_professional_review' ? 'Requires professional review' : undefined,
+                    icon: BookOpenIcon,
+                  },
+                  { label: 'Current Framework', value: company ? FRAMEWORK_LABELS[company.reportingFramework] : '—', icon: ScrollTextIcon },
+                ]}
+              />
 
               {latest.frameworkDiffersFromCurrent && (
                 <div className="flex flex-col gap-3 rounded-lg border border-status-warning-outline bg-status-warning-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between">

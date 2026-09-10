@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Plus } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { BanknoteIcon, CircleCheckIcon, Loader2, Plus, WalletCardsIcon } from 'lucide-react';
+import { PageHeader } from '@/components/app/page-header';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
@@ -65,18 +65,20 @@ export function CustomerReceiptsPage() {
           }
         />
 
-        <SectionCard>
-          <div className="grid gap-6 sm:grid-cols-3">
-            <FigureBlock label="Received" value={formatCurrency(receivedTotal)} hint={`${receipts.length} customer receipts`} tone="positive" />
-            <FigureBlock
-              label="Unallocated"
-              value={formatCurrency(unallocatedTotal)}
-              hint={`${unallocated.length} awaiting matching`}
-              tone={unallocated.length > 0 ? 'warning' : 'default'}
-            />
-            <FigureBlock label="Fully allocated" value={String(receipts.length - unallocated.length)} hint="Matched to invoices" />
-          </div>
-        </SectionCard>
+        <StatTileGrid
+          columns={3}
+          metrics={[
+            { label: 'Received', value: formatCurrency(receivedTotal), hint: `${receipts.length} customer receipts`, tone: 'positive', icon: BanknoteIcon },
+            {
+              label: 'Unallocated',
+              value: formatCurrency(unallocatedTotal),
+              hint: `${unallocated.length} awaiting matching`,
+              tone: unallocated.length > 0 ? 'warning' : 'default',
+              icon: WalletCardsIcon,
+            },
+            { label: 'Fully allocated', value: String(receipts.length - unallocated.length), hint: 'Matched to invoices', icon: CircleCheckIcon },
+          ]}
+        />
 
         {notice && (
           <p className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">{notice}</p>

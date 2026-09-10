@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { AlertTriangleIcon } from 'lucide-react';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { CircleCheckIcon, TriangleAlertIcon, WalletCardsIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatCurrency } from '@/lib/app/format';
@@ -146,12 +147,20 @@ export function InventoryReconciliationReportPage() {
       exportDataset={exportDataset}
       summary={
         result && (
-          <ReportSummaryCard>
-            <FigureBlock label="Inventory subledger" value={formatCurrency(result.subledgerValuation)} />
-            <FigureBlock label="Inventory Asset GL — 1200" value={formatCurrency(result.inventoryGlBalance)} />
-            <FigureBlock label="Total control difference" value={formatCurrency(result.totalInventoryVsGl)} />
-            <FigureBlock label="Status" value={result.isReconciled ? 'Reconciled' : 'Investigate'} tone={result.isReconciled ? 'positive' : 'negative'} />
-          </ReportSummaryCard>
+          <ReportSummaryCard
+            columns={4}
+            metrics={[
+              { label: 'Inventory subledger', value: formatCurrency(result.subledgerValuation), icon: WalletCardsIcon },
+              { label: 'Inventory Asset GL — 1200', value: formatCurrency(result.inventoryGlBalance), icon: WalletCardsIcon },
+              { label: 'Total control difference', value: formatCurrency(result.totalInventoryVsGl), icon: WalletCardsIcon },
+              {
+                label: 'Status',
+                value: result.isReconciled ? 'Reconciled' : 'Investigate',
+                tone: result.isReconciled ? 'positive' : 'negative',
+                icon: result.isReconciled ? CircleCheckIcon : TriangleAlertIcon,
+              },
+            ]}
+          />
         )
       }
     >

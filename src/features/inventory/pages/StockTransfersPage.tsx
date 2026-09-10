@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { StockTransfer, Warehouse } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { FileTextIcon, TruckIcon, WalletCardsIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
@@ -112,13 +113,14 @@ export function StockTransfersPage() {
         </p>
       )}
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-3">
-          <FigureBlock label="Drafts" value={String(draftCount)} />
-          <FigureBlock label="In transit" value={String(inTransitCount)} />
-          <FigureBlock label="In-transit value" value={formatCurrency(inTransitValue)} hint="At carrying cost" />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={3}
+        metrics={[
+          { label: 'Drafts', value: String(draftCount), icon: FileTextIcon },
+          { label: 'In transit', value: String(inTransitCount), icon: TruckIcon },
+          { label: 'In-transit value', value: formatCurrency(inTransitValue), hint: 'At carrying cost', icon: WalletCardsIcon },
+        ]}
+      />
 
       {busy && (
         <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { ArrowLeftRightIcon, PackageXIcon, TrendingDownIcon, TrendingUpIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatCurrency, formatDate } from '@/lib/app/format';
@@ -103,12 +104,15 @@ export function StockTakeVarianceReportPage() {
       exportDataset={exportDataset}
       headerExtra={<DateRangeControl idPrefix="stock-take-variance-report" preset={dateRange.preset} onPresetChange={dateRange.setPreset} start={dateRange.customStart} end={dateRange.customEnd} onCustomChange={dateRange.setCustom} />}
       summary={
-        <ReportSummaryCard>
-          <FigureBlock label="Positive variance" value={formatCurrency(summary.positiveVariance)} tone="positive" />
-          <FigureBlock label="Negative variance" value={formatCurrency(summary.negativeVariance)} tone="negative" />
-          <FigureBlock label="Net variance" value={formatCurrency(summary.netVariance)} />
-          <FigureBlock label="Mismatched items" value={String(summary.mismatchedItemCount)} />
-        </ReportSummaryCard>
+        <ReportSummaryCard
+          columns={4}
+          metrics={[
+            { label: 'Positive variance', value: formatCurrency(summary.positiveVariance), tone: 'positive', icon: TrendingUpIcon },
+            { label: 'Negative variance', value: formatCurrency(summary.negativeVariance), tone: 'negative', icon: TrendingDownIcon },
+            { label: 'Net variance', value: formatCurrency(summary.netVariance), icon: ArrowLeftRightIcon },
+            { label: 'Mismatched items', value: String(summary.mismatchedItemCount), icon: PackageXIcon },
+          ]}
+        />
       }
     >
       {!dateRange.range ? (

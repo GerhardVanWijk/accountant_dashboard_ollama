@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight, FileSpreadsheet, FileText, Landmark, Package
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { StatusBadge } from '@/components/app/status-badge';
+import { formatAmount } from '@/lib/app/format';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { HelpLink } from '@/features/help/components/HelpLink';
 import { ImportWizard } from '../components/ImportWizard';
@@ -177,8 +178,8 @@ export function DataMigrationOverviewPage() {
                   {statements.slice(0, 10).map((s) => (
                     <tr key={s.id} className="border-b border-border/50 last:border-0">
                       <td className="px-3 py-2">{s.sourceFilename ?? '—'}</td>
-                      <td className="px-3 py-2 tabular-nums">R {s.openingBalance.toFixed(2)}</td>
-                      <td className="px-3 py-2 tabular-nums">R {s.closingBalance.toFixed(2)}</td>
+                      <td className="px-3 py-2 tabular-nums">R {formatAmount(s.openingBalance)}</td>
+                      <td className="px-3 py-2 tabular-nums">R {formatAmount(s.closingBalance)}</td>
                       <td className="px-3 py-2 tabular-nums">{s.lineCount}</td>
                       <td className="px-3 py-2">
                         {s.balanceCheckOk === undefined ? <span className="text-muted-foreground">—</span> : <StatusBadge status={s.balanceCheckOk ? 'reconciled' : 'unreconciled'} />}

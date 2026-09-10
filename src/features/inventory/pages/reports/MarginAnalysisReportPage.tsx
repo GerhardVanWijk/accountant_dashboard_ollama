@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { BoxesIcon, PercentIcon, TrendingDownIcon, TrendingUpIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { InventoryReportShell, ReportSummaryCard } from '../../components/reports/InventoryReportShell';
@@ -83,12 +84,15 @@ export function MarginAnalysisReportPage() {
       canExport={canExport}
       exportDataset={exportDataset}
       summary={
-        <ReportSummaryCard>
-          <FigureBlock label="Products" value={String(visibleRows.length)} />
-          <FigureBlock label="Positive margin" value={String(positiveMarginCount)} tone="positive" />
-          <FigureBlock label="Zero/negative margin" value={String(negativeMarginCount)} tone={negativeMarginCount > 0 ? 'negative' : 'default'} />
-          <FigureBlock label="Average margin %" value={avgMarginPercent === null ? '—' : `${avgMarginPercent.toFixed(1)}%`} />
-        </ReportSummaryCard>
+        <ReportSummaryCard
+          columns={4}
+          metrics={[
+            { label: 'Products', value: String(visibleRows.length), icon: BoxesIcon },
+            { label: 'Positive margin', value: String(positiveMarginCount), tone: 'positive', icon: TrendingUpIcon },
+            { label: 'Zero/negative margin', value: String(negativeMarginCount), tone: negativeMarginCount > 0 ? 'negative' : 'default', icon: TrendingDownIcon },
+            { label: 'Average margin %', value: avgMarginPercent === null ? '—' : `${avgMarginPercent.toFixed(1)}%`, icon: PercentIcon },
+          ]}
+        />
       }
       footnote="This is CURRENT THEORETICAL margin (today's price vs today's WAC), not realised historical gross margin — invoice lines carry no product link in this system, so a past sale's actual margin cannot be reconstructed."
     >

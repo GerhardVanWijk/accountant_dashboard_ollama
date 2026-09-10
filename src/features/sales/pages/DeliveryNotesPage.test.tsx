@@ -68,4 +68,11 @@ describe('DeliveryNotesPage', () => {
     renderAt('/sales/delivery-notes');
     expect(screen.getByText(/no delivery notes yet/i)).toBeInTheDocument();
   });
+
+  it('renders the compact KPI strip with the same labels after the StatTileGrid migration', () => {
+    renderAt('/sales/delivery-notes');
+    expect(screen.getByText('Units delivered')).toBeInTheDocument();
+    expect(screen.getByText('Across posted delivery notes')).toBeInTheDocument();
+    expect(screen.getByText('Physically departed')).toBeInTheDocument();
+  });
 });

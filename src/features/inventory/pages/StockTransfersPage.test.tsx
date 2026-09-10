@@ -212,4 +212,13 @@ describe('StockTransfersPage', () => {
     expect(screen.queryByRole('button', { name: /new transfer/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
   });
+
+  it('shows the compact KPI strip once transfers load', async () => {
+    mockedGetTransfers.mockResolvedValue([makeTransfer()]);
+    const { container } = renderPage();
+    await screen.findByText('TRF-0001');
+    expect(screen.getByText('In transit')).toBeInTheDocument();
+    expect(screen.getByText('In-transit value')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/ZAR\s?\d/);
+  });
 });

@@ -93,4 +93,13 @@ describe('ProductsPage', () => {
       expect(screen.getByText(/low stock/i)).toBeInTheDocument();
     });
   });
+
+  it('renders the compact KPI strip (StatTileGrid) with R-formatted money, no "ZAR"', async () => {
+    mockedGetProducts.mockResolvedValue([makeProduct()]);
+    const { container } = renderPage();
+    await waitFor(() => expect(screen.getByText('Stock at cost')).toBeInTheDocument());
+    expect(screen.getByText('Potential margin')).toBeInTheDocument();
+    expect(screen.getByText('Below reorder level')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/ZAR\s?\d/);
+  });
 });

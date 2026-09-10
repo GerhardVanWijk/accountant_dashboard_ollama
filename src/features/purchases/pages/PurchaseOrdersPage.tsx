@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Plus } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { HourglassIcon, Loader2, Plus, ShoppingCartIcon, WalletCardsIcon } from 'lucide-react';
+import { PageHeader } from '@/components/app/page-header';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
@@ -58,13 +58,14 @@ export function PurchaseOrdersPage() {
           }
         />
 
-        <SectionCard>
-          <div className="grid gap-6 sm:grid-cols-3">
-            <FigureBlock label="Total orders" value={String(purchaseOrders.length)} />
-            <FigureBlock label="Total value" value={formatCurrency(totalValue)} hint="All orders" />
-            <FigureBlock label="Open" value={String(openOrders.length)} hint="Not yet received or cancelled" tone={openOrders.length > 0 ? 'warning' : 'default'} />
-          </div>
-        </SectionCard>
+        <StatTileGrid
+          columns={3}
+          metrics={[
+            { label: 'Total orders', value: String(purchaseOrders.length), icon: ShoppingCartIcon },
+            { label: 'Total value', value: formatCurrency(totalValue), hint: 'All orders', icon: WalletCardsIcon },
+            { label: 'Open', value: String(openOrders.length), hint: 'Not yet received or cancelled', tone: openOrders.length > 0 ? 'warning' : 'default', icon: HourglassIcon },
+          ]}
+        />
 
         {isLoading ? (
           <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">

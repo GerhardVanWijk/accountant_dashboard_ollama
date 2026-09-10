@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Landmark, Loader2, Plus, Receipt, RotateCw, ScrollText, Settings2 } from 'lucide-react';
+import { ArrowUpRight, BanknoteIcon, BoxesIcon, CircleDollarSignIcon, Landmark, Loader2, PercentIcon, Plus, Receipt, ReceiptTextIcon, RotateCw, ScrollText, Settings2, TrendingUpIcon, WalletCardsIcon } from 'lucide-react';
 
 import { ActivityFeed } from '@/components/app/dashboard/activity-feed';
 import { AgeingPanel } from '@/components/app/dashboard/ageing-panel';
 import { CashFlowChart, GrossMarginChart, PerformanceChart } from '@/components/app/dashboard/dashboard-charts';
-import { Amount, FigureBlock } from '@/components/app/figure';
-import { MetricCard } from '@/components/app/metric-card';
+import { Amount } from '@/components/app/figure';
+import { StatStrip, StatTile } from '@/components/app/stat-tile';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
@@ -129,25 +129,27 @@ export function DashboardPage() {
         </SectionCard>
       ) : null}
 
-      <section aria-label="Key figures" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        <MetricCard label="Revenue" formattedValue={formatCurrency(metrics.revenue)} trendPercent={data.kpis.revenue.trendPercent} higherIsBetter hint="Flow for selected period" />
-        <MetricCard label="Gross Profit" formattedValue={formatCurrency(metrics.grossProfit)} higherIsBetter hint="Revenue less posted COGS" />
-        <MetricCard label="Net Profit" formattedValue={formatCurrency(metrics.netProfit)} higherIsBetter hint="After operating expenses" />
-        <MetricCard label="Cash Position" formattedValue={formatCurrency(data.kpis.cashPosition.value)} hint={`As at ${period.endDate}`} />
-        <MetricCard label="Gross Margin %" formattedValue={formatPercent(metrics.grossMarginPercent)} higherIsBetter hint="Gross profit divided by revenue" />
-        <MetricCard label="Net Margin %" formattedValue={formatPercent(metrics.netMarginPercent)} higherIsBetter hint="Net profit divided by revenue" />
+      <section aria-label="Key figures">
+        <StatStrip columns={6}>
+          <StatTile variant="compact" icon={ReceiptTextIcon} label="Revenue" value={formatCurrency(metrics.revenue)} trendPercent={data.kpis.revenue.trendPercent} hint="Flow for selected period" />
+          <StatTile variant="compact" icon={TrendingUpIcon} label="Gross Profit" value={formatCurrency(metrics.grossProfit)} hint="Revenue less posted COGS" />
+          <StatTile variant="compact" icon={WalletCardsIcon} label="Net Profit" value={formatCurrency(metrics.netProfit)} hint="After operating expenses" />
+          <StatTile variant="compact" icon={BanknoteIcon} label="Cash Position" value={formatCurrency(data.kpis.cashPosition.value)} hint={`As at ${period.endDate}`} />
+          <StatTile variant="compact" icon={PercentIcon} label="Gross Margin %" value={formatPercent(metrics.grossMarginPercent)} hint="Gross profit ÷ revenue" />
+          <StatTile variant="compact" icon={PercentIcon} label="Net Margin %" value={formatPercent(metrics.netMarginPercent)} hint="Net profit ÷ revenue" />
+        </StatStrip>
       </section>
 
       <div className="grid auto-rows-min gap-6 lg:grid-cols-2 xl:grid-cols-3">
         {visibleWidgets.map((id) => {
           if (id === 'profitability') return <WidgetFrame key={id} span="full"><SectionCard title="Profitability trend" description="Revenue, gross profit, and net result"><PerformanceChart data={monthlySeries} /></SectionCard></WidgetFrame>;
           if (id === 'gross-margin') return <WidgetFrame key={id}><SectionCard title="Gross margin trend" description="Chart filter is local"><GrossMarginChart data={fullMonthlySeries} /></SectionCard></WidgetFrame>;
-          if (id === 'cash-position') return <WidgetFrame key={id}><SectionCard title="Cash position" description={`As at ${period.endDate}`}><FigureBlock label="Net position" value={formatCurrency(data.kpis.cashPosition.value)} hint="Cumulative from posted bank movements" tone="positive" /><dl className="mt-5 flex flex-col gap-3 border-t border-border pt-4"><div className="flex justify-between gap-4"><dt className="text-sm text-muted-foreground">Cash in</dt><dd><Amount value={visibleMonths.reduce((s, m) => s + m.cashIn, 0)} className="text-sm" /></dd></div><div className="flex justify-between gap-4"><dt className="text-sm text-muted-foreground">Cash out</dt><dd><Amount value={-visibleMonths.reduce((s, m) => s + m.cashOut, 0)} className="text-sm" /></dd></div></dl></SectionCard></WidgetFrame>;
+          if (id === 'cash-position') return <WidgetFrame key={id}><SectionCard title="Cash position" description={`As at ${period.endDate}`}><StatTile icon={BanknoteIcon} label="Net position" value={formatCurrency(data.kpis.cashPosition.value)} hint="Cumulative from posted bank movements" /><dl className="mt-5 flex flex-col gap-3 border-t border-border pt-4"><div className="flex justify-between gap-4"><dt className="text-sm text-muted-foreground">Cash in</dt><dd><Amount value={visibleMonths.reduce((s, m) => s + m.cashIn, 0)} className="text-sm" /></dd></div><div className="flex justify-between gap-4"><dt className="text-sm text-muted-foreground">Cash out</dt><dd><Amount value={-visibleMonths.reduce((s, m) => s + m.cashOut, 0)} className="text-sm" /></dd></div></dl></SectionCard></WidgetFrame>;
           if (id === 'cash-movement') return <WidgetFrame key={id}><SectionCard title="Cash movement" description="Cash in against cash out"><CashFlowChart data={fullMonthlySeries} /></SectionCard></WidgetFrame>;
           if (id === 'ar-aging') return <WidgetFrame key={id}><SectionCard title="Receivables ageing" description={`As at ${period.endDate}`} actions={<Button render={<Link to="/sales/invoices" />} nativeButton={false} variant="ghost" size="sm" className="text-xs">View invoices<ArrowUpRight data-icon="inline-end" /></Button>}><AgeingPanel buckets={arBuckets} emptyLabel="No outstanding customer invoices." /></SectionCard></WidgetFrame>;
           if (id === 'ap-aging') return <WidgetFrame key={id}><SectionCard title="Payables ageing" description={`As at ${period.endDate}`} actions={<Button render={<Link to="/purchases/vendors" />} nativeButton={false} variant="ghost" size="sm" className="text-xs">View suppliers<ArrowUpRight data-icon="inline-end" /></Button>}><AgeingPanel buckets={apBuckets} emptyLabel="No outstanding supplier invoices." /></SectionCard></WidgetFrame>;
-          if (id === 'inventory') return <WidgetFrame key={id} span="third"><MetricCard label="Inventory Valuation" formattedValue={formatCurrency(data.inventoryValuation)} hint={`As at ${period.endDate}`} /></WidgetFrame>;
-          if (id === 'stock-margin') return <WidgetFrame key={id}><SectionCard title="Realized stock margin" description="Posted sales less historical COGS"><div className="grid gap-4 sm:grid-cols-2"><FigureBlock label="Margin" value={formatPercent(metrics.realizedStockMarginPercent)} hint="Not markup" /><FigureBlock label="Gross profit" value={formatCurrency(metrics.grossProfit)} /><FigureBlock label="Net product sales" value={formatCurrency(metrics.revenue)} /><FigureBlock label="Historical COGS" value={formatCurrency(metrics.cogs)} /></div><Button render={<Link to="/inventory/reports/margin-analysis" />} nativeButton={false} variant="ghost" size="sm" className="mt-4 text-xs">View theoretical margin<ArrowUpRight data-icon="inline-end" /></Button></SectionCard></WidgetFrame>;
+          if (id === 'inventory') return <WidgetFrame key={id} span="third"><StatTile icon={BoxesIcon} label="Inventory Valuation" value={formatCurrency(data.inventoryValuation)} hint={`As at ${period.endDate}`} className="h-full" /></WidgetFrame>;
+          if (id === 'stock-margin') return <WidgetFrame key={id}><SectionCard title="Realized stock margin" description="Posted sales less historical COGS"><StatStrip columns={2}><StatTile variant="compact" icon={PercentIcon} label="Margin" value={formatPercent(metrics.realizedStockMarginPercent)} hint="Not markup" /><StatTile variant="compact" icon={TrendingUpIcon} label="Gross profit" value={formatCurrency(metrics.grossProfit)} /><StatTile variant="compact" icon={ReceiptTextIcon} label="Net product sales" value={formatCurrency(metrics.revenue)} /><StatTile variant="compact" icon={CircleDollarSignIcon} label="Historical COGS" value={formatCurrency(metrics.cogs)} /></StatStrip><Button render={<Link to="/inventory/reports/margin-analysis" />} nativeButton={false} variant="ghost" size="sm" className="mt-4 text-xs">View theoretical margin<ArrowUpRight data-icon="inline-end" /></Button></SectionCard></WidgetFrame>;
           if (id === 'needs-attention') return <WidgetFrame key={id}><SectionCard title="Needs attention" description="Only actionable exceptions">{attentionRows.length ? <div className="flex flex-col divide-y divide-border">{attentionRows.map((row) => <Link key={row.label} to={row.href} className="flex items-center justify-between gap-4 py-3 text-sm"><span>{row.label}</span><Amount value={row.value} /></Link>)}</div> : <p className="py-4 text-sm text-muted-foreground">No overdue receivables or payables.</p>}</SectionCard></WidgetFrame>;
           if (id === 'recent-activity') return <WidgetFrame key={id}><SectionCard title="Recent activity" description="Compact operational changes" bodyClassName="px-5 py-1"><ActivityFeed items={data.activity.slice(0, 4)} /></SectionCard></WidgetFrame>;
           return null;

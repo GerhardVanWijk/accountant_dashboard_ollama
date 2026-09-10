@@ -1,6 +1,8 @@
 import type { Account, OpeningStockBatch, Product, Warehouse } from '@/types';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
+import { CalendarIcon, ListIcon, WalletCardsIcon } from 'lucide-react';
 import { RecordLink } from '@/components/app/record-link';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import type { AccountingEffectPreview } from '../types/accountingPreview';
@@ -37,11 +39,14 @@ export function OpeningStockBatchDetail({
   return (
     <>
       <SectionCard title={warehouseName(batch.warehouseId)}>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <FigureBlock label="Effective date" value={formatDate(batch.effectiveDate)} />
-          <FigureBlock label="Total cost" value={formatCurrency(batch.totalCost)} />
-          <FigureBlock label="Lines" value={String(batch.lineItems.length)} />
-        </div>
+        <StatTileGrid
+          columns={3}
+          metrics={[
+            { label: 'Effective date', value: formatDate(batch.effectiveDate), icon: CalendarIcon },
+            { label: 'Total cost', value: formatCurrency(batch.totalCost), icon: WalletCardsIcon },
+            { label: 'Lines', value: String(batch.lineItems.length), icon: ListIcon },
+          ]}
+        />
         {batch.notes && <p className="mt-4 text-sm text-muted-foreground">{batch.notes}</p>}
         {batch.journalEntryId && (
           <p className="mt-4 text-xs">

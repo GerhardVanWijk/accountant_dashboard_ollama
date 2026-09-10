@@ -4,7 +4,8 @@ import { BellRing, Check, Loader2, SlidersHorizontal } from 'lucide-react';
 import type { NotificationCategory } from '@/types';
 import { NOTIFICATION_CATEGORY_LABELS } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { BellIcon, MailIcon, TriangleAlertIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { EnumSelect } from '@/components/app/combobox';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
@@ -53,13 +54,14 @@ export function NotificationsPage() {
         }
       />
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-3">
-          <FigureBlock label="Open" value={String(openItems.length)} hint="Active conditions" />
-          <FigureBlock label="Unread" value={String(unreadCount)} hint="Attention-worthy" />
-          <FigureBlock label="Critical" value={String(criticalCount)} hint="Open critical items" />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={3}
+        metrics={[
+          { label: 'Open', value: String(openItems.length), hint: 'Active conditions', icon: BellIcon },
+          { label: 'Unread', value: String(unreadCount), hint: 'Attention-worthy', icon: MailIcon },
+          { label: 'Critical', value: String(criticalCount), hint: 'Open critical items', tone: criticalCount > 0 ? 'negative' : 'default', icon: TriangleAlertIcon },
+        ]}
+      />
 
       <SectionCard title="All notifications" bodyClassName="flex flex-col gap-4 p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-2">

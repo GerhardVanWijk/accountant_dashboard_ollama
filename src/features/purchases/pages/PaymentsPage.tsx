@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Plus } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { BanknoteIcon, Loader2, Plus, UsersIcon, WalletCardsIcon } from 'lucide-react';
+import { PageHeader } from '@/components/app/page-header';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
@@ -60,13 +60,14 @@ export function PaymentsPage() {
           }
         />
 
-        <SectionCard>
-          <div className="grid gap-6 sm:grid-cols-3">
-            <FigureBlock label="Total paid" value={formatCurrency(totalPaid)} hint={`${payments.length} payments`} tone="positive" />
-            <FigureBlock label="Unallocated (on-account)" value={formatCurrency(totalUnallocated)} tone={totalUnallocated > 0 ? 'warning' : 'default'} />
-            <FigureBlock label="Suppliers paid" value={String(new Set(payments.map((p) => p.supplierId)).size)} />
-          </div>
-        </SectionCard>
+        <StatTileGrid
+          columns={3}
+          metrics={[
+            { label: 'Total paid', value: formatCurrency(totalPaid), hint: `${payments.length} payments`, tone: 'positive', icon: BanknoteIcon },
+            { label: 'Unallocated (on-account)', value: formatCurrency(totalUnallocated), tone: totalUnallocated > 0 ? 'warning' : 'default', icon: WalletCardsIcon },
+            { label: 'Suppliers paid', value: String(new Set(payments.map((p) => p.supplierId)).size), icon: UsersIcon },
+          ]}
+        />
 
         {isLoading ? (
           <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">

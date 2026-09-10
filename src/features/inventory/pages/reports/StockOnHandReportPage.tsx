@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { BoxesIcon, HashIcon, TriangleAlertIcon, WalletCardsIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
+import { formatCurrency } from '@/lib/app/format';
 import { sumMoney } from '../../services/inventoryValuation';
 import { InventoryReportShell, ReportSummaryCard } from '../../components/reports/InventoryReportShell';
 import { useStockOnHandData } from '../../hooks/useStockOnHandData';
@@ -111,12 +113,20 @@ export function StockOnHandReportPage() {
       canExport={canExport}
       exportDataset={exportDataset}
       summary={
-        <ReportSummaryCard>
-          <FigureBlock label="SKUs" value={String(skuCount)} />
-          <FigureBlock label="Total units" value={totalUnits.toLocaleString('en-ZA')} />
-          <FigureBlock label="Inventory value" value={new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(totalValue)} />
-          <FigureBlock label="Low / out of stock" value={`${lowCount} / ${outCount}`} tone={outCount > 0 ? 'negative' : lowCount > 0 ? 'warning' : 'default'} />
-        </ReportSummaryCard>
+        <ReportSummaryCard
+          columns={4}
+          metrics={[
+            { label: 'SKUs', value: String(skuCount), icon: BoxesIcon },
+            { label: 'Total units', value: totalUnits.toLocaleString('en-ZA'), icon: HashIcon },
+            { label: 'Inventory value', value: formatCurrency(totalValue), icon: WalletCardsIcon },
+            {
+              label: 'Low / out of stock',
+              value: `${lowCount} / ${outCount}`,
+              tone: outCount > 0 ? 'negative' : lowCount > 0 ? 'warning' : 'default',
+              icon: TriangleAlertIcon,
+            },
+          ]}
+        />
       }
     >
       <SectionCard title="Stock on hand" bodyClassName="p-4 sm:p-5">

@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CreditCard, Loader2, ReceiptText } from 'lucide-react';
+import { ArrowLeft, CircleDollarSignIcon, CreditCard, HourglassIcon, Loader2, ReceiptText, ShoppingCartIcon, WalletCardsIcon } from 'lucide-react';
 import type { Address } from '@/types';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { StatStrip, StatTile } from '@/components/app/stat-tile';
+import { RecordTabs } from '@/components/app/record-page';
+import { SEMANTIC_ICONS } from '@/components/app/semantic-icons';
 import { Button } from '@/components/ui/shadcn/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import {
   Empty,
   EmptyDescription,
@@ -181,46 +182,44 @@ export function SupplierDetailPage({ supplierId, suppliersState, onBack, onEdit 
         </div>
       )}
 
-      <section aria-label="Supplier financial summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SectionCard bodyClassName="p-5">
-          <FigureBlock label="Total payable" value={formatCurrency(summary.totalPayable, supplier.currency)} />
-        </SectionCard>
-        <SectionCard bodyClassName="p-5">
-          <FigureBlock
+      <section aria-label="Supplier financial summary">
+        <StatStrip columns={4}>
+          <StatTile variant="compact" icon={WalletCardsIcon} label="Total payable" value={formatCurrency(summary.totalPayable, supplier.currency)} />
+          <StatTile
+            variant="compact"
+            icon={HourglassIcon}
             label="Overdue balance"
             value={formatCurrency(summary.overdueBalance, supplier.currency)}
             tone={summary.overdueBalance > 0 ? 'negative' : 'default'}
           />
-        </SectionCard>
-        <SectionCard bodyClassName="p-5">
-          <FigureBlock label="YTD purchases" value={formatCurrency(summary.ytdPurchases, supplier.currency)} />
-        </SectionCard>
-        <SectionCard bodyClassName="p-5">
-          <FigureBlock label="Available credit" value={formatCurrency(summary.creditBalance, supplier.currency)} />
-        </SectionCard>
+          <StatTile variant="compact" icon={ShoppingCartIcon} label="YTD purchases" value={formatCurrency(summary.ytdPurchases, supplier.currency)} />
+          <StatTile variant="compact" icon={CircleDollarSignIcon} label="Available credit" value={formatCurrency(summary.creditBalance, supplier.currency)} />
+        </StatStrip>
       </section>
 
       <SectionCard title="Accounts payable ageing">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <FigureBlock label="Current" value={formatCurrency(aging.current, supplier.currency)} />
-          <FigureBlock label="30 days" value={formatCurrency(aging.days30, supplier.currency)} />
-          <FigureBlock label="60 days" value={formatCurrency(aging.days60, supplier.currency)} />
-          <FigureBlock
+        <StatStrip columns={4}>
+          <StatTile variant="compact" icon={SEMANTIC_ICONS.ageing} label="Current" value={formatCurrency(aging.current, supplier.currency)} />
+          <StatTile variant="compact" icon={SEMANTIC_ICONS.ageing} label="30 days" value={formatCurrency(aging.days30, supplier.currency)} />
+          <StatTile variant="compact" icon={SEMANTIC_ICONS.ageing} label="60 days" value={formatCurrency(aging.days60, supplier.currency)} />
+          <StatTile
+            variant="compact"
+            icon={SEMANTIC_ICONS.ageing}
             label="90+ days"
             value={formatCurrency(aging.days90Plus, supplier.currency)}
             tone={aging.days90Plus > 0 ? 'negative' : 'default'}
           />
-        </div>
+        </StatStrip>
       </SectionCard>
 
-      <Tabs defaultValue="overview">
-        <TabsList variant="line" className="w-full justify-start border-b border-border">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="history">Transaction history</TabsTrigger>
-          <TabsTrigger value="remittance">Remittance &amp; statements</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="pt-4">
+      <RecordTabs
+        ariaLabel="Supplier sections"
+        tabs={[
+          {
+            value: 'overview',
+            label: 'Overview',
+            icon: SEMANTIC_ICONS.overview,
+            content: (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <SectionCard title="Contact">
               <InfoRow label="Contact person" value={supplier.contactPerson} />
@@ -255,10 +254,15 @@ export function SupplierDetailPage({ supplierId, suppliersState, onBack, onEdit 
               </SectionCard>
             ) : null}
           </div>
-        </TabsContent>
-
-        <TabsContent value="history" className="pt-4">
-          {supplierBills.length > 0 ? (
+            ),
+          },
+          {
+            value: 'history',
+            label: 'Transaction history',
+            icon: SEMANTIC_ICONS.transactions,
+            count: supplierBills.length,
+            content: (
+          supplierBills.length > 0 ? (
             <SectionCard bodyClassName="p-5">
               <SupplierBillHistoryTable bills={supplierBills} outstandingByBillId={outstandingByBillId} />
             </SectionCard>
@@ -274,10 +278,14 @@ export function SupplierDetailPage({ supplierId, suppliersState, onBack, onEdit 
                 </EmptyHeader>
               </Empty>
             </SectionCard>
-          )}
-        </TabsContent>
-
-        <TabsContent value="remittance" className="pt-4">
+          )
+            ),
+          },
+          {
+            value: 'remittance',
+            label: 'Remittance & statements',
+            icon: SEMANTIC_ICONS.remittance,
+            content: (
           <SectionCard>
             <Empty>
               <EmptyHeader>
@@ -291,8 +299,10 @@ export function SupplierDetailPage({ supplierId, suppliersState, onBack, onEdit 
               </EmptyHeader>
             </Empty>
           </SectionCard>
-        </TabsContent>
-      </Tabs>
+            ),
+          },
+        ]}
+      />
 
       <SectionCard title="Danger zone" className="border-destructive/30">
         <p className="text-sm text-muted-foreground">

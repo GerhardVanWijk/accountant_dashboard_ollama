@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { HourglassIcon, TriangleAlertIcon, UsersIcon, WalletCardsIcon } from 'lucide-react';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { RecordLink } from '@/components/app/record-link';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { formatCurrency } from '@/lib/app/format';
@@ -108,14 +110,15 @@ export function VendorAgingPage() {
 
       {!isLoading && !error && (
         <>
-          <SectionCard>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              <FigureBlock label="Suppliers with balance" value={String(sortedRows.length)} />
-              <FigureBlock label="Total payable" value={formatCurrency(totals.total)} />
-              <FigureBlock label="Current" value={formatCurrency(totals.current)} />
-              <FigureBlock label="90+ days overdue" value={formatCurrency(totals.days90Plus)} tone={totals.days90Plus > 0 ? 'negative' : 'default'} />
-            </div>
-          </SectionCard>
+          <StatTileGrid
+            columns={4}
+            metrics={[
+              { label: 'Suppliers with balance', value: String(sortedRows.length), icon: UsersIcon },
+              { label: 'Total payable', value: formatCurrency(totals.total), icon: WalletCardsIcon },
+              { label: 'Current', value: formatCurrency(totals.current), icon: HourglassIcon },
+              { label: '90+ days overdue', value: formatCurrency(totals.days90Plus), tone: totals.days90Plus > 0 ? 'negative' : 'default', icon: TriangleAlertIcon },
+            ]}
+          />
 
           <SectionCard>
             {sortedRows.length === 0 ? (

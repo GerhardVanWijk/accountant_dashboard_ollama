@@ -3,7 +3,8 @@ import { Loader2, UploadCloud } from 'lucide-react';
 import type { CompanyDocument, Profile } from '@/types';
 import { documentExpiryStatus } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { ArchiveIcon, CircleCheckIcon, ClockAlertIcon, HourglassIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { HelpLink } from '@/features/help/components/HelpLink';
 import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
@@ -130,14 +131,15 @@ export function DocumentsPage() {
         }
       />
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <FigureBlock label="Active documents" value={String(active.length)} hint="Not archived" />
-          <FigureBlock label="Expiring soon" value={String(expiringSoon)} hint="Within 30 days" />
-          <FigureBlock label="Expired" value={String(expired)} hint="Past their expiry date" />
-          <FigureBlock label="Archived" value={String(archivedCount)} hint="Kept, not deleted" />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={4}
+        metrics={[
+          { label: 'Active documents', value: String(active.length), hint: 'Not archived', icon: CircleCheckIcon },
+          { label: 'Expiring soon', value: String(expiringSoon), hint: 'Within 30 days', icon: HourglassIcon },
+          { label: 'Expired', value: String(expired), hint: 'Past their expiry date', tone: expired > 0 ? 'negative' : 'default', icon: ClockAlertIcon },
+          { label: 'Archived', value: String(archivedCount), hint: 'Kept, not deleted', icon: ArchiveIcon },
+        ]}
+      />
 
       {actionError && (
         <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">

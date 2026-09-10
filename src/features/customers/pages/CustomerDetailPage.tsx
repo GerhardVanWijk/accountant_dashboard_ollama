@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Loader2 } from 'lucide-react';
+import { ArrowLeft, BanknoteIcon, CircleDollarSignIcon, FileText, HourglassIcon, Loader2, ReceiptTextIcon, WalletCardsIcon } from 'lucide-react';
 import type { Customer } from '@/types';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDate } from '@/utils/formatDate';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { StatStrip, StatTile } from '@/components/app/stat-tile';
+import { RecordTabs } from '@/components/app/record-page';
+import { SEMANTIC_ICONS } from '@/components/app/semantic-icons';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { useCustomer } from '../hooks/useCustomer';
 import { useCustomerMutations } from '../hooks/useCustomerMutations';
@@ -157,19 +158,24 @@ export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetai
       </div>
 
       {summary && (
-        <section aria-label="Customer financial summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          <SectionCard bodyClassName="p-5">
-            <FigureBlock label="Total outstanding" value={formatCurrency(summary.totalOutstanding, customer.currency)} />
-          </SectionCard>
-          <SectionCard bodyClassName="p-5">
-            <FigureBlock
+        <section aria-label="Customer financial summary">
+          <StatStrip columns={5}>
+            <StatTile
+              variant="compact"
+              icon={WalletCardsIcon}
+              label="Total outstanding"
+              value={formatCurrency(summary.totalOutstanding, customer.currency)}
+            />
+            <StatTile
+              variant="compact"
+              icon={HourglassIcon}
               label="Overdue balance"
               value={formatCurrency(summary.overdueBalance, customer.currency)}
               tone={summary.overdueBalance > 0 ? 'negative' : 'default'}
             />
-          </SectionCard>
-          <SectionCard bodyClassName="p-5">
-            <FigureBlock
+            <StatTile
+              variant="compact"
+              icon={BanknoteIcon}
               label="Available deposit"
               value={formatCurrency(summary.availableDeposit, customer.currency)}
               hint={
@@ -183,29 +189,31 @@ export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetai
               }
               tone={summary.availableDeposit > 0 ? 'positive' : 'default'}
             />
-          </SectionCard>
-          <SectionCard bodyClassName="p-5">
-            <FigureBlock
+            <StatTile
+              variant="compact"
+              icon={CircleDollarSignIcon}
               label="Available credit"
               value={summary.availableCredit === null ? 'No limit set' : formatCurrency(summary.availableCredit, customer.currency)}
-              tone={summary.availableCredit !== null && summary.availableCredit < 0 ? 'negative' : 'positive'}
+              tone={summary.availableCredit !== null && summary.availableCredit < 0 ? 'negative' : 'default'}
             />
-          </SectionCard>
-          <SectionCard bodyClassName="p-5">
-            <FigureBlock label="YTD sales" value={formatCurrency(summary.ytdSales, customer.currency)} />
-          </SectionCard>
+            <StatTile
+              variant="compact"
+              icon={ReceiptTextIcon}
+              label="YTD sales"
+              value={formatCurrency(summary.ytdSales, customer.currency)}
+            />
+          </StatStrip>
         </section>
       )}
 
-      <Tabs defaultValue="overview">
-        <TabsList variant="line" className="w-full justify-start border-b border-border">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="aging">Aging</TabsTrigger>
-          <TabsTrigger value="transactions">Transaction history</TabsTrigger>
-          <TabsTrigger value="statements">Statements</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="pt-4">
+      <RecordTabs
+        ariaLabel="Customer sections"
+        tabs={[
+          {
+            value: 'overview',
+            label: 'Overview',
+            icon: SEMANTIC_ICONS.overview,
+            content: (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <SectionCard title="Contact details">
               <InfoRow label="Phone" value={customer.phone ?? '—'} />
@@ -250,20 +258,36 @@ export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetai
               )}
             </SectionCard>
           </div>
-        </TabsContent>
-
-        <TabsContent value="aging" className="pt-4">
-          <SectionCard title="Accounts receivable aging">
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            ),
+          },
+          {
+            value: 'aging',
+            label: 'Ageing',
+            icon: SEMANTIC_ICONS.ageing,
+            content: (
+          <SectionCard title="Accounts receivable ageing">
+            <StatStrip columns={4}>
               {agingBuckets.map(({ key, label }) => (
-                <FigureBlock key={key} label={label} value={formatCurrency(aging[key], customer.currency)} />
+                <StatTile
+                  key={key}
+                  variant="compact"
+                  icon={SEMANTIC_ICONS.ageing}
+                  label={label}
+                  value={formatCurrency(aging[key], customer.currency)}
+                  tone={key === 'days90Plus' && aging[key] > 0 ? 'negative' : 'default'}
+                />
               ))}
-            </div>
+            </StatStrip>
           </SectionCard>
-        </TabsContent>
-
-        <TabsContent value="transactions" className="pt-4">
-          {customerInvoices.length > 0 ? (
+            ),
+          },
+          {
+            value: 'transactions',
+            label: 'Transaction history',
+            icon: SEMANTIC_ICONS.transactions,
+            count: customerInvoices.length,
+            content: (
+          customerInvoices.length > 0 ? (
             <SectionCard bodyClassName="p-5">
               <CustomerInvoiceHistoryTable invoices={customerInvoices} outstandingByInvoiceId={outstandingByInvoiceId} />
             </SectionCard>
@@ -281,10 +305,14 @@ export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetai
                 </EmptyHeader>
               </Empty>
             </SectionCard>
-          )}
-        </TabsContent>
-
-        <TabsContent value="statements" className="pt-4">
+          )
+            ),
+          },
+          {
+            value: 'statements',
+            label: 'Statements',
+            icon: SEMANTIC_ICONS.statements,
+            content: (
           <SectionCard title="Remittance & statements">
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-end gap-4">
@@ -312,8 +340,10 @@ export function CustomerDetailPage({ customerId, onBack, onEdit }: CustomerDetai
               </p>
             </div>
           </SectionCard>
-        </TabsContent>
-      </Tabs>
+            ),
+          },
+        ]}
+      />
     </>
   );
 }

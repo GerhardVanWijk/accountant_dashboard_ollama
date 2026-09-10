@@ -73,4 +73,14 @@ describe('InvoicesPage', () => {
     const { container } = renderAt('/sales/invoices');
     expect(container.querySelector('[data-slot="sheet-content"]')).toBeNull();
   });
+
+  it('shows the compact KPI strip with R-formatted money and no "ZAR" prefix', () => {
+    const { container } = renderAt('/sales/invoices');
+    // the strip's hint text is unique to the StatTileGrid summary
+    expect(screen.getByText('2 invoices awaiting payment')).toBeInTheDocument();
+    expect(screen.getByText('Fully settled invoices')).toBeInTheDocument();
+    expect(screen.getByText('Not yet sent to customers')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/ZAR\s?\d/);
+    expect(container.textContent).toMatch(/R\s?[\d\s]/);
+  });
 });

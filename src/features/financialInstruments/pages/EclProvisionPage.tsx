@@ -2,7 +2,9 @@
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock, Amount } from '@/components/app/figure';
+import { ShieldAlertIcon, WalletCardsIcon } from 'lucide-react';
+import { Amount } from '@/components/app/figure';
+import { StatTile } from '@/components/app/stat-tile';
 import { RecordLink } from '@/components/app/record-link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
@@ -144,10 +146,10 @@ export function EclProvisionPage() {
             title={`${selectedComputation.financialYearLabel} — ${selectedComputation.status === 'draft' ? 'Draft' : 'Posted'}`}
             description={`As of ${formatDate(selectedComputation.asOfDate)}`}
           >
-            <div className="grid gap-6 sm:grid-cols-3">
-              <FigureBlock label="Gross receivables" value={formatCurrency(selectedComputation.totalGrossReceivable)} />
-              <FigureBlock label="Expected credit loss provision" value={formatCurrency(selectedComputation.totalExpectedCreditLoss)} tone="warning" />
-              <div className="flex flex-col gap-1">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <StatTile variant="compact" icon={WalletCardsIcon} label="Gross receivables" value={formatCurrency(selectedComputation.totalGrossReceivable)} />
+              <StatTile variant="compact" icon={ShieldAlertIcon} label="Expected credit loss provision" value={formatCurrency(selectedComputation.totalExpectedCreditLoss)} tone="warning" />
+              <div className="flex flex-col gap-1 rounded-xl border border-border bg-card p-2.5 sm:p-3">
                 <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{selectedComputation.status === 'draft' ? 'Movement preview' : 'Movement posted'}</span>
                 <Amount value={selectedComputation.status === 'draft' ? previewMovement : (selectedComputation.movementAmount ?? 0)} className="text-xl font-semibold" />
                 <span className="text-xs text-muted-foreground">{priorComputation ? `vs. ${priorComputation.financialYearLabel} (posted)` : 'vs. R0.00 (first computation for this company)'}</span>

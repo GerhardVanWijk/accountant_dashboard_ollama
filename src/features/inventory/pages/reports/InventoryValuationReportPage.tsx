@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { BoxesIcon, CircleCheckIcon, TriangleAlertIcon, WalletCardsIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatCurrency } from '@/lib/app/format';
@@ -90,16 +91,20 @@ export function InventoryValuationReportPage() {
       canExport={canExport}
       exportDataset={exportDataset}
       summary={
-        <ReportSummaryCard>
-          <FigureBlock label="Inventory subledger value" value={formatCurrency(totalValue)} />
-          <FigureBlock label="Filtered lines" value={String(visibleRows.length)} />
-          <FigureBlock label="Total lines" value={String(rows.length)} />
-          <FigureBlock
-            label="Control status"
-            value={reconciliation.result ? (reconciliation.result.isReconciled ? 'Reconciled' : 'Investigate') : '—'}
-            tone={reconciliation.result ? (reconciliation.result.isReconciled ? 'positive' : 'negative') : 'default'}
-          />
-        </ReportSummaryCard>
+        <ReportSummaryCard
+          columns={4}
+          metrics={[
+            { label: 'Inventory subledger value', value: formatCurrency(totalValue), icon: WalletCardsIcon },
+            { label: 'Filtered lines', value: String(visibleRows.length), icon: BoxesIcon },
+            { label: 'Total lines', value: String(rows.length), icon: BoxesIcon },
+            {
+              label: 'Control status',
+              value: reconciliation.result ? (reconciliation.result.isReconciled ? 'Reconciled' : 'Investigate') : '—',
+              tone: reconciliation.result ? (reconciliation.result.isReconciled ? 'positive' : 'negative') : 'default',
+              icon: reconciliation.result && !reconciliation.result.isReconciled ? TriangleAlertIcon : CircleCheckIcon,
+            },
+          ]}
+        />
       }
       footnote="Line-level totals above use the same round-after-sum valuation identity as the general-ledger reconciliation below, but are not independently re-summed against it here."
     >

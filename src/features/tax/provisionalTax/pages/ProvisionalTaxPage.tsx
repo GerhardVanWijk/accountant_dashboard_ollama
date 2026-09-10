@@ -2,7 +2,8 @@
 import { Loader2, CalendarClock } from 'lucide-react';
 import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { ArrowLeftRightIcon, BanknoteIcon, LandmarkIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { EnumSelect } from '@/components/app/combobox';
@@ -194,15 +195,19 @@ export function ProvisionalTaxPage() {
 
           <SectionCard title="Reconciliation">
             {reconciliation?.finalTaxLiability !== undefined ? (
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                <FigureBlock label="Total Paid" value={formatCurrency(reconciliation.totalPaid)} />
-                <FigureBlock label="Final Tax Liability" value={formatCurrency(reconciliation.finalTaxLiability)} tone="warning" />
-                <FigureBlock
-                  label={(reconciliation.variance ?? 0) >= 0 ? 'Still Owed' : 'Overpaid / Refund'}
-                  value={formatCurrency(reconciliation.variance ?? 0)}
-                  tone={(reconciliation.variance ?? 0) >= 0 ? 'warning' : 'positive'}
-                />
-              </div>
+              <StatTileGrid
+                columns={3}
+                metrics={[
+                  { label: 'Total Paid', value: formatCurrency(reconciliation.totalPaid), icon: BanknoteIcon },
+                  { label: 'Final Tax Liability', value: formatCurrency(reconciliation.finalTaxLiability), tone: 'warning', icon: LandmarkIcon },
+                  {
+                    label: (reconciliation.variance ?? 0) >= 0 ? 'Still Owed' : 'Overpaid / Refund',
+                    value: formatCurrency(reconciliation.variance ?? 0),
+                    tone: (reconciliation.variance ?? 0) >= 0 ? 'warning' : 'positive',
+                    icon: ArrowLeftRightIcon,
+                  },
+                ]}
+              />
             ) : (
               <p className="text-sm text-muted-foreground">
                 Total paid so far: {formatCurrency(reconciliation?.totalPaid ?? 0)}. The reconciliation against the final tax liability appears once the Income Tax computation for this

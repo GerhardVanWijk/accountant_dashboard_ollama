@@ -1,6 +1,8 @@
 import type { Account, Product, StockTransfer, Warehouse } from '@/types';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid, type StatMetric } from '@/components/app/stat-tile';
+import { CalendarCheckIcon, CalendarClockIcon, CalendarIcon, ListIcon } from 'lucide-react';
 import { RecordLink } from '@/components/app/record-link';
 import { formatDate } from '@/lib/app/format';
 import type { AccountingEffectPreview } from '../types/accountingPreview';
@@ -39,12 +41,19 @@ export function StockTransferDetail({
   return (
     <>
       <SectionCard title={`${warehouseName(transfer.fromWarehouseId)} → ${warehouseName(transfer.toWarehouseId)}`}>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <FigureBlock label="Transfer date" value={formatDate(transfer.transferDate)} />
-          {transfer.expectedReceiptDate && <FigureBlock label="Expected receipt" value={formatDate(transfer.expectedReceiptDate)} />}
-          {transfer.receivedDate && <FigureBlock label="Received" value={formatDate(transfer.receivedDate)} />}
-          <FigureBlock label="Lines" value={String(transfer.lineItems.length)} />
-        </div>
+        <StatTileGrid
+          columns={3}
+          metrics={[
+            { label: 'Transfer date', value: formatDate(transfer.transferDate), icon: CalendarIcon },
+            ...(transfer.expectedReceiptDate
+              ? [{ label: 'Expected receipt', value: formatDate(transfer.expectedReceiptDate), icon: CalendarClockIcon } as StatMetric]
+              : []),
+            ...(transfer.receivedDate
+              ? [{ label: 'Received', value: formatDate(transfer.receivedDate), icon: CalendarCheckIcon } as StatMetric]
+              : []),
+            { label: 'Lines', value: String(transfer.lineItems.length), icon: ListIcon },
+          ]}
+        />
         {transfer.notes && <p className="mt-4 text-sm text-muted-foreground">{transfer.notes}</p>}
         <div className="mt-4 flex flex-col gap-1 text-xs">
           {transfer.dispatchedJournalEntryId && (

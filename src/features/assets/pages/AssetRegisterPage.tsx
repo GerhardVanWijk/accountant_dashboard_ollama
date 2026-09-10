@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { FixedAsset } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { CircleCheckIcon, CircleDollarSignIcon, TrendingDownIcon, WalletCardsIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { formatCurrency, formatPercent } from '@/lib/app/format';
 import { useFixedAssets } from '../hooks/useFixedAssets';
@@ -119,14 +120,15 @@ export function AssetRegisterPage() {
         </p>
       )}
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <FigureBlock label="Cost" value={formatCurrency(totalCost)} hint={`${assets.length} assets on register`} />
-          <FigureBlock label="Accumulated depreciation" value={formatCurrency(totalAccumDep)} hint={`${formatPercent(depreciatedShare)} of cost written off`} />
-          <FigureBlock label="Carrying value" value={formatCurrency(totalCarrying)} hint="Cost less depreciation" />
-          <FigureBlock label="Active" value={String(activeCount)} hint="Currently in use" />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={4}
+        metrics={[
+          { label: 'Cost', value: formatCurrency(totalCost), hint: `${assets.length} assets on register`, icon: WalletCardsIcon },
+          { label: 'Accumulated depreciation', value: formatCurrency(totalAccumDep), hint: `${formatPercent(depreciatedShare)} of cost written off`, icon: TrendingDownIcon },
+          { label: 'Carrying value', value: formatCurrency(totalCarrying), hint: 'Cost less depreciation', icon: CircleDollarSignIcon },
+          { label: 'Active', value: String(activeCount), hint: 'Currently in use', icon: CircleCheckIcon },
+        ]}
+      />
 
       {busy && (
         <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">

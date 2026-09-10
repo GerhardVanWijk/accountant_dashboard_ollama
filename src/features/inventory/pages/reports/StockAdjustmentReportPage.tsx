@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { ArrowLeftRightIcon, PackageXIcon, TrendingDownIcon, TrendingUpIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatCurrency, formatDateTime } from '@/lib/app/format';
@@ -115,12 +116,15 @@ export function StockAdjustmentReportPage() {
       exportDataset={exportDataset}
       headerExtra={<DateRangeControl idPrefix="adjustment-report" preset={dateRange.preset} onPresetChange={dateRange.setPreset} start={dateRange.customStart} end={dateRange.customEnd} onCustomChange={dateRange.setCustom} />}
       summary={
-        <ReportSummaryCard>
-          <FigureBlock label="Total gains" value={formatCurrency(summary.totalGains)} tone="positive" />
-          <FigureBlock label="Total losses" value={formatCurrency(summary.totalLosses)} tone="negative" />
-          <FigureBlock label="Net adjustment" value={formatCurrency(summary.netAdjustment)} />
-          <FigureBlock label="Total write-offs" value={formatCurrency(summary.totalWriteOffs)} />
-        </ReportSummaryCard>
+        <ReportSummaryCard
+          columns={4}
+          metrics={[
+            { label: 'Total gains', value: formatCurrency(summary.totalGains), tone: 'positive', icon: TrendingUpIcon },
+            { label: 'Total losses', value: formatCurrency(summary.totalLosses), tone: 'negative', icon: TrendingDownIcon },
+            { label: 'Net adjustment', value: formatCurrency(summary.netAdjustment), icon: ArrowLeftRightIcon },
+            { label: 'Total write-offs', value: formatCurrency(summary.totalWriteOffs), icon: PackageXIcon },
+          ]}
+        />
       }
     >
       {!dateRange.range ? (

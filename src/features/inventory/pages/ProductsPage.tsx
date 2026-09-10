@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import type { Product } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { CircleDollarSignIcon, PercentIcon, TriangleAlertIcon, WalletCardsIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
@@ -67,14 +68,15 @@ export function ProductsPage() {
         }
       />
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <FigureBlock label="Stock at cost" value={formatCurrency(totals.stockValueAtCost)} hint={`${totals.lineCount} stock lines`} />
-          <FigureBlock label="Stock at selling price" value={formatCurrency(totals.stockValueAtSelling)} hint="If sold at list price" />
-          <FigureBlock label="Potential margin" value={formatCurrency(totals.potentialMargin)} hint="Selling less cost" tone="positive" />
-          <FigureBlock label="Below reorder level" value={String(belowReorderCount)} hint="Needing replenishment" tone={belowReorderCount > 0 ? 'warning' : 'default'} />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={4}
+        metrics={[
+          { label: 'Stock at cost', value: formatCurrency(totals.stockValueAtCost), hint: `${totals.lineCount} stock lines`, icon: WalletCardsIcon },
+          { label: 'Stock at selling price', value: formatCurrency(totals.stockValueAtSelling), hint: 'If sold at list price', icon: CircleDollarSignIcon },
+          { label: 'Potential margin', value: formatCurrency(totals.potentialMargin), hint: 'Selling less cost', tone: 'positive', icon: PercentIcon },
+          { label: 'Below reorder level', value: String(belowReorderCount), hint: 'Needing replenishment', tone: belowReorderCount > 0 ? 'warning' : 'default', icon: TriangleAlertIcon },
+        ]}
+      />
 
       {loading && (
         <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">

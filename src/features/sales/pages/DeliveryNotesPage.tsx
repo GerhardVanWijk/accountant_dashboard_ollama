@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { BoxesIcon, FileTextIcon, ListIcon, Loader2, TruckIcon } from 'lucide-react';
+import { PageHeader } from '@/components/app/page-header';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { StatusBadge } from '@/components/app/status-badge';
 import { formatDate } from '@/lib/app/format';
 import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
@@ -60,14 +60,15 @@ export function DeliveryNotesPage() {
         description="Physical dispatch evidence for confirmed Sales Orders — created from the Sales Order, posting moves stock and freezes cost. No revenue, VAT or receivable is created here."
       />
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <FigureBlock label="Posted" value={String(posted.length)} hint="Physically departed" />
-          <FigureBlock label="Draft" value={String(drafts.length)} hint="Not yet posted" tone={drafts.length > 0 ? 'warning' : 'default'} />
-          <FigureBlock label="Units delivered" value={fmtQty(totalUnitsDelivered)} hint="Across posted delivery notes" />
-          <FigureBlock label="Total" value={String(deliveryNotes.length)} hint="All delivery notes" />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={4}
+        metrics={[
+          { label: 'Posted', value: String(posted.length), hint: 'Physically departed', icon: TruckIcon },
+          { label: 'Draft', value: String(drafts.length), hint: 'Not yet posted', tone: drafts.length > 0 ? 'warning' : 'default', icon: FileTextIcon },
+          { label: 'Units delivered', value: fmtQty(totalUnitsDelivered), hint: 'Across posted delivery notes', icon: BoxesIcon },
+          { label: 'Total', value: String(deliveryNotes.length), hint: 'All delivery notes', icon: ListIcon },
+        ]}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <input

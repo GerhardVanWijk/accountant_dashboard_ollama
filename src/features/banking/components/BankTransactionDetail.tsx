@@ -1,8 +1,10 @@
+import { CalendarIcon, HashIcon, WalletCardsIcon } from 'lucide-react';
 import type { BankAccount } from '@/types';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { StatusBadge } from '@/components/app/status-badge';
-import { formatDate } from '@/lib/app/format';
+import { formatCurrency, formatDate } from '@/lib/app/format';
 import type { BankTransactionWithAllocations } from '../types';
 
 export interface BankTransactionDetailProps {
@@ -21,11 +23,19 @@ export function BankTransactionDetail({ transaction, bankAccount }: BankTransact
   return (
     <>
       <SectionCard title="Transaction" description={bankAccount?.name ?? 'Unknown account'}>
-        <div className="grid grid-cols-2 gap-4">
-          <FigureBlock label="Amount" value={`${transaction.direction === 'debit' ? '+' : '-'}${transaction.amount.toFixed(2)}`} tone={transaction.direction === 'debit' ? 'positive' : 'default'} />
-          <FigureBlock label="Date" value={formatDate(transaction.date)} />
-          <FigureBlock label="Reference" value={transaction.reference ?? '—'} />
-        </div>
+        <StatTileGrid
+          columns={3}
+          metrics={[
+            {
+              label: 'Amount',
+              value: formatCurrency(transaction.direction === 'debit' ? transaction.amount : -transaction.amount),
+              tone: transaction.direction === 'debit' ? 'positive' : 'default',
+              icon: WalletCardsIcon,
+            },
+            { label: 'Date', value: formatDate(transaction.date), icon: CalendarIcon },
+            { label: 'Reference', value: transaction.reference ?? '—', icon: HashIcon },
+          ]}
+        />
         <p className="mt-4 text-sm text-muted-foreground">{transaction.description}</p>
       </SectionCard>
 

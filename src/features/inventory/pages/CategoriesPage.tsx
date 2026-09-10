@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import type { ProductCategory } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { BookOpenIcon, TagsIcon, TriangleAlertIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { StatusBadge } from '@/components/app/status-badge';
 import { ConfirmDialog } from '@/components/app/form';
@@ -186,17 +187,19 @@ export function CategoriesPage() {
         }
       />
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-3">
-          <FigureBlock label="Categories" value={String(categories.length)} hint={`${activeCount} active`} />
-          <FigureBlock label="With account mappings" value={String(mappedCount)} hint="Override the standard accounts" />
-          <FigureBlock
-            label="Uncategorised products"
-            value={String(products.filter((p) => !p.categoryId).length)}
-            hint="Not assigned to a category"
-          />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={3}
+        metrics={[
+          { label: 'Categories', value: String(categories.length), hint: `${activeCount} active`, icon: TagsIcon },
+          { label: 'With account mappings', value: String(mappedCount), hint: 'Override the standard accounts', icon: BookOpenIcon },
+          {
+            label: 'Uncategorised products',
+            value: String(products.filter((p) => !p.categoryId).length),
+            hint: 'Not assigned to a category',
+            icon: TriangleAlertIcon,
+          },
+        ]}
+      />
 
       {loading ? (
         <div role="status" className="flex min-h-[30vh] items-center justify-center gap-3 text-muted-foreground">

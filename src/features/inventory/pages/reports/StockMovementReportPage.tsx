@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { ArrowLeftRightIcon, RouteIcon, TrendingDownIcon, TrendingUpIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
-import { formatDateTime } from '@/lib/app/format';
+import { formatCurrency, formatDateTime } from '@/lib/app/format';
 import { sumMoney } from '../../services/inventoryValuation';
 import { InventoryReportShell, ReportSummaryCard } from '../../components/reports/InventoryReportShell';
 import { DateRangeControl } from '../../components/reports/DateRangeControl';
@@ -134,12 +135,15 @@ export function StockMovementReportPage() {
       exportDataset={exportDataset}
       headerExtra={<DateRangeControl idPrefix="movement-report" preset={dateRange.preset} onPresetChange={dateRange.setPreset} start={dateRange.customStart} end={dateRange.customEnd} onCustomChange={dateRange.setCustom} />}
       summary={
-        <ReportSummaryCard>
-          <FigureBlock label="Movements" value={String(visibleRows.length)} />
-          <FigureBlock label="Increases (value)" value={new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(increases)} tone="positive" />
-          <FigureBlock label="Decreases (value)" value={new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(decreases)} tone="negative" />
-          <FigureBlock label="Net units" value={netUnits.toLocaleString('en-ZA')} />
-        </ReportSummaryCard>
+        <ReportSummaryCard
+          columns={4}
+          metrics={[
+            { label: 'Movements', value: String(visibleRows.length), icon: RouteIcon },
+            { label: 'Increases (value)', value: formatCurrency(increases), tone: 'positive', icon: TrendingUpIcon },
+            { label: 'Decreases (value)', value: formatCurrency(decreases), tone: 'negative', icon: TrendingDownIcon },
+            { label: 'Net units', value: netUnits.toLocaleString('en-ZA'), icon: ArrowLeftRightIcon },
+          ]}
+        />
       }
     >
       {!dateRange.range ? (

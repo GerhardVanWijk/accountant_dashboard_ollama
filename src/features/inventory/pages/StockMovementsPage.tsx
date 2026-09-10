@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { StockMovement } from '@/types';
+import { RouteIcon, TrendingDownIcon, TrendingUpIcon, TriangleAlertIcon } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { Amount } from '@/components/app/figure';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
@@ -316,19 +317,15 @@ export function StockMovementsPage() {
         actions={<ExportMenu dataset={exportDataset} allowed={canExport} />}
       />
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-3 lg:grid-cols-4">
-          <FigureBlock label="Movements" value={String(movements.length)} hint="All time" />
-          <FigureBlock label="Units in" value={totalIn.toLocaleString('en-ZA')} hint="Receipts, returns, gains, opening" tone="positive" />
-          <FigureBlock label="Units out" value={totalOut.toLocaleString('en-ZA')} hint="Sales, transfers out, write-offs" />
-          <FigureBlock
-            label="Missing evidence"
-            value={String(missingCount)}
-            hint="No source-document link"
-            tone={missingCount > 0 ? 'warning' : 'default'}
-          />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={4}
+        metrics={[
+          { label: 'Movements', value: String(movements.length), hint: 'All time', icon: RouteIcon },
+          { label: 'Units in', value: totalIn.toLocaleString('en-ZA'), hint: 'Receipts, returns, gains, opening', tone: 'positive', icon: TrendingUpIcon },
+          { label: 'Units out', value: totalOut.toLocaleString('en-ZA'), hint: 'Sales, transfers out, write-offs', icon: TrendingDownIcon },
+          { label: 'Missing evidence', value: String(missingCount), hint: 'No source-document link', tone: missingCount > 0 ? 'warning' : 'default', icon: TriangleAlertIcon },
+        ]}
+      />
 
       {loading ? (
         <div role="status" className="flex min-h-[30vh] items-center justify-center gap-3 text-muted-foreground">

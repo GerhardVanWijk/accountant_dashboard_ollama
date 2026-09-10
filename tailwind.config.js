@@ -92,6 +92,8 @@ export default {
         'brand-foreground': 'var(--brand-foreground)',
         'brand-muted': 'var(--brand-muted)',
         'brand-outline': 'var(--brand-outline)',
+        'brand-deep': 'var(--brand-deep)',
+        'brand-deep-foreground': 'var(--brand-deep-foreground)',
 
         /* v0's general-status colors (badges/notifications) — namespaced
            status-* because bare positive/negative/warning/info above are

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Plus } from 'lucide-react';
-import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { FileTextIcon, HourglassIcon, ListIcon, Loader2, Plus, WalletCardsIcon } from 'lucide-react';
+import { PageHeader } from '@/components/app/page-header';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { useLegacyRecordRedirect } from '@/components/app/record-page';
 import { formatCurrency } from '@/lib/app/format';
@@ -63,14 +63,15 @@ export function BillsPage() {
           }
         />
 
-        <SectionCard>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <FigureBlock label="Total supplier invoices" value={String(bills.length)} />
-            <FigureBlock label="Outstanding" value={formatCurrency(totalOutstanding)} tone={totalOutstanding > 0 ? 'warning' : 'default'} />
-            <FigureBlock label="Overdue" value={String(overdueBills.length)} tone={overdueBills.length > 0 ? 'negative' : 'default'} />
-            <FigureBlock label="Drafts" value={String(draftBills.length)} hint="Not yet posted" />
-          </div>
-        </SectionCard>
+        <StatTileGrid
+          columns={4}
+          metrics={[
+            { label: 'Total supplier invoices', value: String(bills.length), icon: ListIcon },
+            { label: 'Outstanding', value: formatCurrency(totalOutstanding), tone: totalOutstanding > 0 ? 'warning' : 'default', icon: WalletCardsIcon },
+            { label: 'Overdue', value: String(overdueBills.length), tone: overdueBills.length > 0 ? 'negative' : 'default', icon: HourglassIcon },
+            { label: 'Drafts', value: String(draftBills.length), hint: 'Not yet posted', icon: FileTextIcon },
+          ]}
+        />
 
         {notice && <p className="rounded-lg border border-status-positive-outline bg-status-positive-surface px-3 py-2 text-sm text-status-positive">{notice}</p>}
 

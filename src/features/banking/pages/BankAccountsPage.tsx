@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus, Search } from 'lucide-react';
 import type { BankAccount } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { LandmarkIcon, WalletCardsIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   InputGroup,
@@ -186,20 +187,23 @@ export function BankAccountsPage() {
         }
       />
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-2">
-          <FigureBlock
-            label="Total active ZAR balance"
-            value={formatCurrency(totalBalance)}
-            hint={`${bankAccounts.length} account${bankAccounts.length === 1 ? '' : 's'}`}
-          />
-          <FigureBlock
-            label="Active accounts"
-            value={String(bankAccounts.filter((a) => a.status === 'active').length)}
-            hint="Currently postable"
-          />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={2}
+        metrics={[
+          {
+            label: 'Total active ZAR balance',
+            value: formatCurrency(totalBalance),
+            hint: `${bankAccounts.length} account${bankAccounts.length === 1 ? '' : 's'}`,
+            icon: WalletCardsIcon,
+          },
+          {
+            label: 'Active accounts',
+            value: String(bankAccounts.filter((a) => a.status === 'active').length),
+            hint: 'Currently postable',
+            icon: LandmarkIcon,
+          },
+        ]}
+      />
 
       <SectionCard bodyClassName="p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

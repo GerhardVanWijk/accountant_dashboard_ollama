@@ -457,15 +457,15 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
           )}
 
           <StatStrip columns={4}>
-            <StatTile size="compact" icon={ReceiptTextIcon} label="Total" value={formatCurrency(invoice.total)} />
-            <StatTile size="compact" icon={WalletIcon} label="Paid" value={formatCurrency(invoice.amountPaid)} tone={invoice.amountPaid > 0 ? 'positive' : 'default'} />
-            <StatTile size="compact"
+            <StatTile variant="compact" icon={ReceiptTextIcon} label="Total" value={formatCurrency(invoice.total)} />
+            <StatTile variant="compact" icon={WalletIcon} label="Paid" value={formatCurrency(invoice.amountPaid)} tone={invoice.amountPaid > 0 ? 'positive' : 'default'} />
+            <StatTile variant="compact"
               icon={BanknoteIcon}
               label="Outstanding"
               value={formatCurrency(outstanding)}
               tone={outstanding > 0.01 && invoice.status !== 'void' ? (overdue ? 'negative' : 'warning') : 'default'}
             />
-            <StatTile size="compact" icon={PrinterIcon} label="Output VAT" value={formatCurrency(invoice.taxTotal)} />
+            <StatTile variant="compact" icon={PrinterIcon} label="Output VAT" value={formatCurrency(invoice.taxTotal)} />
           </StatStrip>
 
           <RecordTabs urlParam="tab" embedded={embedded} ariaLabel="Customer invoice sections" tabs={tabs} />

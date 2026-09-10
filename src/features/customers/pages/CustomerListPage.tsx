@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Loader2, Plus, UploadIcon, Users } from 'lucide-react';
 import type { Customer } from '@/types';
-import { FigureBlock } from '@/components/app/figure';
+import { CircleCheckIcon, HourglassIcon, PauseIcon, WalletCardsIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -127,33 +128,15 @@ export function CustomerListPage({ onView, onCreate, onEdit }: CustomerListPageP
       />
 
       {!loading && !error && (
-        <SectionCard>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <FigureBlock
-              label="Total receivable"
-              value={formatCurrency(fleetSummary.totalReceivable)}
-              hint={`Across ${customers.length} accounts`}
-            />
-            <FigureBlock
-              label="Overdue"
-              value={formatCurrency(fleetSummary.totalOverdue)}
-              hint="Past agreed payment terms"
-              tone="negative"
-            />
-            <FigureBlock
-              label="Active accounts"
-              value={String(fleetSummary.activeCount)}
-              hint="Trading normally"
-              tone="positive"
-            />
-            <FigureBlock
-              label="On hold"
-              value={String(fleetSummary.onHoldCount)}
-              hint="Blocked from new orders"
-              tone={fleetSummary.onHoldCount > 0 ? 'warning' : 'default'}
-            />
-          </div>
-        </SectionCard>
+        <StatTileGrid
+          columns={4}
+          metrics={[
+            { label: 'Total receivable', value: formatCurrency(fleetSummary.totalReceivable), hint: `Across ${customers.length} accounts`, icon: WalletCardsIcon },
+            { label: 'Overdue', value: formatCurrency(fleetSummary.totalOverdue), hint: 'Past agreed payment terms', tone: 'negative', icon: HourglassIcon },
+            { label: 'Active accounts', value: String(fleetSummary.activeCount), hint: 'Trading normally', tone: 'positive', icon: CircleCheckIcon },
+            { label: 'On hold', value: String(fleetSummary.onHoldCount), hint: 'Blocked from new orders', tone: fleetSummary.onHoldCount > 0 ? 'warning' : 'default', icon: PauseIcon },
+          ]}
+        />
       )}
 
       {loading && (

@@ -1,6 +1,8 @@
 import type { Account, Product, Supplier, SupplierReturn, Warehouse } from '@/types';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { StatTileGrid } from '@/components/app/stat-tile';
+import { CalendarIcon, CircleDollarSignIcon, PercentIcon, WalletCardsIcon } from 'lucide-react';
 import { RecordLink } from '@/components/app/record-link';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import type { AccountingEffectPreview } from '../types/accountingPreview';
@@ -40,12 +42,15 @@ export function SupplierReturnDetail({
   return (
     <>
       <SectionCard title={supplierName} description={supplierReturn.reason}>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <FigureBlock label="Return date" value={formatDate(supplierReturn.returnDate)} />
-          <FigureBlock label="Subtotal" value={formatCurrency(supplierReturn.subtotal)} />
-          <FigureBlock label="Tax" value={formatCurrency(supplierReturn.taxTotal)} />
-          <FigureBlock label="Total credit" value={formatCurrency(supplierReturn.total)} />
-        </div>
+        <StatTileGrid
+          columns={4}
+          metrics={[
+            { label: 'Return date', value: formatDate(supplierReturn.returnDate), icon: CalendarIcon },
+            { label: 'Subtotal', value: formatCurrency(supplierReturn.subtotal), icon: WalletCardsIcon },
+            { label: 'Tax', value: formatCurrency(supplierReturn.taxTotal), icon: PercentIcon },
+            { label: 'Total credit', value: formatCurrency(supplierReturn.total), icon: CircleDollarSignIcon },
+          ]}
+        />
         {supplierReturn.notes && <p className="mt-4 text-sm text-muted-foreground">{supplierReturn.notes}</p>}
         {supplierReturn.journalEntryId && (
           <p className="mt-4 text-xs">

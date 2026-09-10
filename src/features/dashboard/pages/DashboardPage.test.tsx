@@ -114,4 +114,15 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Expense mix')).not.toBeInTheDocument();
     expect(screen.queryByText('Revenue by customer')).not.toBeInTheDocument();
   });
+
+  it('the compact KPI strip shows a trend against the previous period and no "ZAR" prefix on money', () => {
+    mockedUseDashboardData.mockReturnValue({ data: baseData(), loading: false, error: null, refetch: vi.fn(), lastUpdated: '2026-09-07T12:00:00.000Z' });
+    const { container } = renderPage();
+
+    // Revenue carries a real trend from the KPI feed
+    expect(screen.getAllByText('vs previous period').length).toBeGreaterThanOrEqual(1);
+    // monetary values render with the SA "R" symbol, never the ISO "ZAR" code
+    expect(container.textContent).not.toMatch(/ZAR\s?\d/);
+    expect(container.textContent).toMatch(/R\s?\d/);
+  });
 });

@@ -588,16 +588,16 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
           )}
 
           <StatStrip columns={4}>
-            <StatTile size="compact" icon={ReceiptTextIcon} label="Order total" value={formatCurrency(order.total)} />
-            <StatTile size="compact" icon={BoxesIcon} label="Ordered" value={fmtQty(fulfilment?.orderedQty ?? order.lineItems.reduce((s, l) => s + l.quantity, 0))} />
-            <StatTile size="compact"
+            <StatTile variant="compact" icon={ReceiptTextIcon} label="Order total" value={formatCurrency(order.total)} />
+            <StatTile variant="compact" icon={BoxesIcon} label="Ordered" value={fmtQty(fulfilment?.orderedQty ?? order.lineItems.reduce((s, l) => s + l.quantity, 0))} />
+            <StatTile variant="compact"
               icon={TruckIcon}
               label={dispatchTile.label}
               value={dispatchTile.value}
               hint={dispatchTile.hint}
               tone={dispatchTile.tone}
             />
-            <StatTile size="compact"
+            <StatTile variant="compact"
               icon={PrinterIcon}
               label="Invoiced"
               value={fmtQty(fulfilment?.postedFulfilledQty ?? 0)}

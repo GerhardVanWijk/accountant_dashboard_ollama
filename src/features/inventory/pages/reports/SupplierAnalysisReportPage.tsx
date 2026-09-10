@@ -1,6 +1,7 @@
 import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { SectionCard } from '@/components/app/page-header';
-import { Amount, FigureBlock } from '@/components/app/figure';
+import { Amount } from '@/components/app/figure';
+import { BoxesIcon, WalletCardsIcon } from 'lucide-react';
 import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import type { ExportColumn, ExportDataset } from '@/features/export/types';
 import { formatCurrency } from '@/lib/app/format';
@@ -65,10 +66,12 @@ export function SupplierAnalysisReportPage() {
       canExport={canExport}
       exportDataset={exportDataset}
       summary={
-        <ReportSummaryCard>
-          <FigureBlock label="Suppliers with preferred items" value={String(rows.length)} />
-          <FigureBlock label="Total inventory value" value={formatCurrency(totalValue)} />
-        </ReportSummaryCard>
+        <ReportSummaryCard
+          metrics={[
+            { label: 'Suppliers with preferred items', value: String(rows.length), icon: BoxesIcon },
+            { label: 'Total inventory value', value: formatCurrency(totalValue), icon: WalletCardsIcon },
+          ]}
+        />
       }
       footnote="Purchase activity and profitability are not shown: no stock movement records which supplier a receipt came from, and bill line items carry no product link — this is inventory POSITION by preferred supplier only."
     >

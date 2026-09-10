@@ -36,6 +36,7 @@ import { RecordDetailField, RecordDetailSection } from '@/components/app/record-
 import { RecordAuditHistorySection } from '@/components/app/record-audit-history';
 import { StatusBadge } from '@/components/app/status-badge';
 import { StatStrip, StatTile, type StatTone } from '@/components/app/stat-tile';
+import { SEMANTIC_ICONS } from '@/components/app/semantic-icons';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
 import { cn } from '@/lib/utils';
@@ -1379,10 +1380,32 @@ export function InventoryItemDetail({
     documents: relatedDocuments.length,
   };
 
+  const tabIcons: Record<string, (typeof SEMANTIC_ICONS)[keyof typeof SEMANTIC_ICONS]> = {
+    overview: SEMANTIC_ICONS.overview,
+    stock: SEMANTIC_ICONS.stock,
+    purchasing: SEMANTIC_ICONS.purchasing,
+    sales: SEMANTIC_ICONS.sales,
+    transactions: SEMANTIC_ICONS.traceability,
+    accounting: SEMANTIC_ICONS.accounting,
+    documents: SEMANTIC_ICONS.documents,
+    audit: SEMANTIC_ICONS.activity,
+  };
+
+  const tabHints: Record<string, (n: number) => string | undefined> = {
+    stock: (n) => `${n} warehouse ${n === 1 ? 'balance' : 'balances'}`,
+    purchasing: (n) => `${n} purchase ${n === 1 ? 'movement' : 'movements'}`,
+    sales: (n) => `${n} sales ${n === 1 ? 'movement' : 'movements'}`,
+    transactions: (n) => `${n} stock ${n === 1 ? 'movement' : 'movements'} / evidence records`,
+    accounting: (n) => `${n} linked journal ${n === 1 ? 'entry' : 'entries'}`,
+    documents: (n) => `${n} related ${n === 1 ? 'document' : 'documents'}`,
+  };
+
   const recordTabs: RecordTab[] = TABS.map((t) => ({
     value: t.value,
     label: t.label,
+    icon: tabIcons[t.value],
     count: tabCounts[t.value],
+    hint: tabHints[t.value]?.(tabCounts[t.value] ?? 0),
     content: t.content,
   }));
 
@@ -1397,7 +1420,7 @@ export function InventoryItemDetail({
             value={t.value}
             hint={t.hint}
             tone={t.tone}
-            size="compact"
+            variant="micro"
             onActivate={t.tab ? () => goToTab(t.tab as string) : undefined}
             activateLabel={t.tab ? `View ${t.label} — opens the ${t.tab} tab` : undefined}
           />

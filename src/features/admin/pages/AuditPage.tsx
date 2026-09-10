@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { FigureBlock } from '@/components/app/figure';
+import { EyeIcon, ShieldXIcon, TriangleAlertIcon, UsersIcon } from 'lucide-react';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { useAuthStore } from '@/stores/authStore';
 import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
@@ -77,14 +78,15 @@ export function AuditPage() {
         }
       />
 
-      <SectionCard>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <FigureBlock label="Denied attempts" value={String(kpis.denied)} hint={`Last ${WINDOW_DAYS} days`} />
-          <FigureBlock label="Permission denials" value={String(kpis.permissionDenied)} hint="Blocked by role/permission" />
-          <FigureBlock label="Sensitive-area access" value={String(kpis.sensitiveAccess)} hint={`Last ${WINDOW_DAYS} days`} />
-          <FigureBlock label="Active users" value={String(kpis.users)} hint="Seen in the log" />
-        </div>
-      </SectionCard>
+      <StatTileGrid
+        columns={4}
+        metrics={[
+          { label: 'Denied attempts', value: String(kpis.denied), hint: `Last ${WINDOW_DAYS} days`, icon: TriangleAlertIcon },
+          { label: 'Permission denials', value: String(kpis.permissionDenied), hint: 'Blocked by role/permission', icon: ShieldXIcon },
+          { label: 'Sensitive-area access', value: String(kpis.sensitiveAccess), hint: `Last ${WINDOW_DAYS} days`, icon: EyeIcon },
+          { label: 'Active users', value: String(kpis.users), hint: 'Seen in the log', icon: UsersIcon },
+        ]}
+      />
 
       {loading ? (
         <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { EnumSelect, SearchableSelect } from '@/components/app/combobox';
 import { Amount } from '@/components/app/figure';
+import { formatAmount } from '@/lib/app/format';
 import { cn } from '@/lib/utils';
 import type { AllocationInput } from '../services';
 import { computeAllocationTax, round2 } from '../utils/taxCalculations';
@@ -205,11 +206,11 @@ export function AllocationRows({ allocations, onChange, glAccounts, taxRates, gr
             </span>
           ) : remaining > 0 ? (
             <span className="inline-flex items-center gap-1.5 rounded-md bg-status-warning-muted px-2 py-1 text-xs font-medium text-status-warning">
-              {`R ${Math.abs(remaining).toFixed(2)} still needs allocation`}
+              {`R ${formatAmount(Math.abs(remaining))} still needs allocation`}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 rounded-md bg-status-negative-muted px-2 py-1 text-xs font-medium text-status-negative">
-              {`R ${Math.abs(remaining).toFixed(2)} over-allocated`}
+              {`R ${formatAmount(Math.abs(remaining))} over-allocated`}
             </span>
           )}
         </div>

@@ -76,12 +76,12 @@ describe('AllocationRows', () => {
 
   it('shows the shortfall when under-allocated', () => {
     renderRows([row({ glAccountId: 'gl_6100', netAmount: 4500 })], 5000);
-    expect(within(summary()).getByText('R 500.00 still needs allocation')).toBeInTheDocument();
+    expect(within(summary()).getByText('R 500,00 still needs allocation')).toBeInTheDocument();
   });
 
   it('shows the excess when over-allocated', () => {
     renderRows([row({ glAccountId: 'gl_6100', netAmount: 5250 })], 5000);
-    expect(within(summary()).getByText('R 250.00 over-allocated')).toBeInTheDocument();
+    expect(within(summary()).getByText('R 250,00 over-allocated')).toBeInTheDocument();
   });
 
   it('folds per-line VAT into the allocated total', () => {
