@@ -2,6 +2,23 @@
 
 ---
 
+## COMPACT METRICS / TABS / CURRENCY DISPLAY STANDARDIZATION (branch `global-ux-terminology-relationships-2026-09-10`) — 2026-09-10
+
+**SHIPPED 2026-09-10** — on explicit user instruction ahead of human browser QA, `global-ux-terminology-relationships-2026-09-10` (commit `f07e6d5`) was fast-forward-merged → `main` (`d37514e..f07e6d5`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). **No migration, no DB write, no accounting-posting / GL / WAC / inventory-valuation / VAT / reconciliation / payment-allocation / lifecycle / RLS change** — presentation only: `formatCurrency`'s display locale changed `en-US`→`en-ZA` (a rand amount now shows `R 21 107,10`, not `ZAR 21,107.10`; ISO-code fields render the `CurrencyCode` string directly and are untouched), and ~130 `FigureBlock` KPI cells across dashboards, reports, record-detail pages and list/index pages were re-rendered through the shared `StatTile` / `StatTileGrid` / `RecordTabs` primitives (icons, deep-green branded tooltips, responsive collapse). Every migrated `value` string is byte-identical to what `FigureBlock` received; `tone` semantics preserved 1:1. **Post-deploy browser QA is now owed.**
+
+Three rounds on one branch: (1) shared foundation — `StatTile` `micro`/`compact`/`trendPercent` + `StatStrip` responsive ladder + `StatTileGrid`/`StatMetric` + `RecordTabs` icon-led mode (`semantic-icons.ts` `resolveTabIcon`/`resolveTabHint`) + `TooltipContent variant="brand"` (`--brand-deep` tokens) + `formatCurrency` locale, adopted on Inventory Product / Customer / Supplier; (2) Dashboard, all 16 Inventory reports (via shared `ReportSummaryCard`), Customer/Supplier Ageing, Cash-Flow, Forecasting, Asset/Lease/Bank-transaction/Employee detail sheets, 5 inventory record-detail components, `MetricCard`→`StatTile` wrapper; (3) ~38 list/index-page summary strips. Deliberate exceptions left on `FigureBlock`: forms (`BillForm`/`PaymentForm`/`PurchaseOrderForm`/`DisposeAssetForm`/`TerminateLeaseForm`), `PaymentSlotCard`, `reconciliationIntelligence`'s own `R…` format, and `RecordSummaryGrid` field pages (Journal Entry / CoA / GL detail). 3234 tests, type-check + lint (`--max-warnings 0`) + build all clean.
+
+### Post-deploy browser-QA checklist (owed — no browser automation in-session)
+
+1. At 1366px especially: no clipped KPI row, no letter-by-letter label wrapping ("AVAIL/ABLE"), no page-level horizontal overflow, tab strips fit or scroll locally.
+2. Money everywhere reads `R 1 234,56`, never `ZAR 1 234,56`; currency-*identifier* fields (pickers, "Currency: ZAR", FX pairs, "Total active ZAR balance") still show the ISO code.
+3. Record tabs show semantic icons; hover/focus reveals the deep-green tooltip with the full label + count; selected tab still obvious; `?tab=` + browser back/forward still work; keyboard arrow-nav still works.
+4. `micro` KPI tiles (Inventory Product) show icon + figure only, label/hint in a readable deep-green tooltip; KPI drill-downs still open the right tab.
+5. Dashboard "Key figures" row shows the trend ("+4.8% vs previous period"); Customer/Supplier drawers' KPI strips and tabs are compact and un-clipped; list/index summary strips (Invoices, Bills, Products, tax pages, admin pages, …) render as compact tiles with the same figures.
+6. Re-confirm dark mode on the new tooltip + tiles.
+
+---
+
 ## GLOBAL UX / TERMINOLOGY / RECORD-RELATIONSHIPS / CLICKABILITY / DENSITY PASS (branch `global-ux-terminology-relationships-2026-09-10`) — 2026-09-10
 
 **SHIPPED 2026-09-10** — on explicit user instruction ahead of human browser QA, `global-ux-terminology-relationships-2026-09-10` was fast-forward-merged → `main` (`161bae7..eef042a`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). **No migration, no DB write, no accounting-posting / GL / WAC / inventory-valuation / reconciliation / lifecycle change** — this is UI, presentation-mapping and read-side relationship resolution only (`fulfilled`→"Completed" and `partially_paid`→"Partially Paid" are display labels over unchanged persisted enums; the SO "Fulfilled … via posted invoice" figure is presentation over unchanged fulfilment logic; account-mapping drilldowns read existing `product.*AccountId` / `category.*AccountId` fields and standard CoA codes). **Post-deploy browser QA is now owed.**
