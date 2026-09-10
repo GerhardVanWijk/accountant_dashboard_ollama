@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { BanknoteIcon, PiggyBankIcon, WalletIcon } from 'lucide-react';
 import {
   RecordActionBar,
@@ -41,6 +41,7 @@ const EPSILON = 0.01;
 export function CustomerReceiptDetailPage({ recordId, embedded }: RecordPageProps = {}) {
   const params = useParams<{ receiptId: string }>();
   const receiptId = recordId ?? params.receiptId;
+  const navigate = useNavigate();
 
   const { receipts, isLoading, error, refetch } = useCustomerReceipts();
   const receipt = receipts.find((r) => r.id === receiptId);
@@ -65,31 +66,37 @@ export function CustomerReceiptDetailPage({ recordId, embedded }: RecordPageProp
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!receipt) return [];
     const items: RelatedRecordItem[] = [
-      { label: 'Customer', value: <Link className="font-medium text-brand hover:underline" to="/sales/customers">{customerName}</Link> },
+      {
+        label: 'Customer',
+        value: <span className="font-medium">{customerName}</span>,
+        onActivate: () => navigate(`/sales/customers?record=${receipt.customerId}`),
+      },
     ];
     for (const a of receipt.allocations) {
       const inv = invoiceById.get(a.invoiceId);
       if (!inv) continue;
       items.push({
-        label: 'Applied to invoice',
-        value: (
-          <Link className="font-medium text-brand hover:underline" to={`/sales/invoices/${inv.id}`}>
-            {inv.invoiceNumber} ({formatCurrency(a.amount)})
-          </Link>
-        ),
+        label: `Invoice ${inv.invoiceNumber}`,
+        value: <span className="text-muted-foreground tabular-nums">{formatCurrency(a.amount)} applied</span>,
+        onActivate: () => navigate(`/sales/invoices/${inv.id}`),
       });
     }
     if (receipt.journalEntryId) {
       items.push({
-        label: 'GL posting',
-        value: <Link className="font-medium text-brand hover:underline" to={`/accounting/journals?record=${receipt.journalEntryId}`}>View journal entry</Link>,
+        label: 'Journal entry',
+        value: <span className="text-muted-foreground">GL posting</span>,
+        onActivate: () => navigate(`/accounting/journals?record=${receipt.journalEntryId}`),
       });
     }
     if (receipt.bankAccountId) {
-      items.push({ label: 'Bank account', value: <Link className="font-medium text-brand hover:underline" to="/banking/accounts">View bank account</Link> });
+      items.push({
+        label: 'Bank account',
+        value: <span className="text-muted-foreground">Deposited to</span>,
+        onActivate: () => navigate(`/banking/accounts?record=${receipt.bankAccountId}`),
+      });
     }
     return items;
-  }, [receipt, customerName, invoiceById]);
+  }, [receipt, customerName, invoiceById, navigate]);
 
   const state = isLoading ? 'loading' : error ? 'error' : receipt ? 'ready' : 'not-found';
   const canAllocate = receipt != null && receipt.unallocatedAmount > EPSILON;
@@ -197,6 +204,7 @@ export function CustomerReceiptDetailPage({ recordId, embedded }: RecordPageProp
         {
           value: 'related',
           label: 'Related records',
+          count: relatedItems.length,
           content: <RelatedRecordsSection items={relatedItems} />,
         },
         {

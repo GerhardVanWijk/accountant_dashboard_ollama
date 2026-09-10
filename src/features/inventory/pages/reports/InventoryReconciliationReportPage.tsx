@@ -35,9 +35,15 @@ const FINDING_EXPORT_COLUMNS: ExportColumn<InventoryReconciliationFinding>[] = [
 
 const SEVERITY_STYLE: Record<InventoryReconciliationFinding['severity'], string> = {
   error: 'border-destructive/30 bg-destructive/10 text-destructive',
-  warning: 'border-warning/30 bg-warning/10 text-warning',
+  warning: 'border-warning/40 bg-warning/10 text-warning',
   info: 'border-border bg-muted/40 text-muted-foreground',
 };
+
+/** "rounding_residual" → "Rounding residual". */
+function findingTitle(code: string): string {
+  const spaced = code.replace(/_/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
 
 function SectionBlock({ title, findings }: { title: string; findings: InventoryReconciliationFinding[] }) {
   return (
@@ -48,13 +54,16 @@ function SectionBlock({ title, findings }: { title: string; findings: InventoryR
       ) : (
         <ul className="flex flex-col gap-2">
           {findings.map((f, i) => (
-            <li key={`${f.code}-${i}`} className={cn('flex flex-col gap-1 rounded-lg border px-3 py-2 text-xs', SEVERITY_STYLE[f.severity])}>
-              <span className="inline-flex items-center gap-1.5 font-medium">
-                <AlertTriangleIcon className="size-3.5 shrink-0" aria-hidden="true" />
-                {f.code.replace(/_/g, ' ')}
-                {f.productSku ? ` — ${f.productSku}` : ''}
+            <li key={`${f.code}-${i}`} className={cn('flex flex-col gap-1 rounded-lg border px-3 py-2.5', SEVERITY_STYLE[f.severity])}>
+              <span className="flex items-start gap-1.5 text-sm font-semibold">
+                <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 [overflow-wrap:anywhere]">
+                  {findingTitle(f.code)}
+                  {f.productSku ? ` — ${f.productSku}` : ''}
+                  {f.difference !== 0 ? ` · ${formatCurrency(f.difference)} difference` : ''}
+                </span>
               </span>
-              <span className="leading-relaxed opacity-90">{f.detail}</span>
+              <span className="text-xs leading-relaxed opacity-90">{f.detail}</span>
             </li>
           ))}
         </ul>

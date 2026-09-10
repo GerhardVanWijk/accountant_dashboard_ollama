@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import type { Bill } from '@/types';
 import { BillDetailPage } from './BillDetailPage';
@@ -80,5 +80,26 @@ describe('BillDetailPage', () => {
   it('deep-links: an unknown id shows the not-found state', () => {
     renderAt('/purchases/bills/nope');
     expect(screen.getByText(/could not be found/i)).toBeInTheDocument();
+  });
+
+  it('Related records surfaces the source PO and each payment as distinct clickable rows', () => {
+    vi.mocked(usePurchaseOrders).mockReturnValue({
+      purchaseOrders: [{ id: 'po1', poNumber: 'PO-2026-0009', supplierId: 's1', status: 'received', lineItems: [] }],
+      isLoading: false, error: null, refetch: vi.fn(),
+    } as never);
+    vi.mocked(useBills).mockReturnValue({ bills: [bill({ purchaseOrderId: 'po1' })], isLoading: false, error: null, refetch: vi.fn() } as never);
+    vi.mocked(usePayments).mockReturnValue({
+      payments: [
+        { id: 'pay1', paymentNumber: 'PMT-001', supplierId: 's1', date: '2026-09-05', method: 'eft', allocations: [{ billId: 'b1', amount: 200 }] },
+        { id: 'pay2', paymentNumber: 'PMT-002', supplierId: 's1', date: '2026-09-06', method: 'eft', allocations: [{ billId: 'b1', amount: 100 }] },
+      ],
+      isLoading: false, error: null, refetch: vi.fn(),
+    } as never);
+    renderAt();
+    fireEvent.click(screen.getByRole('tab', { name: /Related records/ }));
+    expect(screen.getByRole('button', { name: /Purchase order PO-2026-0009/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Payment PMT-001/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Payment PMT-002/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Supplier/ })).toBeInTheDocument();
   });
 });

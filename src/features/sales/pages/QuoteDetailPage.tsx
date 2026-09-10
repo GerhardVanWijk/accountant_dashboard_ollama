@@ -80,16 +80,21 @@ export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!quote) return [];
     const items: RelatedRecordItem[] = [
-      { label: 'Customer', value: <Link className="font-medium text-brand hover:underline" to="/sales/customers">{customerName}</Link> },
+      {
+        label: 'Customer',
+        value: <span className="font-medium">{customerName}</span>,
+        onActivate: () => navigate(`/sales/customers?record=${quote.customerId}`),
+      },
     ];
     if (convertedOrder) {
       items.push({
-        label: 'Sales order',
-        value: <Link className="font-medium text-brand hover:underline" to={`/sales/orders/${convertedOrder.id}`}>{convertedOrder.orderNumber}</Link>,
+        label: `Sales order ${convertedOrder.orderNumber}`,
+        value: <StatusBadge status={convertedOrder.status} />,
+        onActivate: () => navigate(`/sales/orders/${convertedOrder.id}`),
       });
     }
     return items;
-  }, [quote, customerName, convertedOrder]);
+  }, [quote, customerName, convertedOrder, navigate]);
 
   async function act(fn: () => Promise<unknown>, after: () => void = () => {}) {
     setActionError(null);
@@ -154,6 +159,7 @@ export function QuoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
         {
           value: 'related',
           label: 'Related records',
+          count: relatedItems.length,
           content: <RelatedRecordsSection items={relatedItems} />,
         },
         {

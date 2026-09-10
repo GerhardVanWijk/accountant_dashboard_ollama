@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ArrowLeftRightIcon,
   BoxesIcon,
+  ChevronRightIcon,
   CircleDollarSignIcon,
   PackageCheckIcon,
   PercentIcon,
@@ -9,10 +10,12 @@ import {
   TruckIcon,
   WalletIcon,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import type {
-  RelatedRecordType,
-  ResolvedSourceDocument,
+import { Link, useSearchParams } from 'react-router-dom';
+import {
+  RecordTabs,
+  type RecordTab,
+  type RelatedRecordType,
+  type ResolvedSourceDocument,
 } from '@/components/app/record-page';
 import type {
   Bill,
@@ -35,7 +38,6 @@ import { StatusBadge } from '@/components/app/status-badge';
 import { StatStrip, StatTile, type StatTone } from '@/components/app/stat-tile';
 import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/app/data-table';
 import { Amount } from '@/components/app/figure';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { cn } from '@/lib/utils';
 import { formatCurrency, formatDate } from '@/lib/app/format';
 import { getTaxRateLabel, MOVEMENT_TYPE_LABELS } from '../constants';
@@ -50,6 +52,9 @@ import { MovementEvidenceDrawer } from './MovementEvidenceDrawer';
 import { hasNoSourceEvidence, type MovementEvidenceContext } from '../utils/movementEvidence';
 
 export type { MovementAccounting } from '../services/movementAccounting';
+
+/** Tab slugs in render order — the `?tab=` whitelist and KPI drill-down targets. */
+const TAB_VALUES = ['overview', 'stock', 'purchasing', 'sales', 'transactions', 'accounting', 'documents', 'audit'] as const;
 
 /** The standard Chart-of-Accounts code + name for each inventory posting role. */
 const GENERIC_ACCOUNT: Record<AccountRole, { code: string; name: string }> = {
@@ -101,6 +106,9 @@ export interface InventoryItemDetailProps {
    * reconciliation result). Never recomputed here.
    */
   integrity?: { summary: IntegritySummary | null; loading?: boolean; error?: Error | null };
+  /** Chart of accounts — lets the Accounting tab resolve each posting role to a
+   * real account and link it to the account record (`/accounting/coa?record=`). */
+  accounts?: { id: string; code: string; name: string }[];
   /** Source-document resolution + accounting trace + preview-overlay callback for the movement ledger. */
   ledgerHelpers?: MovementLedgerHelpers;
 }
@@ -129,6 +137,64 @@ const SOURCE_LABEL: Record<string, string> = {
   return_note: 'Return note',
   reversal: 'Reversal',
 };
+
+/**
+ * Compact, restrained "record workspace" section for the Overview tab — a
+ * hairline border, a small uppercase header, modest padding. Deliberately
+ * NOT a dashboard card: it groups a handful of aligned label/value rows the
+ * way a structured accounting record reads, and several sit two-up on a
+ * desktop column without dominating the page.
+ */
+function OverviewSection({
+  title,
+  children,
+  className,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cn('flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card p-4', className)}>
+      <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/** A two-up label/value grid inside an OverviewSection — narrow columns wrap cleanly. */
+function OverviewFields({ children }: { children: React.ReactNode }) {
+  return <div className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">{children}</div>;
+}
+
+/**
+ * An Accounting-summary figure that drills into the tab holding its evidence
+ * (movements/costing for value & COGS, the sales history for revenue &
+ * margin). Never recomputes anything — `value` is passed in already formatted.
+ */
+function AccountingFigure({
+  label,
+  value,
+  onDrill,
+}: {
+  label: string;
+  value: React.ReactNode;
+  onDrill: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onDrill}
+      className="group/fig flex min-w-0 flex-col gap-0.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+    >
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        {label}
+        <ChevronRightIcon className="size-3 opacity-0 transition-opacity group-hover/fig:opacity-100 group-focus-visible/fig:opacity-100" aria-hidden="true" />
+      </span>
+      <span className="text-sm text-foreground [overflow-wrap:anywhere] group-hover/fig:text-brand">{value}</span>
+    </button>
+  );
+}
 
 function SubTable({ head, children }: { head: string[]; children: React.ReactNode }) {
   return (
@@ -419,7 +485,23 @@ const ROLE_LABEL: Record<AccountRole, string> = {
   purchase_price_variance: 'Purchase Price Variance',
 };
 
-function accountRoleSource(role: AccountRole, product: Product, category: ProductCategory | undefined): string {
+interface ResolvedRoleAccount {
+  /** Real account id when it can be resolved (override / category default / a chart account matching the standard code). */
+  id?: string;
+  /** "CODE Name" when known, else the standard code+name. */
+  label: string;
+  /** Where the account comes from — shown as a small caption. */
+  source: string;
+}
+
+function resolveRoleAccount(
+  role: AccountRole,
+  product: Product,
+  category: ProductCategory | undefined,
+  accountByCode: Map<string, { id: string; code: string; name: string }>,
+  accountById: Map<string, { id: string; code: string; name: string }>,
+): ResolvedRoleAccount {
+  const generic = GENERIC_ACCOUNT[role];
   const productOverride: Partial<Record<AccountRole, string | undefined>> = {
     inventory: product.inventoryAccountId,
     cogs: product.cogsAccountId,
@@ -431,14 +513,55 @@ function accountRoleSource(role: AccountRole, product: Product, category: Produc
     revenue: category?.revenueAccountId,
     adjustment: category?.adjustmentAccountId,
   };
-  const generic = GENERIC_ACCOUNT[role];
-  if (productOverride[role]) return 'Product-specific account override';
-  if (categoryMapping[role]) return `Category default (${category?.name})`;
-  return `Standard — ${generic.code} ${generic.name}`;
+  const labelFor = (id: string | undefined, fallback: string) => {
+    const acc = id ? accountById.get(id) : undefined;
+    return acc ? `${acc.code} ${acc.name}` : fallback;
+  };
+  const genericFallback = `${generic.code} ${generic.name}`;
+  if (productOverride[role]) {
+    return { id: productOverride[role], label: labelFor(productOverride[role], genericFallback), source: 'Product-specific override' };
+  }
+  if (categoryMapping[role]) {
+    return { id: categoryMapping[role], label: labelFor(categoryMapping[role], genericFallback), source: `Category default${category ? ` — ${category.name}` : ''}` };
+  }
+  const standard = accountByCode.get(generic.code);
+  return { id: standard?.id, label: genericFallback, source: 'Standard account' };
 }
 
-function AccountRow({ role, product, category }: { role: AccountRole; product: Product; category: ProductCategory | undefined }) {
-  return <RecordDetailField label={ROLE_LABEL[role]} value={accountRoleSource(role, product, category)} />;
+function AccountRow({
+  role,
+  product,
+  category,
+  accountByCode,
+  accountById,
+  accountHref,
+}: {
+  role: AccountRole;
+  product: Product;
+  category: ProductCategory | undefined;
+  accountByCode: Map<string, { id: string; code: string; name: string }>;
+  accountById: Map<string, { id: string; code: string; name: string }>;
+  accountHref: (id: string | undefined) => string | undefined;
+}) {
+  const resolved = resolveRoleAccount(role, product, category, accountByCode, accountById);
+  const href = accountHref(resolved.id);
+  return (
+    <RecordDetailField
+      label={ROLE_LABEL[role]}
+      value={
+        <span className="flex min-w-0 flex-col gap-0.5">
+          {href ? (
+            <Link to={href} className="font-medium text-brand hover:underline [overflow-wrap:anywhere]">
+              {resolved.label}
+            </Link>
+          ) : (
+            <span className="[overflow-wrap:anywhere]">{resolved.label}</span>
+          )}
+          <span className="text-xs text-muted-foreground">{resolved.source}</span>
+        </span>
+      }
+    />
+  );
 }
 
 /**
@@ -465,11 +588,34 @@ export function InventoryItemDetail({
   commitments,
   onOrder,
   integrity,
+  accounts = [],
   accountLabel,
   ledgerHelpers = {},
 }: InventoryItemDetailProps) {
-  const [tab, setTab] = useState('overview');
   const [drawer, setDrawer] = useState<MovementEvidenceContext | null>(null);
+  const accountByCode = useMemo(() => new Map(accounts.map((a) => [a.code, a])), [accounts]);
+  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+  /** `/accounting/coa?record=<id>` — the account record sheet, when the id is real. */
+  const accountHref = (id: string | undefined) => (id && accountById.has(id) ? `/accounting/coa?record=${id}` : undefined);
+
+  // The tab strip is the shared `RecordTabs` primitive — it owns the active
+  // tab and mirrors it to `?tab=`. KPI tiles and Accounting-summary figures
+  // deep-link into a tab by writing that same param; RecordTabs picks it up.
+  const [, setSearchParams] = useSearchParams();
+  const goToTab = useCallback(
+    (next: string) => {
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next === TAB_VALUES[0]) params.delete('tab');
+          else params.set('tab', next);
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const warehouseById = useMemo(() => new Map(warehouses.map((w) => [w.id, w])), [warehouses]);
   const supplierById = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
@@ -671,7 +817,8 @@ export function InventoryItemDetail({
     });
   }
 
-  const kpiTiles: { label: string; value: string; hint?: string; tone: StatTone; icon: typeof BoxesIcon }[] =
+  /** Each KPI drills into the tab that holds the evidence behind the figure. */
+  const kpiTiles: { label: string; value: string; hint?: string; tone: StatTone; icon: typeof BoxesIcon; tab?: string }[] =
     product.trackInventory
       ? [
           {
@@ -679,6 +826,7 @@ export function InventoryItemDetail({
             value: String(product.quantityOnHand),
             tone: product.quantityOnHand < 0 ? 'negative' : 'default',
             icon: BoxesIcon,
+            tab: 'stock',
           },
           {
             label: 'Available',
@@ -686,6 +834,7 @@ export function InventoryItemDetail({
             hint: 'On hand − committed',
             tone: available <= 0 ? 'warning' : 'default',
             icon: PackageCheckIcon,
+            tab: 'stock',
           },
           {
             label: 'Committed',
@@ -693,6 +842,7 @@ export function InventoryItemDetail({
             hint: 'Confirmed sales orders',
             tone: productCommitted > 0 ? 'info' : 'default',
             icon: TagIcon,
+            tab: 'sales',
           },
           {
             label: 'In transit',
@@ -700,6 +850,7 @@ export function InventoryItemDetail({
             hint: inTransit.legs.length > 0 ? `${inTransit.legs.length} transfer${inTransit.legs.length === 1 ? '' : 's'}` : 'Between warehouses',
             tone: inTransit.totalQuantity > 0 ? 'info' : 'default',
             icon: TruckIcon,
+            tab: 'stock',
           },
           {
             label: 'On order',
@@ -707,6 +858,7 @@ export function InventoryItemDetail({
             hint: 'Open purchase orders',
             tone: 'default',
             icon: ArrowLeftRightIcon,
+            tab: 'purchasing',
           },
           {
             label: 'Stock value',
@@ -714,14 +866,16 @@ export function InventoryItemDetail({
             hint: 'At current WAC',
             tone: 'default',
             icon: WalletIcon,
+            tab: 'accounting',
           },
-          { label: 'WAC', value: formatCurrency(product.costPrice), tone: 'default', icon: CircleDollarSignIcon },
+          { label: 'WAC', value: formatCurrency(product.costPrice), tone: 'default', icon: CircleDollarSignIcon, tab: 'transactions' },
           {
             label: 'Gross margin',
             value: marginPct === null ? '—' : `${marginPct.toFixed(1)}%`,
             hint: `Sells at ${formatCurrency(product.unitPrice)}`,
             tone: 'default',
             icon: PercentIcon,
+            tab: 'sales',
           },
         ]
       : [
@@ -740,94 +894,102 @@ export function InventoryItemDetail({
       value: 'overview',
       label: 'Overview',
       content: (
-        <div className="flex flex-col gap-6">
-          <RecordDetailSection title="Product details">
-            <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-              <RecordDetailField label="SKU" value={product.sku} />
-              <RecordDetailField label="Barcode" value={product.barcode ?? '—'} />
-              <RecordDetailField label="Item name" value={product.name} />
-              <RecordDetailField label="Type" value={product.type === 'service' ? 'Service' : 'Good'} />
-              <RecordDetailField label="Category" value={category?.name ?? product.category ?? '—'} />
-              <RecordDetailField label="Unit of measure" value={product.uom ?? '—'} />
-              <RecordDetailField label="Stock tracking" value={product.trackInventory ? 'Tracked' : 'Not tracked'} />
-              <RecordDetailField label="Active state" value={<StatusBadge status={product.status} />} />
-              <RecordDetailField label="Valuation method" value={product.valuationMethod === 'fifo' ? 'FIFO' : 'Weighted average'} />
-            </div>
-            {product.description && <RecordDetailField label="Description" value={product.description} className="mt-4" />}
-          </RecordDetailSection>
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+            {/* LEFT — the master record */}
+            <div className="flex min-w-0 flex-col gap-4">
+              <OverviewSection title="Product details">
+                <OverviewFields>
+                  <RecordDetailField label="SKU" value={product.sku} />
+                  <RecordDetailField label="Barcode" value={product.barcode ?? '—'} />
+                  <RecordDetailField label="Item name" value={product.name} />
+                  <RecordDetailField label="Type" value={product.type === 'service' ? 'Service' : 'Good'} />
+                  <RecordDetailField label="Category" value={category?.name ?? product.category ?? '—'} />
+                  <RecordDetailField label="Unit of measure" value={product.uom ?? '—'} />
+                  <RecordDetailField label="Stock tracking" value={product.trackInventory ? 'Tracked' : 'Not tracked'} />
+                  <RecordDetailField label="Active state" value={<StatusBadge status={product.status} />} />
+                  <RecordDetailField label="Valuation method" value={product.valuationMethod === 'fifo' ? 'FIFO' : 'Weighted average'} />
+                </OverviewFields>
+                {product.description && <RecordDetailField label="Description" value={product.description} className="mt-1" />}
+              </OverviewSection>
 
-          <RecordDetailSection title="Commercial">
-            <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-              <RecordDetailField label="Selling price" value={<Amount value={product.unitPrice} />} />
-              <RecordDetailField label="Current WAC" value={<Amount value={product.costPrice} />} />
-              <RecordDetailField label="Margin per unit" value={<Amount value={product.unitPrice - product.costPrice} />} />
-              <RecordDetailField label="Margin %" value={marginPct === null ? '—' : `${marginPct.toFixed(1)}%`} />
-              <RecordDetailField label="Tax treatment" value={taxLabel} />
+              <OverviewSection title="Commercial">
+                <OverviewFields>
+                  <RecordDetailField label="Selling price" value={<Amount value={product.unitPrice} />} />
+                  <RecordDetailField label="Current WAC" value={<Amount value={product.costPrice} />} />
+                  <RecordDetailField label="Margin per unit" value={<Amount value={product.unitPrice - product.costPrice} />} />
+                  <RecordDetailField label="Margin %" value={marginPct === null ? '—' : `${marginPct.toFixed(1)}%`} />
+                  <RecordDetailField label="Tax treatment" value={taxLabel} />
+                </OverviewFields>
+              </OverviewSection>
             </div>
-          </RecordDetailSection>
+
+            {/* RIGHT — the stock/supply position */}
+            <div className="flex min-w-0 flex-col gap-4">
+              {product.trackInventory && (
+                <OverviewSection title="Stock position">
+                  <OverviewFields>
+                    <RecordDetailField label="On hand" value={product.quantityOnHand} />
+                    <RecordDetailField label="Available" value={available} />
+                    <RecordDetailField label="Committed" value={productCommitted} />
+                    <RecordDetailField label="On order" value={productOnOrder} />
+                    <RecordDetailField label="In transit" value={inTransit.totalQuantity} />
+                    <RecordDetailField label="Reorder level" value={product.reorderLevel ?? '—'} />
+                    <RecordDetailField label="Preferred stock level" value={product.preferredStockLevel ?? '—'} />
+                    <RecordDetailField label="Stock value" value={<Amount value={stockValue} />} />
+                  </OverviewFields>
+                </OverviewSection>
+              )}
+
+              {product.trackInventory && (
+                <OverviewSection title="Warehouse position">
+                  {productBalances.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No stock recorded at any warehouse yet.</p>
+                  ) : (
+                    <SubTable head={['Warehouse', 'On hand', 'Committed', 'Available', 'Value']}>
+                      {productBalances.map((b) => (
+                        <tr key={b.id} className="border-b border-border last:border-0">
+                          <td className="px-3 py-2">{warehouseName(b.warehouseId)}</td>
+                          <td className="figure px-3 py-2 text-right tabular-nums">{b.quantityOnHand}</td>
+                          <td className="figure px-3 py-2 text-right tabular-nums text-muted-foreground">{b.quantityCommitted}</td>
+                          <td className="figure px-3 py-2 text-right tabular-nums">{b.quantityOnHand - b.quantityCommitted + b.quantityOnOrder}</td>
+                          <td className="figure px-3 py-2 text-right tabular-nums">{formatCurrency(b.quantityOnHand * product.costPrice)}</td>
+                        </tr>
+                      ))}
+                    </SubTable>
+                  )}
+                </OverviewSection>
+              )}
+
+              <OverviewSection title="Supply">
+                <OverviewFields>
+                  <RecordDetailField
+                    label="Preferred supplier"
+                    value={product.preferredSupplierId ? supplierById.get(product.preferredSupplierId) ?? '—' : '—'}
+                  />
+                  <RecordDetailField label="Supplier item code" value={product.supplierItemCode ?? '—'} />
+                  <RecordDetailField
+                    label="Last purchase"
+                    value={purchaseMovements[0] ? formatDate(purchaseMovements[0].movementDate ?? purchaseMovements[0].createdAt) : '—'}
+                  />
+                  <RecordDetailField
+                    label="Last purchase cost"
+                    value={purchaseMovements[0]?.unitCost != null ? formatCurrency(purchaseMovements[0].unitCost) : '—'}
+                  />
+                </OverviewFields>
+              </OverviewSection>
+            </div>
+          </div>
 
           {product.trackInventory && (
-            <>
-              <RecordDetailSection title="Stock position">
-                <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <RecordDetailField label="On hand" value={product.quantityOnHand} />
-                  <RecordDetailField label="Available" value={available} />
-                  <RecordDetailField label="Committed" value={productCommitted} />
-                  <RecordDetailField label="On order" value={productOnOrder} />
-                  <RecordDetailField label="In transit" value={inTransit.totalQuantity} />
-                  <RecordDetailField label="Reorder level" value={product.reorderLevel ?? '—'} />
-                  <RecordDetailField label="Preferred stock level" value={product.preferredStockLevel ?? '—'} />
-                  <RecordDetailField label="Stock value" value={<Amount value={stockValue} />} />
-                </div>
-              </RecordDetailSection>
-
-              <RecordDetailSection title="Warehouse position">
-                {productBalances.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No stock recorded at any warehouse yet.</p>
-                ) : (
-                  <SubTable head={['Warehouse', 'On hand', 'Committed', 'Available', 'Value']}>
-                    {productBalances.map((b) => (
-                      <tr key={b.id} className="border-b border-border last:border-0">
-                        <td className="px-3 py-2">{warehouseName(b.warehouseId)}</td>
-                        <td className="figure px-3 py-2 text-right tabular-nums">{b.quantityOnHand}</td>
-                        <td className="figure px-3 py-2 text-right tabular-nums text-muted-foreground">{b.quantityCommitted}</td>
-                        <td className="figure px-3 py-2 text-right tabular-nums">{b.quantityOnHand - b.quantityCommitted + b.quantityOnOrder}</td>
-                        <td className="figure px-3 py-2 text-right tabular-nums">{formatCurrency(b.quantityOnHand * product.costPrice)}</td>
-                      </tr>
-                    ))}
-                  </SubTable>
-                )}
-              </RecordDetailSection>
-            </>
-          )}
-
-          <RecordDetailSection title="Supply">
-            <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-              <RecordDetailField
-                label="Preferred supplier"
-                value={product.preferredSupplierId ? supplierById.get(product.preferredSupplierId) ?? '—' : '—'}
-              />
-              <RecordDetailField label="Supplier item code" value={product.supplierItemCode ?? '—'} />
-              <RecordDetailField
-                label="Last purchase"
-                value={purchaseMovements[0] ? formatDate(purchaseMovements[0].movementDate ?? purchaseMovements[0].createdAt) : '—'}
-              />
-              <RecordDetailField
-                label="Last purchase cost"
-                value={purchaseMovements[0]?.unitCost != null ? formatCurrency(purchaseMovements[0].unitCost) : '—'}
-              />
-            </div>
-          </RecordDetailSection>
-
-          {product.trackInventory && (
-            <RecordDetailSection title="Stock integrity">
+            <OverviewSection title="Stock integrity">
               <ProductIntegritySummary
                 summary={integrity?.summary ?? null}
                 loading={integrity?.loading}
                 error={integrity?.error ?? null}
                 warehouseName={warehouseName}
               />
-            </RecordDetailSection>
+            </OverviewSection>
           )}
         </div>
       ),
@@ -1052,17 +1214,28 @@ export function InventoryItemDetail({
               How this item posts. Resolution order: product override → category default → standard account.
             </p>
             <div className="mt-3 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-              <AccountRow role="inventory" product={product} category={category} />
-              <AccountRow role="cogs" product={product} category={category} />
-              <AccountRow role="revenue" product={product} category={category} />
-              <AccountRow role="adjustment" product={product} category={category} />
-              <AccountRow role="purchase_price_variance" product={product} category={category} />
+              <AccountRow role="inventory" product={product} category={category} accountByCode={accountByCode} accountById={accountById} accountHref={accountHref} />
+              <AccountRow role="cogs" product={product} category={category} accountByCode={accountByCode} accountById={accountById} accountHref={accountHref} />
+              <AccountRow role="revenue" product={product} category={category} accountByCode={accountByCode} accountById={accountById} accountHref={accountHref} />
+              <AccountRow role="adjustment" product={product} category={category} accountByCode={accountByCode} accountById={accountById} accountHref={accountHref} />
+              <AccountRow role="purchase_price_variance" product={product} category={category} accountByCode={accountByCode} accountById={accountById} accountHref={accountHref} />
               <RecordDetailField
                 label="VAT"
                 value={
-                  product.taxRateId
-                    ? `${taxLabel} → 2100 Output / 2110 Input`
-                    : 'No tax rate — 2100 Output / 2110 Input on the document'
+                  <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                    {product.taxRateId ? <span>{taxLabel}</span> : <span>No tax rate</span>}
+                    <span className="text-muted-foreground">→</span>
+                    {(['2100', '2110'] as const).map((code, i) => {
+                      const acc = accountByCode.get(code);
+                      const href = accountHref(acc?.id);
+                      const text = `${code} ${i === 0 ? 'Output' : 'Input'}`;
+                      return href ? (
+                        <Link key={code} to={href} className="font-medium text-brand hover:underline">{text}</Link>
+                      ) : (
+                        <span key={code}>{text}</span>
+                      );
+                    })}
+                  </span>
                 }
               />
             </div>
@@ -1071,13 +1244,14 @@ export function InventoryItemDetail({
           {product.trackInventory && (
             <RecordDetailSection title="Accounting summary">
               <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-                <RecordDetailField label="Inventory value" value={<Amount value={stockValue} />} />
-                <RecordDetailField label="COGS to date" value={<Amount value={cogsToDate} />} />
-                <RecordDetailField label="Sales revenue to date" value={<Amount value={revenueToDate} />} />
-                <RecordDetailField label="Gross profit" value={<Amount value={grossProfitToDate} />} />
-                <RecordDetailField
+                <AccountingFigure label="Inventory value" value={<Amount value={stockValue} />} onDrill={() => goToTab('transactions')} />
+                <AccountingFigure label="COGS to date" value={<Amount value={cogsToDate} />} onDrill={() => goToTab('transactions')} />
+                <AccountingFigure label="Sales revenue to date" value={<Amount value={revenueToDate} />} onDrill={() => goToTab('sales')} />
+                <AccountingFigure label="Gross profit" value={<Amount value={grossProfitToDate} />} onDrill={() => goToTab('sales')} />
+                <AccountingFigure
                   label="Gross margin"
                   value={revenueToDate > 0 ? `${((grossProfitToDate / revenueToDate) * 100).toFixed(1)}%` : '—'}
+                  onDrill={() => goToTab('sales')}
                 />
               </div>
             </RecordDetailSection>
@@ -1114,7 +1288,17 @@ export function InventoryItemDetail({
                       <td className="px-3 py-2">{li === 0 ? jeCell : ''}</td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">{li === 0 && j.entry ? formatDate(j.entry.date) : ''}</td>
                       <td className="px-3 py-2 text-right">{li === 0 ? j.entry?.source ?? '—' : ''}</td>
-                      <td className="px-3 py-2 text-right text-xs">{accountLabel ? accountLabel(line.accountId) : line.accountId}</td>
+                      <td className="px-3 py-2 text-right text-xs">
+                        {accountHref(line.accountId) ? (
+                          <Link to={accountHref(line.accountId) as string} className="font-medium text-brand hover:underline">
+                            {accountLabel ? accountLabel(line.accountId) : line.accountId}
+                          </Link>
+                        ) : accountLabel ? (
+                          accountLabel(line.accountId)
+                        ) : (
+                          line.accountId
+                        )}
+                      </td>
                       <td className="figure px-3 py-2 text-right tabular-nums">{line.debit ? formatCurrency(line.debit) : ''}</td>
                       <td className="figure px-3 py-2 text-right tabular-nums">{line.credit ? formatCurrency(line.credit) : ''}</td>
                     </tr>
@@ -1186,28 +1370,41 @@ export function InventoryItemDetail({
     },
   ];
 
+  const tabCounts: Record<string, number> = {
+    stock: productBalances.length,
+    purchasing: purchaseMovements.length,
+    sales: salesMovements.length,
+    transactions: productMovements.length,
+    accounting: relatedJournals.length,
+    documents: relatedDocuments.length,
+  };
+
+  const recordTabs: RecordTab[] = TABS.map((t) => ({
+    value: t.value,
+    label: t.label,
+    count: tabCounts[t.value],
+    content: t.content,
+  }));
+
   return (
-    <div className="flex w-full min-w-0 flex-col gap-6">
-      <StatStrip columns={4}>
+    <div className="flex w-full min-w-0 flex-col gap-5">
+      <StatStrip columns={kpiTiles.length >= 6 ? 8 : 3}>
         {kpiTiles.map((t) => (
-          <StatTile key={t.label} icon={t.icon} label={t.label} value={t.value} hint={t.hint} tone={t.tone} />
+          <StatTile
+            key={t.label}
+            icon={t.icon}
+            label={t.label}
+            value={t.value}
+            hint={t.hint}
+            tone={t.tone}
+            size="compact"
+            onActivate={t.tab ? () => goToTab(t.tab as string) : undefined}
+            activateLabel={t.tab ? `View ${t.label} — opens the ${t.tab} tab` : undefined}
+          />
         ))}
       </StatStrip>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="w-full min-w-0">
-        <TabsList variant="line" className="no-scrollbar -mb-px w-full justify-start overflow-x-auto pr-2 pb-px">
-          {TABS.map((t) => (
-            <TabsTrigger key={t.value} value={t.value} className="flex-none">
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        {TABS.map((t) => (
-          <TabsContent key={t.value} value={t.value} keepMounted className="min-w-0 pt-5">
-            {t.content}
-          </TabsContent>
-        ))}
-      </Tabs>
+      <RecordTabs urlParam="tab" ariaLabel="Product sections" tabs={recordTabs} />
 
       <MovementEvidenceDrawer context={drawer} open={drawer != null} onClose={() => setDrawer(null)} />
     </div>

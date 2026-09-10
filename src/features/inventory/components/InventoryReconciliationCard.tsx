@@ -25,11 +25,23 @@ function Row({ label, value, muted }: { label: string; value: string; muted?: bo
   );
 }
 
+/**
+ * Attention (warning) findings use the darker `--color-warning` amber as a
+ * readable foreground with a faint amber wash + a visible hairline — an
+ * "investigate this" treatment, never the pale-yellow-on-white it used to be
+ * and never a destructive red. Error stays red; info stays neutral.
+ */
 const SEVERITY_STYLE: Record<InventoryReconciliationFinding['severity'], string> = {
   error: 'border-destructive/30 bg-destructive/10 text-destructive',
-  warning: 'border-warning/30 bg-warning/10 text-warning',
+  warning: 'border-warning/40 bg-warning/10 text-warning',
   info: 'border-border bg-muted/40 text-muted-foreground',
 };
+
+/** "rounding_residual" → "Rounding residual". */
+function findingTitle(code: string): string {
+  const spaced = code.replace(/_/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
 
 /**
  * Surfaces the Phase-3 `reconcileInventory()` engine — the subledger vs GL
@@ -97,16 +109,19 @@ export function InventoryReconciliationCard({ result, loading, error, onRefresh 
               {result.findings.map((finding, i) => (
                 <li
                   key={`${finding.code}-${i}`}
-                  className={cn('flex flex-col gap-1 rounded-lg border px-3 py-2 text-xs', SEVERITY_STYLE[finding.severity])}
+                  className={cn('flex flex-col gap-1 rounded-lg border px-3 py-2.5', SEVERITY_STYLE[finding.severity])}
                 >
-                  <span className="inline-flex items-center gap-1.5 font-medium">
-                    <AlertTriangleIcon className="size-3.5 shrink-0" aria-hidden="true" />
-                    {finding.code.replace(/_/g, ' ')}
-                    {finding.productSku ? ` — ${finding.productSku}` : ''}
+                  <span className="flex items-start gap-1.5 text-sm font-semibold">
+                    <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 [overflow-wrap:anywhere]">
+                      {findingTitle(finding.code)}
+                      {finding.productSku ? ` — ${finding.productSku}` : ''}
+                      {finding.difference !== 0 ? ` · ${formatCurrency(finding.difference)} difference` : ''}
+                    </span>
                   </span>
-                  <span className="leading-relaxed opacity-90">{finding.detail}</span>
+                  <span className="text-xs leading-relaxed opacity-90">{finding.detail}</span>
                   {(finding.expected !== 0 || finding.actual !== 0 || finding.difference !== 0) && (
-                    <span className="figure tabular-nums opacity-90">
+                    <span className="figure text-xs tabular-nums opacity-80">
                       expected {formatCurrency(finding.expected)} · actual {formatCurrency(finding.actual)} · diff{' '}
                       {formatCurrency(finding.difference)}
                       {finding.toleranceBound != null ? ` · bound ±${formatCurrency(finding.toleranceBound)}` : ''}

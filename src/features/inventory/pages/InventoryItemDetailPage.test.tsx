@@ -20,6 +20,19 @@ vi.mock('../hooks/useInventoryReconciliation', () => ({
 vi.mock('../hooks/useStockOnOrder', () => ({
   useStockOnOrder: () => ({ onOrder: new Map([['p_1__wh_1', 7]]), loading: false, error: null, refetch: vi.fn() }),
 }));
+vi.mock('@/features/accounting/hooks/useAccounts', () => ({
+  useAccounts: () => ({
+    accounts: [
+      { id: 'acc-1200', code: '1200', name: 'Inventory' },
+      { id: 'acc-5000', code: '5000', name: 'Cost of Goods Sold' },
+      { id: 'acc-4000', code: '4000', name: 'Sales Revenue' },
+    ],
+    postedAccountIds: new Set(),
+    loading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}));
 
 const movementsMock = vi.fn<() => { movements: StockMovement[] }>();
 vi.mock('../hooks/useStockMovements', () => ({ useStockMovements: () => movementsMock() }));
@@ -66,8 +79,43 @@ describe('InventoryItemDetailPage', () => {
     renderAt();
     expect(screen.getByRole('heading', { name: 'CON-001' })).toBeInTheDocument();
     for (const label of ['Overview', 'Stock', 'Purchasing', 'Sales', 'Traceability', 'Accounting', 'Documents', 'Activity']) {
-      expect(screen.getByRole('tab', { name: label })).toBeInTheDocument();
+      // a tab may carry a trailing count badge ("Sales 1") — match the leading label
+      expect(screen.getByRole('tab', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
+  });
+
+  it('a KPI tile is a drill-down button that opens its evidence tab and syncs the URL', () => {
+    renderAt();
+    const onOrderTile = screen.getByRole('button', { name: /View On order/ });
+    fireEvent.click(onOrderTile);
+    // Purchasing tab is now the selected one
+    expect(screen.getByRole('tab', { name: /^Purchasing/, selected: true })).toBeInTheDocument();
+  });
+
+  it('restores the active tab from ?tab= on load', () => {
+    renderAt('/inventory/products/p_1?tab=accounting');
+    expect(screen.getByRole('tab', { name: /^Accounting/, selected: true })).toBeInTheDocument();
+  });
+
+  it('shows a count badge on a tab from the loaded data', () => {
+    renderAt();
+    // one sale movement → Traceability + Sales each show "1"
+    expect(screen.getByRole('tab', { name: 'Traceability 1' })).toBeInTheDocument();
+  });
+
+  it('Account mapping links each posting role to its account record', () => {
+    renderAt();
+    fireEvent.click(screen.getByRole('tab', { name: /^Accounting/ }));
+    const inventoryLink = screen.getByRole('link', { name: '1200 Inventory' });
+    expect(inventoryLink).toHaveAttribute('href', expect.stringContaining('/accounting/coa?record=acc-1200'));
+    expect(screen.getByRole('link', { name: '5000 Cost of Goods Sold' })).toBeInTheDocument();
+  });
+
+  it('an Accounting-summary figure drills into its evidence tab', () => {
+    renderAt();
+    fireEvent.click(screen.getByRole('tab', { name: /^Accounting/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Sales revenue to date/ }));
+    expect(screen.getByRole('tab', { name: /^Sales/, selected: true })).toBeInTheDocument();
   });
 
   it('shows the KPI hero strip for a stock-tracked item, including derived on order', () => {
@@ -89,7 +137,7 @@ describe('InventoryItemDetailPage', () => {
 
   it('shows the traceability ledger with a human document number, linked, not a raw UUID', () => {
     renderAt();
-    fireEvent.click(screen.getByRole('tab', { name: 'Traceability' }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Traceability/ }));
     // getByRole ignores the hidden (keepMounted) sibling panels.
     const ref = screen.getByRole('link', { name: 'INV-1061' });
     expect(ref).toHaveAttribute('href', expect.stringContaining('/sales/invoices'));
@@ -99,7 +147,7 @@ describe('InventoryItemDetailPage', () => {
 
   it('opens the movement evidence drawer when a ledger row is clicked', () => {
     renderAt();
-    fireEvent.click(screen.getByRole('tab', { name: 'Traceability' }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Traceability/ }));
     fireEvent.click(screen.getByRole('button', { name: /Open evidence for Sale/i }));
     expect(screen.getByText(/Movement value/i)).toBeInTheDocument();
   });

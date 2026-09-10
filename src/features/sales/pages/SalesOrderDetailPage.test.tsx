@@ -9,8 +9,12 @@ vi.mock('@/features/sales/hooks/useSalesOrderMutations');
 vi.mock('@/features/sales/hooks/useQuotes');
 vi.mock('@/features/sales/hooks/useInvoices');
 vi.mock('@/features/sales/hooks/useCustomerMap');
-vi.mock('@/features/sales/hooks/useDeliveryNotes', () => ({ useDeliveryNotes: () => ({ deliveryNotes: [], isLoading: false, loading: false, error: null, refetch: vi.fn() }) }));
+const deliveryNotesMock = vi.fn<() => { deliveryNotes: unknown[] }>();
+vi.mock('@/features/sales/hooks/useDeliveryNotes', () => ({
+  useDeliveryNotes: () => ({ isLoading: false, loading: false, error: null, refetch: vi.fn(), ...deliveryNotesMock() }),
+}));
 vi.mock('@/features/sales/hooks/useReturnNotes', () => ({ useReturnNotes: () => ({ returnNotes: [], isLoading: false, loading: false, error: null, refetch: vi.fn() }) }));
+vi.mock('@/features/sales/hooks/useCreditNotes', () => ({ useCreditNotes: () => ({ creditNotes: [], isLoading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('@/services/auditLogService', () => ({ auditLogService: { getForRecord: vi.fn().mockResolvedValue([]) } }));
 vi.mock('@/features/inventory/hooks/useProducts', () => ({ useProducts: () => ({ products: [], loading: false, error: null, refetch: vi.fn() }) }));
 vi.mock('@/features/inventory/hooks/useWarehouses', () => ({ useWarehouses: () => ({ warehouses: [], loading: false, error: null, refetch: vi.fn() }) }));
@@ -56,6 +60,7 @@ beforeEach(() => {
   });
   vi.mocked(useQuotes).mockReturnValue({ quotes: [] } as never);
   vi.mocked(useInvoices).mockReturnValue({ invoices: [], refetch: vi.fn() } as never);
+  deliveryNotesMock.mockReturnValue({ deliveryNotes: [] });
   vi.mocked(useCustomerMap).mockReturnValue({ customers: new Map([['cust_1', 'FreshMart Retail Group']]), loading: false, error: null });
 });
 
@@ -161,11 +166,12 @@ describe('SalesOrderDetailPage', () => {
       expect(screen.getByRole('columnheader', { name: 'Remaining' })).toBeInTheDocument();
       // Overview summary fields
       expect(screen.getByText('Invoiced (posted)').parentElement).toHaveTextContent('4');
-      // Phase 5C: "Remaining to fulfil" was superseded by the delivery-aware
-      // "Remaining to deliver" — numerically identical here since no
-      // Delivery Note exists (proven to reduce byte-identically in
-      // salesOrderFulfilment.test.ts).
-      expect(screen.getByText('Remaining to deliver').parentElement).toHaveTextContent('6');
+      expect(screen.getByText('Remaining to invoice').parentElement).toHaveTextContent('6');
+      // No Delivery Note here → the posted invoice IS the dispatch event, so we
+      // show "Fulfilled via invoice", never a naked "Delivered 0" /
+      // "Remaining to deliver" next to a completed order.
+      expect(screen.getByText('Fulfilled via invoice').parentElement).toHaveTextContent('4');
+      expect(screen.queryByText('Remaining to deliver')).not.toBeInTheDocument();
       // primary action reads "Invoice remaining" when partly invoiced
       expect(screen.getByRole('button', { name: 'Invoice remaining' })).toBeInTheDocument();
     });
@@ -188,6 +194,70 @@ describe('SalesOrderDetailPage', () => {
       vi.mocked(useInvoices).mockReturnValue({ invoices: [partialInvoice({ lineItems: [{ id: 'il-1', salesOrderLineId: 'sol-1', description: 'Ergonomic chair', quantity: 10, unitPrice: 1500, taxAmount: 2250, lineTotal: 15000 }] })], refetch: vi.fn() } as never);
       renderAt();
       expect(screen.queryByRole('button', { name: /invoice/i })).not.toBeInTheDocument();
+    });
+
+    it('shows the terminal status as "Completed", never the informal "Fulfilled"', () => {
+      vi.mocked(useSalesOrders).mockReturnValue({ salesOrders: [order({ id: 'so_1', status: 'fulfilled', lineItems: confirmedOrder().lineItems })], isLoading: false, error: null, refetch: vi.fn() });
+      renderAt();
+      expect(screen.getByText('Completed')).toBeInTheDocument();
+      // "Fulfilled" may still appear as a KPI tile label (the process word) —
+      // but never as the lifecycle status badge.
+      expect(screen.queryByText('Fulfilled', { selector: '[data-slot="badge"]' })).not.toBeInTheDocument();
+    });
+
+    it('surfaces the linked invoice in Related records with a matching tab count', () => {
+      vi.mocked(useSalesOrders).mockReturnValue({ salesOrders: [confirmedOrder()], isLoading: false, error: null, refetch: vi.fn() });
+      vi.mocked(useInvoices).mockReturnValue({ invoices: [partialInvoice()], refetch: vi.fn() } as never);
+      renderAt();
+      // Customer + one invoice = 2 related records
+      expect(screen.getByRole('tab', { name: /Related records 2/ })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('tab', { name: /Related records/ }));
+      expect(screen.getByText('Invoice INV-2026-0001')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Customer/ })).toBeInTheDocument();
+    });
+
+    it('opens a related record in an overlay (dialog) rather than navigating away', () => {
+      vi.mocked(useSalesOrders).mockReturnValue({ salesOrders: [confirmedOrder()], isLoading: false, error: null, refetch: vi.fn() });
+      vi.mocked(useInvoices).mockReturnValue({ invoices: [partialInvoice()], refetch: vi.fn() } as never);
+      renderAt();
+      fireEvent.click(screen.getByRole('tab', { name: /Related records/ }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /Invoice INV-2026-0001/ }));
+      // an overlay opened over the still-mounted sales-order route
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getAllByText('SO-2026-0004').length).toBeGreaterThan(0);
+    });
+
+    it('fulfilment via posted invoice (no Delivery Note) reads "Fulfilled — via posted invoice", not "Delivered 0"', () => {
+      vi.mocked(useSalesOrders).mockReturnValue({ salesOrders: [order({ id: 'so_1', status: 'fulfilled', lineItems: confirmedOrder().lineItems })], isLoading: false, error: null, refetch: vi.fn() });
+      vi.mocked(useInvoices).mockReturnValue({
+        invoices: [partialInvoice({ lineItems: [{ id: 'il-1', salesOrderLineId: 'sol-1', description: 'Ergonomic chair', quantity: 10, unitPrice: 1500, taxAmount: 2250, lineTotal: 15000 }] })],
+        refetch: vi.fn(),
+      } as never);
+      renderAt();
+      // KPI strip: the dispatch tile is "Fulfilled / Via posted invoice"
+      expect(screen.getByText('Via posted invoice')).toBeInTheDocument();
+      expect(screen.queryByText('Delivered')).not.toBeInTheDocument();
+    });
+
+    it('fulfilment via a posted Delivery Note keeps "Delivered" with the documented quantity', () => {
+      vi.mocked(useSalesOrders).mockReturnValue({ salesOrders: [confirmedOrder()], isLoading: false, error: null, refetch: vi.fn() });
+      vi.mocked(useInvoices).mockReturnValue({ invoices: [], refetch: vi.fn() } as never);
+      deliveryNotesMock.mockReturnValue({
+        deliveryNotes: [
+          {
+            id: 'dn_1', deliveryNoteNumber: 'DN-2026-0001', salesOrderId: 'so_1', customerId: 'cust_1',
+            warehouseId: 'wh_1', status: 'posted', deliveryDate: '2026-09-16', createdAt: '', updatedAt: '',
+            lineItems: [{ id: 'dnl-1', salesOrderLineId: 'sol-1', description: 'Ergonomic chair', quantity: 6 }],
+          },
+        ],
+      });
+      renderAt();
+      fireEvent.click(screen.getByRole('tab', { name: /Fulfilment/ }));
+      // "Delivered" appears as the KPI tile label and the detail-grid field — at
+      // least one carries the documented Delivery Note quantity (6).
+      expect(screen.getAllByText('Delivered').some((el) => el.parentElement?.textContent?.includes('6'))).toBe(true);
+      expect(screen.getByText('Remaining to deliver').parentElement).toHaveTextContent('4');
     });
   });
 

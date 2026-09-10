@@ -8,7 +8,7 @@ import type { SalesOrder } from '@/types';
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending' },
   { value: 'confirmed', label: 'Confirmed' },
-  { value: 'fulfilled', label: 'Fulfilled' },
+  { value: 'fulfilled', label: 'Completed' },
   { value: 'closed', label: 'Closed' },
   { value: 'cancelled', label: 'Cancelled' },
 ];

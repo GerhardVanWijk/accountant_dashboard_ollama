@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PercentIcon, PrinterIcon, ReceiptTextIcon, WalletIcon } from 'lucide-react';
 import type { CreditNote } from '@/types';
 import { BusinessDocumentPreviewModal, useBusinessDocument } from '@/features/businessDocuments';
@@ -57,6 +57,7 @@ const EPSILON = 0.01;
 export function CreditNoteDetailPage({ recordId, embedded }: RecordPageProps = {}) {
   const params = useParams<{ creditNoteId: string }>();
   const creditNoteId = recordId ?? params.creditNoteId;
+  const navigate = useNavigate();
 
   const { creditNotes, isLoading, error, refetch } = useCreditNotes();
   const creditNote = creditNotes.find((cn) => cn.id === creditNoteId);
@@ -113,22 +114,35 @@ export function CreditNoteDetailPage({ recordId, embedded }: RecordPageProps = {
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!creditNote) return [];
     const items: RelatedRecordItem[] = [
-      { label: 'Customer', value: <Link className="font-medium text-brand hover:underline" to="/sales/customers">{customerName}</Link> },
+      {
+        label: 'Customer',
+        value: <span className="font-medium">{customerName}</span>,
+        onActivate: () => navigate(`/sales/customers?record=${creditNote.customerId}`),
+      },
     ];
     if (linkedInvoice) {
       items.push({
-        label: 'Original invoice',
-        value: <Link className="font-medium text-brand hover:underline" to={`/sales/invoices/${linkedInvoice.id}`}>{linkedInvoice.invoiceNumber}</Link>,
+        label: `Original invoice ${linkedInvoice.invoiceNumber}`,
+        value: <StatusBadge status={linkedInvoice.status} />,
+        onActivate: () => navigate(`/sales/invoices/${linkedInvoice.id}`),
       });
+      if (linkedInvoice.salesOrderId) {
+        items.push({
+          label: 'Sales order',
+          value: <span className="text-muted-foreground">Via the original invoice</span>,
+          onActivate: () => navigate(`/sales/orders/${linkedInvoice.salesOrderId}`),
+        });
+      }
     }
     if (creditNote.journalEntryId) {
       items.push({
-        label: 'GL posting',
-        value: <Link className="font-medium text-brand hover:underline" to={`/accounting/journals?record=${creditNote.journalEntryId}`}>View journal entry</Link>,
+        label: 'Journal entry',
+        value: <span className="text-muted-foreground">GL posting</span>,
+        onActivate: () => navigate(`/accounting/journals?record=${creditNote.journalEntryId}`),
       });
     }
     return items;
-  }, [creditNote, customerName, linkedInvoice]);
+  }, [creditNote, customerName, linkedInvoice, navigate]);
 
   async function act(fn: () => Promise<unknown>, after: () => void = () => {}) {
     setActionError(null);
@@ -314,6 +328,7 @@ export function CreditNoteDetailPage({ recordId, embedded }: RecordPageProps = {
         {
           value: 'related',
           label: 'Related records',
+          count: relatedItems.length,
           content: <RelatedRecordsSection items={relatedItems} />,
         },
         {

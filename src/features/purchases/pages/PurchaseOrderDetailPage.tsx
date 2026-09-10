@@ -102,22 +102,39 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!po) return [];
     const items: RelatedRecordItem[] = [
-      { label: 'Supplier', value: <Link className="font-medium text-brand hover:underline" to="/purchases/vendors">{supplierName}</Link> },
+      {
+        label: 'Supplier',
+        value: <span className="font-medium">{supplierName}</span>,
+        onActivate: () => navigate(`/purchases/vendors?record=${po.supplierId}`),
+      },
     ];
+    if (poMovements.length > 0) {
+      items.push({
+        label: 'Goods received',
+        value: (
+          <span className="text-muted-foreground tabular-nums">
+            {poMovements.length} stock movement{poMovements.length === 1 ? '' : 's'}
+          </span>
+        ),
+        onActivate: () => navigate({ search: '?tab=receiving' }),
+      });
+    }
     if (convertedBill) {
       items.push({
-        label: 'Supplier invoice',
-        value: <Link className="font-medium text-brand hover:underline" to={`/purchases/bills/${convertedBill.id}`}>{convertedBill.billNumber}</Link>,
+        label: `Supplier invoice ${convertedBill.billNumber}`,
+        value: <StatusBadge status={convertedBill.status} />,
+        onActivate: () => navigate(`/purchases/bills/${convertedBill.id}`),
       });
     }
     if (po.journalEntryId) {
       items.push({
-        label: 'GL posting (goods received)',
-        value: <Link className="font-medium text-brand hover:underline" to={`/accounting/journals?record=${po.journalEntryId}`}>View journal entry</Link>,
+        label: 'Journal entry',
+        value: <span className="text-muted-foreground">GL posting — goods received</span>,
+        onActivate: () => navigate(`/accounting/journals?record=${po.journalEntryId}`),
       });
     }
     return items;
-  }, [po, supplierName, convertedBill]);
+  }, [po, supplierName, convertedBill, poMovements, navigate]);
 
   async function act(fn: () => Promise<unknown>) {
     setActionError(null);
@@ -315,6 +332,7 @@ export function PurchaseOrderDetailPage({ recordId, embedded }: RecordPageProps 
         {
           value: 'related',
           label: 'Related records',
+          count: relatedItems.length,
           content: <RelatedRecordsSection items={relatedItems} />,
         },
         {

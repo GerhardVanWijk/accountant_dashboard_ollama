@@ -38,11 +38,14 @@ const statusMap: Record<string, { tone: Tone; label: string }> = {
   sent: { tone: 'info', label: 'Sent' },
   viewed: { tone: 'info', label: 'Viewed' },
   paid: { tone: 'positive', label: 'Paid' },
-  'partially-paid': { tone: 'warning', label: 'Part paid' },
+  /** Professional accounting wording: "Partially Paid", never the informal
+   * "Part paid". The persisted enum stays `partially_paid` / `partially-paid`
+   * — this is a presentation label only. */
+  'partially-paid': { tone: 'warning', label: 'Partially Paid' },
   /** Real Invoice/CreditNote statuses (src/types/invoice.ts,
    * src/types/creditNote.ts) use underscores, not v0's own hyphenated
    * mock set — both spellings are kept so this stays a drop-in for either. */
-  partially_paid: { tone: 'warning', label: 'Part paid' },
+  partially_paid: { tone: 'warning', label: 'Partially Paid' },
   /** Real BillStatus (src/types/bill.ts) — not part of v0's own status set (M8). */
   awaiting_payment: { tone: 'info', label: 'Awaiting payment' },
   /** Real PurchaseOrderStatus (src/types/purchaseOrder.ts) — not part of v0's own status set (M8). */
@@ -152,7 +155,14 @@ const statusMap: Record<string, { tone: Tone; label: string }> = {
   declined: { tone: 'critical', label: 'Declined' },
   expired: { tone: 'neutral', label: 'Expired' },
   confirmed: { tone: 'info', label: 'Confirmed' },
-  fulfilled: { tone: 'positive', label: 'Fulfilled' },
+  /** The stored terminal Sales Order status (`SalesOrderStatus = '… | fulfilled | …'`,
+   * set once every line is fully covered by POSTED invoices — see
+   * `salesOrderFulfilment.ts`). Shown to users as "Completed": it is the
+   * final, done state of the order. The word "Fulfilment" is kept for the
+   * PROCESS (the Fulfilment tab, fulfilment progress, the derived
+   * `partially_fulfilled` state) — only the settled end-state badge reads
+   * "Completed". Internal enum, DB value and domain type are unchanged. */
+  fulfilled: { tone: 'positive', label: 'Completed' },
   /* Sales Order derived fulfilment / invoicing progress (Phase 5B.1) —
    * computed from linked invoice lines, never a stored status. */
   not_fulfilled: { tone: 'neutral', label: 'Not fulfilled' },

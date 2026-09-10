@@ -87,10 +87,10 @@ describe('ReturnNoteDetailPage', () => {
     expect(screen.queryByText('rn1')).not.toBeInTheDocument();
   });
 
-  it('links the originating delivery note and sales order as related records', () => {
+  it('links the originating delivery note and sales order as clickable related records', () => {
     renderAt();
-    expect(screen.getAllByRole('link', { name: 'DN-2026-0001' }).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByRole('link', { name: 'SO-2026-0004' }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('button', { name: /Delivery note DN-2026-0001/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sales order SO-2026-0004/ })).toBeInTheDocument();
   });
 
   it('a draft return note offers Post return, Cancel draft (inline) and Delete draft (overflow)', () => {

@@ -158,6 +158,7 @@ export function InventoryItemDetailPage() {
             customers={customers}
             transfers={transfers}
             journalEntries={journalEntries}
+            accounts={accounts}
             accountLabel={accountLabel}
             integrity={integrity}
             ledgerHelpers={ledgerHelpers}

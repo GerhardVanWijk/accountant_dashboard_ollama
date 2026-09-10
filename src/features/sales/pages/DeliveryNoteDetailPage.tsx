@@ -138,16 +138,24 @@ export function DeliveryNoteDetailPage({ recordId, embedded }: RecordPageProps =
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!dn) return [];
     const items: RelatedRecordItem[] = [
-      { label: 'Customer', value: <Link className="font-medium text-brand hover:underline" to="/sales/customers">{customerName}</Link> },
+      {
+        label: 'Customer',
+        value: <span className="font-medium">{customerName}</span>,
+        onActivate: () => navigate(`/sales/customers?record=${dn.customerId}`),
+      },
     ];
     if (salesOrder) {
-      items.push({ label: 'Sales order', value: <Link className="font-medium text-brand hover:underline" to={`/sales/orders/${salesOrder.id}`}>{salesOrder.orderNumber}</Link> });
+      items.push({
+        label: `Sales order ${salesOrder.orderNumber}`,
+        value: <StatusBadge status={salesOrder.status} />,
+        onActivate: () => navigate(`/sales/orders/${salesOrder.id}`),
+      });
     }
     if (warehouse) {
-      items.push({ label: 'Warehouse', value: warehouse.name });
+      items.push({ label: 'Warehouse', value: <span className="text-muted-foreground">{warehouse.name}</span> });
     }
     return items;
-  }, [dn, customerName, salesOrder, warehouse]);
+  }, [dn, customerName, salesOrder, warehouse, navigate]);
 
   return (
     <RecordPageShell

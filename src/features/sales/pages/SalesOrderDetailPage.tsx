@@ -32,6 +32,8 @@ import { useQuotes } from '@/features/sales/hooks/useQuotes';
 import { useInvoices } from '@/features/sales/hooks/useInvoices';
 import { useDeliveryNotes } from '@/features/sales/hooks/useDeliveryNotes';
 import { useReturnNotes } from '@/features/sales/hooks/useReturnNotes';
+import { useCreditNotes } from '@/features/sales/hooks/useCreditNotes';
+import type { RelatedRecordType } from '@/components/app/record-page';
 import { useCustomerMap } from '@/features/sales/hooks/useCustomerMap';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 import { PartialInvoicePicker } from '@/features/sales/components/PartialInvoicePicker';
@@ -99,6 +101,7 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
   const { invoices, refetch: refetchInvoices } = useInvoices();
   const { deliveryNotes } = useDeliveryNotes();
   const { returnNotes } = useReturnNotes();
+  const { creditNotes } = useCreditNotes();
   const { warehouses } = useWarehouses();
 
   const [actionError, setActionError] = useState<string | null>(null);
@@ -111,6 +114,7 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
   const [createdInvoice, setCreatedInvoice] = useState<{ id: string; number: string } | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [deliveryNotePreviewId, setDeliveryNotePreviewId] = useState<string | null>(null);
+  const [relatedPreview, setRelatedPreview] = useState<{ type: RelatedRecordType; id: string; title: string } | null>(null);
   const { viewModel, loading: docLoading, error: docError } = useBusinessDocument({ kind: 'sales_order', record: order });
 
   const fulfilment = useMemo(
@@ -139,6 +143,50 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
   const showProgress = Boolean(
     fulfilment && (fulfilment.hasLineLevelEvidence || linkedInvoices.length === 0),
   );
+  /**
+   * A Delivery Note workflow is in play only when a posted Delivery Note
+   * exists for this order. Without one, a POSTED inventory invoice IS the
+   * physical dispatch event (docs/SALES_FULFILMENT.md §"NON-NEGOTIABLE
+   * ACCOUNTING MODEL") — so "Delivered 0" would be misleading next to a
+   * completed order; we show "Fulfilled … via posted invoice" instead.
+   */
+  const hasDeliveryNoteEvidence = Boolean(fulfilment && fulfilment.deliveredQty > 1e-6);
+  const dispatchTile = (() => {
+    if (!fulfilment || !showProgress) {
+      return { label: 'Delivered', value: fmtQty(fulfilment?.deliveredQty ?? 0), hint: undefined as string | undefined, tone: 'default' as const };
+    }
+    if (hasDeliveryNoteEvidence) {
+      return {
+        label: 'Delivered',
+        value: fmtQty(fulfilment.deliveredQty),
+        hint: linkedDeliveryNotes.length > 0 ? `On ${linkedDeliveryNotes.length} delivery note${linkedDeliveryNotes.length === 1 ? '' : 's'}` : undefined,
+        tone: 'positive' as const,
+      };
+    }
+    if (fulfilment.postedFulfilledQty > 1e-6) {
+      return { label: 'Fulfilled', value: fmtQty(fulfilment.postedFulfilledQty), hint: 'Via posted invoice', tone: 'positive' as const };
+    }
+    return { label: 'Delivered', value: fmtQty(0), hint: undefined, tone: 'default' as const };
+  })();
+  const linkedInvoiceIds = useMemo(() => new Set(linkedInvoices.map((inv) => inv.id)), [linkedInvoices]);
+  const linkedReturnNotes = useMemo(
+    () =>
+      order
+        ? returnNotes
+            .filter((rn) => rn.salesOrderId === order.id)
+            .sort((a, b) => b.returnDate.localeCompare(a.returnDate))
+        : [],
+    [order, returnNotes],
+  );
+  const linkedCreditNotes = useMemo(
+    () =>
+      order
+        ? creditNotes
+            .filter((cn) => cn.invoiceId && linkedInvoiceIds.has(cn.invoiceId))
+            .sort((a, b) => b.issueDate.localeCompare(a.issueDate))
+        : [],
+    [order, creditNotes, linkedInvoiceIds],
+  );
 
   const { deleteSalesOrder, confirmOrder, cancelOrder, closeRemaining, createInvoiceFromSalesOrder, isLoading: isBusy } = useSalesOrderMutations({
     onSuccess: () => refetch(),
@@ -163,16 +211,61 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
   const customerName = order ? customerMap.get(order.customerId) || 'Unknown customer' : '';
   const sourceQuote = order?.quoteId ? quotes.find((q) => q.id === order.quoteId) : undefined;
 
+  /**
+   * The genuine document chain for this order, from authoritative links only:
+   * the customer, the quote it came from (`order.quoteId`), every non-void
+   * invoice raised against it (`invoice.salesOrderId`), every delivery /
+   * return note (`*.salesOrderId`), and every credit note against one of
+   * those invoices (`creditNote.invoiceId`). Each row opens the record in an
+   * overlay so the order stays in view. Nothing is fabricated — a row only
+   * appears when the link exists in the data.
+   */
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!order) return [];
     const items: RelatedRecordItem[] = [
-      { label: 'Customer', value: <Link className="font-medium text-brand hover:underline" to="/sales/customers">{customerName}</Link> },
+      {
+        label: 'Customer',
+        value: <span className="font-medium">{customerName}</span>,
+        onActivate: () => navigate(`/sales/customers?record=${order.customerId}`),
+      },
     ];
     if (sourceQuote) {
-      items.push({ label: 'Source quote', value: <Link className="font-medium text-brand hover:underline" to="/sales/quotes">{sourceQuote.quoteNumber}</Link> });
+      items.push({
+        label: `Quotation ${sourceQuote.quoteNumber}`,
+        value: <span className="text-muted-foreground">Source quote</span>,
+        onActivate: () => setRelatedPreview({ type: 'quote', id: sourceQuote.id, title: `Quotation ${sourceQuote.quoteNumber}` }),
+      });
     }
+    linkedInvoices.forEach((inv) => {
+      items.push({
+        label: `Invoice ${inv.invoiceNumber}`,
+        value: <StatusBadge status={inv.status} />,
+        onActivate: () => setRelatedPreview({ type: 'invoice', id: inv.id, title: `Invoice ${inv.invoiceNumber}` }),
+      });
+    });
+    linkedDeliveryNotes.forEach((dn) => {
+      items.push({
+        label: `Delivery note ${dn.deliveryNoteNumber}`,
+        value: <StatusBadge status={dn.status} />,
+        onActivate: () => setRelatedPreview({ type: 'delivery_note', id: dn.id, title: `Delivery note ${dn.deliveryNoteNumber}` }),
+      });
+    });
+    linkedReturnNotes.forEach((rn) => {
+      items.push({
+        label: `Return note ${rn.returnNoteNumber}`,
+        value: <StatusBadge status={rn.status} />,
+        onActivate: () => setRelatedPreview({ type: 'return_note', id: rn.id, title: `Return note ${rn.returnNoteNumber}` }),
+      });
+    });
+    linkedCreditNotes.forEach((cn) => {
+      items.push({
+        label: `Credit note ${cn.creditNoteNumber}`,
+        value: <StatusBadge status={cn.status} />,
+        onActivate: () => setRelatedPreview({ type: 'credit_note', id: cn.id, title: `Credit note ${cn.creditNoteNumber}` }),
+      });
+    });
     return items;
-  }, [order, customerName, sourceQuote]);
+  }, [order, customerName, sourceQuote, linkedInvoices, linkedDeliveryNotes, linkedReturnNotes, linkedCreditNotes, navigate]);
 
   async function act(fn: () => Promise<unknown>, after: () => void) {
     setActionError(null);
@@ -289,11 +382,20 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
       <RecordPageSection title="Fulfilment & invoicing">
         <RecordSummaryGrid>
           <RecordField label="Ordered" value={<span className="tabular-nums">{fmtQty(fulfilment.orderedQty)}</span>} />
-          <RecordField label="Delivered" value={<span className="tabular-nums">{fmtQty(fulfilment.deliveredQty)}</span>} />
-          {fulfilment.returnedQty > 0 && (
-            <RecordField label="Returned (uninvoiced)" value={<span className="tabular-nums">{fmtQty(fulfilment.returnedQty)}</span>} />
+          {hasDeliveryNoteEvidence ? (
+            <>
+              <RecordField label="Delivered" value={<span className="tabular-nums">{fmtQty(fulfilment.deliveredQty)}</span>} />
+              {fulfilment.returnedQty > 0 && (
+                <RecordField label="Returned (uninvoiced)" value={<span className="tabular-nums">{fmtQty(fulfilment.returnedQty)}</span>} />
+              )}
+              <RecordField label="Remaining to deliver" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToDeliver)}</span>} />
+            </>
+          ) : (
+            <RecordField
+              label="Fulfilled via invoice"
+              value={<span className="tabular-nums">{fmtQty(fulfilment.postedFulfilledQty)} unit(s) · dispatched on the posted invoice</span>}
+            />
           )}
-          <RecordField label="Remaining to deliver" value={<span className="tabular-nums">{fmtQty(fulfilment.remainingToDeliver)}</span>} />
           <RecordField label="Invoiced (posted)" value={<span className="tabular-nums">{fmtQty(fulfilment.postedFulfilledQty)}</span>} />
           {fulfilment.draftInvoicedQty > 0 && (
             <RecordField label="In draft invoices" value={<span className="tabular-nums">{fmtQty(fulfilment.draftInvoicedQty)}</span>} />
@@ -332,7 +434,7 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
                   {sourceQuote && (
                     <RecordField
                       label="Source quote"
-                      value={<Link className="text-brand hover:underline" to="/sales/quotes">{sourceQuote.quoteNumber}</Link>}
+                      value={<Link className="text-brand hover:underline" to={`/sales/quotes/${sourceQuote.id}`}>{sourceQuote.quoteNumber}</Link>}
                     />
                   )}
                   {fulfilment && showProgress && (
@@ -490,9 +592,10 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
             <StatTile size="compact" icon={BoxesIcon} label="Ordered" value={fmtQty(fulfilment?.orderedQty ?? order.lineItems.reduce((s, l) => s + l.quantity, 0))} />
             <StatTile size="compact"
               icon={TruckIcon}
-              label="Delivered"
-              value={fmtQty(fulfilment?.deliveredQty ?? 0)}
-              tone={fulfilment && fulfilment.deliveredQty > 0 ? 'positive' : 'default'}
+              label={dispatchTile.label}
+              value={dispatchTile.value}
+              hint={dispatchTile.hint}
+              tone={dispatchTile.tone}
             />
             <StatTile size="compact"
               icon={PrinterIcon}
@@ -577,6 +680,14 @@ export function SalesOrderDetailPage({ recordId, embedded }: RecordPageProps = {
                 ? `Delivery note ${linkedDeliveryNotes.find((d) => d.id === deliveryNotePreviewId)?.deliveryNoteNumber}`
                 : 'Delivery note'
             }
+          />
+
+          <RelatedRecordPreview
+            open={relatedPreview != null}
+            onClose={() => setRelatedPreview(null)}
+            type={relatedPreview?.type}
+            id={relatedPreview?.id}
+            title={relatedPreview?.title}
           />
         </>
       )}

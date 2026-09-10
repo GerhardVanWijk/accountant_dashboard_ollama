@@ -103,19 +103,38 @@ export function ReturnNoteDetailPage({ recordId, embedded }: RecordPageProps = {
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!rn) return [];
     const items: RelatedRecordItem[] = [
-      { label: 'Customer', value: <Link className="font-medium text-brand hover:underline" to="/sales/customers">{customerName}</Link> },
+      {
+        label: 'Customer',
+        value: <span className="font-medium">{customerName}</span>,
+        onActivate: () => navigate(`/sales/customers?record=${rn.customerId}`),
+      },
     ];
     if (deliveryNote) {
-      items.push({ label: 'Delivery note', value: <Link className="font-medium text-brand hover:underline" to={`/sales/delivery-notes/${deliveryNote.id}`}>{deliveryNote.deliveryNoteNumber}</Link> });
+      items.push({
+        label: `Delivery note ${deliveryNote.deliveryNoteNumber}`,
+        value: <StatusBadge status={deliveryNote.status} />,
+        onActivate: () => navigate(`/sales/delivery-notes/${deliveryNote.id}`),
+      });
     }
     if (salesOrder) {
-      items.push({ label: 'Sales order', value: <Link className="font-medium text-brand hover:underline" to={`/sales/orders/${salesOrder.id}`}>{salesOrder.orderNumber}</Link> });
+      items.push({
+        label: `Sales order ${salesOrder.orderNumber}`,
+        value: <StatusBadge status={salesOrder.status} />,
+        onActivate: () => navigate(`/sales/orders/${salesOrder.id}`),
+      });
+    }
+    if (rn.journalEntryId) {
+      items.push({
+        label: 'Journal entry',
+        value: <span className="text-muted-foreground">GL posting</span>,
+        onActivate: () => navigate(`/accounting/journals?record=${rn.journalEntryId}`),
+      });
     }
     if (warehouse) {
-      items.push({ label: 'Warehouse', value: warehouse.name });
+      items.push({ label: 'Warehouse', value: <span className="text-muted-foreground">{warehouse.name}</span> });
     }
     return items;
-  }, [rn, customerName, deliveryNote, salesOrder, warehouse]);
+  }, [rn, customerName, deliveryNote, salesOrder, warehouse, navigate]);
 
   return (
     <RecordPageShell

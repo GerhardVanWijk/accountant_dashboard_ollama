@@ -25,7 +25,15 @@
   --color-primary: #8fb8e8;
   --color-secondary: #c9b8ef;
   --color-success: #a8ddb5;
-  --color-warning: #f6d29b;
+  /* Attention/investigate amber. Was #f6d29b — a pastel that fails the
+     Accent Contrast Rule the moment it is used as a foreground (`text-warning`)
+     on a light surface, which ~25 call sites and the reconciliation finding
+     cards do. Darkened to a strong amber that reads clearly as text on white
+     (~4.8:1), still renders as a faint warm tint at `/10` and a visible
+     hairline at `/30`, and keeps enough lightness to carry dark
+     `--color-text-on-accent` on a solid `bg-warning` fill. Dark mode keeps
+     its lighter amber (readable on the near-black panel). */
+  --color-warning: #b26a08;
   --color-danger: #f3afaf;
   --color-info: #a9d8f0;
 
@@ -161,7 +169,13 @@
   --panel: oklch(0.19 0.004 240);
   --positive: oklch(0.76 0.15 166);
   --negative: oklch(0.68 0.19 22);
-  --warning: oklch(0.79 0.14 78);
+  /* Status amber (badges, StatTile warning tone, ~25 `text-status-warning`
+     foregrounds). The old oklch(0.79 …) was too light to read as text on the
+     15%-amber badge wash or on white. Darkened for the light surface; the
+     dark-theme override below restores a bright amber for the near-black
+     panel. The -muted/-surface/-outline washes keep their own lighter oklch
+     literals — a pale badge background is intended; only the text was wrong. */
+  --warning: oklch(0.6 0.13 66);
   --info: oklch(0.72 0.1 234);
 
   /* Pre-baked status alpha tokens (fix/v0-shell-dashboard-fidelity follow-up).
@@ -239,6 +253,9 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+  /* Restore a bright amber for status text/badges on the near-black panel —
+     the light-surface value set on :root is too dark to read here. */
+  --warning: oklch(0.83 0.13 82);
 }
 
 /* The brand green is the single primary action colour across the v0

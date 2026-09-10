@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { BanknoteIcon, WalletIcon } from 'lucide-react';
 import {
   RecordActivitySection,
@@ -33,6 +33,7 @@ const METHOD_LABELS: Record<string, string> = {
 export function SupplierPaymentDetailPage({ recordId, embedded }: RecordPageProps = {}) {
   const params = useParams<{ paymentId: string }>();
   const paymentId = recordId ?? params.paymentId;
+  const navigate = useNavigate();
 
   const { payments, isLoading, error } = usePayments();
   const payment = payments.find((p) => p.id === paymentId);
@@ -47,31 +48,37 @@ export function SupplierPaymentDetailPage({ recordId, embedded }: RecordPageProp
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!payment) return [];
     const items: RelatedRecordItem[] = [
-      { label: 'Supplier', value: <Link className="font-medium text-brand hover:underline" to="/purchases/vendors">{supplierName}</Link> },
+      {
+        label: 'Supplier',
+        value: <span className="font-medium">{supplierName}</span>,
+        onActivate: () => navigate(`/purchases/vendors?record=${payment.supplierId}`),
+      },
     ];
     for (const a of payment.allocations) {
       const b = billById.get(a.billId);
       if (!b) continue;
       items.push({
-        label: 'Applied to supplier invoice',
-        value: (
-          <Link className="font-medium text-brand hover:underline" to={`/purchases/bills/${b.id}`}>
-            {b.billNumber} ({formatCurrency(a.amount)})
-          </Link>
-        ),
+        label: `Supplier invoice ${b.billNumber}`,
+        value: <span className="text-muted-foreground tabular-nums">{formatCurrency(a.amount)} applied</span>,
+        onActivate: () => navigate(`/purchases/bills/${b.id}`),
       });
     }
     if (payment.journalEntryId) {
       items.push({
-        label: 'GL posting',
-        value: <Link className="font-medium text-brand hover:underline" to={`/accounting/journals?record=${payment.journalEntryId}`}>View journal entry</Link>,
+        label: 'Journal entry',
+        value: <span className="text-muted-foreground">GL posting</span>,
+        onActivate: () => navigate(`/accounting/journals?record=${payment.journalEntryId}`),
       });
     }
     if (payment.bankAccountId) {
-      items.push({ label: 'Bank account', value: <Link className="font-medium text-brand hover:underline" to="/banking/accounts">View bank account</Link> });
+      items.push({
+        label: 'Bank account',
+        value: <span className="text-muted-foreground">Paid from</span>,
+        onActivate: () => navigate(`/banking/accounts?record=${payment.bankAccountId}`),
+      });
     }
     return items;
-  }, [payment, supplierName, billById]);
+  }, [payment, supplierName, billById, navigate]);
 
   const state = isLoading ? 'loading' : error ? 'error' : payment ? 'ready' : 'not-found';
 
@@ -163,6 +170,7 @@ export function SupplierPaymentDetailPage({ recordId, embedded }: RecordPageProp
         {
           value: 'related',
           label: 'Related records',
+          count: relatedItems.length,
           content: <RelatedRecordsSection items={relatedItems} />,
         },
         {

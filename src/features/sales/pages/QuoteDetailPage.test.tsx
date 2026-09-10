@@ -86,7 +86,7 @@ describe('QuoteDetailPage', () => {
     renderAt();
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Line items/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Related records' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Related records/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Activity' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Accounting' })).not.toBeInTheDocument();
   });

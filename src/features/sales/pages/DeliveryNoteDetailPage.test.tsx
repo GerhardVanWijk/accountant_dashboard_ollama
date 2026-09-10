@@ -84,9 +84,9 @@ describe('DeliveryNoteDetailPage', () => {
     expect(screen.queryByText('dn1')).not.toBeInTheDocument();
   });
 
-  it('links the originating sales order as a related record', () => {
+  it('links the originating sales order as a clickable related record', () => {
     renderAt();
-    expect(screen.getAllByRole('link', { name: 'SO-2026-0004' }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('button', { name: /Sales order SO-2026-0004/ })).toBeInTheDocument();
   });
 
   it('a draft delivery note offers Post delivery, Cancel draft (inline) and Delete draft (overflow); never Create invoice', () => {

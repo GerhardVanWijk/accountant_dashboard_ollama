@@ -128,39 +128,43 @@ export function InvoiceDetailPage({ recordId, embedded }: RecordPageProps = {}) 
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!invoice) return [];
     const items: RelatedRecordItem[] = [
-      { label: 'Customer', value: <Link className="font-medium text-brand hover:underline" to="/sales/customers">{customerName}</Link> },
+      {
+        label: 'Customer',
+        value: <span className="font-medium">{customerName}</span>,
+        onActivate: () => navigate(`/sales/customers?record=${invoice.customerId}`),
+      },
     ];
     if (sourceOrder) {
       items.push({
-        label: 'Source sales order',
-        value: <Link className="font-medium text-brand hover:underline" to={`/sales/orders/${sourceOrder.id}`}>{sourceOrder.orderNumber}</Link>,
+        label: `Sales order ${sourceOrder.orderNumber}`,
+        value: <StatusBadge status={sourceOrder.status} />,
+        onActivate: () => navigate(`/sales/orders/${sourceOrder.id}`),
       });
     }
     if (invoice.journalEntryId) {
       items.push({
-        label: 'GL posting',
-        value: <Link className="font-medium text-brand hover:underline" to={`/accounting/journals?record=${invoice.journalEntryId}`}>View journal entry</Link>,
+        label: 'Journal entry',
+        value: <span className="text-muted-foreground">GL posting</span>,
+        onActivate: () => navigate(`/accounting/journals?record=${invoice.journalEntryId}`),
       });
     }
     for (const cn of relatedCreditNotes) {
       items.push({
-        label: 'Credit note',
-        value: <Link className="font-medium text-brand hover:underline" to={`/sales/credit-notes/${cn.id}`}>{cn.creditNoteNumber}</Link>,
+        label: `Credit note ${cn.creditNoteNumber}`,
+        value: <StatusBadge status={cn.status} />,
+        onActivate: () => navigate(`/sales/credit-notes/${cn.id}`),
       });
     }
     for (const receipt of relatedReceipts) {
       const allocated = receipt.allocations.find((a) => a.invoiceId === invoice.id)?.amount ?? 0;
       items.push({
-        label: 'Receipt',
-        value: (
-          <Link className="font-medium text-brand hover:underline" to={`/sales/receipts/${receipt.id}`}>
-            {receipt.receiptNumber} ({formatCurrency(allocated)})
-          </Link>
-        ),
+        label: `Receipt ${receipt.receiptNumber}`,
+        value: <span className="text-muted-foreground tabular-nums">{formatCurrency(allocated)}</span>,
+        onActivate: () => navigate(`/sales/receipts/${receipt.id}`),
       });
     }
     return items;
-  }, [invoice, customerName, sourceOrder, relatedCreditNotes, relatedReceipts]);
+  }, [invoice, customerName, sourceOrder, relatedCreditNotes, relatedReceipts, navigate]);
 
   async function act(fn: () => Promise<unknown>, after: () => void) {
     setActionError(null);

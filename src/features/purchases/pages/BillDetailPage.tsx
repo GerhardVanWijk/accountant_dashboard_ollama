@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { BanknoteIcon, PackageIcon, ReceiptTextIcon, WalletIcon } from 'lucide-react';
 import type { Bill } from '@/types';
 import {
@@ -45,6 +45,7 @@ import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
 export function BillDetailPage({ recordId, embedded }: RecordPageProps = {}) {
   const params = useParams<{ billId: string }>();
   const billId = recordId ?? params.billId;
+  const navigate = useNavigate();
 
   const { bills, isLoading, error, refetch } = useBills();
   const bill = bills.find((b) => b.id === billId);
@@ -101,33 +102,36 @@ export function BillDetailPage({ recordId, embedded }: RecordPageProps = {}) {
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!bill) return [];
     const items: RelatedRecordItem[] = [
-      { label: 'Supplier', value: <Link className="font-medium text-brand hover:underline" to="/purchases/vendors">{supplierName}</Link> },
+      {
+        label: 'Supplier',
+        value: <span className="font-medium">{supplierName}</span>,
+        onActivate: () => navigate(`/purchases/vendors?record=${bill.supplierId}`),
+      },
     ];
     if (sourcePo) {
       items.push({
-        label: 'Source purchase order',
-        value: <Link className="font-medium text-brand hover:underline" to={`/purchases/orders/${sourcePo.id}`}>{sourcePo.poNumber}</Link>,
+        label: `Purchase order ${sourcePo.poNumber}`,
+        value: <StatusBadge status={sourcePo.status} />,
+        onActivate: () => navigate(`/purchases/orders/${sourcePo.id}`),
       });
     }
     if (bill.journalEntryId) {
       items.push({
-        label: 'GL posting',
-        value: <Link className="font-medium text-brand hover:underline" to={`/accounting/journals?record=${bill.journalEntryId}`}>View journal entry</Link>,
+        label: 'Journal entry',
+        value: <span className="text-muted-foreground">GL posting</span>,
+        onActivate: () => navigate(`/accounting/journals?record=${bill.journalEntryId}`),
       });
     }
     for (const p of relatedPayments) {
       const allocated = p.allocations.find((a) => a.billId === bill.id)?.amount ?? 0;
       items.push({
-        label: 'Paid via',
-        value: (
-          <Link className="font-medium text-brand hover:underline" to={`/purchases/payments/${p.id}`}>
-            {p.paymentNumber} ({formatCurrency(allocated)})
-          </Link>
-        ),
+        label: `Payment ${p.paymentNumber}`,
+        value: <span className="text-muted-foreground tabular-nums">{formatCurrency(allocated)} applied</span>,
+        onActivate: () => navigate(`/purchases/payments/${p.id}`),
       });
     }
     return items;
-  }, [bill, supplierName, sourcePo, relatedPayments]);
+  }, [bill, supplierName, sourcePo, relatedPayments, navigate]);
 
   const state = isLoading ? 'loading' : error ? 'error' : bill ? 'ready' : 'not-found';
 

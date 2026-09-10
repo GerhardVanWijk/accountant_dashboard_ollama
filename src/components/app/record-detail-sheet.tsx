@@ -221,18 +221,18 @@ export function RelatedRecordsSection({ items, title = 'Related records' }: { it
               key={item.label}
               type="button"
               onClick={item.onActivate}
-              className="flex items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+              className="flex items-start justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
             >
-              <dt className="text-xs text-muted-foreground">{item.label}</dt>
-              <dd className="flex items-center gap-1 text-sm">
-                {item.value}
+              <dt className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">{item.label}</dt>
+              <dd className="flex min-w-0 items-center gap-1 text-sm">
+                <span className="min-w-0 [overflow-wrap:anywhere]">{item.value}</span>
                 <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               </dd>
             </button>
           ) : (
-            <div key={item.label} className="flex items-center justify-between gap-3 px-3 py-2.5">
-              <dt className="text-xs text-muted-foreground">{item.label}</dt>
-              <dd className="text-sm">{item.value}</dd>
+            <div key={item.label} className="flex items-start justify-between gap-3 px-3 py-2.5">
+              <dt className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">{item.label}</dt>
+              <dd className="min-w-0 text-sm [overflow-wrap:anywhere]">{item.value}</dd>
             </div>
           ),
         )}

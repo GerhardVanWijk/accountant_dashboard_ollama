@@ -6,6 +6,8 @@ import {
   RecordActivitySection,
   RecordPageHeader,
   RecordPageShell,
+  RelatedRecordsSection,
+  type RelatedRecordItem,
   type RecordPageProps,
 } from '@/components/app/record-page';
 import { StatusBadge } from '@/components/app/status-badge';
@@ -69,6 +71,36 @@ export function SupplierReturnDetailPage({ recordId, embedded }: RecordPageProps
   const supplierName = supplierReturn ? suppliers.find((s) => s.id === supplierReturn.supplierId)?.name ?? supplierReturn.supplierId : '';
   const state = loading ? 'loading' : error ? 'error' : supplierReturn ? 'ready' : 'not-found';
 
+  const relatedItems: RelatedRecordItem[] = [];
+  if (supplierReturn) {
+    relatedItems.push({
+      label: 'Supplier',
+      value: <span className="font-medium">{supplierName}</span>,
+      onActivate: () => navigate(`/purchases/vendors?record=${supplierReturn.supplierId}`),
+    });
+    if (supplierReturn.purchaseOrderId) {
+      relatedItems.push({
+        label: 'Purchase order',
+        value: <span className="text-muted-foreground">Goods originally received on</span>,
+        onActivate: () => navigate(`/purchases/orders/${supplierReturn.purchaseOrderId}`),
+      });
+    }
+    if (supplierReturn.billId) {
+      relatedItems.push({
+        label: 'Supplier invoice',
+        value: <span className="text-muted-foreground">Billed on</span>,
+        onActivate: () => navigate(`/purchases/bills/${supplierReturn.billId}`),
+      });
+    }
+    if (supplierReturn.journalEntryId) {
+      relatedItems.push({
+        label: 'Journal entry',
+        value: <span className="text-muted-foreground">Purchase price variance posting</span>,
+        onActivate: () => navigate(`/accounting/journals?record=${supplierReturn.journalEntryId}`),
+      });
+    }
+  }
+
   return (
     <RecordPageShell
       breadcrumbs={[{ label: 'Inventory', to: '/inventory' }, { label: 'Supplier returns', to: '/inventory/supplier-returns' }, { label: supplierReturn?.returnNumber ?? 'Supplier return' }]}
@@ -115,6 +147,8 @@ export function SupplierReturnDetailPage({ recordId, embedded }: RecordPageProps
             previewError={previewError}
             onOpenJournal={(journalEntryId) => navigate(`/accounting/journals?record=${journalEntryId}`)}
           />
+
+          <RelatedRecordsSection items={relatedItems} />
 
           <RecordActivitySection recordType="SupplierReturn" recordId={supplierReturn.id} title="Record activity" subtitle="Changes and lifecycle events for this supplier return." />
 
