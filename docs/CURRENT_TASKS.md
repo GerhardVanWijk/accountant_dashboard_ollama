@@ -2,6 +2,24 @@
 
 ---
 
+## COMPACT WAREHOUSE REFERENCES ACROSS INVENTORY (branch `global-ux-terminology-relationships-2026-09-10`) — 2026-09-10
+
+**SHIPPED 2026-09-10** — on explicit user instruction ahead of human browser QA, `global-ux-terminology-relationships-2026-09-10` (commit `e8ddac2`) was fast-forward-merged → `main` (`a5ca2ae..e8ddac2`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). **No migration, no DB write, no accounting-posting / GL / WAC / inventory-valuation / reconciliation / lifecycle / RLS change** — display only: dense inventory, movement and report tables now show the authoritative `warehouse.code` (`WH-001`) instead of long location names, with the full descriptive name kept one hover / keyboard-focus away in the branded tooltip and in the accessible name. A raw warehouse UUID is never rendered (an id-shaped value is treated as "no code" → falls back to name → em dash); no codes are fabricated. The app keeps using the warehouse id / foreign key internally.
+
+New shared `src/components/app/warehouse-reference.tsx`: `WarehouseReference` (`compact` / `name` variants), `WarehouseRoute` (`CODE → CODE` with both full names on one tooltip/aria-label), `warehouseRefText()` for sort keys / search strings / detail headings. `useStockMovementResolvers` gained `warehouse(id) => Warehouse | undefined`. Adopted across 31 files: Stock Movements page (warehouse column + transfer route), Transfers/Adjustments/Takes/Opening-Batches registers, per-(product,warehouse) reports, Movement/Adjustment/Stock-Take-Variance/Transfer reports (+ a `Warehouse Code` export column alongside the unchanged `Warehouse` name column), product Stock/Traceability/Purchasing/Sales tabs, DeliveryNotes list, Sales-Order/Invoice/PO stock-movement sub-tables, and the Transfer/Adjustment/Take/Supplier-Return/Opening-Batch detail line tables. Forms, selectors and the Warehouse master / analysis pages deliberately keep the descriptive name. Table search still matches both code and full name. 3243 tests (391 files), type-check + lint (`--max-warnings 0`) + build all clean.
+
+### Post-deploy browser-QA checklist (owed — no browser automation in-session)
+
+1. Dense tables (Stock Movements, transfer/adjustment/take registers, inventory reports) show `WH-001`-style codes, not long names; no page-level horizontal overflow.
+2. Hover / keyboard-focus on a warehouse code reveals the deep-green branded tooltip with `code — full name`; the accessible name carries both.
+3. Stock-transfer rows render `WH-001 → WH-002`; the route tooltip lists both full names under From / To; the narrow-width two-line stack works.
+4. Warehouse forms, selectors and the Warehouse master + Warehouse Analysis pages still show the descriptive name.
+5. CSV/Excel exports for the report pages + opening-stock batches keep the `Warehouse` name column and now also carry `Warehouse Code`.
+6. Table search matches both a warehouse code and its full name; no raw UUID appears anywhere on screen.
+7. Re-confirm dark mode on the new tooltip.
+
+---
+
 ## COMPACT METRICS / TABS / CURRENCY DISPLAY STANDARDIZATION (branch `global-ux-terminology-relationships-2026-09-10`) — 2026-09-10
 
 **SHIPPED 2026-09-10** — on explicit user instruction ahead of human browser QA, `global-ux-terminology-relationships-2026-09-10` (commit `f07e6d5`) was fast-forward-merged → `main` (`d37514e..f07e6d5`) + pushed; Cloudflare Pages auto-deploys `main` to production (`vertex-accounting.pages.dev`). **No migration, no DB write, no accounting-posting / GL / WAC / inventory-valuation / VAT / reconciliation / payment-allocation / lifecycle / RLS change** — presentation only: `formatCurrency`'s display locale changed `en-US`→`en-ZA` (a rand amount now shows `R 21 107,10`, not `ZAR 21,107.10`; ISO-code fields render the `CurrencyCode` string directly and are untouched), and ~130 `FigureBlock` KPI cells across dashboards, reports, record-detail pages and list/index pages were re-rendered through the shared `StatTile` / `StatTileGrid` / `RecordTabs` primitives (icons, deep-green branded tooltips, responsive collapse). Every migrated `value` string is byte-identical to what `FigureBlock` received; `tone` semantics preserved 1:1. **Post-deploy browser QA is now owed.**
