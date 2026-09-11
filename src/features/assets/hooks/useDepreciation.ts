@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { DepreciationEntry } from '@/types';
-import { depreciationService, type DepreciationRunResult } from '../services';
+import { depreciationService, type DepreciationPreview, type DepreciationRunResult } from '../services';
 
 export interface UseDepreciationResult {
   history: DepreciationEntry[];
@@ -8,6 +8,7 @@ export interface UseDepreciationResult {
   error: Error | null;
   refetch: () => Promise<void>;
   runDepreciation: (periodEnd: string) => Promise<DepreciationRunResult>;
+  previewDepreciation: (periodEnd: string) => Promise<DepreciationPreview>;
 }
 
 /** Component -> Hook -> Service -> Repository chain for the depreciation ledger. */
@@ -41,5 +42,7 @@ export function useDepreciation(): UseDepreciationResult {
     [refetch],
   );
 
-  return { history, loading, error, refetch, runDepreciation };
+  const previewDepreciation = useCallback((periodEnd: string) => depreciationService.previewDepreciation(periodEnd), []);
+
+  return { history, loading, error, refetch, runDepreciation, previewDepreciation };
 }

@@ -1,6 +1,7 @@
 import { SupabaseFixedAssetRepository } from './SupabaseFixedAssetRepository';
 import { SupabaseDepreciationEntryRepository } from './SupabaseDepreciationEntryRepository';
 import { SupabaseAssetDisposalRepository } from './SupabaseAssetDisposalRepository';
+import { SupabaseEstimateRevisionRepository } from './SupabaseEstimateRevisionRepository';
 import { supabase } from '@/config/supabase';
 
 /**
@@ -12,3 +13,4 @@ import { supabase } from '@/config/supabase';
 export const fixedAssetRepository = new SupabaseFixedAssetRepository(supabase);
 export const depreciationEntryRepository = new SupabaseDepreciationEntryRepository(supabase);
 export const assetDisposalRepository = new SupabaseAssetDisposalRepository(supabase);
+export const estimateRevisionRepository = new SupabaseEstimateRevisionRepository(supabase);

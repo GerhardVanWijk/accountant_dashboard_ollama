@@ -88,23 +88,23 @@ export function AssetsTable({ assets, onEdit, onPostAcquisition, onDelete, onSel
     {
       key: 'actions',
       header: '',
-      cell: (a) => (
-        <div className="flex justify-end gap-1">
-          {a.status === 'draft' && (
+      // Capitalized assets open their detail workspace on row click (Revise
+      // estimate / Dispose live there) — only a draft still needs inline
+      // actions, since it isn't yet real accounting history.
+      cell: (a) =>
+        a.status === 'draft' ? (
+          <div className="flex justify-end gap-1">
             <Button variant="ghost" size="sm" onClick={() => onPostAcquisition(a)}>
               Post acquisition
             </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={() => onEdit(a)}>
-            Edit
-          </Button>
-          {a.status === 'draft' && (
+            <Button variant="ghost" size="sm" onClick={() => onEdit(a)}>
+              Edit
+            </Button>
             <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(a)}>
               Delete
             </Button>
-          )}
-        </div>
-      ),
+          </div>
+        ) : null,
     },
   ];
 

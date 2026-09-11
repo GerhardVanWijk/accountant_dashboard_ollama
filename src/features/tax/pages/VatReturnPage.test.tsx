@@ -23,8 +23,8 @@ function makeReport(overrides: Partial<VatReport> = {}): VatReport {
   return {
     periodStart: '2026-08-01T00:00:00.000Z',
     periodEnd: '2026-08-31T23:59:59.999Z',
-    outputVat: { byTreatment: [{ treatment: 'standard_rated', taxBase: 1000, vatAmount: 150 }], total: 150 },
-    inputVat: { byTreatment: [{ treatment: 'standard_rated', taxBase: 500, vatAmount: 75 }], nonDeductibleTotal: 0, total: 75 },
+    outputVat: { byTreatment: [{ treatment: 'standard_rated', taxBase: 1000, vatAmount: 150 }], total: 150, capitalGoods: { taxBase: 0, vatAmount: 0 } },
+    inputVat: { byTreatment: [{ treatment: 'standard_rated', taxBase: 500, vatAmount: 75 }], nonDeductibleTotal: 0, total: 75, capitalGoods: { taxBase: 0, vatAmount: 0 } },
     netVatPayable: 75,
     unresolvedLineCount: 0,
     ...overrides,
@@ -98,6 +98,27 @@ describe('VatReturnPage', () => {
 
     expect(screen.getByText('GL Reconciliation')).toBeInTheDocument();
     expect(screen.getAllByText('Reconciled')).toHaveLength(2);
+  });
+
+  it('discloses the capital-goods sub-total without implying it is a second figure (Review 4 Item M)', () => {
+    mockedUseVatReport.mockReturnValue(
+      mockResult({
+        report: makeReport({
+          outputVat: { byTreatment: [{ treatment: 'standard_rated', taxBase: 41000, vatAmount: 6150 }], total: 6150, capitalGoods: { taxBase: 40000, vatAmount: 6000 } },
+        }),
+      }),
+    );
+    renderPage();
+
+    expect(screen.getByText(/Of which capital goods/)).toBeInTheDocument();
+    expect(screen.getByText(/already included above/)).toBeInTheDocument();
+  });
+
+  it('hides the capital-goods note when nothing this period was classified as capital goods', () => {
+    mockedUseVatReport.mockReturnValue(mockResult());
+    renderPage();
+
+    expect(screen.queryByText(/Of which capital goods/)).not.toBeInTheDocument();
   });
 
   it('flags unresolved line items rather than silently dropping them', () => {

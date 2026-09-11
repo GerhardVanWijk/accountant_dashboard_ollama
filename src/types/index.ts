@@ -16,6 +16,7 @@ export * from './bankStatement';
 export * from './journalEntry';
 export * from './account';
 export * from './taxRate';
+export * from './vatSource';
 export * from './user';
 export * from './role';
 export * from './subscription';

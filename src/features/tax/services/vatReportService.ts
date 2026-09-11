@@ -1,4 +1,4 @@
-import type { Bill, CreditNote, ID, ISODateString, Invoice, TaxRate, VatTreatment } from '@/types';
+import type { Bill, CreditNote, ID, ISODateString, Invoice, TaxRate, VatSourceEntry, VatTreatment } from '@/types';
 import type { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import type { AccountMapper } from '@/features/accounting/services';
 
@@ -12,12 +12,28 @@ export interface VatTreatmentBreakdown {
   vatAmount: number;
 }
 
+/**
+ * A `classification` sub-total — e.g. capital goods — over the SAME rows
+ * already counted in `byTreatment`/`total` above it. This is a breakdown,
+ * never an addition: every `vatSourceEntries` row folds into `byTreatment`
+ * exactly once by `treatment` (its VAT-rate branch, e.g. standard-rated);
+ * `capitalGoods` re-reads that same set of rows filtered by `classification`
+ * for disclosure purposes only. Summing `capitalGoods.vatAmount` into
+ * `total` would double-count it.
+ */
+export interface VatClassificationBreakdown {
+  taxBase: number;
+  vatAmount: number;
+}
+
 export interface VatReport {
   periodStart: ISODateString;
   periodEnd: ISODateString;
   outputVat: {
     byTreatment: VatTreatmentBreakdown[];
     total: number;
+    /** The capital-goods subset of `total` above — see VatClassificationBreakdown's doc comment. */
+    capitalGoods: VatClassificationBreakdown;
   };
   inputVat: {
     byTreatment: VatTreatmentBreakdown[];
@@ -25,6 +41,8 @@ export interface VatReport {
     nonDeductibleTotal: number;
     /** Claimable input VAT only. */
     total: number;
+    /** The capital-goods subset of `total` above — see VatClassificationBreakdown's doc comment. */
+    capitalGoods: VatClassificationBreakdown;
   };
   /** outputVat.total - inputVat.total. Positive = payable to SARS, negative = refund due. */
   netVatPayable: number;
@@ -113,6 +131,7 @@ export function computeVatReport(
   creditNotes: CreditNote[],
   bills: Bill[],
   allTaxRates: TaxRate[],
+  vatSourceEntries: VatSourceEntry[] = [],
 ): VatReport {
   const outputBreakdown = emptyBreakdownMap();
   const inputBreakdown = emptyBreakdownMap();
@@ -136,6 +155,16 @@ export function computeVatReport(
     unresolvedLineCount += accumulateLines(bill.lineItems, allTaxRates, inputBreakdown, 1);
   }
 
+  // Persisted VAT source/evidence for taxable transactions outside the
+  // Invoice/Credit Note/Bill pipeline (migration 0080) — e.g. fixed-asset
+  // disposals. Already classified (treatment) and signed (contra rows carry
+  // negative amounts), so they fold straight into the same breakdown.
+  const periodVatSourceEntries = vatSourceEntries.filter((entry) => inPeriod(entry.transactionDate, periodStart, periodEnd));
+  for (const entry of periodVatSourceEntries) {
+    const breakdown = entry.direction === 'output' ? outputBreakdown : inputBreakdown;
+    addToBreakdown(breakdown, entry.treatment, entry.taxableAmount, entry.vatAmount);
+  }
+
   const outputRows = [...outputBreakdown.values()].sort((a, b) => a.treatment.localeCompare(b.treatment));
   const outputTotal = outputRows.reduce((sum, row) => sum + row.vatAmount, 0);
 
@@ -144,11 +173,22 @@ export function computeVatReport(
   const claimableInputRows = allInputRows.filter((r) => r.treatment !== 'non_deductible');
   const inputTotal = claimableInputRows.reduce((sum, row) => sum + row.vatAmount, 0);
 
+  // Capital-goods sub-total (Review 4 Item M) — a disclosure breakdown over
+  // the SAME rows already counted above by treatment, never a second
+  // addition to outputTotal/inputTotal. See VatClassificationBreakdown.
+  const capitalGoodsBreakdown = (direction: 'output' | 'input'): VatClassificationBreakdown =>
+    periodVatSourceEntries
+      .filter((entry) => entry.direction === direction && entry.classification === 'capital_goods')
+      .reduce(
+        (acc, entry) => ({ taxBase: acc.taxBase + entry.taxableAmount, vatAmount: acc.vatAmount + entry.vatAmount }),
+        { taxBase: 0, vatAmount: 0 },
+      );
+
   return {
     periodStart: periodStart.toISOString(),
     periodEnd: periodEnd.toISOString(),
-    outputVat: { byTreatment: outputRows, total: outputTotal },
-    inputVat: { byTreatment: claimableInputRows, nonDeductibleTotal, total: inputTotal },
+    outputVat: { byTreatment: outputRows, total: outputTotal, capitalGoods: capitalGoodsBreakdown('output') },
+    inputVat: { byTreatment: claimableInputRows, nonDeductibleTotal, total: inputTotal, capitalGoods: capitalGoodsBreakdown('input') },
     netVatPayable: outputTotal - inputTotal,
     unresolvedLineCount,
   };
@@ -157,7 +197,7 @@ export function computeVatReport(
 /** One real posted document's contribution to a VAT period — for the "which transactions make up this figure" traceability view (M7). Reuses the exact same per-line classification `computeVatReport()` already does; this is a different SHAPE of the same output (per-document, not aggregated by treatment), not a second calculation. */
 export interface VatTransactionRow {
   id: ID;
-  documentType: 'invoice' | 'credit_note' | 'bill';
+  documentType: 'invoice' | 'credit_note' | 'bill' | 'vat_source';
   documentNumber: string;
   date: ISODateString;
   direction: 'output' | 'input';
@@ -165,6 +205,8 @@ export interface VatTransactionRow {
   treatment: VatTreatment | undefined;
   taxBase: number;
   vatAmount: number;
+  /** e.g. 'capital_goods' — only ever set on a `documentType: 'vat_source'` row (drill-down for Review 4 Item M). */
+  classification?: string;
 }
 
 function dominantTreatment(lines: LineLike[], allTaxRates: TaxRate[]): VatTreatment | undefined {
@@ -193,6 +235,7 @@ export function listVatTransactions(
   creditNotes: CreditNote[],
   bills: Bill[],
   allTaxRates: TaxRate[],
+  vatSourceEntries: VatSourceEntry[] = [],
 ): VatTransactionRow[] {
   const rows: VatTransactionRow[] = [];
 
@@ -241,6 +284,22 @@ export function listVatTransactions(
       treatment: dominantTreatment(bill.lineItems, allTaxRates),
       taxBase: bill.subtotal,
       vatAmount: bill.taxTotal,
+    });
+  }
+
+  for (const entry of vatSourceEntries) {
+    if (!inPeriod(entry.transactionDate, periodStart, periodEnd)) continue;
+    if (entry.vatAmount === 0) continue;
+    rows.push({
+      id: entry.id,
+      documentType: 'vat_source',
+      documentNumber: entry.reason ?? entry.sourceType,
+      date: entry.transactionDate,
+      direction: entry.direction,
+      treatment: entry.treatment,
+      taxBase: entry.taxableAmount,
+      vatAmount: entry.vatAmount,
+      classification: entry.classification,
     });
   }
 

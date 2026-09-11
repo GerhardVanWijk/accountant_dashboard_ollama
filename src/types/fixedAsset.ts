@@ -122,6 +122,40 @@ export interface DepreciationEntry extends BaseEntity {
 }
 
 /**
+ * One effective-dated change in accounting estimate (IAS 8.36 / IAS 16.51)
+ * on a capitalized asset — the authoritative accounting record the
+ * depreciation engine reconstructs the estimate timeline from (migration
+ * 0079). Append-only, same rationale as DepreciationEntry.
+ *
+ * `effectiveDate` is always the first day of a month (estimate changes take
+ * effect on an accounting-period boundary — see
+ * fixedAssetService.reviseEstimate()). `usefulLifeYears` is the revised
+ * TOTAL useful life measured from the acquisition date (one meaning
+ * everywhere), not a "remaining" life. `previous*` fields snapshot the
+ * estimate that applied immediately before this revision, so the revision
+ * history is self-sufficient for reconstruction.
+ *
+ * PRECEDENCE (docs/FIXED_ASSETS.md): for any period the applicable estimate
+ * is the revision with the greatest effectiveDate <= the period start;
+ * before the earliest revision, that revision's `previous*` values; with no
+ * revisions, the FixedAsset baseline columns (effective from acquisition).
+ */
+export interface EstimateRevision extends BaseEntity {
+  assetId: ID;
+  effectiveDate: ISODateString;
+  usefulLifeYears: number;
+  residualValue: number;
+  depreciationMethod: DepreciationMethod;
+  reducingBalanceRatePercent?: number;
+  previousUsefulLifeYears: number;
+  previousResidualValue: number;
+  previousDepreciationMethod: DepreciationMethod;
+  previousReducingBalanceRatePercent?: number;
+  reason?: string;
+  createdBy?: string;
+}
+
+/**
  * One disposal record per asset (an asset can only be disposed once —
  * enforced by assetDisposalService, not by this type). Append-only, same
  * rationale as DepreciationEntry above.

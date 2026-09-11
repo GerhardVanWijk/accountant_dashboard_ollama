@@ -26,7 +26,7 @@ export { JournalEntryService, SYSTEM_USER_ID } from './journalEntryService';
 export { AccountingPeriodService } from './accountingPeriodService';
 export { FinancialYearService } from './financialYearService';
 export type { AccountMappingKey, AccountMapper } from './accountMappingService';
-export { AccountMappingService } from './accountMappingService';
+export { AccountMappingService, ACCOUNT_CODE_BY_KEY } from './accountMappingService';
 export type { CategoryAccountResolver, ResolvedCategoryAccounts } from './categoryAccountMappingService';
 export { CategoryAccountMappingService, nullCategoryAccountResolver } from './categoryAccountMappingService';
 export { bucketByAccount, roundToCents } from './journalAccountSplit';

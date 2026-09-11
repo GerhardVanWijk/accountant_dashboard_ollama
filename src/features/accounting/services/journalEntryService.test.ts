@@ -310,6 +310,21 @@ describe('JournalEntryService', () => {
       await expect(service.reverseJournalEntry(original.id)).rejects.toThrow(/subledger/i);
     });
 
+    it('refuses to reverse a Fixed Assets-sourced entry from the general ledger (Review 4 Item O — no dedicated reversal workflow exists yet)', async () => {
+      const { service } = setup();
+      for (const source of ['fixed_asset_acquisition', 'depreciation', 'asset_disposal']) {
+        const original = await service.postJournalEntry({
+          date: '2026-02-01T00:00:00.000Z',
+          source,
+          lines: [
+            { accountId: 'acc_1500', debit: 500, credit: 0 },
+            { accountId: 'acc_2000', debit: 0, credit: 500 },
+          ],
+        });
+        await expect(service.reverseJournalEntry(original.id)).rejects.toThrow(/subledger/i);
+      }
+    });
+
     it('allows reversing a subledger-sourced entry when the caller explicitly opts in', async () => {
       const { service } = setup();
       const original = await service.postJournalEntry({

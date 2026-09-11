@@ -1,9 +1,11 @@
 ﻿import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, BookOpenIcon, CalculatorIcon, GitCompareArrowsIcon } from 'lucide-react';
 import { PageHeader } from '@/components/app/page-header';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
+import { formatCurrency } from '@/lib/app/format';
 import { useTaxRegister } from '../hooks/useTaxRegister';
 import { TaxRegisterTable } from '../components/TaxRegisterTable';
 
@@ -36,6 +38,32 @@ export function TaxRegisterPage() {
           </Field>
         }
       />
+
+      {!loading && !error && rows.length > 0 && (
+        <StatTileGrid
+          columns={3}
+          metrics={[
+            {
+              label: 'Book carrying value',
+              value: formatCurrency(rows.reduce((s, r) => s + r.accountingCarryingValue, 0)),
+              hint: 'Per the accounting records',
+              icon: BookOpenIcon,
+            },
+            {
+              label: 'Tax written-down value',
+              value: formatCurrency(rows.reduce((s, r) => s + (r.taxWrittenDownValue ?? r.accountingCarryingValue), 0)),
+              hint: `${rows.filter((r) => r.taxWearTearRatePercent !== undefined).length} of ${rows.length} with a wear-and-tear rate`,
+              icon: CalculatorIcon,
+            },
+            {
+              label: 'Temporary difference',
+              value: formatCurrency(rows.reduce((s, r) => s + (r.temporaryDifference ?? 0), 0)),
+              hint: 'Tax base less book carrying value',
+              icon: GitCompareArrowsIcon,
+            },
+          ]}
+        />
+      )}
 
       <p role="note" className="rounded-lg border border-status-warning-outline bg-status-warning-surface px-4 py-3 text-sm text-status-warning">
         Wear-and-tear rates are typical/indicative values, not independently verified against SARS Binding General

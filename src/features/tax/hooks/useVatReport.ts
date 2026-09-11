@@ -3,7 +3,7 @@ import { invoiceService } from '@/services';
 import { creditNoteService } from '@/features/sales/services';
 import { billService } from '@/features/purchases/services';
 import { journalEntryService, accountMappingService } from '@/features/accounting/services';
-import { taxRateService } from '../services';
+import { taxRateService, vatSourceEntryService } from '../services';
 import { computeVatReport, listVatTransactions, reconcileVatControlAccounts, type VatReconciliation, type VatReport, type VatTransactionRow } from '../services/vatReportService';
 
 export interface UseVatReportResult {
@@ -40,12 +40,13 @@ export function useVatReport(periodStart: Date, periodEnd: Date): UseVatReportRe
       creditNoteService.getCreditNotes(),
       billService.getBills(),
       taxRateService.getTaxRates(),
+      vatSourceEntryService.getEntries(),
     ])
-      .then(([invoices, creditNotes, bills, allTaxRates]) => {
+      .then(([invoices, creditNotes, bills, allTaxRates, vatSourceEntries]) => {
         if (cancelled) return;
-        const computed = computeVatReport(periodStart, periodEnd, invoices, creditNotes, bills, allTaxRates);
+        const computed = computeVatReport(periodStart, periodEnd, invoices, creditNotes, bills, allTaxRates, vatSourceEntries);
         setReport(computed);
-        setTransactions(listVatTransactions(periodStart, periodEnd, invoices, creditNotes, bills, allTaxRates));
+        setTransactions(listVatTransactions(periodStart, periodEnd, invoices, creditNotes, bills, allTaxRates, vatSourceEntries));
         return reconcileVatControlAccounts(journalEntryService, accountMappingService, periodStart, periodEnd, computed);
       })
       .then((recon) => {

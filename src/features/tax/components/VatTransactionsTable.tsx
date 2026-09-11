@@ -11,12 +11,14 @@ const DOCUMENT_TYPE_LABELS: Record<VatTransactionRow['documentType'], string> = 
   invoice: 'Invoice',
   credit_note: 'Credit Note',
   bill: 'Bill',
+  vat_source: 'Asset disposal',
 };
 
 const DOCUMENT_TYPE_ROUTE: Record<VatTransactionRow['documentType'], string> = {
   invoice: '/sales/invoices',
   credit_note: '/sales/credit-notes',
   bill: '/purchases/bills',
+  vat_source: '/assets/disposals',
 };
 
 /**
@@ -43,10 +45,18 @@ export function VatTransactionsTable({ transactions }: { transactions: VatTransa
       sortValue: (t) => t.documentNumber,
       cell: (t) => (
         <div className="flex flex-col gap-0.5">
-          <RecordLink onClick={() => navigate(`${DOCUMENT_TYPE_ROUTE[t.documentType]}/${t.id}`)} className="text-sm font-medium">
+          <RecordLink
+            onClick={() =>
+              navigate(t.documentType === 'vat_source' ? DOCUMENT_TYPE_ROUTE[t.documentType] : `${DOCUMENT_TYPE_ROUTE[t.documentType]}/${t.id}`)
+            }
+            className="text-sm font-medium"
+          >
             {t.documentNumber}
           </RecordLink>
-          <span className="text-xs text-muted-foreground">{DOCUMENT_TYPE_LABELS[t.documentType]}</span>
+          <span className="text-xs text-muted-foreground">
+            {DOCUMENT_TYPE_LABELS[t.documentType]}
+            {t.classification === 'capital_goods' && ' · Capital goods'}
+          </span>
         </div>
       ),
     },

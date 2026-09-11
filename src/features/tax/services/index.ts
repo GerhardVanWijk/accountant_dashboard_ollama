@@ -1,11 +1,15 @@
 import { TaxRateService } from './taxRateService';
+import { VatSourceEntryService } from './vatSourceEntryService';
 import { SupabaseTaxRateRepository } from '@/repositories/SupabaseTaxRateRepository';
+import { SupabaseVatSourceEntryRepository } from '../repositories/SupabaseVatSourceEntryRepository';
 import { supabase } from '@/config/supabase';
 import { auditLogService } from '@/services/auditLogService';
 
 export type { CreateTaxRateDTO, SupersedeTaxRateInput } from './taxRateService';
 export { TaxRateService } from './taxRateService';
+export { VatSourceEntryService } from './vatSourceEntryService';
 export { MockTaxRateRepository } from '@/repositories/mock/MockTaxRateRepository';
+export { MockVatSourceEntryRepository } from '../repositories/MockVatSourceEntryRepository';
 
 /**
  * Supabase-wired (2026-09-03). Previously Mock-wired: the app-wide singleton
@@ -22,3 +26,13 @@ export { MockTaxRateRepository } from '@/repositories/mock/MockTaxRateRepository
  * Supabase-wired service barrel's test convention.
  */
 export const taxRateService = new TaxRateService(new SupabaseTaxRateRepository(supabase), auditLogService);
+
+/**
+ * Persisted VAT source/evidence ledger (migration 0080) — taxable events
+ * that originate outside the Invoice/Credit Note/Supplier Invoice pipeline
+ * (fixed-asset disposals today). The VAT report reads these alongside its
+ * document sources so a disposal's output VAT reaches the return and the
+ * VAT control-account reconciliation.
+ */
+export const vatSourceEntryRepository = new SupabaseVatSourceEntryRepository(supabase);
+export const vatSourceEntryService = new VatSourceEntryService(vatSourceEntryRepository);

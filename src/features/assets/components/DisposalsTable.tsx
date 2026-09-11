@@ -8,12 +8,15 @@ import { formatDate } from '@/lib/app/format';
 export interface DisposalsTableProps {
   disposals: AssetDisposal[];
   assets: FixedAsset[];
+  /** Opens the asset record workspace (disposal waterfall + journals live there). Falls back to navigating to the register. */
+  onSelectAsset?: (assetId: string) => void;
 }
 
-/** Asset disposal ledger, re-skinned onto v0's DataTable (M8) — gain/loss is read from the posted AssetDisposal record, not recomputed. */
-export function DisposalsTable({ disposals, assets }: DisposalsTableProps) {
+/** Asset disposal ledger — gain/loss is read from the posted AssetDisposal record, not recomputed. */
+export function DisposalsTable({ disposals, assets, onSelectAsset }: DisposalsTableProps) {
   const navigate = useNavigate();
   const assetById = new Map(assets.map((a) => [a.id, a]));
+  const openAsset = (assetId: string) => (onSelectAsset ? onSelectAsset(assetId) : navigate(`/assets/register?record=${assetId}`));
 
   const columns: DataTableColumn<AssetDisposal>[] = [
     { key: 'date', header: 'Disposal date', sortValue: (d) => d.disposalDate, cell: (d) => formatDate(d.disposalDate) },
@@ -24,7 +27,7 @@ export function DisposalsTable({ disposals, assets }: DisposalsTableProps) {
       cell: (d) => {
         const asset = assetById.get(d.assetId);
         return (
-          <RecordLink onClick={() => navigate(`/assets/register?record=${d.assetId}`)} className="text-sm">
+          <RecordLink onClick={() => openAsset(d.assetId)} className="text-sm">
             {asset ? `${asset.assetNumber} - ${asset.name}` : d.assetId}
           </RecordLink>
         );

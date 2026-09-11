@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeVatReport, listVatTransactions, reconcileVatControlAccounts } from './vatReportService';
-import type { Bill, CreditNote, Invoice, TaxRate } from '@/types';
+import type { Bill, CreditNote, Invoice, TaxRate, VatSourceEntry } from '@/types';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import { AccountService } from '@/features/accounting/services/accountService';
 import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
@@ -230,6 +230,72 @@ describe('computeVatReport', () => {
   });
 });
 
+function vatSource(overrides: Partial<VatSourceEntry> = {}): VatSourceEntry {
+  return {
+    id: 'vse_1',
+    sourceType: 'asset_disposal',
+    sourceId: 'disp_1',
+    transactionDate: '2026-08-12T00:00:00.000Z',
+    taxRateId: 'tax_std',
+    treatment: 'standard_rated',
+    direction: 'output',
+    taxableAmount: 40000,
+    vatAmount: 6000,
+    grossAmount: 46000,
+    classification: 'capital_goods',
+    createdAt: '2026-08-12T00:00:00.000Z',
+    updatedAt: '2026-08-12T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('computeVatReport — persisted VAT source entries (fixed-asset disposals etc.)', () => {
+  it('folds a taxable disposal into Output VAT by treatment, alongside document sources', () => {
+    const report = computeVatReport(AUG_2026.start, AUG_2026.end, [invoice()], [], [], ALL_RATES, [vatSource()]);
+    expect(report.outputVat.total).toBe(150 + 6000);
+    const std = report.outputVat.byTreatment.find((r) => r.treatment === 'standard_rated');
+    expect(std).toEqual({ treatment: 'standard_rated', taxBase: 1000 + 40000, vatAmount: 150 + 6000 });
+  });
+
+  it('excludes a source entry dated outside the period', () => {
+    const report = computeVatReport(AUG_2026.start, AUG_2026.end, [], [], [], ALL_RATES, [
+      vatSource({ transactionDate: '2026-09-03T00:00:00.000Z' }),
+    ]);
+    expect(report.outputVat.total).toBe(0);
+  });
+
+  it('a contra (reversal) source entry nets the original out', () => {
+    const report = computeVatReport(AUG_2026.start, AUG_2026.end, [], [], [], ALL_RATES, [
+      vatSource(),
+      vatSource({ id: 'vse_2', reversesEntryId: 'vse_1', taxableAmount: -40000, vatAmount: -6000, grossAmount: -46000 }),
+    ]);
+    expect(report.outputVat.total).toBe(0);
+  });
+
+  // Review 4 Item M — the capital-goods sub-bucket must actually reflect a
+  // taxable disposal's classification, not merely persist it unused.
+  it('a taxable disposal (classification: capital_goods) lands in outputVat.capitalGoods', () => {
+    const report = computeVatReport(AUG_2026.start, AUG_2026.end, [], [], [], ALL_RATES, [vatSource()]);
+    expect(report.outputVat.capitalGoods).toEqual({ taxBase: 40000, vatAmount: 6000 });
+    expect(report.inputVat.capitalGoods).toEqual({ taxBase: 0, vatAmount: 0 });
+  });
+
+  it('an ordinary standard-rated invoice does NOT land in capitalGoods', () => {
+    const report = computeVatReport(AUG_2026.start, AUG_2026.end, [invoice()], [], [], ALL_RATES, []);
+    expect(report.outputVat.capitalGoods).toEqual({ taxBase: 0, vatAmount: 0 });
+  });
+
+  // Review 4 Item N — capitalGoods is a breakdown, not an addition: the
+  // grand total must equal invoice VAT + disposal VAT exactly once, and the
+  // capital-goods sub-bucket must contain ONLY the disposal's portion.
+  it('does not double-count: total = ordinary invoice + disposal, exactly once; capitalGoods holds only the disposal', () => {
+    const report = computeVatReport(AUG_2026.start, AUG_2026.end, [invoice()], [], [], ALL_RATES, [vatSource()]);
+    expect(report.outputVat.total).toBe(150 + 6000); // invoice VAT + disposal VAT, once each
+    expect(report.outputVat.capitalGoods.vatAmount).toBe(6000); // disposal only, not 150 + 6000
+    expect(report.outputVat.capitalGoods.taxBase).toBe(40000); // disposal only, not 1000 + 40000
+  });
+});
+
 describe('listVatTransactions', () => {
   it('lists a posted invoice as an output-VAT row and a posted bill as an input-VAT row', () => {
     const rows = listVatTransactions(AUG_2026.start, AUG_2026.end, [invoice()], [], [bill()], ALL_RATES);
@@ -264,6 +330,12 @@ describe('listVatTransactions', () => {
   it('excludes documents outside the period', () => {
     const rows = listVatTransactions(AUG_2026.start, AUG_2026.end, [invoice({ issueDate: '2026-09-15T00:00:00.000Z' })], [], [], ALL_RATES);
     expect(rows).toHaveLength(0);
+  });
+
+  it('lists a taxable disposal VAT source entry as an output row', () => {
+    const rows = listVatTransactions(AUG_2026.start, AUG_2026.end, [], [], [], ALL_RATES, [vatSource()]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ documentType: 'vat_source', direction: 'output', treatment: 'standard_rated', taxBase: 40000, vatAmount: 6000 });
   });
 
   it('sorts rows by date ascending', () => {

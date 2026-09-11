@@ -2,12 +2,13 @@ import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
-import type { AssetCategory, DepreciationMethod, FixedAsset } from '@/types';
+import type { Account, AssetCategory, DepreciationMethod, FixedAsset } from '@/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { EnumSelect } from '@/components/app/combobox';
+import { ACCOUNT_CODE_BY_KEY } from '@/features/accounting/services';
 import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
 import { CATEGORY_LABELS, DEPRECIATION_METHOD_LABELS, WEAR_TEAR_RATE_DEFAULTS, ASSETS_CURRENCY } from '../constants';
 import type { CreateFixedAssetDTO, UpdateFixedAssetDTO } from '../services';
@@ -59,10 +60,25 @@ export type AssetFormValues = z.infer<typeof assetSchema>;
 
 export interface AssetFormProps {
   asset?: FixedAsset;
+  /** Chart of Accounts — used to resolve the standard Fixed Asset / Accumulated Depreciation / Depreciation Expense GL accounts for a new asset. */
+  accounts: Account[];
   onSubmit: (data: CreateFixedAssetDTO | UpdateFixedAssetDTO) => Promise<void>;
   onCancel: () => void;
   onDirtyChange?: (dirty: boolean) => void;
 }
+
+/**
+ * Chart-of-Accounts codes for the three fixed-asset posting roles — the
+ * single source of truth is `AccountMappingService.ACCOUNT_CODE_BY_KEY`
+ * (the same map `fixedAssetService.capitalizeFromBillLine()` resolves
+ * through server-side). This form only picks the account ids to seed a new
+ * asset with; it never invents its own resolution.
+ */
+const ASSET_ACCOUNT_CODES = {
+  cost: ACCOUNT_CODE_BY_KEY.FIXED_ASSET,
+  accumulated: ACCOUNT_CODE_BY_KEY.ACCUMULATED_DEPRECIATION,
+  expense: ACCOUNT_CODE_BY_KEY.DEPRECIATION_EXPENSE,
+} as const;
 
 function toDefaultValues(asset?: FixedAsset): AssetFormValues {
   return {
@@ -89,8 +105,15 @@ function toDefaultValues(asset?: FixedAsset): AssetFormValues {
  * visible before the user tries. Re-skinned onto v0's Field/Input/Textarea
  * (M8); validation schema and submit wiring unchanged.
  */
-export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFormProps) {
+export function AssetForm({ asset, accounts, onSubmit, onCancel, onDirtyChange }: AssetFormProps) {
   const locked = asset !== undefined && asset.status !== 'draft';
+
+  const accountIdByCode = (code: string) => accounts.find((a) => a.code === code)?.id;
+  const resolvedCost = asset?.glAssetAccountId ?? accountIdByCode(ASSET_ACCOUNT_CODES.cost);
+  const resolvedAccumulated = asset?.glAccumulatedDepreciationAccountId ?? accountIdByCode(ASSET_ACCOUNT_CODES.accumulated);
+  const resolvedExpense = asset?.glDepreciationExpenseAccountId ?? accountIdByCode(ASSET_ACCOUNT_CODES.expense);
+  const accountsUnresolved =
+    !asset && accounts.length > 0 && (!resolvedCost || !resolvedAccumulated || !resolvedExpense);
 
   const {
     register,
@@ -135,9 +158,9 @@ export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFor
           : undefined,
       taxWearTearRatePercent: data.taxWearTearRatePercent ? Number(data.taxWearTearRatePercent) : undefined,
       taxWearTearRateSource: asset?.taxWearTearRateSource,
-      glAssetAccountId: asset?.glAssetAccountId ?? 'acc_1500',
-      glAccumulatedDepreciationAccountId: asset?.glAccumulatedDepreciationAccountId ?? 'acc_1590',
-      glDepreciationExpenseAccountId: asset?.glDepreciationExpenseAccountId ?? 'acc_5200',
+      glAssetAccountId: resolvedCost ?? '',
+      glAccumulatedDepreciationAccountId: resolvedAccumulated ?? '',
+      glDepreciationExpenseAccountId: resolvedExpense ?? '',
     });
   });
 
@@ -243,6 +266,13 @@ export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFor
         </FieldDescription>
       </Field>
 
+      {accountsUnresolved && (
+        <p role="alert" className="rounded-lg border border-status-warning-outline bg-status-warning-surface px-3 py-2 text-sm text-status-warning">
+          The standard Fixed Asset (1500), Accumulated Depreciation (1590) or Depreciation Expense (5200) accounts
+          are missing from the Chart of Accounts. Add them before capitalizing assets.
+        </p>
+      )}
+
       {locked && (
         <p className="text-sm text-muted-foreground">
           This asset has already been capitalized — cost, dates, useful life, and depreciation method are locked
@@ -256,7 +286,7 @@ export function AssetForm({ asset, onSubmit, onCancel, onDirtyChange }: AssetFor
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting || accountsUnresolved}>
           {asset ? 'Save Changes' : 'Add Asset'}
         </Button>
       </FormFooter>

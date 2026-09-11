@@ -24,9 +24,12 @@ export function DepreciationHistoryTable({ entries, assets }: DepreciationHistor
       cell: (e) => {
         const asset = assetById.get(e.assetId);
         return (
-          <RecordLink onClick={() => navigate(`/assets/register?record=${e.assetId}`)} className="text-sm">
-            {asset ? `${asset.assetNumber} - ${asset.name}` : e.assetId}
-          </RecordLink>
+          <div className="flex flex-col">
+            <RecordLink onClick={() => navigate(`/assets/register?record=${e.assetId}`)} className="figure text-sm">
+              {asset?.assetNumber ?? e.assetId}
+            </RecordLink>
+            {asset && <span className="text-xs text-muted-foreground">{asset.name}</span>}
+          </div>
         );
       },
     },
@@ -45,6 +48,17 @@ export function DepreciationHistoryTable({ entries, assets }: DepreciationHistor
       align: 'right',
       sortValue: (e) => e.carryingValueAfter,
       cell: (e) => <Amount value={e.carryingValueAfter} className="text-sm font-medium" />,
+    },
+    {
+      key: 'journal',
+      header: 'Journal',
+      align: 'right',
+      hideBelowMd: true,
+      cell: (e) => (
+        <RecordLink onClick={() => navigate(`/accounting/journals?record=${e.journalEntryId}`)} className="text-xs">
+          View
+        </RecordLink>
+      ),
     },
   ];
 

@@ -74,6 +74,20 @@ const BALANCE_EPSILON = 0.005;
  * via { allowSubledgerSourced: true } (a dedicated document-level flow that
  * unwinds the subledger too). Inventory sources are absent on purpose — the
  * inventory engine reverses through its own idempotent RPC, never here.
+ *
+ * `fixed_asset_acquisition` / `depreciation` / `asset_disposal` (Fixed
+ * Assets accounting-integrity Review 4, docs/FIXED_ASSETS.md "Generic
+ * journal reversal") are subledger-owned for the same reason: a generic
+ * reversal of one of these would move the GL but leave `fixed_assets`
+ * (status/accumulated depreciation/disposal fields), `depreciation_entries`,
+ * and `asset_disposals`/`vat_source_entries` completely unchanged — exactly
+ * the silent GL-vs-subledger split this set exists to prevent. Unlike
+ * AR/AP, Fixed Assets has no dedicated reversal workflow yet that would call
+ * `reverseJournalEntry(..., { allowSubledgerSourced: true })` after also
+ * unwinding its own subledger state — so today nothing in this codebase
+ * passes that option for these three sources, and correcting a posted
+ * acquisition/depreciation/disposal instead requires a manual balancing
+ * journal against a different account (see docs/FIXED_ASSETS.md).
  */
 const SUBLEDGER_OWNED_SOURCES = new Set([
   'invoice',
@@ -82,6 +96,9 @@ const SUBLEDGER_OWNED_SOURCES = new Set([
   'customer_receipt',
   'customer_receipt_allocation',
   'payment',
+  'fixed_asset_acquisition',
+  'depreciation',
+  'asset_disposal',
 ]);
 
 /**

@@ -81,7 +81,7 @@ export type AccountMappingKey =
  * convention exists at all. Building a genuine configurable mapping
  * (company-specific, UI-editable) is a separate, larger feature.
  */
-const ACCOUNT_CODE_BY_KEY: Record<AccountMappingKey, string> = {
+export const ACCOUNT_CODE_BY_KEY: Record<AccountMappingKey, string> = {
   AR: '1100',
   CUSTOMER_DEPOSIT: '2600',
   AP: '2000',

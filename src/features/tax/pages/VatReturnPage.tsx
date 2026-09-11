@@ -10,7 +10,7 @@ import { formatCurrency } from '@/lib/app/format';
 import { cn } from '@/lib/utils';
 import { useVatReport } from '../hooks/useVatReport';
 import { VatTransactionsTable } from '../components/VatTransactionsTable';
-import type { VatControlAccountCheck, VatTreatmentBreakdown } from '../services/vatReportService';
+import type { VatClassificationBreakdown, VatControlAccountCheck, VatTreatmentBreakdown } from '../services/vatReportService';
 import { treatmentLabels } from '../utils/treatmentLabels';
 
 function monthInputValue(date: Date): string {
@@ -25,10 +25,26 @@ function endOfMonth(year: number, month: number): Date {
   return new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
 }
 
-function BreakdownTable({ title, rows, emptyLabel }: { title: string; rows: VatTreatmentBreakdown[]; emptyLabel: string }) {
+function BreakdownTable({
+  title,
+  rows,
+  emptyLabel,
+  capitalGoods,
+}: {
+  title: string;
+  rows: VatTreatmentBreakdown[];
+  emptyLabel: string;
+  /** Review 4 Item M — a disclosure sub-total already included once in `rows`/the total above, never an addition. */
+  capitalGoods?: VatClassificationBreakdown;
+}) {
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-sm font-semibold">{title}</h3>
+      {capitalGoods && capitalGoods.vatAmount > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Of which capital goods: <Amount value={capitalGoods.vatAmount} plain className="font-medium" /> (already included above)
+        </p>
+      )}
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">{emptyLabel}</p>
       ) : (
@@ -195,8 +211,8 @@ export function VatReturnPage() {
 
           <SectionCard title="VAT by treatment">
             <div className="flex flex-col gap-6">
-              <BreakdownTable title="Output VAT" rows={report.outputVat.byTreatment} emptyLabel="No output VAT this period." />
-              <BreakdownTable title="Input VAT (claimable only)" rows={report.inputVat.byTreatment} emptyLabel="No input VAT this period." />
+              <BreakdownTable title="Output VAT" rows={report.outputVat.byTreatment} emptyLabel="No output VAT this period." capitalGoods={report.outputVat.capitalGoods} />
+              <BreakdownTable title="Input VAT (claimable only)" rows={report.inputVat.byTreatment} emptyLabel="No input VAT this period." capitalGoods={report.inputVat.capitalGoods} />
             </div>
           </SectionCard>
 

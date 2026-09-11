@@ -22,15 +22,35 @@ vi.mock('../services', () => ({
     updateFixedAsset: vi.fn(),
     deleteFixedAsset: vi.fn(),
     postAcquisition: vi.fn(),
+    reviseEstimate: vi.fn(),
   },
   depreciationService: {
     getDepreciationHistory: vi.fn().mockResolvedValue([]),
     runDepreciation: vi.fn(),
+    previewDepreciation: vi.fn().mockResolvedValue({ targetDate: '', periods: [], rows: [], totalCharge: 0, totalDebit: 0, totalCredit: 0, blockedTotal: 0, hasBlockedPeriods: false }),
   },
   assetDisposalService: {
     getDisposals: vi.fn().mockResolvedValue([]),
     disposeAsset: vi.fn(),
   },
+  reconcileAssetRegisterToGl: vi.fn().mockResolvedValue({
+    cost: [], accumulatedDepreciation: [],
+    totals: { registerCost: 0, glCost: 0, registerAccumulatedDepreciation: 0, glAccumulatedDepreciation: 0, registerCarryingValue: 0, glCarryingValue: 0, costVariance: 0, accumulatedDepreciationVariance: 0, carryingValueVariance: 0 },
+    isReconciled: true,
+  }),
+  auditAssetRegisterIntegrity: vi.fn().mockReturnValue({ exceptions: [], checkedAssets: 0, errorCount: 0, warningCount: 0, isClean: true }),
+  splitProceeds: vi.fn().mockReturnValue({ grossProceeds: 0, vatAmount: 0, netProceeds: 0 }),
+  calculateMonthlyDepreciation: vi.fn().mockReturnValue(0),
+  DEFAULT_DISPOSAL_VAT_CODE: 'STD',
+}));
+
+vi.mock('../hooks/useEstimateRevisions', () => ({
+  useEstimateRevisions: () => ({ revisions: [], loading: false, error: null, refetch: vi.fn() }),
+}));
+
+vi.mock('@/features/tax/hooks/useTaxRates', () => ({
+  useTaxRates: () => ({ taxRates: [], loading: false, error: null }),
+  useAllTaxRates: () => ({ taxRates: [], loading: false, error: null }),
 }));
 
 vi.mock('@/features/accounting/services', () => ({
@@ -39,6 +59,8 @@ vi.mock('@/features/accounting/services', () => ({
     hasPostings: vi.fn().mockResolvedValue(false),
     getAccountIdsWithPostings: vi.fn().mockResolvedValue(new Set()),
   },
+  journalEntryService: { getAccountLedger: vi.fn().mockResolvedValue([]) },
+  ACCOUNT_CODE_BY_KEY: { FIXED_ASSET: '1500', ACCUMULATED_DEPRECIATION: '1590', DEPRECIATION_EXPENSE: '5200' },
 }));
 
 const mockedGetFixedAssets = fixedAssetService.getFixedAssets as unknown as ReturnType<typeof vi.fn>;
@@ -85,7 +107,12 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
 describe('AssetRegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedGetAccounts.mockResolvedValue([makeAccount()]);
+    mockedGetAccounts.mockResolvedValue([
+      makeAccount(),
+      makeAccount({ id: 'acc_1500', code: '1500', name: 'Fixed Assets', type: 'asset', normalBalance: 'debit' }),
+      makeAccount({ id: 'acc_1590', code: '1590', name: 'Accumulated Depreciation', type: 'asset', normalBalance: 'credit' }),
+      makeAccount({ id: 'acc_5200', code: '5200', name: 'Depreciation Expense', type: 'expense', normalBalance: 'debit' }),
+    ]);
   });
 
   it('shows a loading state while assets are being fetched', () => {

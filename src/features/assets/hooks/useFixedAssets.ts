@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FixedAsset } from '@/types';
-import { fixedAssetService, type CreateFixedAssetDTO, type UpdateFixedAssetDTO } from '../services';
+import { fixedAssetService, type CreateFixedAssetDTO, type ReviseEstimateInput, type UpdateFixedAssetDTO } from '../services';
 
 export interface UseFixedAssetsResult {
   assets: FixedAsset[];
@@ -11,6 +11,7 @@ export interface UseFixedAssetsResult {
   updateFixedAsset: (id: string, patch: UpdateFixedAssetDTO) => Promise<FixedAsset>;
   deleteFixedAsset: (id: string) => Promise<void>;
   postAcquisition: (id: string, contraAccountId: string) => Promise<FixedAsset>;
+  reviseEstimate: (id: string, input: ReviseEstimateInput) => Promise<FixedAsset>;
 }
 
 /** Component -> Hook -> Service -> Repository chain for the Fixed Asset Register (docs/ARCHITECTURE.md). */
@@ -70,5 +71,14 @@ export function useFixedAssets(): UseFixedAssetsResult {
     [refetch],
   );
 
-  return { assets, loading, error, refetch, createFixedAsset, updateFixedAsset, deleteFixedAsset, postAcquisition };
+  const reviseEstimate = useCallback(
+    async (id: string, input: ReviseEstimateInput) => {
+      const updated = await fixedAssetService.reviseEstimate(id, input);
+      await refetch();
+      return updated;
+    },
+    [refetch],
+  );
+
+  return { assets, loading, error, refetch, createFixedAsset, updateFixedAsset, deleteFixedAsset, postAcquisition, reviseEstimate };
 }

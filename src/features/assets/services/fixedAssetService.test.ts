@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { FixedAssetService, type CreateFixedAssetDTO } from './fixedAssetService';
 import { MockFixedAssetRepository } from '../repositories/MockFixedAssetRepository';
+import { MockDepreciationEntryRepository } from '../repositories/MockDepreciationEntryRepository';
+import { MockEstimateRevisionRepository } from '../repositories/MockEstimateRevisionRepository';
+import { DepreciationService } from './depreciationService';
+import { FakeDepreciationPeriodExecutor } from './depreciationPeriodExecutor';
+import { FakeEstimateRevisionExecutor } from './estimateRevisionExecutor';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import { AccountService } from '@/features/accounting/services/accountService';
 import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
@@ -46,17 +51,26 @@ function makeAsset(overrides: Partial<CreateFixedAssetDTO> = {}): CreateFixedAss
 describe('FixedAssetService', () => {
   let fixedAssetService: FixedAssetService;
   let repository: MockFixedAssetRepository;
+  let depreciationRepository: MockDepreciationEntryRepository;
+  let revisionRepository: MockEstimateRevisionRepository;
+  let depreciationService: DepreciationService;
   let journalEntryService: JournalEntryService;
+  let estimateRevisionExecutor: FakeEstimateRevisionExecutor;
 
   beforeEach(() => {
     repository = new MockFixedAssetRepository([]);
+    depreciationRepository = new MockDepreciationEntryRepository([]);
+    revisionRepository = new MockEstimateRevisionRepository([]);
     const journalRepository = new MockJournalEntryRepository([]);
     const accountRepository = new MockAccountRepository(seedAccounts);
     const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
     const auditLog = new AuditLogService(new MockAuditLogRepository());
     journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
     const accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
-    fixedAssetService = new FixedAssetService(repository, journalEntryService, accountMapper);
+    estimateRevisionExecutor = new FakeEstimateRevisionExecutor({ assets: repository, revisions: revisionRepository });
+    fixedAssetService = new FixedAssetService(repository, journalEntryService, accountMapper, revisionRepository, depreciationRepository, estimateRevisionExecutor);
+    const periodExecutor = new FakeDepreciationPeriodExecutor({ journal: journalEntryService, assets: repository, depreciationEntries: depreciationRepository });
+    depreciationService = new DepreciationService(depreciationRepository, repository, periodExecutor, periodRepository, revisionRepository);
   });
 
   describe('createFixedAsset', () => {
@@ -141,6 +155,144 @@ describe('FixedAssetService', () => {
       const asset = await fixedAssetService.createFixedAsset(makeAsset());
       await fixedAssetService.postAcquisition(asset.id, 'acc_2000');
       await expect(fixedAssetService.deleteFixedAsset(asset.id)).rejects.toThrow(/only a draft/i);
+    });
+  });
+
+  describe('reviseEstimate', () => {
+    async function capitalized(overrides: Partial<CreateFixedAssetDTO> = {}) {
+      const created = await fixedAssetService.createFixedAsset(
+        makeAsset({ cost: 100000, residualValue: 10000, usefulLifeYears: 5, acquisitionDate: '2026-01-01', ...overrides }),
+      );
+      return fixedAssetService.postAcquisition(created.id, 'acc_2000');
+    }
+
+    it('persists an effective-dated revision and refreshes the current-estimate snapshot', async () => {
+      const asset = await capitalized();
+      const revised = await fixedAssetService.reviseEstimate(asset.id, {
+        effectiveDate: '2026-07-01',
+        usefulLifeYears: 8,
+        residualValue: 5000,
+        reason: 'Overhaul extended the life',
+      });
+      expect(revised.usefulLifeYears).toBe(8);
+      expect(revised.residualValue).toBe(5000);
+      expect(revised.cost).toBe(100000);
+      expect(revised.acquisitionDate).toBe(asset.acquisitionDate);
+
+      const revisions = await fixedAssetService.getEstimateRevisions(asset.id);
+      expect(revisions).toHaveLength(1);
+      expect(revisions[0]).toMatchObject({
+        effectiveDate: '2026-07-01',
+        usefulLifeYears: 8,
+        residualValue: 5000,
+        previousUsefulLifeYears: 5,
+        previousResidualValue: 10000,
+        reason: 'Overhaul extended the life',
+      });
+    });
+
+    it('rejects a revision on a draft asset (edit it directly instead)', async () => {
+      const created = await fixedAssetService.createFixedAsset(makeAsset());
+      await expect(fixedAssetService.reviseEstimate(created.id, { effectiveDate: '2026-08-01', usefulLifeYears: 8 })).rejects.toThrow(/capitalized asset/i);
+    });
+
+    it('rejects an effective date that is not the first of a month', async () => {
+      const asset = await capitalized();
+      await expect(fixedAssetService.reviseEstimate(asset.id, { effectiveDate: '2026-07-15', usefulLifeYears: 8 })).rejects.toThrow(/first day of a month/i);
+    });
+
+    it('rejects an effective date that would re-rate an already-posted period', async () => {
+      const asset = await capitalized({ acquisitionDate: '2026-01-01', cost: 120000, residualValue: 0, usefulLifeYears: 5 });
+      await depreciationService.runDepreciation('2026-06-30'); // Jan–Jun posted
+      await expect(
+        fixedAssetService.reviseEstimate(asset.id, { effectiveDate: '2026-06-01', usefulLifeYears: 8 }),
+      ).rejects.toThrow(/already posted/i);
+      // July is fine
+      await expect(
+        fixedAssetService.reviseEstimate(asset.id, { effectiveDate: '2026-07-01', usefulLifeYears: 8 }),
+      ).resolves.toBeDefined();
+    });
+
+    it('rejects a residual value above the current carrying amount', async () => {
+      const asset = await capitalized();
+      await expect(fixedAssetService.reviseEstimate(asset.id, { effectiveDate: '2026-07-01', residualValue: 999999 })).rejects.toThrow(/carrying value/i);
+    });
+
+    it('rejects a revised life that leaves no remaining life on the effective date', async () => {
+      const asset = await capitalized({ acquisitionDate: '2026-01-01', usefulLifeYears: 5 });
+      await expect(fixedAssetService.reviseEstimate(asset.id, { effectiveDate: '2026-07-01', usefulLifeYears: 0.25 })).rejects.toThrow(/remaining life/i);
+    });
+
+    it('requires an annual rate when switching to reducing balance', async () => {
+      const asset = await capitalized();
+      await expect(
+        fixedAssetService.reviseEstimate(asset.id, { effectiveDate: '2026-07-01', depreciationMethod: 'reducing_balance' }),
+      ).rejects.toThrow(/annual rate/i);
+    });
+
+    it('reactivates a fully-depreciated asset when a lower residual opens up more base', async () => {
+      const created = await fixedAssetService.createFixedAsset(makeAsset({ cost: 12000, residualValue: 2000, usefulLifeYears: 1, acquisitionDate: '2026-01-01' }));
+      const asset = await fixedAssetService.postAcquisition(created.id, 'acc_2000');
+      await repository.update(asset.id, { status: 'fully_depreciated', accumulatedDepreciation: 10000 });
+      const revised = await fixedAssetService.reviseEstimate(asset.id, { effectiveDate: '2026-07-01', residualValue: 500 });
+      expect(revised.status).toBe('active');
+    });
+
+    it('does not rewrite posted depreciation history', async () => {
+      const asset = await capitalized({ acquisitionDate: '2026-01-01', cost: 120000, residualValue: 0, usefulLifeYears: 5 });
+      const before = await depreciationService.runDepreciation('2026-06-30');
+      const postedAmounts = before.entries.map((e) => ({ periodEnd: e.periodEnd, amount: e.amount }));
+
+      await fixedAssetService.reviseEstimate(asset.id, { effectiveDate: '2026-07-01', usefulLifeYears: 9, residualValue: 40000 });
+
+      const history = await depreciationService.getDepreciationHistory(asset.id);
+      expect(history.map((e) => ({ periodEnd: e.periodEnd, amount: e.amount }))).toEqual(postedAmounts);
+    });
+  });
+
+  describe('reviseEstimate + depreciation catch-up (crossing a revision)', () => {
+    it('applies the OLD estimate before the effective date and the NEW estimate after — in one catch-up run', async () => {
+      // Acquired 1 May, 5-year life, R0 residual, cost 120000. Nothing posted.
+      const created = await fixedAssetService.createFixedAsset(
+        makeAsset({ assetNumber: 'FA-XREV', acquisitionDate: '2026-05-01', cost: 120000, residualValue: 0, usefulLifeYears: 5 }),
+      );
+      const asset = await fixedAssetService.postAcquisition(created.id, 'acc_2000');
+
+      // Revision effective 1 July: 7-year total life, R20 000 residual.
+      await fixedAssetService.reviseEstimate(asset.id, { effectiveDate: '2026-07-01', usefulLifeYears: 7, residualValue: 20000 });
+
+      // One catch-up run through September.
+      const result = await depreciationService.runDepreciation('2026-09-30');
+      const byMonth = new Map(result.entries.map((e) => [e.periodEnd.slice(0, 7), e.amount]));
+      expect([...byMonth.keys()]).toEqual(['2026-05', '2026-06', '2026-07', '2026-08', '2026-09']);
+
+      // May & June: old estimate (120000 / ~1826 days * days-in-month)
+      expect(byMonth.get('2026-05')! / 31).toBeCloseTo(120000 / 1826, 1);
+      // July: new estimate → strictly slower per-day than the old estimate's July
+      const oldJulyPerDay = 120000 / 1826;
+      expect(byMonth.get('2026-07')! / 31).toBeLessThan(oldJulyPerDay);
+
+      // Register reconciles to the GL after the mixed-estimate catch-up.
+      const updated = await repository.getById(asset.id);
+      expect(updated!.accumulatedDepreciation).toBeCloseTo(
+        result.entries.reduce((s, e) => s + e.amount, 0),
+        2,
+      );
+    });
+
+    it('handles two sequential revisions across one catch-up run', async () => {
+      const created = await fixedAssetService.createFixedAsset(
+        makeAsset({ assetNumber: 'FA-2REV', acquisitionDate: '2026-05-01', cost: 120000, residualValue: 0, usefulLifeYears: 5 }),
+      );
+      const asset = await fixedAssetService.postAcquisition(created.id, 'acc_2000');
+      await fixedAssetService.reviseEstimate(asset.id, { effectiveDate: '2026-07-01', usefulLifeYears: 7, residualValue: 20000 });
+      await fixedAssetService.reviseEstimate(asset.id, { effectiveDate: '2026-11-01', usefulLifeYears: 10, residualValue: 30000 });
+
+      const result = await depreciationService.runDepreciation('2026-12-31');
+      const perDay = result.entries.map((e) => e.amount / new Date(Date.UTC(2026, Number(e.periodEnd.slice(5, 7)), 0)).getUTCDate());
+      // step down at July (index 2) and again at November (index 6)
+      expect(perDay[1]).toBeGreaterThan(perDay[2]);
+      expect(perDay[5]).toBeGreaterThan(perDay[6]);
     });
   });
 
