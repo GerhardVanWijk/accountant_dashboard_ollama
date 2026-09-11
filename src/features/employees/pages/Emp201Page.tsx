@@ -1,13 +1,16 @@
 ﻿import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
-import { CircleDollarSignIcon, LandmarkIcon, ShieldIcon, UsersIcon } from 'lucide-react';
+import { CircleDollarSignIcon, InfoIcon, LandmarkIcon, ShieldIcon, UsersIcon } from 'lucide-react';
 import { Amount } from '@/components/app/figure';
 import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
+import { RecordLink } from '@/components/app/record-link';
 import { formatCurrency } from '@/lib/app/format';
 import { cn } from '@/lib/utils';
+import { useAccountingUiStore } from '@/features/accounting/store/accountingUiStore';
 import { useEmp201Report } from '../hooks/useEmp201Report';
 import type { PayrollControlAccountCheck } from '../services';
 
@@ -23,7 +26,22 @@ function endOfMonth(year: number, month: number): Date {
   return new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
 }
 
+/**
+ * Each variance card drills into the two things that could actually
+ * explain a discrepancy — the underlying payroll records (posted runs for
+ * the period) and the GL movement itself (the control account's ledger) —
+ * rather than a bare number a user has no way to investigate further
+ * (Leases + Payroll integrity audit, PART 5's EMP201 requirement).
+ */
 function ReconciliationCard({ label, check }: { label: string; check: PayrollControlAccountCheck }) {
+  const navigate = useNavigate();
+  const setSelectedLedgerAccountId = useAccountingUiStore((s) => s.setSelectedLedgerAccountId);
+
+  const openLedger = () => {
+    setSelectedLedgerAccountId(check.controlAccountId);
+    navigate('/accounting/ledger');
+  };
+
   return (
     <SectionCard
       title={label}
@@ -37,13 +55,17 @@ function ReconciliationCard({ label, check }: { label: string; check: PayrollCon
         <div>
           <dt className="text-xs tracking-wide text-muted-foreground uppercase">GL Posted This Period</dt>
           <dd className="mt-1">
-            <Amount value={check.controlAccountMovement} plain className="text-sm" />
+            <RecordLink onClick={openLedger}>
+              <Amount value={check.controlAccountMovement} plain className="text-sm" />
+            </RecordLink>
           </dd>
         </div>
         <div>
           <dt className="text-xs tracking-wide text-muted-foreground uppercase">Return Total</dt>
           <dd className="mt-1">
-            <Amount value={check.reportTotal} plain className="text-sm" />
+            <RecordLink onClick={() => navigate('/payroll/runs')}>
+              <Amount value={check.reportTotal} plain className="text-sm" />
+            </RecordLink>
           </dd>
         </div>
         <div>
@@ -53,6 +75,11 @@ function ReconciliationCard({ label, check }: { label: string; check: PayrollCon
           </dd>
         </div>
       </dl>
+      {!check.isReconciled && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Click the GL figure to open this account's ledger, or the return total to review the posted payroll runs it was summed from.
+        </p>
+      )}
     </SectionCard>
   );
 }
@@ -109,6 +136,15 @@ export function Emp201Page() {
           </div>
         }
       />
+
+      <div role="note" className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+        <InfoIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <p>
+          <span className="font-medium text-foreground">Internal reconciliation only.</span> This is Vertex's own
+          computed EMP201-shaped summary from posted payroll runs — it is not submitted to SARS or e@syFile. Use it
+          to prepare your figures before filing through SARS's own channels.
+        </p>
+      </div>
 
       {loading && (
         <div role="status" className="flex min-h-[30vh] items-center justify-center gap-2 text-muted-foreground">

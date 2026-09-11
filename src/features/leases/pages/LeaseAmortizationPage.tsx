@@ -22,7 +22,7 @@ function endOfCurrentMonth(): string {
  * PageHeader/SectionCard/DataTable/Dialog (M13).
  */
 export function LeaseAmortizationPage() {
-  const { history, loading, error, refetch, runAmortization } = useLeaseAmortization();
+  const { history, loading, error, refetch, runAmortization, previewAmortization } = useLeaseAmortization();
   const { leases, loading: leasesLoading } = useLeases();
   const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -103,7 +103,13 @@ export function LeaseAmortizationPage() {
       {runDialogOpen && (
         <FormShell open onClose={closeDialog} size="sm" mode="edit" isDirty={dirty}>
           <FormHeader title="Run amortization" />
-          <RunAmortizationForm defaultPeriodEnd={endOfCurrentMonth()} onSubmit={handleRun} onCancel={closeDialog} onDirtyChange={setDirty} />
+          <RunAmortizationForm
+            defaultPeriodEnd={endOfCurrentMonth()}
+            onSubmit={handleRun}
+            onCancel={closeDialog}
+            onDirtyChange={setDirty}
+            previewAmortization={previewAmortization}
+          />
         </FormShell>
       )}
     </div>

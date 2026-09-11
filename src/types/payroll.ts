@@ -118,6 +118,37 @@ export interface PayrollRun extends BaseEntity {
   status: PayrollRunStatus;
   payslips: PayslipLine[];
   journalEntryId?: ID;
-  /** The account net pay was credited to at posting — typically Cash and Bank (paid immediately) or the Net Pay Payable control account (paid later via a separate EFT batch, not itself modeled — see docs/SA_SPEC_GAP_ANALYSIS.md). Set only once posted. */
+  /**
+   * The clearing/payable account net pay was credited to at posting —
+   * Net Pay Payable (2250). Must be a liability account, enforced by
+   * `post_payroll_run` (migration 0091): net pay is settled later, exactly
+   * once, through the existing Banking module against this same account
+   * (`subledgerSettlementService.ts`) — never Cash and Bank directly, which
+   * would let the real EFT disbursement double-count the same cash
+   * movement. Set only once posted.
+   */
   contraAccountId?: ID;
+  /**
+   * Which `PayrollTaxYearConfig` actually computed this run's payslips —
+   * set once, at creation time, never changed afterward (Leases + Payroll
+   * integrity audit, PART 2 "statutory governance"). Lets a historical
+   * run's figures be reproduced/verified even after a later tax year's
+   * config has superseded it as `getConfigForDate()`'s current answer.
+   * Migration 0092 blocks that referenced config from ever being mutated.
+   */
+  payrollTaxYearConfigId?: ID;
+  /**
+   * Reversal evidence (Leases + Payroll integrity audit, PART 2 "payroll
+   * correction/reversal workflow", migration 0093). Set together, once,
+   * by `PayrollRunService.reversePayrollRun()` — the ONLY supported way to
+   * correct a posted run. `status` deliberately stays 'posted': the run
+   * WAS posted and its original journal is still on the books, unchanged
+   * — a reversal is a NEW contra journal, never a deletion/mutation of
+   * the original (SA_ACCOUNTING_MASTER_SPEC.md's immutable-history
+   * discipline). Undefined means never reversed.
+   */
+  reversedAt?: ISODateString;
+  reversalJournalEntryId?: ID;
+  reversalReason?: string;
+  reversedBy?: ID;
 }

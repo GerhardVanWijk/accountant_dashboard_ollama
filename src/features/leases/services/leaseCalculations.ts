@@ -1,4 +1,4 @@
-import type { LeaseContract } from '@/types/lease';
+import type { LeaseAmortizationEntry, LeaseContract } from '@/types/lease';
 
 /** Half a cent — same rounding tolerance as journalEntryService.ts. */
 export const EPSILON = 0.005;
@@ -134,4 +134,109 @@ export function calculateCurrentPortionForLease(
     lease.discountRatePercent,
     monthsRemaining,
   );
+}
+
+/** One row of a lease's full payment schedule — see `projectLeasePaymentSchedule()`. */
+export interface LeasePaymentScheduleRow {
+  periodNumber: number;
+  /** ISO date (yyyy-mm-dd). */
+  periodEnd: string;
+  /** true = a real `LeaseAmortizationEntry` exists for this period (actually posted); false = projected for display only, nothing posted. */
+  posted: boolean;
+  /** Only set when `posted` — the real entry's id, for settlement/drill-down. */
+  entryId?: string;
+  /** Only set when `posted` — the combined journal entry this period's amortization run posted (may be shared with other leases' periods run the same period-end). */
+  journalEntryId?: string;
+  openingLiability: number;
+  interest: number;
+  principal: number;
+  /** interest + principal — the period's Lease Payment Clearing obligation. */
+  payment: number;
+  depreciation: number;
+  closingLiability: number;
+}
+
+/**
+ * The FULL payment schedule for a lease — every ALREADY-POSTED period (real
+ * figures, straight off its own `LeaseAmortizationEntry` row) followed by
+ * every period still to come (PROJECTED for display only, via the same
+ * `calculateMonthlyAmortization()` the real posting run itself uses — never
+ * a different formula), up to `leaseTermMonths` total periods or until the
+ * liability is fully amortized, whichever comes first. Purely a read-side
+ * simulation: it posts nothing, mutates nothing, and a projected row's
+ * figures are never trusted as authoritative — only a posted row (`posted:
+ * true`, backed by a real `entryId`) has a genuine Lease Payment Clearing
+ * obligation a settlement can be recorded against (Leases + Payroll
+ * integrity audit, FINAL HARDENING PART B: a lease's clearing balance is
+ * traceable period by period, not one opaque cumulative figure — this is
+ * the function that gives the Lease Detail payment schedule its rows).
+ * Terminated leases show only their posted history — nothing is projected
+ * past a lease that no longer exists.
+ */
+export function projectLeasePaymentSchedule(
+  lease: Pick<LeaseContract, 'commencementDate' | 'leaseTermMonths' | 'monthlyPayment' | 'discountRatePercent' | 'initialLeaseLiability' | 'initialRightOfUseAsset' | 'status'>,
+  history: LeaseAmortizationEntry[],
+): LeasePaymentScheduleRow[] {
+  const sorted = [...history].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
+  const rows: LeasePaymentScheduleRow[] = [];
+  let periodNumber = 0;
+  let openingLiability = lease.initialLeaseLiability;
+  let accumulatedDepreciation = 0;
+  let lastPeriodEnd: Date | undefined;
+
+  for (const entry of sorted) {
+    periodNumber += 1;
+    rows.push({
+      periodNumber,
+      periodEnd: entry.periodEnd,
+      posted: true,
+      entryId: entry.id,
+      journalEntryId: entry.journalEntryId,
+      openingLiability: round2(openingLiability),
+      interest: entry.interestAmount,
+      principal: entry.principalAmount,
+      payment: round2(entry.interestAmount + entry.principalAmount),
+      depreciation: entry.depreciationAmount,
+      closingLiability: entry.outstandingLeaseLiabilityAfter,
+    });
+    openingLiability = entry.outstandingLeaseLiabilityAfter;
+    accumulatedDepreciation = round2(accumulatedDepreciation + entry.depreciationAmount);
+    lastPeriodEnd = new Date(entry.periodEnd);
+  }
+
+  // A terminated lease has no future periods — its ROU/liability were
+  // derecognized at termination, not amortized forward.
+  if (lease.status === 'terminated') return rows;
+
+  const monthlyRatePercent = lease.discountRatePercent / 12;
+  const fullMonthlyDepreciation = calculateStraightLineRouDepreciation(lease.initialRightOfUseAsset, lease.leaseTermMonths);
+  let cursor = lastPeriodEnd
+    ? new Date(Date.UTC(lastPeriodEnd.getUTCFullYear(), lastPeriodEnd.getUTCMonth(), 1))
+    : new Date(lease.commencementDate);
+
+  while (periodNumber < lease.leaseTermMonths && openingLiability > EPSILON) {
+    periodNumber += 1;
+    cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1));
+    const periodEndDate = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0));
+    const { interest, principal, closingBalance } = calculateMonthlyAmortization(openingLiability, lease.monthlyPayment, monthlyRatePercent);
+    const depreciationRemaining = Math.max(0, round2(lease.initialRightOfUseAsset - accumulatedDepreciation));
+    const depreciation = Math.min(fullMonthlyDepreciation, depreciationRemaining);
+
+    rows.push({
+      periodNumber,
+      periodEnd: periodEndDate.toISOString().slice(0, 10),
+      posted: false,
+      openingLiability: round2(openingLiability),
+      interest,
+      principal,
+      payment: round2(interest + principal),
+      depreciation,
+      closingLiability: closingBalance,
+    });
+
+    openingLiability = closingBalance;
+    accumulatedDepreciation = round2(accumulatedDepreciation + depreciation);
+  }
+
+  return rows;
 }

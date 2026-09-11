@@ -1,9 +1,13 @@
 import { EmployeeService } from './employeeService';
 import { PayrollTaxConfigService } from './payrollTaxConfigService';
 import { PayrollRunService } from './payrollRunService';
+import { RealPayrollRunPostingExecutor } from './payrollRunPostingExecutor';
+import { RealPayrollRunCorrectionExecutor } from './payrollRunCorrectionExecutor';
+import { RealPayrollSettlementExecutor } from './payrollSettlementExecutor';
 import { employeeRepository, payrollRunRepository, payrollTaxConfigRepository } from '../repositories/instances';
-import { journalEntryService, accountMappingService } from '@/features/accounting/services';
+import { accountMappingService } from '@/features/accounting/services';
 import { companyService } from '@/features/admin/services';
+import { supabase } from '@/config/supabase';
 
 export type { CreateEmployeeDTO, UpdateEmployeeDTO } from './employeeService';
 export type { CreatePayrollTaxYearConfigDTO } from './payrollTaxConfigService';
@@ -27,12 +31,12 @@ export { PayrollTaxConfigService } from './payrollTaxConfigService';
 export { PayrollRunService } from './payrollRunService';
 
 /**
- * Wires the services to their shared mock repositories and the real GL
- * posting engine (journalEntryService) — the same singleton every other
- * posting module uses, so a payroll run is immediately visible in the
- * trial balance and subject to accountingPeriodService's period-open rule.
- * Hooks depend on these singletons instead of importing repositories
- * directly.
+ * Wires the services to their shared Supabase repositories and the atomic
+ * RPC executors (Leases + Payroll integrity audit, PART 2 — migrations
+ * 0091/0093) — a payroll run's post and its (rare) reversal each commit
+ * their journal and mutate `payroll_runs` in ONE database transaction, so
+ * a run is never left half-posted by a partial write. Hooks depend on
+ * these singletons instead of importing repositories directly.
  */
 export const payrollTaxConfigService = new PayrollTaxConfigService(payrollTaxConfigRepository);
 export const employeeService = new EmployeeService(employeeRepository, payrollRunRepository);
@@ -41,6 +45,8 @@ export const payrollRunService = new PayrollRunService(
   employeeService,
   payrollTaxConfigService,
   companyService,
-  journalEntryService,
+  new RealPayrollRunPostingExecutor(supabase),
   accountMappingService,
+  new RealPayrollRunCorrectionExecutor(supabase),
+  new RealPayrollSettlementExecutor(supabase),
 );

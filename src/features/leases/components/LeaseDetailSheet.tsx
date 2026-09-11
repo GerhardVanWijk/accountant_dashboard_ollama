@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { Bill } from '@/types';
 import type { LeaseAmortizationEntry, LeaseContract } from '@/types/lease';
+import type { BankTransactionWithAllocations } from '@/features/banking/types';
 import { RecordDetailSheet, RelatedRecordsSection, type RelatedRecordItem } from '@/components/app/record-detail-sheet';
 import { RecordAuditHistorySection } from '@/components/app/record-audit-history';
 import { RecordLink } from '@/components/app/record-link';
@@ -10,14 +12,20 @@ import { LeaseDetail } from './LeaseDetail';
 export interface LeaseDetailSheetProps {
   lease: LeaseContract | undefined;
   amortizationHistory: LeaseAmortizationEntry[];
+  relatedBills?: Bill[];
+  settlementTransactions?: BankTransactionWithAllocations[];
+  bankAccountNameById?: Map<string, string>;
+  /** Called with the specific `LeaseAmortizationEntry` id the user wants to settle — FINAL HARDENING PART B, period-level settlement. */
+  onSettle?: (leaseAmortizationEntryId: string) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function LeaseDetailSheet({ lease, amortizationHistory, open, onOpenChange }: LeaseDetailSheetProps) {
+export function LeaseDetailSheet({ lease, amortizationHistory, relatedBills, settlementTransactions, bankAccountNameById, onSettle, open, onOpenChange }: LeaseDetailSheetProps) {
   const navigate = useNavigate();
 
   const leaseAmortization = useMemo(() => (lease ? amortizationHistory.filter((e) => e.leaseId === lease.id) : []), [lease, amortizationHistory]);
+  const leaseEntryIds = useMemo(() => new Set(leaseAmortization.map((e) => e.id)), [leaseAmortization]);
 
   const relatedItems = useMemo<RelatedRecordItem[]>(() => {
     if (!lease) return [];
@@ -44,7 +52,16 @@ export function LeaseDetailSheet({ lease, amortizationHistory, open, onOpenChang
     >
       {lease && (
         <div className="flex flex-col gap-6">
-          <LeaseDetail lease={lease} amortizationHistory={leaseAmortization} onOpenJournal={(journalEntryId) => navigate(`/accounting/journals?record=${journalEntryId}`)} />
+          <LeaseDetail
+            lease={lease}
+            amortizationHistory={leaseAmortization}
+            relatedBills={relatedBills?.filter((b) => b.leaseId === lease.id)}
+            settlementTransactions={settlementTransactions?.filter((t) => t.matchedEntityType === 'lease_amortization_entry' && t.matchedEntityId && leaseEntryIds.has(t.matchedEntityId))}
+            bankAccountNameById={bankAccountNameById}
+            onOpenJournal={(journalEntryId) => navigate(`/accounting/journals?record=${journalEntryId}`)}
+            onOpenBill={(billId) => navigate(`/purchases/bills/${billId}`)}
+            onSettle={onSettle}
+          />
           <RelatedRecordsSection items={relatedItems} />
           <RecordAuditHistorySection recordType="Lease" recordId={lease.id} />
         </div>

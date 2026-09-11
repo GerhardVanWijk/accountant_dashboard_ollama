@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { SupplierCombobox } from '@/components/app/combobox';
+import { SupplierCombobox, SearchableSelect } from '@/components/app/combobox';
 import { FigureBlock } from '@/components/app/figure';
 import { FormBody, FormFooter, FormGrid } from '@/components/app/form';
+import { FieldDescription } from '@/components/ui/shadcn/field';
 import { formatCurrency } from '@/lib/app/format';
 import { newUuid } from '@/lib/uuid';
 import type { CreateBillDTO } from '../services';
@@ -14,6 +15,7 @@ import { LineItemsEditor } from './LineItemsEditor';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
 import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
+import { useLeases } from '@/features/leases/hooks/useLeases';
 
 export interface BillFormProps {
   suppliers: Supplier[];
@@ -44,8 +46,12 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel, onD
   const { taxRates } = useTaxRates();
   const { products } = useProducts();
   const { warehouses } = useWarehouses();
+  const { leases } = useLeases();
+  const leaseOptions = leases.filter((l) => l.status === 'active');
   const [billNumber, setBillNumber] = useState(defaultBillNumber);
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? '');
+  const [leaseId, setLeaseId] = useState<string | null>(null);
+  const [leasePeriodEnd, setLeasePeriodEnd] = useState('');
   const [issueDate, setIssueDate] = useState(today());
   const [dueDate, setDueDate] = useState(plusDays(30));
   const [notes, setNotes] = useState('');
@@ -82,6 +88,8 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel, onD
         currency: 'ZAR',
         status: 'draft',
         notes: notes || undefined,
+        leaseId: leaseId ?? undefined,
+        leasePeriodEnd: leaseId && leasePeriodEnd ? leasePeriodEnd : undefined,
       });
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not save supplier invoice.');
@@ -115,6 +123,33 @@ export function BillForm({ suppliers, defaultBillNumber, onSubmit, onCancel, onD
           <FieldLabel htmlFor="bill-due-date">Due Date</FieldLabel>
           <Input id="bill-due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </Field>
+        {leaseOptions.length > 0 && (
+          <Field>
+            <FieldLabel htmlFor="bill-lease">Related Lease (optional)</FieldLabel>
+            <SearchableSelect
+              id="bill-lease"
+              value={leaseId}
+              onChange={setLeaseId}
+              options={leaseOptions.map((l) => ({ value: l.id, label: `${l.leaseNumber} — ${l.assetDescription}`, keywords: l.lessorName }))}
+              placeholder="None"
+            />
+            <FieldDescription>
+              Tag this Bill as a VAT-bearing lessor tax invoice for a lease. Code the net expense line to 2460 Lease
+              Payment Clearing to settle against the lease's IFRS 16 amortisation — this does not itself post any
+              lease liability or ROU asset movement.
+            </FieldDescription>
+          </Field>
+        )}
+        {leaseId && (
+          <Field>
+            <FieldLabel htmlFor="bill-lease-period">Lease Period (optional)</FieldLabel>
+            <Input id="bill-lease-period" type="date" value={leasePeriodEnd} onChange={(e) => setLeasePeriodEnd(e.target.value)} />
+            <FieldDescription>
+              Only if this invoice corresponds to ONE specific amortisation period — leave blank for an upfront,
+              multi-period, or catch-up charge that doesn't map to a single month. Never required.
+            </FieldDescription>
+          </Field>
+        )}
       </FormGrid>
 
       <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRates={taxRates} products={products} warehouses={warehouses} allowFixedAssetCapitalization />

@@ -5,7 +5,9 @@ import {
   calculateLeaseLiabilityPresentValue,
   calculateMonthlyAmortization,
   calculateStraightLineRouDepreciation,
+  projectLeasePaymentSchedule,
 } from './leaseCalculations';
+import type { LeaseAmortizationEntry, LeaseContract } from '@/types/lease';
 
 describe('calculateLeaseLiabilityPresentValue', () => {
   it('matches a hand-computed PV example (monthly payment 10000, 36 months, 10% annual)', () => {
@@ -133,5 +135,99 @@ describe('calculateCurrentPortionForLease', () => {
   it('never lets monthsRemaining go negative when more runs have completed than the term', () => {
     const lease = { outstandingLeaseLiability: 100, monthlyPayment: 1000, discountRatePercent: 10, leaseTermMonths: 12 };
     expect(calculateCurrentPortionForLease(lease, 20)).toBe(0);
+  });
+});
+
+describe('projectLeasePaymentSchedule (FINAL HARDENING PART B — period-traceable lease clearing)', () => {
+  function makeLease(overrides: Partial<LeaseContract> = {}): Pick<LeaseContract, 'commencementDate' | 'leaseTermMonths' | 'monthlyPayment' | 'discountRatePercent' | 'initialLeaseLiability' | 'initialRightOfUseAsset' | 'status'> {
+    return {
+      commencementDate: '2026-01-01',
+      leaseTermMonths: 12,
+      monthlyPayment: 1000,
+      discountRatePercent: 12,
+      initialLeaseLiability: calculateLeaseLiabilityPresentValue(1000, 12, 12),
+      initialRightOfUseAsset: calculateLeaseLiabilityPresentValue(1000, 12, 12),
+      status: 'active',
+      ...overrides,
+    };
+  }
+
+  function makeEntry(overrides: Partial<LeaseAmortizationEntry>): LeaseAmortizationEntry {
+    return {
+      id: 'entry_1',
+      leaseId: 'lease_1',
+      periodEnd: '2026-01-31',
+      interestAmount: 100,
+      principalAmount: 800,
+      depreciationAmount: 900,
+      outstandingLeaseLiabilityAfter: 10000,
+      accumulatedDepreciationAfter: 900,
+      journalEntryId: 'je_1',
+      createdAt: '',
+      updatedAt: '',
+      ...overrides,
+    };
+  }
+
+  it('with no history, projects the FULL term (leaseTermMonths rows), all marked posted: false', () => {
+    const lease = makeLease({ leaseTermMonths: 12 });
+    const schedule = projectLeasePaymentSchedule(lease, []);
+    expect(schedule).toHaveLength(12);
+    expect(schedule.every((r) => !r.posted)).toBe(true);
+    expect(schedule[0].periodNumber).toBe(1);
+    expect(schedule[11].periodNumber).toBe(12);
+  });
+
+  it('posted periods use the REAL entry figures verbatim, never recomputed', () => {
+    const lease = makeLease();
+    const entry = makeEntry({ interestAmount: 123.45, principalAmount: 876.55, outstandingLeaseLiabilityAfter: 9123.0, journalEntryId: 'je_real' });
+    const schedule = projectLeasePaymentSchedule(lease, [entry]);
+    const row = schedule[0];
+    expect(row.posted).toBe(true);
+    expect(row.entryId).toBe('entry_1');
+    expect(row.journalEntryId).toBe('je_real');
+    expect(row.interest).toBe(123.45);
+    expect(row.principal).toBe(876.55);
+    expect(row.payment).toBeCloseTo(1000, 2);
+    expect(row.closingLiability).toBe(9123.0);
+  });
+
+  it('projected periods continue from the LAST posted period\'s closing balance, not from the original opening balance', () => {
+    const lease = makeLease({ leaseTermMonths: 12 });
+    const janEntry = makeEntry({ id: 'entry_jan', periodEnd: '2026-01-31', outstandingLeaseLiabilityAfter: 9200, accumulatedDepreciationAfter: 900 });
+    const schedule = projectLeasePaymentSchedule(lease, [janEntry]);
+    // Capped at the term (12) but may finish sooner — R9,200 at R1,000/month
+    // amortizes fully in well under 11 more periods, so fewer than 12 rows
+    // total is the CORRECT behaviour here, not a bug.
+    expect(schedule.length).toBeGreaterThan(1);
+    expect(schedule.length).toBeLessThanOrEqual(12);
+    expect(schedule[0].posted).toBe(true);
+    expect(schedule[1].posted).toBe(false);
+    // February's opening liability must equal January's closing, not the lease's original PV.
+    expect(schedule[1].openingLiability).toBeCloseTo(9200, 2);
+    expect(schedule[1].periodEnd).toBe('2026-02-28');
+  });
+
+  it('stops projecting once the liability is fully amortized, even before leaseTermMonths is reached', () => {
+    const lease = makeLease({ leaseTermMonths: 60, monthlyPayment: 100000, discountRatePercent: 0, initialLeaseLiability: 100000 });
+    const schedule = projectLeasePaymentSchedule(lease, []);
+    // A R100,000 liability paid off at R100,000/month with 0% interest clears in ONE period.
+    expect(schedule).toHaveLength(1);
+    expect(schedule[0].closingLiability).toBe(0);
+  });
+
+  it('a terminated lease shows ONLY its posted history — nothing is projected past termination', () => {
+    const lease = makeLease({ leaseTermMonths: 36, status: 'terminated' });
+    const entry = makeEntry({});
+    const schedule = projectLeasePaymentSchedule(lease, [entry]);
+    expect(schedule).toHaveLength(1);
+    expect(schedule[0].posted).toBe(true);
+  });
+
+  it('posts nothing and mutates nothing — pure projection, safe to call repeatedly', () => {
+    const lease = makeLease();
+    const before = projectLeasePaymentSchedule(lease, []);
+    const after = projectLeasePaymentSchedule(lease, []);
+    expect(after).toEqual(before);
   });
 });

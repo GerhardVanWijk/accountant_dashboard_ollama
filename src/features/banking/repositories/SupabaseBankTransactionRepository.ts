@@ -15,6 +15,7 @@ interface BankTransactionRow {
   direction: string;
   status: string;
   matched_entity_id: string | null;
+  matched_entity_type: string | null;
   category: string | null;
   source: string | null;
   journal_entry_id: string | null;
@@ -38,6 +39,7 @@ function rowToBankTransaction(row: BankTransactionRow): BankTransactionWithAlloc
     direction: row.direction as BankTransactionWithAllocations['direction'],
     status: row.status as BankTransactionWithAllocations['status'],
     matchedEntityId: row.matched_entity_id ?? undefined,
+    matchedEntityType: (row.matched_entity_type as BankTransactionWithAllocations['matchedEntityType']) ?? undefined,
     category: row.category ?? undefined,
     source: (row.source as BankTransactionWithAllocations['source']) ?? undefined,
     journalEntryId: row.journal_entry_id ?? undefined,
@@ -57,6 +59,7 @@ function bankTransactionToRow(entity: Partial<BankTransactionWithAllocations>): 
   if (entity.direction !== undefined) row.direction = entity.direction;
   if (entity.status !== undefined) row.status = entity.status;
   if (entity.matchedEntityId !== undefined) row.matched_entity_id = entity.matchedEntityId;
+  if (entity.matchedEntityType !== undefined) row.matched_entity_type = entity.matchedEntityType;
   if (entity.category !== undefined) row.category = entity.category;
   if (entity.source !== undefined) row.source = entity.source;
   if (entity.journalEntryId !== undefined) row.journal_entry_id = entity.journalEntryId;

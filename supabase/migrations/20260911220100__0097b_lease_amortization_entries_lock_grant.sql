@@ -1,0 +1,30 @@
+-- 0097b_lease_amortization_entries_lock_grant
+-- Found during live smoke testing of 0097 (settle_lease_period_payment):
+-- the function LOCKS the target `lease_amortization_entries` row via
+-- `select ... for update` before reading `subledger_settlements`' sum for
+-- it (the concurrency-safety mechanism this whole audit is built on — see
+-- 0097's own header). Postgres requires the invoking role to hold
+-- table-level UPDATE privilege to take a row lock via FOR UPDATE, even
+-- though this function (and this table generally) never issues an actual
+-- UPDATE statement against it — `lease_amortization_entries` was
+-- deliberately left without an UPDATE grant when the table was first
+-- created (append-only ledger, same as depreciation_entries/
+-- asset_disposals), and 0089/0097 never revisited that grant when 0097
+-- introduced the first FOR UPDATE lock against this table. Confirmed live:
+-- "ERROR: 42501: permission denied for table lease_amortization_entries...
+-- HINT: Grant the required privileges... GRANT UPDATE...".
+--
+-- This GRANT alone does NOT reopen the append-only guarantee: this table
+-- has row level security enabled with NO UPDATE/ALL policy defined at all
+-- (only its original SELECT/INSERT policies), so with RLS enabled and no
+-- permissive UPDATE/ALL policy, Postgres RLS silently matches ZERO rows
+-- for any actual UPDATE statement regardless of this table-level grant —
+-- the identical "table privilege present, RLS policy absent = still no
+-- real mutation possible" pattern this schema already relies on elsewhere
+-- (e.g. subledger_settlements' explicit revoke). `SELECT ... FOR UPDATE`
+-- itself is governed by the table's existing SELECT policy (already
+-- company-scoped), so the lock correctly stays company-scoped too.
+-- CONFIRMED LIVE: an actual UPDATE against this table by `authenticated`
+-- still matches ZERO rows post-grant (RLS has no UPDATE/ALL policy) —
+-- verified via a rolled-back transaction immediately after applying.
+grant update on public.lease_amortization_entries to authenticated;

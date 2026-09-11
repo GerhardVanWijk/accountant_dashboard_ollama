@@ -35,7 +35,21 @@ export function PayrollRunsTable({ runs, onView, onDelete }: PayrollRunsTablePro
       sortValue: (r) => r.payslips.reduce((sum, p) => sum + p.netPay, 0),
       cell: (r) => <Amount value={r.payslips.reduce((sum, p) => sum + p.netPay, 0)} className="text-sm font-medium" />,
     },
-    { key: 'status', header: 'Status', sortValue: (r) => r.status, cell: (r) => <StatusBadge status={r.status} /> },
+    {
+      key: 'status',
+      header: 'Status',
+      sortValue: (r) => r.status,
+      cell: (r) => (
+        <div className="flex items-center gap-1.5">
+          <StatusBadge status={r.status} />
+          {r.reversedAt && (
+            <span className="rounded-full bg-status-negative-muted px-2 py-0.5 text-xs font-semibold text-status-negative" title={r.reversalReason}>
+              Reversed
+            </span>
+          )}
+        </div>
+      ),
+    },
     {
       key: 'actions',
       header: '',

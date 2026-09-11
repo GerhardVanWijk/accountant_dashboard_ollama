@@ -9,6 +9,8 @@ interface BillRow {
   bill_number: string;
   supplier_id: string;
   purchase_order_id: string | null;
+  lease_id: string | null;
+  lease_period_end: string | null;
   issue_date: string;
   due_date: string;
   line_items: DocumentLineItem[];
@@ -32,6 +34,8 @@ function rowToBill(row: BillRow): Bill {
     billNumber: row.bill_number,
     supplierId: row.supplier_id,
     purchaseOrderId: row.purchase_order_id ?? undefined,
+    leaseId: row.lease_id ?? undefined,
+    leasePeriodEnd: row.lease_period_end ?? undefined,
     issueDate: row.issue_date,
     dueDate: row.due_date,
     lineItems: row.line_items ?? [],
@@ -51,6 +55,8 @@ function billToRow(entity: Partial<Bill>): Record<string, unknown> {
   if (entity.billNumber !== undefined) row.bill_number = entity.billNumber;
   if (entity.supplierId !== undefined) row.supplier_id = entity.supplierId;
   if (entity.purchaseOrderId !== undefined) row.purchase_order_id = entity.purchaseOrderId;
+  if (entity.leaseId !== undefined) row.lease_id = entity.leaseId;
+  if (entity.leasePeriodEnd !== undefined) row.lease_period_end = entity.leasePeriodEnd;
   if (entity.issueDate !== undefined) row.issue_date = entity.issueDate;
   if (entity.dueDate !== undefined) row.due_date = entity.dueDate;
   if (entity.lineItems !== undefined) row.line_items = entity.lineItems;

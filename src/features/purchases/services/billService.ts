@@ -274,7 +274,19 @@ export class BillService {
 
     const extraJournal: ExtraJournalLine[] = [];
     if (expenseDebit > 0) {
-      extraJournal.push({ accountId: await this.accounts.getAccountId('EXPENSE'), debit: expenseDebit, credit: 0, description: docLabel });
+      // Leases + Payroll integrity audit, PART 4 (South African lease VAT
+      // architecture): a Bill tagged to a Lease (`bill.leaseId`, migration
+      // 0087) codes its net expense line to 2460 Lease Payment Clearing —
+      // the SAME account `leaseAmortizationService.runAmortization()`
+      // credits each period for interest+principal — instead of the
+      // default Operating Expenses account, so the two postings net
+      // against each other. This touches ONLY the expense-side account
+      // resolved here; it never references RIGHT_OF_USE_ASSET or
+      // LEASE_LIABILITY, so a lease-linked Bill can never duplicate the
+      // IFRS 16 ROU asset or lease liability recognized at commencement —
+      // see billService.test.ts's explicit proof of that.
+      const expenseAccountKey = bill.leaseId ? 'LEASE_PAYMENT_CLEARING' : 'EXPENSE';
+      extraJournal.push({ accountId: await this.accounts.getAccountId(expenseAccountKey), debit: expenseDebit, credit: 0, description: docLabel });
     }
     if (deductibleVat > 0) {
       extraJournal.push({ accountId: await this.accounts.getAccountId('VAT_INPUT'), debit: deductibleVat, credit: 0, description: `${docLabel} - VAT Input` });

@@ -429,4 +429,13 @@ describe('BankTransactionService', () => {
       ).rejects.toThrow(/reconciled/i);
     });
   });
+
+  // `recordSubledgerSettlement()` (and its tests) were REMOVED in the
+  // FINAL PRE-MIGRATION HARDENING pass, PART A — it had no server-side cap
+  // on the settlement amount. See bankTransactionService.ts's trailing
+  // comment. Its replacement — `settle_payroll_net_pay` /
+  // `settle_lease_period_payment`, the atomic, over-settlement-proof RPCs —
+  // is tested in payrollSettlementExecutor.test.ts /
+  // leasePeriodSettlementExecutor.test.ts, not here (they no longer go
+  // through BankTransactionService at all).
 });

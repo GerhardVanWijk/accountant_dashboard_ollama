@@ -380,6 +380,91 @@ describe('BillService', () => {
       expect(harness.balanced(posted.journalEntryId)).toBe(true);
     });
 
+    // Leases + Payroll integrity audit, PART 4 (South African lease VAT
+    // architecture) — a VAT-bearing lease rental invoice is an ordinary
+    // Bill tagged to its Lease, never a second posting path.
+    describe('leaseId linkage (PART 4)', () => {
+      it('codes the net expense line to 2460 Lease Payment Clearing instead of the default Operating Expenses account', async () => {
+        const bill = await billService.createBill({
+          billNumber: 'BILL-LEASE-VAT',
+          supplierId: 'sup_test',
+          leaseId: 'lease_test_1',
+          issueDate: '2026-08-21',
+          dueDate: '2026-09-21',
+          lineItems: [
+            { id: 'li_1', description: 'Monthly lease rental', quantity: 1, unitPrice: 1000, taxRateId: 'tax_std_v2', taxAmount: 150, lineTotal: 1000 },
+          ],
+          subtotal: 1000,
+          taxTotal: 150,
+          total: 1150,
+          amountPaid: 0,
+          currency: 'ZAR',
+          status: 'draft',
+        });
+        const posted = await billService.postBill(bill.id);
+
+        // VAT still resolves through the same evidence/rate-table engine —
+        // this is an ordinary Bill, not a reinvented VAT path.
+        expect(harness.line(posted.journalEntryId, 'acc_2110', 'debit')).toBe(150);
+        // The net rental amount clears 2460, not the default 5100.
+        expect(harness.line(posted.journalEntryId, 'acc_2460', 'debit')).toBe(1000);
+        expect(harness.line(posted.journalEntryId, 'acc_5100', 'debit')).toBeUndefined();
+        expect(harness.balanced(posted.journalEntryId)).toBe(true);
+      });
+
+      it('never posts to the Right-of-Use Asset or Lease Liability accounts — linking a Bill to a Lease cannot duplicate IFRS 16 recognition', async () => {
+        const bill = await billService.createBill({
+          billNumber: 'BILL-LEASE-VAT-2',
+          supplierId: 'sup_test',
+          leaseId: 'lease_test_1',
+          issueDate: '2026-08-21',
+          dueDate: '2026-09-21',
+          lineItems: [
+            { id: 'li_1', description: 'Monthly lease rental', quantity: 1, unitPrice: 2000, taxRateId: 'tax_std_v2', taxAmount: 300, lineTotal: 2000 },
+          ],
+          subtotal: 2000,
+          taxTotal: 300,
+          total: 2300,
+          amountPaid: 0,
+          currency: 'ZAR',
+          status: 'draft',
+        });
+        const posted = await billService.postBill(bill.id);
+
+        const entry = harness.getJE(posted.journalEntryId)!;
+        const touchedAccounts = new Set(entry.lines.map((l) => l.accountId));
+        // 1700 Right-of-Use Asset, 2450 Lease Liability — the accounts
+        // ONLY leaseService.postCommencement() / leaseAmortizationService
+        // ever touch. A Bill — whatever it's tagged to — must never post
+        // to either; that would duplicate the IFRS 16 ROU asset or
+        // liability the lease's own commencement/amortization already
+        // recognizes.
+        expect(touchedAccounts.has('acc_1700')).toBe(false);
+        expect(touchedAccounts.has('acc_2450')).toBe(false);
+      });
+
+      it('a Bill with no leaseId still posts to the default Operating Expenses account, unaffected', async () => {
+        const bill = await billService.createBill({
+          billNumber: 'BILL-NO-LEASE',
+          supplierId: 'sup_test',
+          issueDate: '2026-08-21',
+          dueDate: '2026-09-21',
+          lineItems: [
+            { id: 'li_1', description: 'Office supplies', quantity: 1, unitPrice: 500, taxRateId: 'tax_std_v2', taxAmount: 75, lineTotal: 500 },
+          ],
+          subtotal: 500,
+          taxTotal: 75,
+          total: 575,
+          amountPaid: 0,
+          currency: 'ZAR',
+          status: 'draft',
+        });
+        const posted = await billService.postBill(bill.id);
+        expect(harness.line(posted.journalEntryId, 'acc_5100', 'debit')).toBe(500);
+        expect(harness.line(posted.journalEntryId, 'acc_2460', 'debit')).toBeUndefined();
+      });
+    });
+
     it('folds non-deductible VAT into the expense line instead of posting it to VAT Input', async () => {
       const bill = await billService.createBill({
         billNumber: 'BILL-VAT-NODEDUCT',

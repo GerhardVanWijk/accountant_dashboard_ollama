@@ -5,6 +5,10 @@ import { LeaseAmortizationService } from './leaseAmortizationService';
 import { LeaseService } from './leaseService';
 import { MockLeaseRepository } from '../repositories/MockLeaseRepository';
 import { MockLeaseAmortizationEntryRepository } from '../repositories/MockLeaseAmortizationEntryRepository';
+import { FakeLeaseCommencementExecutor } from './leaseCommencementExecutor';
+import { FakeLeaseAmortizationPeriodExecutor } from './leaseAmortizationPeriodExecutor';
+import type { LeasePeriodSettlementExecutor } from './leasePeriodSettlementExecutor';
+import { FakeLeaseTerminationExecutor } from './leaseTerminationExecutor';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import { AccountService } from '@/features/accounting/services/accountService';
 import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
@@ -48,9 +52,13 @@ describe('LeaseDisposalService.terminateLease', () => {
     const auditLog = new AuditLogService(new MockAuditLogRepository());
     journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
     const accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
-    leaseService = new LeaseService(leaseRepository, journalEntryService, accountMapper);
-    amortizationService = new LeaseAmortizationService(amortizationRepository, leaseRepository, journalEntryService, accountMapper);
-    disposalService = new LeaseDisposalService(leaseRepository, journalEntryService, accountMapper);
+    const commencementExecutor = new FakeLeaseCommencementExecutor({ journal: journalEntryService, leases: leaseRepository });
+    leaseService = new LeaseService(leaseRepository, commencementExecutor, accountMapper);
+    const periodExecutor = new FakeLeaseAmortizationPeriodExecutor({ journal: journalEntryService, leases: leaseRepository, amortizationEntries: amortizationRepository });
+    const unusedSettlementExecutor: LeasePeriodSettlementExecutor = { settle: async () => { throw new Error('settlement not exercised in this test'); } };
+    amortizationService = new LeaseAmortizationService(amortizationRepository, leaseRepository, periodExecutor, accountMapper, unusedSettlementExecutor);
+    const terminationExecutor = new FakeLeaseTerminationExecutor({ journal: journalEntryService, leases: leaseRepository });
+    disposalService = new LeaseDisposalService(leaseRepository, terminationExecutor, accountMapper);
   });
 
   it('rejects terminating a draft lease', async () => {

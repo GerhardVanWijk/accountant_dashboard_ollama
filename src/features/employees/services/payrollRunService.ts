@@ -1,21 +1,15 @@
-import type { Company, Employee, ID, JournalEntry, PayrollRun, PayslipLine } from '@/types';
+import type { Company, Employee, ID, PayrollRun, PayslipLine } from '@/types';
 import type { IPayrollRunRepository } from '../repositories/IPayrollRunRepository';
 import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 import type { PayrollTaxConfigService } from './payrollTaxConfigService';
 import { computePayslipLine, type PayslipOverrideInput } from './payrollCalculations';
+import type { PayrollRunPostingExecutor } from './payrollRunPostingExecutor';
+import type { PayrollRunCorrectionExecutor } from './payrollRunCorrectionExecutor';
+import type { PayrollSettlementExecutor, SettlePayrollNetPayResult } from './payrollSettlementExecutor';
+import { newUuid } from '@/lib/uuid';
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-export interface JournalPoster {
-  postJournalEntry(input: {
-    date: string;
-    memo?: string;
-    source: string;
-    lines: NewJournalLineInput[];
-    postedByUserId?: ID;
-  }): Promise<JournalEntry>;
 }
 
 /** Minimal surface of EmployeeService this service depends on. */
@@ -29,7 +23,17 @@ export interface CompanyStore {
   getCompanies(): Promise<Company[]>;
 }
 
+/**
+ * A reversed run is excluded from the overlap check — its period is freed
+ * for a genuine correction re-run (Leases + Payroll integrity audit, PART
+ * 2 "payroll correction/reversal workflow"), same scope as migration
+ * 0091's `payroll_runs_no_overlapping_period` EXCLUDE constraint (`where
+ * reversed_at is null`), which is the real, race-proof backstop this
+ * app-level check exists alongside for a friendlier error message before
+ * ever reaching the database.
+ */
 function overlaps(run: PayrollRun, start: string, end: string): boolean {
+  if (run.reversedAt) return false;
   return run.payPeriodStart <= end && start <= run.payPeriodEnd;
 }
 
@@ -67,8 +71,10 @@ export class PayrollRunService {
     private readonly employeeStore: EmployeeStore,
     private readonly taxConfigService: Pick<PayrollTaxConfigService, 'getConfigForDate'>,
     private readonly companyStore: CompanyStore,
-    private readonly journalPoster: JournalPoster,
+    private readonly postingExecutor: PayrollRunPostingExecutor,
     private readonly accounts: AccountMapper,
+    private readonly correctionExecutor: PayrollRunCorrectionExecutor,
+    private readonly settlementExecutor: PayrollSettlementExecutor,
   ) {}
 
   async getPayrollRuns(): Promise<PayrollRun[]> {
@@ -139,6 +145,13 @@ export class PayrollRunService {
       payDate,
       status: 'draft',
       payslips,
+      // Statutory traceability (audit item 4): records WHICH tax-year
+      // config actually computed these payslips, set once here and never
+      // changed afterward — migration 0092 blocks that config from being
+      // mutated once any run references it. Reproducing this run's figures
+      // later never depends on getConfigForDate(payDate) still resolving
+      // to the same config a later tax year's row might otherwise shadow.
+      payrollTaxYearConfigId: config.id,
       createdAt: now,
       updatedAt: now,
     });
@@ -196,14 +209,29 @@ export class PayrollRunService {
    *   CR UIF Payable - Employer
    *   CR SDL Payable
    *   CR Other Payroll Deductions Payable  (pension/medical/garnishee etc.)
-   *   CR contraAccountId                   (sum of net pay — Cash and Bank
-   *                                          if paid immediately, or Net
-   *                                          Pay Payable if disbursed later)
+   *   CR contraAccountId                   (sum of net pay — Net Pay
+   *                                          Payable; see below)
    * Balances by construction: computePayslipLine() defines each employee's
    * netPay as the exact remainder of grossPay after paye/uifEmployee/
    * deductions, so summed across the run, debits (gross + employer UIF +
    * SDL) always equal credits (paye + uifEmployee + uifEmployer + SDL +
    * deductions + netPay) — see payrollCalculations.ts's doc comment.
+   *
+   * `contraAccountId` MUST be a liability/clearing account (2250 Net Pay
+   * Payable) — never Cash and Bank directly (Leases + Payroll integrity
+   * audit, PART 3 Banking fix, enforced again server-side by
+   * `post_payroll_run`, migration 0091). The real EFT disbursement is
+   * recorded once, later, through the existing Banking module against
+   * this same clearing account (`subledgerSettlementService.ts`) — posting
+   * straight to Cash here would let that later import/allocation double-
+   * count the same cash movement.
+   *
+   * Posts through `postingExecutor` — one atomic RPC call (`post_payroll_run`)
+   * that posts the journal AND flips the run to 'posted' in the SAME
+   * database transaction — a failure between the two independent writes
+   * this replaced could leave a posted journal with the run still showing
+   * 'draft', and a retry would double-post the whole run's salaries/UIF/
+   * PAYE/SDL.
    */
   async postPayrollRun(id: ID, contraAccountId: ID, postedByUserId?: ID): Promise<PayrollRun> {
     const run = await this.repository.getById(id);
@@ -242,15 +270,83 @@ export class PayrollRunService {
     if (totals.deductionsTotal > 0) lines.push({ accountId: otherDeductionsPayableId, description: memo, debit: 0, credit: round2(totals.deductionsTotal) });
     if (totals.netPay > 0) lines.push({ accountId: contraAccountId, description: memo, debit: 0, credit: round2(totals.netPay) });
 
-    const entry = await this.journalPoster.postJournalEntry({
-      date: run.payDate,
+    const result = await this.postingExecutor.postRun({
+      payrollRunId: id,
+      payDate: run.payDate,
       memo,
       source: 'payroll',
       lines,
-      postedByUserId,
+      contraAccountId,
+      createdBy: postedByUserId,
     });
 
-    return this.repository.update(id, { status: 'posted', journalEntryId: entry.id, contraAccountId });
+    return result.run;
+  }
+
+  /**
+   * The supported payroll-owned correction/reversal workflow (audit item
+   * 5) — the pairing `journalEntryService.ts`'s generic block of a
+   * `source: 'payroll'` reversal was always missing. Posts the EXACT
+   * mathematical inverse of the original journal's own lines (derived from
+   * `journal_lines` itself, not recomputed from payslips) as a new
+   * `source: 'payroll_correction'` journal, and marks this run reversed —
+   * never deletes or mutates its `payslips`/`journalEntryId`/`status`. Both
+   * the original journal and the reversal remain on the books permanently.
+   *
+   * A genuinely corrected run for the now-freed pay period is just a
+   * normal new `createPayrollRun()` call — no second "correction run"
+   * concept exists.
+   */
+  async reversePayrollRun(id: ID, reason: string, reversalDate: string, reversedByUserId?: ID): Promise<PayrollRun> {
+    if (!reason || reason.trim() === '') {
+      throw new Error('A reason is required to reverse a posted payroll run.');
+    }
+    const run = await this.repository.getById(id);
+    if (!run) {
+      throw new Error(`Payroll run "${id}" not found.`);
+    }
+    if (run.status !== 'posted') {
+      throw new Error(`Payroll run "${run.runNumber}" is not posted (status: ${run.status}) — only a posted run can be reversed.`);
+    }
+    if (run.reversedAt) {
+      throw new Error(`Payroll run "${run.runNumber}" has already been reversed.`);
+    }
+
+    const result = await this.correctionExecutor.postCorrection({
+      correctionId: newUuid(),
+      payrollRunId: id,
+      reversalDate,
+      reason,
+      createdBy: reversedByUserId,
+    });
+
+    return result.run;
+  }
+
+  /**
+   * Records the real cash movement that clears (part of) a posted run's
+   * Net Pay Payable balance — FINAL PRE-MIGRATION HARDENING, PART A. Posts
+   * through `settlementExecutor` — one atomic RPC call
+   * (`settle_payroll_net_pay`, migration 0096) that derives the
+   * authoritative outstanding balance from the run's own posted journal
+   * and every settlement already recorded, and refuses an amount that
+   * would exceed it, ENTIRELY at the database layer — not merely in this
+   * method or the calling form. A frontend-computed "outstanding" is never
+   * trusted; only `amount` is passed through, and the RPC recomputes and
+   * validates it itself under a row lock, so two concurrent callers (two
+   * tabs, a retried request) can never together over-settle the same run.
+   */
+  async settleNetPay(id: ID, input: { bankAccountId: ID; date: string; amount: number; description?: string; reference?: string; settledByUserId?: ID }): Promise<SettlePayrollNetPayResult> {
+    return this.settlementExecutor.settle({
+      settlementId: newUuid(),
+      payrollRunId: id,
+      bankAccountId: input.bankAccountId,
+      date: input.date,
+      description: input.description,
+      reference: input.reference,
+      amount: input.amount,
+      createdBy: input.settledByUserId,
+    });
   }
 
   private async nextRunNumber(): Promise<string> {

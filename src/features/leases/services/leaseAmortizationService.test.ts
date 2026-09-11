@@ -4,6 +4,9 @@ import { LeaseAmortizationService } from './leaseAmortizationService';
 import { LeaseService } from './leaseService';
 import { MockLeaseRepository } from '../repositories/MockLeaseRepository';
 import { MockLeaseAmortizationEntryRepository } from '../repositories/MockLeaseAmortizationEntryRepository';
+import { FakeLeaseCommencementExecutor } from './leaseCommencementExecutor';
+import { FakeLeaseAmortizationPeriodExecutor } from './leaseAmortizationPeriodExecutor';
+import type { LeasePeriodSettlementExecutor } from './leasePeriodSettlementExecutor';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import { AccountService } from '@/features/accounting/services/accountService';
 import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
@@ -17,7 +20,7 @@ import type { LeaseContract } from '@/types/lease';
 
 const INTEREST_EXPENSE_LEASE_ACCOUNT_ID = 'acc_5810';
 const LEASE_LIABILITY_ACCOUNT_ID = 'acc_2450';
-const CASH_AND_BANK_ACCOUNT_ID = 'acc_1000';
+const LEASE_PAYMENT_CLEARING_ACCOUNT_ID = 'acc_2460';
 const DEPRECIATION_EXPENSE_ROU_ACCOUNT_ID = 'acc_5800';
 const ACCUMULATED_DEPRECIATION_ROU_ACCOUNT_ID = 'acc_1790';
 
@@ -80,8 +83,11 @@ describe('LeaseAmortizationService.runAmortization', () => {
     const auditLog = new AuditLogService(new MockAuditLogRepository());
     journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
     const accountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
-    leaseService = new LeaseService(leaseRepository, journalEntryService, accountMapper);
-    amortizationService = new LeaseAmortizationService(amortizationRepository, leaseRepository, journalEntryService, accountMapper);
+    const commencementExecutor = new FakeLeaseCommencementExecutor({ journal: journalEntryService, leases: leaseRepository });
+    leaseService = new LeaseService(leaseRepository, commencementExecutor, accountMapper);
+    const periodExecutor = new FakeLeaseAmortizationPeriodExecutor({ journal: journalEntryService, leases: leaseRepository, amortizationEntries: amortizationRepository });
+    const unusedSettlementExecutor: LeasePeriodSettlementExecutor = { settle: async () => { throw new Error('settlement not exercised in this test'); } };
+    amortizationService = new LeaseAmortizationService(amortizationRepository, leaseRepository, periodExecutor, accountMapper, unusedSettlementExecutor);
   });
 
   it('posts one balanced combined entry across multiple leases, with interest + principal === payment', async () => {
@@ -113,7 +119,7 @@ describe('LeaseAmortizationService.runAmortization', () => {
 
     const interestLine = entry!.lines.find((l) => l.accountId === INTEREST_EXPENSE_LEASE_ACCOUNT_ID)!;
     const liabilityLine = entry!.lines.find((l) => l.accountId === LEASE_LIABILITY_ACCOUNT_ID)!;
-    const cashLine = entry!.lines.find((l) => l.accountId === CASH_AND_BANK_ACCOUNT_ID)!;
+    const cashLine = entry!.lines.find((l) => l.accountId === LEASE_PAYMENT_CLEARING_ACCOUNT_ID)!;
     const depExpenseLine = entry!.lines.find((l) => l.accountId === DEPRECIATION_EXPENSE_ROU_ACCOUNT_ID)!;
     const accumDepLine = entry!.lines.find((l) => l.accountId === ACCUMULATED_DEPRECIATION_ROU_ACCOUNT_ID)!;
 
@@ -175,5 +181,57 @@ describe('LeaseAmortizationService.runAmortization', () => {
     });
     const result = await amortizationService.runAmortization('2026-01-31');
     expect(result.entries).toHaveLength(0);
+  });
+
+  describe('previewAmortization', () => {
+    it('matches exactly what runAmortization posts for the same period (no drift between preview and post)', async () => {
+      await activeLease({ monthlyPayment: 1000, discountRatePercent: 12, leaseTermMonths: 12 });
+      await activeLease({ monthlyPayment: 500, discountRatePercent: 6, leaseTermMonths: 24 });
+
+      const preview = await amortizationService.previewAmortization('2026-01-31');
+      const ready = preview.filter((row) => row.status === 'ready');
+      expect(ready).toHaveLength(2);
+
+      const result = await amortizationService.runAmortization('2026-01-31');
+      expect(result.entries).toHaveLength(2);
+
+      for (const row of ready) {
+        const posted = result.entries.find((e) => e.leaseId === row.lease.id)!;
+        expect(posted.interestAmount).toBeCloseTo(row.interest, 2);
+        expect(posted.principalAmount).toBeCloseTo(row.principal, 2);
+        expect(posted.depreciationAmount).toBeCloseTo(row.rouDepreciation, 2);
+        expect(posted.outstandingLeaseLiabilityAfter).toBeCloseTo(row.closingLiability, 2);
+      }
+    });
+
+    it('flags a draft lease as blocked with a reason, never as ready', async () => {
+      await leaseService.createLease({
+        lessorName: 'Never Commenced', assetDescription: 'x', commencementDate: '2026-01-01', leaseTermMonths: 12, monthlyPayment: 500, discountRatePercent: 10,
+      });
+      const preview = await amortizationService.previewAmortization('2026-01-31');
+      expect(preview).toHaveLength(1);
+      expect(preview[0].status).toBe('blocked');
+      expect(preview[0].reason).toMatch(/draft/i);
+    });
+
+    it('flags an already-amortized lease as blocked for that period, but ready again next period', async () => {
+      await activeLease();
+      await amortizationService.runAmortization('2026-01-31');
+
+      const samePeriod = await amortizationService.previewAmortization('2026-01-31');
+      expect(samePeriod[0].status).toBe('blocked');
+      expect(samePeriod[0].reason).toMatch(/already amortized/i);
+
+      const nextPeriod = await amortizationService.previewAmortization('2026-02-28');
+      expect(nextPeriod[0].status).toBe('ready');
+    });
+
+    it('flags a terminated lease as blocked, never as ready', async () => {
+      const lease = await activeLease();
+      await leaseRepository.update(lease.id, { status: 'terminated', terminationDate: '2026-01-15' });
+      const preview = await amortizationService.previewAmortization('2026-01-31');
+      expect(preview[0].status).toBe('blocked');
+      expect(preview[0].reason).toMatch(/terminated/i);
+    });
   });
 });

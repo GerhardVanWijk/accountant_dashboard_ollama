@@ -32,6 +32,7 @@ import { useProducts } from '@/features/inventory/hooks/useProducts';
 import { useWarehouses } from '@/features/inventory/hooks/useWarehouses';
 import { useStockMovements } from '@/features/inventory/hooks/useStockMovements';
 import { useAllTaxRates } from '@/features/tax/hooks/useTaxRates';
+import { useLeases } from '@/features/leases/hooks/useLeases';
 
 /**
  * Full-page Supplier Invoice detail — route `/purchases/bills/:billId`.
@@ -58,6 +59,7 @@ export function BillDetailPage({ recordId, embedded }: RecordPageProps = {}) {
   const { warehouses } = useWarehouses();
   const { movements } = useStockMovements();
   const { taxRates, loading: taxRatesLoading, error: taxRatesError } = useAllTaxRates();
+  const { leases } = useLeases();
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [recordingPayment, setRecordingPayment] = useState(false);
@@ -67,6 +69,7 @@ export function BillDetailPage({ recordId, embedded }: RecordPageProps = {}) {
   const warehouseMap = useMemo(() => new Map(warehouses.map((w) => [w.id, w.name])), [warehouses]);
   const supplierName = bill ? suppliersMap.get(bill.supplierId) ?? 'Unknown supplier' : '';
   const sourcePo = bill?.purchaseOrderId ? purchaseOrders.find((po) => po.id === bill.purchaseOrderId) : undefined;
+  const relatedLease = bill?.leaseId ? leases.find((l) => l.id === bill.leaseId) : undefined;
   const outstanding = bill ? bill.total - bill.amountPaid : 0;
 
   const relatedPayments = useMemo(
@@ -115,6 +118,13 @@ export function BillDetailPage({ recordId, embedded }: RecordPageProps = {}) {
         onActivate: () => navigate(`/purchases/orders/${sourcePo.id}`),
       });
     }
+    if (relatedLease) {
+      items.push({
+        label: `Lease ${relatedLease.leaseNumber}`,
+        value: <span className="text-muted-foreground">{relatedLease.assetDescription}</span>,
+        onActivate: () => navigate(`/leases/register?record=${relatedLease.id}`),
+      });
+    }
     if (bill.journalEntryId) {
       items.push({
         label: 'Journal entry',
@@ -131,7 +141,7 @@ export function BillDetailPage({ recordId, embedded }: RecordPageProps = {}) {
       });
     }
     return items;
-  }, [bill, supplierName, sourcePo, relatedPayments, navigate]);
+  }, [bill, supplierName, sourcePo, relatedLease, relatedPayments, navigate]);
 
   const state = isLoading ? 'loading' : error ? 'error' : bill ? 'ready' : 'not-found';
 
@@ -199,6 +209,12 @@ export function BillDetailPage({ recordId, embedded }: RecordPageProps = {}) {
                     <RecordField
                       label="Source purchase order"
                       value={<Link className="text-brand hover:underline" to={`/purchases/orders/${sourcePo.id}`}>{sourcePo.poNumber}</Link>}
+                    />
+                  )}
+                  {relatedLease && (
+                    <RecordField
+                      label="Lease"
+                      value={<Link className="text-brand hover:underline" to={`/leases/register?record=${relatedLease.id}`}>{relatedLease.leaseNumber}</Link>}
                     />
                   )}
                 </RecordSummaryGrid>

@@ -14,6 +14,11 @@ interface PayrollRunRow {
   payslips: PayslipLine[];
   journal_entry_id: string | null;
   contra_account_id: string | null;
+  payroll_tax_year_config_id: string | null;
+  reversed_at: string | null;
+  reversal_journal_entry_id: string | null;
+  reversal_reason: string | null;
+  reversed_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +36,11 @@ function rowToPayrollRun(row: PayrollRunRow): PayrollRun {
     payslips: row.payslips ?? [],
     journalEntryId: row.journal_entry_id ?? undefined,
     contraAccountId: row.contra_account_id ?? undefined,
+    payrollTaxYearConfigId: row.payroll_tax_year_config_id ?? undefined,
+    reversedAt: row.reversed_at ?? undefined,
+    reversalJournalEntryId: row.reversal_journal_entry_id ?? undefined,
+    reversalReason: row.reversal_reason ?? undefined,
+    reversedBy: row.reversed_by ?? undefined,
   };
 }
 
@@ -44,6 +54,11 @@ function payrollRunToRow(entity: Partial<PayrollRun>): Record<string, unknown> {
   if (entity.payslips !== undefined) row.payslips = entity.payslips;
   if (entity.journalEntryId !== undefined) row.journal_entry_id = entity.journalEntryId;
   if (entity.contraAccountId !== undefined) row.contra_account_id = entity.contraAccountId;
+  if (entity.payrollTaxYearConfigId !== undefined) row.payroll_tax_year_config_id = entity.payrollTaxYearConfigId;
+  if (entity.reversedAt !== undefined) row.reversed_at = entity.reversedAt;
+  if (entity.reversalJournalEntryId !== undefined) row.reversal_journal_entry_id = entity.reversalJournalEntryId;
+  if (entity.reversalReason !== undefined) row.reversal_reason = entity.reversalReason;
+  if (entity.reversedBy !== undefined) row.reversed_by = entity.reversedBy;
   return row;
 }
 

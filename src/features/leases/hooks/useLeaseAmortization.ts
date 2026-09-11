@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LeaseAmortizationEntry } from '@/types/lease';
-import { leaseAmortizationService, type LeaseAmortizationRunResult } from '../services';
+import { leaseAmortizationService, type LeaseAmortizationRunResult, type LeaseAmortizationPreviewRow } from '../services';
 
 export interface UseLeaseAmortizationResult {
   history: LeaseAmortizationEntry[];
@@ -8,6 +8,8 @@ export interface UseLeaseAmortizationResult {
   error: Error | null;
   refetch: () => Promise<void>;
   runAmortization: (periodEnd: string) => Promise<LeaseAmortizationRunResult>;
+  /** Read-only preview of what runAmortization(periodEnd) would post — PART 1.20 of the Leases + Payroll integrity audit. Posts nothing. */
+  previewAmortization: (periodEnd: string) => Promise<LeaseAmortizationPreviewRow[]>;
 }
 
 /** Component -> Hook -> Service -> Repository chain for the lease amortization ledger. */
@@ -41,5 +43,7 @@ export function useLeaseAmortization(): UseLeaseAmortizationResult {
     [refetch],
   );
 
-  return { history, loading, error, refetch, runAmortization };
+  const previewAmortization = useCallback((periodEnd: string) => leaseAmortizationService.previewAmortization(periodEnd), []);
+
+  return { history, loading, error, refetch, runAmortization, previewAmortization };
 }

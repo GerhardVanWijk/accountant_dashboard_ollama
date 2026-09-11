@@ -1,19 +1,33 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, CircleCheckIcon, CircleDollarSignIcon, TrendingDownIcon, WalletCardsIcon } from 'lucide-react';
 import type { LeaseContract } from '@/types/lease';
 import { PageHeader } from '@/components/app/page-header';
+import { StatTileGrid } from '@/components/app/stat-tile';
 import { Button } from '@/components/ui/shadcn/button';
 import { FormShell, FormHeader } from '@/components/app/form';
+import { formatCurrency } from '@/lib/app/format';
 import { useLeases } from '../hooks/useLeases';
 import { useLeaseAmortization } from '../hooks/useLeaseAmortization';
+import { useLeaseRegisterHealth } from '../hooks/useLeaseRegisterHealth';
+import { useAccounts } from '@/features/accounting/hooks/useAccounts';
+import { useBills } from '@/features/purchases/hooks/useBills';
+import { useBankAccounts } from '@/features/banking/hooks/useBankAccounts';
+import { useBankTransactions } from '@/features/banking/hooks/useBankTransactions';
+import { SettleClearingBalanceForm } from '@/features/banking/components/SettleClearingBalanceForm';
 import { LeaseForm } from '../components/LeaseForm';
 import { TerminateLeaseForm } from '../components/TerminateLeaseForm';
 import { LeasesTable } from '../components/LeasesTable';
 import { LeaseDetailSheet } from '../components/LeaseDetailSheet';
-import type { CreateLeaseDTO, UpdateLeaseDTO } from '../services';
+import { LeaseRegisterHealthCard } from '../components/LeaseRegisterHealthCard';
+import { leaseAmortizationService, type CreateLeaseDTO, type UpdateLeaseDTO } from '../services';
 
-type DialogState = { mode: 'create' } | { mode: 'edit'; lease: LeaseContract } | { mode: 'terminate'; lease: LeaseContract } | null;
+type DialogState =
+  | { mode: 'create' }
+  | { mode: 'edit'; lease: LeaseContract }
+  | { mode: 'terminate'; lease: LeaseContract }
+  | { mode: 'settle'; lease: LeaseContract; leaseAmortizationEntryId: string; periodEnd: string }
+  | null;
 
 /**
  * Lease Register — route `/leases/register`. Real useLeases()/leaseService
@@ -25,6 +39,11 @@ type DialogState = { mode: 'create' } | { mode: 'edit'; lease: LeaseContract } |
 export function LeaseRegisterPage() {
   const { leases, loading, error, refetch, createLease, updateLease, deleteLease, postCommencement, terminateLease } = useLeases();
   const { history: amortizationHistory, loading: amortizationLoading } = useLeaseAmortization();
+  const { accounts, loading: accountsLoading } = useAccounts();
+  const { bills } = useBills();
+  const { bankAccounts } = useBankAccounts();
+  const { transactions: bankTransactions, refetch: refetchBankTransactions } = useBankTransactions();
+  const bankAccountNameById = useMemo(() => new Map(bankAccounts.map((a) => [a.id, a.name])), [bankAccounts]);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [dirty, setDirty] = useState(false);
   const closeDialog = () => {
@@ -101,7 +120,48 @@ export function LeaseRegisterPage() {
     }
   };
 
-  const busy = loading || amortizationLoading;
+  const handleSettle = async (
+    dialogState: { lease: LeaseContract; leaseAmortizationEntryId: string },
+    input: { bankAccountId: string; date: string; amount: number; reference?: string },
+  ) => {
+    setActionError(null);
+    try {
+      // FINAL PRE-MIGRATION HARDENING, PART A+B: posts through the atomic,
+      // over-settlement-proof `settle_lease_period_payment` RPC (0097) —
+      // the database itself derives and validates the outstanding balance
+      // for THIS SPECIFIC period; `settleTargetOutstanding` below is only
+      // a UX convenience for the input's max/placeholder, never trusted.
+      await leaseAmortizationService.settlePeriod(dialogState.leaseAmortizationEntryId, {
+        bankAccountId: input.bankAccountId,
+        date: input.date,
+        amount: input.amount,
+        description: `Lease payment — ${dialogState.lease.leaseNumber}`,
+        reference: input.reference,
+      });
+      await refetchBankTransactions();
+      setDialog(null);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to record the settlement.');
+    }
+  };
+
+  const settleTargetOutstanding = (() => {
+    if (dialog?.mode !== 'settle') return 0;
+    const entry = amortizationHistory.find((e) => e.id === dialog.leaseAmortizationEntryId);
+    if (!entry) return 0;
+    const obligation = entry.interestAmount + entry.principalAmount;
+    const settled = bankTransactions
+      .filter((t) => t.matchedEntityType === 'lease_amortization_entry' && t.matchedEntityId === dialog.leaseAmortizationEntryId)
+      .reduce((s, t) => s + t.amount, 0);
+    return Math.max(0, obligation - settled);
+  })();
+
+  const busy = loading || amortizationLoading || accountsLoading;
+  const activeLeases = leases.filter((l) => l.status === 'active');
+  const totalOutstandingLiability = activeLeases.reduce((s, l) => s + l.outstandingLeaseLiability, 0);
+  const totalRouCarryingValue = activeLeases.reduce((s, l) => s + (l.initialRightOfUseAsset - l.accumulatedDepreciation), 0);
+  const totalMonthlyPayments = activeLeases.reduce((s, l) => s + l.monthlyPayment, 0);
+  const health = useLeaseRegisterHealth(leases, accounts, !busy && !error);
 
   return (
     <div className="flex flex-col gap-6">
@@ -122,6 +182,16 @@ export function LeaseRegisterPage() {
         </p>
       )}
 
+      <StatTileGrid
+        columns={4}
+        metrics={[
+          { label: 'Active leases', value: String(activeLeases.length), hint: `${leases.length} on the register`, icon: CircleCheckIcon },
+          { label: 'Lease liability', value: formatCurrency(totalOutstandingLiability), hint: 'Outstanding, active leases', icon: WalletCardsIcon },
+          { label: 'ROU carrying value', value: formatCurrency(totalRouCarryingValue), hint: 'Cost less accumulated depreciation', icon: CircleDollarSignIcon },
+          { label: 'Monthly lease payments', value: formatCurrency(totalMonthlyPayments), hint: 'Committed, active leases', icon: TrendingDownIcon },
+        ]}
+      />
+
       {busy && (
         <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-muted-foreground">
           <Loader2 className="size-5 animate-spin" aria-hidden="true" />
@@ -138,20 +208,41 @@ export function LeaseRegisterPage() {
       )}
 
       {!busy && !error && (
-        <LeasesTable
-          leases={leases}
-          completedAmortizationRunsByLease={completedAmortizationRunsByLease}
-          onEdit={(lease) => setDialog({ mode: 'edit', lease })}
-          onPostCommencement={(lease) => void handlePostCommencement(lease)}
-          onTerminate={(lease) => setDialog({ mode: 'terminate', lease })}
-          onDelete={(lease) => void handleDelete(lease)}
-          onSelect={(lease) => openRecord(lease.id)}
-        />
+        <>
+          <LeaseRegisterHealthCard
+            reconciliation={health.reconciliation}
+            loading={health.loading}
+            error={health.error}
+            onRefresh={() => void health.refetch()}
+          />
+
+          <LeasesTable
+            leases={leases}
+            completedAmortizationRunsByLease={completedAmortizationRunsByLease}
+            onEdit={(lease) => setDialog({ mode: 'edit', lease })}
+            onPostCommencement={(lease) => void handlePostCommencement(lease)}
+            onTerminate={(lease) => setDialog({ mode: 'terminate', lease })}
+            onDelete={(lease) => void handleDelete(lease)}
+            onSelect={(lease) => openRecord(lease.id)}
+          />
+        </>
       )}
 
       <LeaseDetailSheet
         lease={detailLease}
         amortizationHistory={amortizationHistory}
+        relatedBills={bills}
+        settlementTransactions={bankTransactions}
+        bankAccountNameById={bankAccountNameById}
+        onSettle={
+          detailLease
+            ? (leaseAmortizationEntryId) => {
+                const entry = amortizationHistory.find((e) => e.id === leaseAmortizationEntryId);
+                if (!entry) return;
+                setDialog({ mode: 'settle', lease: detailLease, leaseAmortizationEntryId, periodEnd: entry.periodEnd });
+              }
+            : undefined
+        }
         open={detailOpen}
         onOpenChange={(next) => {
           if (!next) closeRecord();
@@ -169,6 +260,20 @@ export function LeaseRegisterPage() {
         <FormShell open onClose={closeDialog} size="sm" mode="edit" isDirty={dirty}>
           <FormHeader title="Terminate lease" />
           <TerminateLeaseForm lease={dialog.lease} onSubmit={handleTerminate} onCancel={closeDialog} onDirtyChange={setDirty} />
+        </FormShell>
+      )}
+
+      {dialog?.mode === 'settle' && (
+        <FormShell open onClose={closeDialog} size="md" mode="create" isDirty={dirty}>
+          <FormHeader title={`Settle lease payment — ${dialog.lease.leaseNumber} (${dialog.periodEnd})`} />
+          <SettleClearingBalanceForm
+            bankAccounts={bankAccounts}
+            maxAmount={settleTargetOutstanding}
+            defaultDescription={`Lease payment — ${dialog.lease.leaseNumber} (${dialog.periodEnd})`}
+            onSubmit={(input) => handleSettle(dialog, input)}
+            onCancel={closeDialog}
+            onDirtyChange={setDirty}
+          />
         </FormShell>
       )}
     </div>

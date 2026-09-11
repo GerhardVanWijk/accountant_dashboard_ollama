@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, InfoIcon, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { CircleDollarSignIcon, LandmarkIcon, ShieldIcon, UsersIcon } from 'lucide-react';
 import { Amount } from '@/components/app/figure';
@@ -48,6 +48,16 @@ export function Emp501Page() {
           </div>
         }
       />
+
+      <div role="note" className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+        <InfoIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <p>
+          <span className="font-medium text-foreground">Internal reconciliation only.</span> This is Vertex's own
+          computed EMP501 reconciliation from posted payroll runs — it is not submitted to SARS or e@syFile, and
+          Vertex has no SARS/e@syFile submission capability. Use it to prepare your figures before filing through
+          SARS's own channels. Vertex also does not generate IRP5 or IT3(a) tax certificates.
+        </p>
+      </div>
 
       {loading && (
         <div role="status" className="flex min-h-[30vh] items-center justify-center gap-2 text-muted-foreground">

@@ -325,6 +325,47 @@ describe('JournalEntryService', () => {
       }
     });
 
+    it('refuses to reverse a Leases-sourced entry from the general ledger (Leases + Payroll integrity audit PART 1.15/2.23 — no dedicated reversal workflow exists yet)', async () => {
+      const { service } = setup();
+      for (const source of ['lease_commencement', 'lease_amortization', 'lease_termination']) {
+        const original = await service.postJournalEntry({
+          date: '2026-02-01T00:00:00.000Z',
+          source,
+          lines: [
+            { accountId: 'acc_1700', debit: 500, credit: 0 },
+            { accountId: 'acc_2450', debit: 0, credit: 500 },
+          ],
+        });
+        await expect(service.reverseJournalEntry(original.id)).rejects.toThrow(/subledger/i);
+      }
+    });
+
+    it('refuses to reverse a Payroll-sourced entry from the general ledger — the payroll-owned correction workflow (PayrollRunService.reversePayrollRun) is the only supported way to correct a posted run (Leases + Payroll integrity audit PART 2.23)', async () => {
+      const { service } = setup();
+      const original = await service.postJournalEntry({
+        date: '2026-02-01T00:00:00.000Z',
+        source: 'payroll',
+        lines: [
+          { accountId: 'acc_5400', debit: 5000, credit: 0 },
+          { accountId: 'acc_1000', debit: 0, credit: 5000 },
+        ],
+      });
+      await expect(service.reverseJournalEntry(original.id)).rejects.toThrow(/subledger/i);
+    });
+
+    it('refuses to reverse a payroll_correction-sourced entry — a reversal-of-a-reversal is nonsensical, nothing further downstream to desync', async () => {
+      const { service } = setup();
+      const original = await service.postJournalEntry({
+        date: '2026-02-01T00:00:00.000Z',
+        source: 'payroll_correction',
+        lines: [
+          { accountId: 'acc_1000', debit: 5000, credit: 0 },
+          { accountId: 'acc_5400', debit: 0, credit: 5000 },
+        ],
+      });
+      await expect(service.reverseJournalEntry(original.id)).rejects.toThrow(/subledger/i);
+    });
+
     it('allows reversing a subledger-sourced entry when the caller explicitly opts in', async () => {
       const { service } = setup();
       const original = await service.postJournalEntry({

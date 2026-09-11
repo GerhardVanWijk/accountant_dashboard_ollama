@@ -11,6 +11,8 @@ export interface UsePayrollRunsResult {
   updatePayslipOverride: (runId: string, employeeId: string, overrides: PayslipOverrideInput) => Promise<PayrollRun>;
   deletePayrollRun: (id: string) => Promise<void>;
   postPayrollRun: (id: string, contraAccountId: string) => Promise<PayrollRun>;
+  /** The payroll-owned correction/reversal workflow (Leases + Payroll integrity audit, PART 2, audit item 5). */
+  reversePayrollRun: (id: string, reason: string, reversalDate: string) => Promise<PayrollRun>;
 }
 
 /** Component -> Hook -> Service -> Repository chain for payroll runs (docs/ARCHITECTURE.md). */
@@ -71,5 +73,14 @@ export function usePayrollRuns(): UsePayrollRunsResult {
     [refetch],
   );
 
-  return { runs, loading, error, refetch, createPayrollRun, updatePayslipOverride, deletePayrollRun, postPayrollRun };
+  const reversePayrollRun = useCallback(
+    async (id: string, reason: string, reversalDate: string) => {
+      const updated = await payrollRunService.reversePayrollRun(id, reason, reversalDate);
+      await refetch();
+      return updated;
+    },
+    [refetch],
+  );
+
+  return { runs, loading, error, refetch, createPayrollRun, updatePayslipOverride, deletePayrollRun, postPayrollRun, reversePayrollRun };
 }

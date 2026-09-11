@@ -49,6 +49,12 @@ const REQUIRED_CODES: Record<AccountMappingKey, string> = {
   INCOME_TAX_PAYABLE: '2300', INCOME_TAX_EXPENSE: '5500', DEFERRED_TAX_ASSET: '1600',
   DEFERRED_TAX_LIABILITY: '2400', DEFERRED_TAX_EXPENSE: '5600', RETAINED_EARNINGS: '3900',
   DIVIDENDS_PAYABLE: '2500', DIVIDENDS_TAX_PAYABLE: '2510', OWNERS_EQUITY: '3000',
+  // Leases + Payroll integrity audit (PART 3 — Banking fix): added by 0085
+  // (backfill for existing companies) and 0094 (create-or-replaces 0066's
+  // seed_new_company_accounting so a BRAND NEW company gets them too — see
+  // the "seeds every account code" check below, which reads 0066 + 0094
+  // together for exactly this reason).
+  NET_PAY_PAYABLE: '2250', LEASE_PAYMENT_CLEARING: '2460',
 };
 
 describe('0066 — atomic first-company bootstrap', () => {
@@ -113,7 +119,13 @@ describe('0066 — atomic first-company bootstrap', () => {
     });
 
     it('seeds every account code that AccountMapper resolves', () => {
-      const missing = Object.entries(REQUIRED_CODES).filter(([, c]) => !new RegExp(`\\('${c}',`).test(rawSql));
+      // 0066 defined seed_new_company_accounting(); 0094 create-or-replaces
+      // it to add 2250/2460 (Leases + Payroll integrity audit, PART 3) — a
+      // brand new company's actual seeded CoA is whichever migration ran
+      // LAST, so "does the current function seed every code" must check
+      // both, not 0066 alone (which correctly predates those two codes).
+      const currentSeedSql = rawSql + raw('0094');
+      const missing = Object.entries(REQUIRED_CODES).filter(([, c]) => !new RegExp(`\\('${c}',`).test(currentSeedSql));
       expect(missing.map(([k]) => k)).toEqual([]);
     });
 

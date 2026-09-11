@@ -55,8 +55,10 @@ export type AccountMappingKey =
   | 'UIF_EMPLOYER_PAYABLE'
   | 'SDL_PAYABLE'
   | 'OTHER_DEDUCTIONS_PAYABLE'
+  | 'NET_PAY_PAYABLE' // 2250 — clearing account for net pay pending EFT disbursement, settled through Banking (never Cash and Bank directly). See migration 0085.
   | 'RIGHT_OF_USE_ASSET'
   | 'LEASE_LIABILITY'
+  | 'LEASE_PAYMENT_CLEARING' // 2460 — clearing account for the lease amortization run's cash leg, settled through Banking (never Cash and Bank directly). See migration 0085.
   | 'ACCUMULATED_DEPRECIATION_ROU'
   | 'DEPRECIATION_EXPENSE_ROU'
   | 'INTEREST_EXPENSE_LEASE'
@@ -113,8 +115,10 @@ export const ACCOUNT_CODE_BY_KEY: Record<AccountMappingKey, string> = {
   UIF_EMPLOYER_PAYABLE: '2220',
   SDL_PAYABLE: '2230',
   OTHER_DEDUCTIONS_PAYABLE: '2240',
+  NET_PAY_PAYABLE: '2250',
   RIGHT_OF_USE_ASSET: '1700',
   LEASE_LIABILITY: '2450',
+  LEASE_PAYMENT_CLEARING: '2460',
   ACCUMULATED_DEPRECIATION_ROU: '1790',
   DEPRECIATION_EXPENSE_ROU: '5800',
   INTEREST_EXPENSE_LEASE: '5810',

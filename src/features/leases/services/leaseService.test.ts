@@ -3,6 +3,7 @@ import type { AccountingPeriod } from '@/types';
 import { LeaseService } from './leaseService';
 import { calculateLeaseLiabilityPresentValue } from './leaseCalculations';
 import { MockLeaseRepository } from '../repositories/MockLeaseRepository';
+import { FakeLeaseCommencementExecutor } from './leaseCommencementExecutor';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import { AccountService } from '@/features/accounting/services/accountService';
 import { AccountMappingService } from '@/features/accounting/services/accountMappingService';
@@ -42,7 +43,8 @@ describe('LeaseService', () => {
     const periodRepository = new MockAccountingPeriodRepository([makeOpenPeriod()]);
     const auditLog = new AuditLogService(new MockAuditLogRepository());
     journalEntryService = new JournalEntryService(journalRepository, accountRepository, periodRepository, auditLog);
-    leaseService = new LeaseService(leaseRepository, journalEntryService, new AccountMappingService(new AccountService(accountRepository, journalRepository)));
+    const commencementExecutor = new FakeLeaseCommencementExecutor({ journal: journalEntryService, leases: leaseRepository });
+    leaseService = new LeaseService(leaseRepository, commencementExecutor, new AccountMappingService(new AccountService(accountRepository, journalRepository)));
   });
 
   describe('createLease', () => {
@@ -153,6 +155,33 @@ describe('LeaseService', () => {
       });
       await leaseService.postCommencement(lease.id);
       await expect(leaseService.postCommencement(lease.id)).rejects.toThrow(/already commenced/);
+    });
+
+    it('refuses to commence a lease into a locked accounting period', async () => {
+      // Leases + Payroll integrity audit, item 7: "locked periods remain
+      // protected" — a fresh harness with a LOCKED period covering the
+      // commencement date, standing in for the real
+      // accounting_periods.status = 'locked' check the atomic RPC
+      // (post_lease_commencement, migration 0088) performs before posting
+      // anything.
+      const localLeaseRepository = new MockLeaseRepository([]);
+      const journalRepository = new MockJournalEntryRepository([]);
+      const accountRepository = new MockAccountRepository(seedAccounts);
+      const lockedPeriodRepository = new MockAccountingPeriodRepository([{ ...makeOpenPeriod(), status: 'locked' }]);
+      const auditLog = new AuditLogService(new MockAuditLogRepository());
+      const localJournalEntryService = new JournalEntryService(journalRepository, accountRepository, lockedPeriodRepository, auditLog);
+      const localAccountMapper = new AccountMappingService(new AccountService(accountRepository, journalRepository));
+      const localCommencementExecutor = new FakeLeaseCommencementExecutor({ journal: localJournalEntryService, leases: localLeaseRepository });
+      const localLeaseService = new LeaseService(localLeaseRepository, localCommencementExecutor, localAccountMapper);
+
+      const lease = await localLeaseService.createLease({
+        lessorName: 'ACME', assetDescription: 'Truck', commencementDate: '2026-01-01', leaseTermMonths: 12, monthlyPayment: 1000, discountRatePercent: 10,
+      });
+      await expect(localLeaseService.postCommencement(lease.id)).rejects.toThrow(/not open/);
+
+      // Nothing committed — the lease is still a draft, no journal posted.
+      const stillDraft = await localLeaseRepository.getById(lease.id);
+      expect(stillDraft!.status).toBe('draft');
     });
   });
 });

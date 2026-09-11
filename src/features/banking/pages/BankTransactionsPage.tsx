@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/shadcn/select';
 import { ConfirmDialog } from '@/components/app/form';
 import { useTaxRates } from '@/features/tax/hooks/useTaxRates';
+import { useLeaseAmortization } from '@/features/leases/hooks/useLeaseAmortization';
 import { useBankAccounts } from '../hooks/useBankAccounts';
 import { useBankTransactions } from '../hooks/useBankTransactions';
 import { useBankTransactionMutations } from '../hooks/useBankTransactionMutations';
@@ -44,6 +45,7 @@ export function BankTransactionsPage() {
   const { bankAccounts, isLoading: accountsLoading } = useBankAccounts();
   const { taxRates } = useTaxRates();
   const { accounts: glAccounts } = useGlAccounts();
+  const { history: leaseAmortizationHistory } = useLeaseAmortization();
   const [selectedAccountId, setSelectedAccountId] = useState<string>('all');
 
   const filterAccountId = selectedAccountId === 'all' ? undefined : selectedAccountId;
@@ -196,6 +198,10 @@ export function BankTransactionsPage() {
         transaction={detailTransaction}
         isLoading={isLoading}
         bankAccount={detailTransaction ? bankAccountsById.get(detailTransaction.bankAccountId) : undefined}
+        resolveLeaseAmortizationEntry={(entryId) => {
+          const entry = leaseAmortizationHistory.find((e) => e.id === entryId);
+          return entry ? { leaseId: entry.leaseId, periodEnd: entry.periodEnd } : undefined;
+        }}
         open={detailOpen}
         onOpenChange={(next) => {
           if (!next) closeRecord();

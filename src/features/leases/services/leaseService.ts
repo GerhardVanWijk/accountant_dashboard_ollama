@@ -1,19 +1,10 @@
 import type { ID } from '@/types/common';
-import type { JournalEntry } from '@/types';
 import type { LeaseContract } from '@/types/lease';
 import type { ILeaseRepository } from '../repositories/ILeaseRepository';
-import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
-import { calculateLeaseLiabilityPresentValue, round2 } from './leaseCalculations';
-
-export interface JournalPoster {
-  postJournalEntry(input: {
-    date: string;
-    memo?: string;
-    source: string;
-    lines: NewJournalLineInput[];
-    postedByUserId?: ID;
-  }): Promise<JournalEntry>;
-}
+import type { AccountMapper } from '@/features/accounting/services';
+import { calculateLeaseLiabilityPresentValue } from './leaseCalculations';
+import type { LeaseCommencementExecutor } from './leaseCommencementExecutor';
+import { newUuid } from '@/lib/uuid';
 
 export type CreateLeaseDTO = Pick<
   LeaseContract,
@@ -46,7 +37,7 @@ function validateLeaseEconomics(data: { leaseTermMonths: number; monthlyPayment:
 export class LeaseService {
   constructor(
     private readonly repository: ILeaseRepository,
-    private readonly journalPoster: JournalPoster,
+    private readonly commencementExecutor: LeaseCommencementExecutor,
     private readonly accounts: AccountMapper,
   ) {}
 
@@ -155,9 +146,20 @@ export class LeaseService {
    * fixedAssetService.postAcquisition(), there is no funding-account
    * choice here — the credit side is always the Lease Liability itself
    * (the payable created by the lease contract), not a bank/AP account the
-   * user selects, so this takes no contra-account parameter. Only a
-   * 'draft' lease may be posted, so the same lease can never be commenced
-   * twice.
+   * user selects, so this takes no contra-account parameter.
+   *
+   * Posts through `commencementExecutor` — one atomic RPC call
+   * (`post_lease_commencement`, migration 0088) that posts the journal AND
+   * flips the lease to 'active' in the SAME database transaction (Leases +
+   * Payroll integrity audit, PART 1). Before this, the journal post and the
+   * lease status update were two independent Supabase calls; a failure
+   * between them could leave a posted capitalization journal with the
+   * lease still showing 'draft', and a retry would double-capitalize it.
+   * The `commencementId` is a fresh client-generated token per call — a
+   * genuine retry of the SAME logical commencement should re-use it (this
+   * method does not itself retry, so each call gets a fresh one; a caller
+   * that wraps this in its own retry logic should generate the id once,
+   * outside the retry loop).
    */
   async postCommencement(id: ID, postedByUserId?: ID): Promise<LeaseContract> {
     const lease = await this.repository.getById(id);
@@ -173,34 +175,19 @@ export class LeaseService {
       this.accounts.getAccountId('RIGHT_OF_USE_ASSET'),
       this.accounts.getAccountId('LEASE_LIABILITY'),
     ]);
-    const lines: NewJournalLineInput[] = [
-      {
-        accountId: rightOfUseAssetId,
-        description: memo,
-        debit: round2(lease.initialLeaseLiability),
-        credit: 0,
-      },
-      {
-        accountId: leaseLiabilityId,
-        description: memo,
-        debit: 0,
-        credit: round2(lease.initialLeaseLiability),
-      },
-    ];
 
-    const entry = await this.journalPoster.postJournalEntry({
-      date: lease.commencementDate,
+    const result = await this.commencementExecutor.postCommencement({
+      commencementId: newUuid(),
+      leaseId: id,
+      commencementDate: lease.commencementDate,
       memo,
       source: 'lease_commencement',
-      lines,
-      postedByUserId,
+      rightOfUseAssetAccountId: rightOfUseAssetId,
+      leaseLiabilityAccountId: leaseLiabilityId,
+      createdBy: postedByUserId,
     });
 
-    return this.repository.update(id, {
-      status: 'active',
-      outstandingLeaseLiability: lease.initialLeaseLiability,
-      journalEntryId: entry.id,
-    });
+    return result.lease;
   }
 
   /** Mirrors FixedAssetService.nextAssetNumber()'s shape — sequential, based on register size. */

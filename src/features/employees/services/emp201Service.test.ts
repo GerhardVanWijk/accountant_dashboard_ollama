@@ -4,6 +4,16 @@ import { computeEmp501Report } from './emp501Service';
 import { getSarsTaxYear } from '../utils/sarsTaxYear';
 import { PayrollRunService } from './payrollRunService';
 import { PayrollTaxConfigService } from './payrollTaxConfigService';
+import { FakePayrollRunPostingExecutor } from './payrollRunPostingExecutor';
+import { FakePayrollRunCorrectionExecutor } from './payrollRunCorrectionExecutor';
+import type { PayrollSettlementExecutor } from './payrollSettlementExecutor';
+
+/** Not exercised by this file — settlement has its own dedicated adversarial suite in payrollSettlementExecutor.test.ts. */
+const unusedSettlementExecutor: PayrollSettlementExecutor = {
+  settle: async () => {
+    throw new Error('settlement not exercised in this test file');
+  },
+};
 import { MockPayrollRunRepository } from '../repositories/MockPayrollRunRepository';
 import { MockPayrollTaxConfigRepository } from '../repositories/MockPayrollTaxConfigRepository';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
@@ -68,6 +78,13 @@ describe('EMP201/EMP501 reporting — integration against a real posted payroll 
       },
     ];
 
+    const postingExecutor = new FakePayrollRunPostingExecutor({
+      journal: journalEntryService,
+      runs: runRepository,
+      accounts: { getType: async (id) => (await accountRepository.getById(id))?.type },
+    });
+    const correctionExecutor = new FakePayrollRunCorrectionExecutor({ journal: journalEntryService, runs: runRepository });
+
     runService = new PayrollRunService(
       runRepository,
       {
@@ -76,14 +93,16 @@ describe('EMP201/EMP501 reporting — integration against a real posted payroll 
       },
       taxConfigService,
       { getCompanies: async () => [{ sdlExempt: false } as Company] },
-      journalEntryService,
+      postingExecutor,
       accountMapper,
+      correctionExecutor,
+      unusedSettlementExecutor,
     );
   });
 
   it('computeEmp201Report matches a real posted run, and reconcilePayrollLiabilities finds zero variance', async () => {
     const draft = await runService.createPayrollRun('2026-06-01', '2026-06-30', '2026-06-25');
-    await runService.postPayrollRun(draft.id, 'acc_1000');
+    await runService.postPayrollRun(draft.id, 'acc_2250');
 
     const runs = await runService.getPayrollRuns();
     const periodStart = new Date('2026-06-01T00:00:00.000Z');
@@ -111,7 +130,7 @@ describe('EMP201/EMP501 reporting — integration against a real posted payroll 
 
   it('computeEmp501Report rolls up the same posted run into its month', async () => {
     const draft = await runService.createPayrollRun('2026-06-01', '2026-06-30', '2026-06-25');
-    await runService.postPayrollRun(draft.id, 'acc_1000');
+    await runService.postPayrollRun(draft.id, 'acc_2250');
 
     const runs = await runService.getPayrollRuns();
     const taxYear = getSarsTaxYear(new Date('2026-06-15T00:00:00.000Z'));

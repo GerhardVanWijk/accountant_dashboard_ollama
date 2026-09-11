@@ -214,7 +214,7 @@ export const seedAccounts: Account[] = [
     normalBalance: 'credit',
     isActive: true,
     description:
-      'Employees’ net pay not yet disbursed. A payroll run may instead credit Cash and Bank (acc_1000) directly when pay is disbursed immediately — this control account is only used when payment is a separate later step.',
+      'Employees’ net pay pending EFT disbursement. `post_payroll_run` (migration 0091) always credits this clearing account, never Cash and Bank (acc_1000) directly — the actual disbursement is recorded once, separately, through the Banking module against this same account (see docs/SA_SPEC_GAP_ANALYSIS.md\'s history: this was previously optional, letting a payroll run credit Cash directly, which the Leases + Payroll integrity audit found could double-count against an imported bank statement).',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
@@ -537,6 +537,19 @@ export const seedAccounts: Account[] = [
     normalBalance: 'credit',
     isActive: true,
     description: 'IFRS 16 (§32/§47) lease liability at the present value of remaining lease payments — not split into separate current/non-current GL accounts (the current portion is shown as a computed field, same simplification every other liability in this Chart of Accounts already has).',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'acc_2460',
+    code: '2460',
+    name: 'Lease Payment Clearing',
+    type: 'liability',
+    subType: 'current_liability',
+    normalBalance: 'credit',
+    isActive: true,
+    description:
+      '`post_lease_amortization_period` (migration 0089) credits this clearing account for the period\'s interest+principal cash portion, never Cash and Bank (acc_1000) directly — the actual debit order is recorded once, separately, through the Banking module against this same account. Distinct from acc_2450 Lease Liability, which only carries the IFRS 16 present-value roll-forward.',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },

@@ -15,6 +15,20 @@ export interface BankTransaction extends BaseEntity {
   status: BankTransactionStatus;
   /** Journal entry or invoice/bill payment this transaction was matched to. */
   matchedEntityId?: ID;
+  /**
+   * What `matchedEntityId` refers to. Was unset by every service until the
+   * Leases + Payroll integrity audit (PART 3 — Banking fix, migration
+   * 0086). Set exclusively by the atomic, over-settlement-proof RPCs
+   * `settle_payroll_net_pay` / `settle_lease_period_payment` (FINAL
+   * HARDENING pass, migrations 0096/0097): 'payroll_run' (matchedEntityId
+   * -> a PayrollRun's id, one obligation per whole run) or
+   * 'lease_amortization_entry' (matchedEntityId -> a
+   * LeaseAmortizationEntry's id — one specific amortization PERIOD, not
+   * the lease as a whole, so a lease's clearing balance is traceable
+   * period by period rather than one opaque cumulative figure). Undefined
+   * for any other transaction.
+   */
+  matchedEntityType?: 'payroll_run' | 'lease_amortization_entry';
   category?: string;
 
   /**

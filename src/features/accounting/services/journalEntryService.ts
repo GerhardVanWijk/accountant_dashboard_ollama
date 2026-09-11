@@ -88,6 +88,36 @@ const BALANCE_EPSILON = 0.005;
  * passes that option for these three sources, and correcting a posted
  * acquisition/depreciation/disposal instead requires a manual balancing
  * journal against a different account (see docs/FIXED_ASSETS.md).
+ *
+ * `lease_commencement` / `lease_amortization` / `lease_termination`
+ * (Leases + Payroll accounting-integrity audit, PART 1.15/2.23) are
+ * subledger-owned for the identical reason: a generic reversal of one of
+ * these would move the GL but leave `lease_contracts` (status,
+ * outstandingLeaseLiability, accumulatedDepreciation, journalEntryId) and
+ * `lease_amortization_entries` completely unchanged — the same silent
+ * GL-vs-subledger split. Like Fixed Assets, the Lease module has no
+ * dedicated reversal workflow yet, so correcting a posted lease journal
+ * today requires a manual balancing journal against a different account,
+ * not a reversal of the original entry.
+ *
+ * `payroll` (same audit, PART 2.23) is subledger-owned for the same
+ * reason again: a generic reversal would move the GL but leave the
+ * originating `payroll_runs` row's `status: 'posted'`/`journalEntryId` and
+ * every payslip line untouched — invisible to EMP201/EMP501, which derive
+ * their totals from posted PayrollRuns, not from the GL. Unlike Fixed
+ * Assets and Leases, payroll DOES have a dedicated correction workflow now
+ * — `PayrollRunService.reversePayrollRun()` / `post_payroll_run_correction`
+ * (migration 0093, audit item 5) — which correctly unwinds BOTH sides
+ * (posts the GL reversal AND marks the run reversed) in one atomic
+ * operation; that is the supported way to correct a posted run, not this
+ * generic path.
+ *
+ * `payroll_correction` (the reversal journal that workflow itself posts)
+ * is ALSO subledger-owned, for a narrower reason: a reversal-of-a-reversal
+ * is nonsensical (there is nothing further downstream for it to desync —
+ * the original run's `reversedAt`/`reversalJournalEntryId` already record
+ * that it happened), so it is blocked here too rather than left reachable
+ * through the generic path.
  */
 const SUBLEDGER_OWNED_SOURCES = new Set([
   'invoice',
@@ -99,6 +129,11 @@ const SUBLEDGER_OWNED_SOURCES = new Set([
   'fixed_asset_acquisition',
   'depreciation',
   'asset_disposal',
+  'lease_commencement',
+  'lease_amortization',
+  'lease_termination',
+  'payroll',
+  'payroll_correction',
 ]);
 
 /**

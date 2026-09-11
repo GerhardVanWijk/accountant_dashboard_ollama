@@ -1,18 +1,9 @@
 import type { ID } from '@/types/common';
-import type { JournalEntry } from '@/types';
 import type { LeaseContract } from '@/types/lease';
 import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
 import { EPSILON, round2 } from './leaseCalculations';
-
-export interface JournalPoster {
-  postJournalEntry(input: {
-    date: string;
-    memo?: string;
-    source: string;
-    lines: NewJournalLineInput[];
-    postedByUserId?: ID;
-  }): Promise<JournalEntry>;
-}
+import type { LeaseTerminationExecutor } from './leaseTerminationExecutor';
+import { newUuid } from '@/lib/uuid';
 
 /** Minimal surface of LeaseRepository this service depends on. */
 export interface LeaseStore {
@@ -37,10 +28,19 @@ export interface LeaseStore {
 export class LeaseDisposalService {
   constructor(
     private readonly leaseStore: LeaseStore,
-    private readonly journalPoster: JournalPoster,
+    private readonly terminationExecutor: LeaseTerminationExecutor,
     private readonly accounts: AccountMapper,
   ) {}
 
+  /**
+   * Posts through `terminationExecutor` — one atomic RPC call
+   * (`post_lease_termination`, migration 0090) that posts the termination
+   * journal AND flips the lease to 'terminated' in the SAME database
+   * transaction (Leases + Payroll integrity audit, PART 1) — a failure
+   * between the two independent writes this replaced could leave a posted
+   * derecognition journal with the lease still showing 'active', and a
+   * retry would double-terminate it.
+   */
   async terminateLease(id: ID, terminationDate: string, postedByUserId?: ID): Promise<LeaseContract> {
     const lease = await this.leaseStore.getById(id);
     if (!lease) {
@@ -107,18 +107,16 @@ export class LeaseDisposalService {
       });
     }
 
-    const entry = await this.journalPoster.postJournalEntry({
-      date: terminationDate,
-      source: 'lease_termination',
+    const result = await this.terminationExecutor.postTermination({
+      terminationId: newUuid(),
+      leaseId: id,
+      terminationDate,
       memo,
+      source: 'lease_termination',
       lines,
-      postedByUserId,
+      createdBy: postedByUserId,
     });
 
-    return this.leaseStore.update(id, {
-      status: 'terminated',
-      terminationDate,
-      terminationJournalEntryId: entry.id,
-    });
+    return result.lease;
   }
 }

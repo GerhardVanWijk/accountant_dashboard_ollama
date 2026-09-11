@@ -438,3 +438,27 @@ export class BankTransactionService {
     );
   }
 }
+
+/**
+ * DELIBERATELY REMOVED (FINAL PRE-MIGRATION HARDENING, PART A):
+ * `BankTransactionService.recordSubledgerSettlement()` used to live here —
+ * a thin wrapper around `createDirectTransaction()` that recorded a
+ * payroll/lease clearing settlement with NO server-side cap on the
+ * amount. Its outstanding-balance check lived only in
+ * `SettleClearingBalanceForm.tsx` (a React `<input max=...>`), which a
+ * second browser tab, a stale page, a retry, or a direct service call
+ * bypassed completely — two callers could together over-settle the same
+ * obligation with nothing in the database to stop it.
+ *
+ * The replacement is NOT a hardened version of this method — it is two
+ * dedicated atomic RPCs, one per domain, each deriving and validating the
+ * authoritative outstanding balance itself under a row lock:
+ *   - `PayrollRunService.settleNetPay()` -> `settle_payroll_net_pay` (0096)
+ *   - `LeaseAmortizationService.settlePeriod()` -> `settle_lease_period_payment` (0097)
+ * Both still post through the exact same DR-clearing/CR-bank shape this
+ * method used (still no VAT — a clearing settlement is not a taxable
+ * supply; still `direction: 'credit'`, a payment) and still tag the
+ * resulting `BankTransaction` with `matchedEntityType`/`matchedEntityId`
+ * (0086) for `BankTransactionDetailSheet`'s related-record link — but the
+ * cap is now enforced where it actually has to be.
+ */
