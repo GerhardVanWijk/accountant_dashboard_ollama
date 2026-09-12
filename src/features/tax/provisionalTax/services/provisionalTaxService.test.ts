@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { AccountingPeriod, Company, FinancialYear, TaxComputation } from '@/types';
 import { ProvisionalTaxService } from './provisionalTaxService';
+import { FakeProvisionalTaxPostingExecutor } from './provisionalTaxPostingExecutor';
 import { IncomeTaxConfigService } from '@/features/tax/incomeTax/services/incomeTaxConfigService';
 import { MockIncomeTaxConfigRepository } from '@/features/tax/incomeTax/repositories/MockIncomeTaxConfigRepository';
 import { MockProvisionalTaxPeriodRepository } from '../repositories/MockProvisionalTaxPeriodRepository';
@@ -16,6 +17,7 @@ import { seedAccounts } from '@/mock-data/accounts';
 
 const INCOME_TAX_PAYABLE_ACCOUNT_ID = 'acc_2300';
 const CASH_ACCOUNT_ID = 'acc_1000';
+const PROVISIONAL_TAX_PAYMENT_CLEARING_ACCOUNT_ID = 'acc_2270';
 
 function makeOpenPeriod(): AccountingPeriod {
   return {
@@ -115,7 +117,7 @@ describe('ProvisionalTaxService', () => {
       { getFinancialYears: async () => [financialYear] },
       { getCompanies: async () => [company] },
       incomeTaxConfigService,
-      journalEntryService,
+      new FakeProvisionalTaxPostingExecutor({ journal: journalEntryService, periods: periodRepository }),
       { getComputationForFinancialYear: async () => taxComputation },
       new AccountMappingService(new AccountService(accountRepository, journalRepository)),
     );
@@ -172,7 +174,7 @@ describe('ProvisionalTaxService', () => {
   });
 
   describe('payProvisionalTax', () => {
-    it('posts a balanced journal entry DR Income Tax Payable / CR Cash and Bank and records the payment on the slot', async () => {
+    it('posts a balanced journal entry DR Income Tax Payable / CR Provisional Tax Payment Clearing (never Cash and Bank directly) and records the payment on the slot', async () => {
       const period = await service.getOrCreatePeriod(financialYear.id);
       await service.recordEstimate(period.id, 'first', 300000);
 
@@ -188,11 +190,13 @@ describe('ProvisionalTaxService', () => {
       expect(entry?.lines).toHaveLength(2);
 
       const payableLine = entry?.lines.find((l) => l.accountId === INCOME_TAX_PAYABLE_ACCOUNT_ID);
-      const cashLine = entry?.lines.find((l) => l.accountId === CASH_ACCOUNT_ID);
+      const clearingLine = entry?.lines.find((l) => l.accountId === PROVISIONAL_TAX_PAYMENT_CLEARING_ACCOUNT_ID);
       expect(payableLine?.debit).toBeCloseTo(40000, 2);
       expect(payableLine?.credit).toBe(0);
-      expect(cashLine?.credit).toBeCloseTo(40000, 2);
-      expect(cashLine?.debit).toBe(0);
+      // Migration-review addendum §3: never Cash and Bank (acc_1000) directly — CR the clearing account instead.
+      expect(entry?.lines.some((l) => l.accountId === CASH_ACCOUNT_ID)).toBe(false);
+      expect(clearingLine?.credit).toBeCloseTo(40000, 2);
+      expect(clearingLine?.debit).toBe(0);
 
       const totalDebit = entry!.lines.reduce((sum, l) => sum + l.debit, 0);
       const totalCredit = entry!.lines.reduce((sum, l) => sum + l.credit, 0);
@@ -210,6 +214,33 @@ describe('ProvisionalTaxService', () => {
     it('rejects a non-positive amount', async () => {
       const period = await service.getOrCreatePeriod(financialYear.id);
       await expect(service.payProvisionalTax(period.id, 'first', 0, '2026-07-01')).rejects.toThrow(/greater than 0/i);
+    });
+
+    it('first and second payments coexist and the Trial Balance stays balanced after both (atomic posting, 2026-09-12 continuation)', async () => {
+      const period = await service.getOrCreatePeriod(financialYear.id);
+      await service.recordEstimate(period.id, 'first', 300000);
+      await service.recordEstimate(period.id, 'second', 600000);
+
+      const afterFirst = await service.payProvisionalTax(period.id, 'first', 40000, '2026-07-01');
+      const afterSecond = await service.payProvisionalTax(afterFirst.id, 'second', 80000, '2026-12-15');
+
+      expect(afterSecond.first.paidDate).toBe('2026-07-01');
+      expect(afterSecond.second.paidDate).toBe('2026-12-15');
+      expect(afterSecond.first.journalEntryId).not.toBe(afterSecond.second.journalEntryId);
+
+      const entries = await journalEntryService.getEntries();
+      expect(entries.filter((e) => e.source === 'provisional_tax')).toHaveLength(2);
+
+      const trialBalance = await journalEntryService.computeTrialBalance();
+      expect(trialBalance.balanced).toBe(true);
+    });
+
+    it('rejects a payment dated outside any open accounting period (locked-period protection)', async () => {
+      const period = await service.getOrCreatePeriod(financialYear.id);
+      await service.recordEstimate(period.id, 'first', 300000);
+
+      // No accounting period covers 2027 — the mock only seeds calendar-year 2026.
+      await expect(service.payProvisionalTax(period.id, 'first', 40000, '2027-03-01')).rejects.toThrow(/no accounting period/i);
     });
   });
 

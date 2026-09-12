@@ -34,15 +34,50 @@ export class RelatedPartyService {
     if (!data.name.trim()) {
       throw new Error('Related party name is required.');
     }
+    const effectiveFrom = data.effectiveFrom || new Date().toISOString().slice(0, 10);
+    if (data.effectiveTo && data.effectiveTo < effectiveFrom) {
+      throw new Error('Effective-to date cannot be before the effective-from date.');
+    }
     const now = new Date().toISOString();
-    return this.repository.create({ ...data, id: '', createdAt: now, updatedAt: now });
+    return this.repository.create({ ...data, effectiveFrom, id: '', createdAt: now, updatedAt: now });
   }
 
   async updateRelatedParty(id: ID, patch: UpdateRelatedPartyDTO): Promise<RelatedParty> {
     if (patch.name !== undefined && !patch.name.trim()) {
       throw new Error('Related party name is required.');
     }
+    if (patch.effectiveFrom !== undefined || patch.effectiveTo !== undefined) {
+      const existing = await this.repository.getById(id);
+      if (!existing) {
+        throw new Error(`Related party "${id}" not found.`);
+      }
+      const effectiveFrom = patch.effectiveFrom ?? existing.effectiveFrom;
+      const effectiveTo = patch.effectiveTo ?? existing.effectiveTo;
+      if (effectiveTo && effectiveTo < effectiveFrom) {
+        throw new Error('Effective-to date cannot be before the effective-from date.');
+      }
+    }
     return this.repository.update(id, patch);
+  }
+
+  /**
+   * Deactivates a related party by CLOSING its relationship period —
+   * setting `isActive = false` and `effectiveTo` (defaulting to today) —
+   * rather than deleting the record or merely flipping a boolean with no
+   * date attached (Tax & Compliance integrity audit continuation,
+   * 2026-09-12, §9). The party itself, and every RelatedPartyTransaction
+   * that references it, remain in the register for historical disclosure.
+   */
+  async deactivateRelatedParty(id: ID, effectiveTo?: string): Promise<RelatedParty> {
+    const existing = await this.repository.getById(id);
+    if (!existing) {
+      throw new Error(`Related party "${id}" not found.`);
+    }
+    const closeDate = effectiveTo || new Date().toISOString().slice(0, 10);
+    if (closeDate < existing.effectiveFrom) {
+      throw new Error('Effective-to date cannot be before the effective-from date.');
+    }
+    return this.repository.update(id, { isActive: false, effectiveTo: closeDate });
   }
 
   /**

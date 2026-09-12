@@ -394,6 +394,19 @@ export const seedAccounts: Account[] = [
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
+    id: 'acc_2270',
+    code: '2270',
+    name: 'Provisional Tax Payment Clearing',
+    type: 'liability',
+    subType: 'current_liability',
+    normalBalance: 'credit',
+    isActive: true,
+    description:
+      'A paid provisional tax slot (first/second/top-up) pending EFT to SARS. `pay_provisional_tax` (migration 0101, hardened by the migration-review addendum) always credits this clearing account, never Cash and Bank (acc_1000) directly — the actual EFT is recorded once, separately, through the Banking module against this same account, mirroring acc_2250 Net Pay Payable\'s precedent.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
     id: 'acc_2300',
     code: '2300',
     name: 'Income Tax Payable',
@@ -428,6 +441,19 @@ export const seedAccounts: Account[] = [
     isActive: true,
     description:
       'Dividends Tax withheld from a declared dividend on behalf of the shareholder, owed to SARS (§56) — a withholding liability, distinct from the company’s own Income Tax Payable.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'acc_2520',
+    code: '2520',
+    name: 'Dividends Payment Clearing',
+    type: 'liability',
+    subType: 'current_liability',
+    normalBalance: 'credit',
+    isActive: true,
+    description:
+      'The net-to-shareholders leg of a dividend payment and the SARS remittance leg of the withheld Dividends Tax, both pending EFT. `_post_dividend_transition` (migration 0102, hardened by the migration-review addendum) always credits this clearing account, never Cash and Bank (acc_1000) directly — the actual EFT is recorded once, separately, through the Banking module against this same account, mirroring acc_2250 Net Pay Payable\'s precedent.',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },

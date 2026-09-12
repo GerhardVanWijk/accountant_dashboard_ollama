@@ -52,9 +52,14 @@ const REQUIRED_CODES: Record<AccountMappingKey, string> = {
   // Leases + Payroll integrity audit (PART 3 — Banking fix): added by 0085
   // (backfill for existing companies) and 0094 (create-or-replaces 0066's
   // seed_new_company_accounting so a BRAND NEW company gets them too — see
-  // the "seeds every account code" check below, which reads 0066 + 0094
-  // together for exactly this reason).
+  // the "seeds every account code" check below, which reads 0066 + 0094 +
+  // 0108 together for exactly this reason).
   NET_PAY_PAYABLE: '2250', LEASE_PAYMENT_CLEARING: '2460',
+  // Tax & Compliance audit, migration-review addendum (Tax ↔ Banking
+  // duplicate-post fix): added by 0107 (backfill for existing companies)
+  // and 0108 (create-or-replaces seed_new_company_accounting again so a
+  // BRAND NEW company gets them too — same relationship 0094 has to 0085).
+  PROVISIONAL_TAX_PAYMENT_CLEARING: '2270', DIVIDENDS_PAYMENT_CLEARING: '2520',
 };
 
 describe('0066 — atomic first-company bootstrap', () => {
@@ -120,11 +125,13 @@ describe('0066 — atomic first-company bootstrap', () => {
 
     it('seeds every account code that AccountMapper resolves', () => {
       // 0066 defined seed_new_company_accounting(); 0094 create-or-replaces
-      // it to add 2250/2460 (Leases + Payroll integrity audit, PART 3) — a
-      // brand new company's actual seeded CoA is whichever migration ran
-      // LAST, so "does the current function seed every code" must check
-      // both, not 0066 alone (which correctly predates those two codes).
-      const currentSeedSql = rawSql + raw('0094');
+      // it to add 2250/2460 (Leases + Payroll integrity audit, PART 3), and
+      // 0108 create-or-replaces it again to add 2270/2520 (Tax & Compliance
+      // audit, migration-review addendum) — a brand new company's actual
+      // seeded CoA is whichever migration ran LAST, so "does the current
+      // function seed every code" must check all three, not 0066 alone
+      // (which correctly predates all four codes).
+      const currentSeedSql = rawSql + raw('0094') + raw('0108');
       const missing = Object.entries(REQUIRED_CODES).filter(([, c]) => !new RegExp(`\\('${c}',`).test(currentSeedSql));
       expect(missing.map(([k]) => k)).toEqual([]);
     });

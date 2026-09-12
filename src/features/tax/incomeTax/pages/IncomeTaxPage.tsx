@@ -1,6 +1,7 @@
 ﻿import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { FileQuestion, Loader2 } from 'lucide-react';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { ArrowLeftRightIcon, CircleDollarSignIcon, LandmarkIcon, TrendingUpIcon } from 'lucide-react';
@@ -33,6 +34,9 @@ export function IncomeTaxPage() {
     setSbcEligibility,
   } = useIncomeTax();
   const navigate = useNavigate();
+  const canCreate = useCanAccess('tax', 'create');
+  const canUpdate = useCanAccess('tax', 'update');
+  const canPost = useCanAccess('tax', 'post');
 
   const [selectedFinancialYearId, setSelectedFinancialYearId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -114,9 +118,11 @@ export function IncomeTaxPage() {
         title="SBC (Small Business Corporation) Eligibility"
         description={`Manually confirmed by an accountant only — not auto-determined. ${company?.isSbcEligible ? 'Currently flagged eligible' : 'Currently not flagged eligible'}${company?.sbcEligibilityReason ? `: "${company.sbcEligibilityReason}"` : '.'}`}
         actions={
-          <Button variant="outline" onClick={() => setSbcModalOpen(true)}>
-            {company?.isSbcEligible ? 'Change' : 'Flag as SBC-eligible'}
-          </Button>
+          canUpdate ? (
+            <Button variant="outline" onClick={() => setSbcModalOpen(true)}>
+              {company?.isSbcEligible ? 'Change' : 'Flag as SBC-eligible'}
+            </Button>
+          ) : undefined
         }
         bodyClassName="hidden"
       >
@@ -142,16 +148,18 @@ export function IncomeTaxPage() {
               <EmptyTitle>No tax computation yet for {selectedFinancialYear.name}</EmptyTitle>
               <EmptyDescription>Create one to compute accounting profit, suggested tax adjustments, taxable income, and the resulting tax liability.</EmptyDescription>
             </EmptyHeader>
-            <Button
-              disabled={busy}
-              onClick={() =>
-                runAction(async () => {
-                  await createComputation(selectedFinancialYear.id);
-                }, `Created a draft tax computation for ${selectedFinancialYear.name}.`)
-              }
-            >
-              Create Tax Computation
-            </Button>
+            {canCreate && (
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  runAction(async () => {
+                    await createComputation(selectedFinancialYear.id);
+                  }, `Created a draft tax computation for ${selectedFinancialYear.name}.`)
+                }
+              >
+                Create Tax Computation
+              </Button>
+            )}
           </Empty>
         </SectionCard>
       )}
@@ -187,28 +195,32 @@ export function IncomeTaxPage() {
 
           {selectedComputation.status === 'draft' ? (
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                className="text-destructive"
-                disabled={busy}
-                onClick={() =>
-                  runAction(async () => {
-                    await deleteComputation(selectedComputation.id);
-                  }, 'Draft tax computation deleted.')
-                }
-              >
-                Delete Draft
-              </Button>
-              <Button
-                disabled={busy}
-                onClick={() =>
-                  runAction(async () => {
-                    await postComputation(selectedComputation.id);
-                  }, `Posted income tax for ${selectedComputation.financialYearLabel}.`)
-                }
-              >
-                Post Tax Computation
-              </Button>
+              {canUpdate && (
+                <Button
+                  variant="outline"
+                  className="text-destructive"
+                  disabled={busy}
+                  onClick={() =>
+                    runAction(async () => {
+                      await deleteComputation(selectedComputation.id);
+                    }, 'Draft tax computation deleted.')
+                  }
+                >
+                  Delete Draft
+                </Button>
+              )}
+              {canPost && (
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    runAction(async () => {
+                      await postComputation(selectedComputation.id);
+                    }, `Posted income tax for ${selectedComputation.financialYearLabel}.`)
+                  }
+                >
+                  Post Tax Computation
+                </Button>
+              )}
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">

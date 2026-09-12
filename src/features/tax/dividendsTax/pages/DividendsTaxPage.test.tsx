@@ -4,6 +4,7 @@ import type { DividendDeclaration } from '@/types';
 import { DividendsTaxPage } from './DividendsTaxPage';
 import { dividendDeclarationService } from '../services';
 import { formatDate } from '@/lib/app/format';
+import { useAuthStore } from '@/stores/authStore';
 
 vi.mock('../services', () => ({
   dividendDeclarationService: {
@@ -14,6 +15,7 @@ vi.mock('../services', () => ({
     remitToSars: vi.fn(),
     deleteDraftDeclaration: vi.fn(),
   },
+  reconcileDividendsTaxControlAccounts: vi.fn().mockResolvedValue(null),
   getRemittanceDueDateHint: (paidDate: string) => {
     const d = new Date(paidDate);
     const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 2, 0));
@@ -45,6 +47,9 @@ function makeDeclaration(overrides: Partial<DividendDeclaration> = {}): Dividend
 describe('DividendsTaxPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useAuthStore.setState({
+      profile: { id: 'u1', role: 'admin', companyId: 'comp_001', isActive: true, createdAt: '', updatedAt: '' },
+    });
   });
 
   it('shows a loading state while declarations are being fetched', () => {

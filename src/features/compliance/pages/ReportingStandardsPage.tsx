@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { FormShell, FormHeader } from '@/components/app/form';
 import { formatDate } from '@/lib/app/format';
 import type { ReportingStandardName } from '@/types';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useReportingStandards } from '../hooks/useReportingStandards';
 import { resolveApplicableVersion } from '../services/reportingStandardCalculations';
 import { AddReportingStandardVersionForm } from '../components/AddReportingStandardVersionForm';
@@ -28,6 +29,7 @@ const STANDARDS: ReportingStandardName[] = ['full_ifrs', 'ifrs_for_smes'];
  */
 export function ReportingStandardsPage() {
   const { financialYears, versions, loading, error, refetch, supersede } = useReportingStandards();
+  const canUpdate = useCanAccess('compliance', 'update');
   const [earlyAdoptionElected, setEarlyAdoptionElected] = useState(false);
   const [addModalStandard, setAddModalStandard] = useState<ReportingStandardName | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -113,9 +115,11 @@ export function ReportingStandardsPage() {
               key={standard}
               title={`${STANDARD_LABELS[standard]} — Edition History`}
               actions={
-                <Button variant="outline" onClick={() => setAddModalStandard(standard)}>
-                  Add New Edition
-                </Button>
+                canUpdate ? (
+                  <Button variant="outline" onClick={() => setAddModalStandard(standard)}>
+                    Add New Edition
+                  </Button>
+                ) : undefined
               }
             >
               <div className="overflow-x-auto rounded-lg border border-border">

@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { RelatedPartyTransactionService } from './relatedPartyTransactionService';
+import type { ResolvedSourceDocument, SourceDocumentLookup } from './relatedPartyTransactionService';
 import { MockRelatedPartyTransactionRepository } from '../repositories/MockRelatedPartyTransactionRepository';
 import type { CreateRelatedPartyTransactionDTO } from './relatedPartyTransactionService';
 import type { RelatedParty } from '@/types/relatedParty';
@@ -9,6 +10,7 @@ const PARTY: RelatedParty = {
   name: 'Jane Director',
   relationshipType: 'director',
   isActive: true,
+  effectiveFrom: '2026-01-01',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -75,5 +77,58 @@ describe('RelatedPartyTransactionService', () => {
     const forParty1 = await service.getTransactionsForParty(PARTY.id);
     expect(forParty1).toHaveLength(1);
     expect(forParty1[0].natureOfTransaction).toBe('Loan advanced');
+  });
+
+  describe('source-document linkage (Tax & Compliance integrity audit continuation, 2026-09-12, §10)', () => {
+    function makeLookup(resolved: ResolvedSourceDocument | undefined): SourceDocumentLookup {
+      return { resolve: async () => resolved };
+    }
+
+    it('derives amount/transactionDate/sourceReference from the linked source, never trusting a manually-typed duplicate', async () => {
+      const linkedService = new RelatedPartyTransactionService(
+        repository,
+        { getRelatedParty: async (id) => partiesById.get(id) },
+        makeLookup({ amount: 54321, date: '2026-03-15', reference: 'INV-0042' }),
+      );
+
+      const created = await linkedService.createTransaction(
+        makeTransactionDTO({ amount: 1, transactionDate: '2020-01-01', sourceDocumentType: 'invoice', sourceDocumentId: 'inv_1' }),
+      );
+
+      expect(created.amount).toBe(54321);
+      expect(created.transactionDate).toBe('2026-03-15');
+      expect(created.sourceReference).toBe('INV-0042');
+    });
+
+    it('rejects linking a source when no SourceDocumentLookup is configured', async () => {
+      // `service` (outer beforeEach) has no lookup wired.
+      await expect(
+        service.createTransaction(makeTransactionDTO({ sourceDocumentType: 'invoice', sourceDocumentId: 'inv_1' })),
+      ).rejects.toThrow(/no SourceDocumentLookup is configured/);
+    });
+
+    it('rejects linking to a source record that does not resolve (does not exist / wrong company)', async () => {
+      const linkedService = new RelatedPartyTransactionService(
+        repository,
+        { getRelatedParty: async (id) => partiesById.get(id) },
+        makeLookup(undefined),
+      );
+      await expect(
+        linkedService.createTransaction(makeTransactionDTO({ sourceDocumentType: 'invoice', sourceDocumentId: 'does-not-exist' })),
+      ).rejects.toThrow(/no invoice record/i);
+    });
+
+    it('rejects setting sourceDocumentType without sourceDocumentId (or vice versa) — no half-linked state', async () => {
+      await expect(
+        service.createTransaction(makeTransactionDTO({ sourceDocumentType: 'invoice' })),
+      ).rejects.toThrow(/must both be set/);
+    });
+
+    it('a Manual/Other transaction (neither field set) keeps its manually-entered amount/date untouched', async () => {
+      const created = await service.createTransaction(makeTransactionDTO({ amount: 7500, transactionDate: '2026-05-01' }));
+      expect(created.amount).toBe(7500);
+      expect(created.transactionDate).toBe('2026-05-01');
+      expect(created.sourceDocumentType).toBeUndefined();
+    });
   });
 });

@@ -1,7 +1,8 @@
-import type { Company, EclBucketLine, EclComputation, FinancialYear, ID, JournalEntry } from '@/types';
+import type { Company, EclBucketLine, EclComputation, FinancialYear, ID } from '@/types';
 import type { AgingReportRow } from '@/features/reports/aging/types';
 import type { IEclComputationRepository } from '../repositories/IEclComputationRepository';
 import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
+import type { EclPostingExecutor } from './eclPostingExecutor';
 import {
   aggregateReceivablesByBucket,
   calculateEclTotals,
@@ -11,11 +12,6 @@ import {
   recalculateBucketLine,
   round2,
 } from './eclCalculations';
-
-/** Fixed GL account ids (src/mock-data/accounts.ts), added for Phase 12. */
-export interface JournalPoster {
-  postJournalEntry(input: { date: string; memo?: string; source: string; lines: NewJournalLineInput[]; postedByUserId?: ID }): Promise<JournalEntry>;
-}
 
 /** Narrow surface each dependency needs — same "narrow interface, real singleton injected in services/index.ts" pattern every other module in this codebase uses. */
 export interface FinancialYearLookup {
@@ -55,7 +51,7 @@ export class EclComputationService {
     private readonly financialYearLookup: FinancialYearLookup,
     private readonly companyLookup: CompanyLookup,
     private readonly agingLookup: AgingLookup,
-    private readonly journalPoster: JournalPoster,
+    private readonly postingExecutor: EclPostingExecutor,
     private readonly accounts: AccountMapper,
   ) {}
 
@@ -188,7 +184,19 @@ export class EclComputationService {
    * (acc_1150); a decrease (a reversal) does the reverse. A computation
    * with no real movement still moves to 'posted' with movementAmount 0 and
    * no journalEntryId, mirroring DeferredTaxComputationService's
-   * convention. Rejects a computation that is already posted.
+   * convention. Rejects a computation that is already posted. Never
+   * touches the underlying receivables/invoices — this only ever moves
+   * the allowance accounts.
+   *
+   * Posts through `postingExecutor` — one atomic RPC call
+   * (`post_ecl_computation`, migration 0104, Tax & Compliance integrity
+   * audit continuation 2026-09-12) that posts the movement journal AND
+   * flips the computation to 'posted' in the SAME database transaction.
+   * Before this, the two writes were separate and independently-
+   * committing — a failure between them could leave a posted GL movement
+   * with the computation still showing 'draft', and a retry would post a
+   * SECOND movement journal, double-counting the period's impairment
+   * expense/allowance change. See eclPostingExecutor.ts's doc comment.
    */
   async postComputation(id: ID, postedByUserId?: ID): Promise<EclComputation> {
     const computation = await this.repository.getById(id);
@@ -204,49 +212,37 @@ export class EclComputationService {
 
     const priorTotal = prior?.totalExpectedCreditLoss ?? 0;
     const movementAmount = round2(computation.totalExpectedCreditLoss - priorTotal);
-    const now = new Date().toISOString();
-
-    if (Math.abs(movementAmount) <= EPSILON) {
-      return this.repository.update(id, {
-        status: 'posted',
-        priorTotalExpectedCreditLoss: prior?.totalExpectedCreditLoss,
-        movementAmount: 0,
-        postedAt: now,
-        postedByUserId,
-      });
-    }
 
     const memo = `Expected credit loss movement - ${computation.financialYearLabel}`;
-    const [impairmentLossId, allowanceId] = await Promise.all([
-      this.accounts.getAccountId('IMPAIRMENT_LOSS'),
-      this.accounts.getAccountId('ALLOWANCE_FOR_DOUBTFUL_DEBTS'),
-    ]);
-    const lines: NewJournalLineInput[] =
-      movementAmount > 0
-        ? [
-            { accountId: impairmentLossId, description: memo, debit: round2(movementAmount), credit: 0 },
-            { accountId: allowanceId, description: memo, debit: 0, credit: round2(movementAmount) },
-          ]
-        : [
-            { accountId: allowanceId, description: memo, debit: round2(-movementAmount), credit: 0 },
-            { accountId: impairmentLossId, description: memo, debit: 0, credit: round2(-movementAmount) },
-          ];
+    let lines: NewJournalLineInput[] = [];
+    if (Math.abs(movementAmount) > EPSILON) {
+      const [impairmentLossId, allowanceId] = await Promise.all([
+        this.accounts.getAccountId('IMPAIRMENT_LOSS'),
+        this.accounts.getAccountId('ALLOWANCE_FOR_DOUBTFUL_DEBTS'),
+      ]);
+      lines =
+        movementAmount > 0
+          ? [
+              { accountId: impairmentLossId, description: memo, debit: round2(movementAmount), credit: 0 },
+              { accountId: allowanceId, description: memo, debit: 0, credit: round2(movementAmount) },
+            ]
+          : [
+              { accountId: allowanceId, description: memo, debit: round2(-movementAmount), credit: 0 },
+              { accountId: impairmentLossId, description: memo, debit: 0, credit: round2(-movementAmount) },
+            ];
+    }
 
-    const entry = await this.journalPoster.postJournalEntry({
+    const result = await this.postingExecutor.postComputation({
+      eclComputationId: id,
       date: computation.asOfDate,
       memo,
       source: 'expected_credit_loss',
       lines,
+      movementAmount: lines.length === 0 ? 0 : movementAmount,
+      priorTotalExpectedCreditLoss: prior?.totalExpectedCreditLoss,
       postedByUserId,
     });
 
-    return this.repository.update(id, {
-      status: 'posted',
-      journalEntryId: entry.id,
-      priorTotalExpectedCreditLoss: prior?.totalExpectedCreditLoss,
-      movementAmount,
-      postedAt: now,
-      postedByUserId,
-    });
+    return result.computation;
   }
 }

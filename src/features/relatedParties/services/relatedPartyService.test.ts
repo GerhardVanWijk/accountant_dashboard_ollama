@@ -10,6 +10,7 @@ function makeRelatedPartyDTO(overrides: Partial<CreateRelatedPartyDTO> = {}): Cr
     relationshipType: 'director',
     relationshipDetail: 'CEO',
     isActive: true,
+    effectiveFrom: '2026-01-01',
     ...overrides,
   };
 }
@@ -79,5 +80,46 @@ describe('RelatedPartyService', () => {
 
   it('throws when deleting a non-existent related party', async () => {
     await expect(service.deleteRelatedParty('does-not-exist')).rejects.toThrow(/not found/);
+  });
+
+  describe('effective dating (Tax & Compliance integrity audit continuation, 2026-09-12, §9)', () => {
+    it('defaults effectiveFrom to today when not supplied', async () => {
+      const { effectiveFrom, ...rest } = makeRelatedPartyDTO();
+      void effectiveFrom;
+      const created = await service.createRelatedParty(rest as CreateRelatedPartyDTO);
+      expect(created.effectiveFrom).toBe(new Date().toISOString().slice(0, 10));
+    });
+
+    it('rejects creating with effectiveTo before effectiveFrom', async () => {
+      await expect(
+        service.createRelatedParty(makeRelatedPartyDTO({ effectiveFrom: '2026-06-01', effectiveTo: '2026-01-01' })),
+      ).rejects.toThrow(/cannot be before/);
+    });
+
+    it('rejects updating effectiveTo to before the existing effectiveFrom', async () => {
+      const created = await service.createRelatedParty(makeRelatedPartyDTO({ effectiveFrom: '2026-06-01' }));
+      await expect(service.updateRelatedParty(created.id, { effectiveTo: '2026-01-01' })).rejects.toThrow(/cannot be before/);
+    });
+
+    it('deactivateRelatedParty closes the period (sets isActive=false and effectiveTo) without deleting the record', async () => {
+      const created = await service.createRelatedParty(makeRelatedPartyDTO({ effectiveFrom: '2026-01-01' }));
+      const deactivated = await service.deactivateRelatedParty(created.id, '2026-08-15');
+
+      expect(deactivated.isActive).toBe(false);
+      expect(deactivated.effectiveTo).toBe('2026-08-15');
+      expect(deactivated.effectiveFrom).toBe('2026-01-01');
+      expect(await repository.getById(created.id)).toBeDefined();
+    });
+
+    it('deactivateRelatedParty defaults effectiveTo to today when not supplied', async () => {
+      const created = await service.createRelatedParty(makeRelatedPartyDTO());
+      const deactivated = await service.deactivateRelatedParty(created.id);
+      expect(deactivated.effectiveTo).toBe(new Date().toISOString().slice(0, 10));
+    });
+
+    it('rejects deactivating with an effectiveTo before the relationship\'s effectiveFrom', async () => {
+      const created = await service.createRelatedParty(makeRelatedPartyDTO({ effectiveFrom: '2026-06-01' }));
+      await expect(service.deactivateRelatedParty(created.id, '2026-01-01')).rejects.toThrow(/cannot be before/);
+    });
   });
 });

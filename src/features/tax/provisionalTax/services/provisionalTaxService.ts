@@ -1,4 +1,4 @@
-import type { Company, FinancialYear, ID, IncomeTaxYearConfig, JournalEntry, TaxComputation } from '@/types';
+import type { Company, FinancialYear, ID, IncomeTaxYearConfig, TaxComputation } from '@/types';
 import type {
   ProvisionalPaymentSlot,
   ProvisionalPaymentSlotName,
@@ -7,6 +7,7 @@ import type {
 } from '@/types/provisionalTax';
 import type { IProvisionalTaxPeriodRepository } from '../repositories/IProvisionalTaxPeriodRepository';
 import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
+import type { ProvisionalTaxPostingExecutor } from './provisionalTaxPostingExecutor';
 import { calculateTaxLiability } from '@/features/tax/incomeTax/services';
 import { calculateProvisionalTaxDueDates } from '../utils/provisionalTaxDueDates';
 
@@ -15,16 +16,6 @@ const EPSILON = 0.005;
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-export interface JournalPoster {
-  postJournalEntry(input: {
-    date: string;
-    memo?: string;
-    source: string;
-    lines: NewJournalLineInput[];
-    postedByUserId?: ID;
-  }): Promise<JournalEntry>;
 }
 
 /** Minimal surface each dependency needs — same "narrow interface, real singleton injected in services/index.ts" pattern every other module in this codebase uses. */
@@ -74,17 +65,24 @@ function slotLabel(slot: ProvisionalPaymentSlotName): string {
  * (src/features/tax/incomeTax/services/taxComputationCalculations.ts) —
  * never a second SBC-bracket or flat-rate implementation.
  *
- * No new GL account is introduced: a provisional tax payment is simply an
- * early payment AGAINST the same liability TaxComputationService.
- * postComputation() will eventually credit at year-end — DR Income Tax
- * Payable (acc_2300) / CR Cash and Bank (acc_1000). This naturally nets
- * against the final entry: if provisional payments were exactly right, the
- * account nets to zero after the final posting; if not, the remaining
- * balance IS the underpayment/overpayment, visible on the Trial Balance /
- * General Ledger like any other control account — no separate accounting
- * needed for "the reconciliation," it falls out of the GL for free.
+ * A provisional tax payment is an early payment AGAINST the same liability
+ * TaxComputationService.postComputation() will eventually credit at
+ * year-end — DR Income Tax Payable (acc_2300). This naturally nets against
+ * the final entry: if provisional payments were exactly right, the account
+ * nets to zero after the final posting; if not, the remaining balance IS
+ * the underpayment/overpayment, visible on the Trial Balance / General
+ * Ledger like any other control account — no separate accounting needed
+ * for "the reconciliation," it falls out of the GL for free.
  * getReconciliation() below only re-surfaces that same diff as a
  * convenience read model, it never posts anything extra.
+ *
+ * The OTHER side of the payment entry credits Provisional Tax Payment
+ * Clearing (acc_2270, migration 0107) — never Cash and Bank directly. The
+ * real SARS EFT is recorded exactly once, later, through the existing
+ * Banking module against this same clearing account (migration-review
+ * addendum §3, same fix Payroll/Leases already have — see
+ * `docs/SA_ACCOUNTING_MASTER_SPEC.md` and accountMappingService.ts's
+ * NET_PAY_PAYABLE doc comment for the identical precedent).
  *
  * Deliberately NOT implemented (§110 "no unsupported claims"): any
  * underpayment INTEREST/penalty calculation — SARS's provisional-tax
@@ -101,7 +99,7 @@ export class ProvisionalTaxService {
     private readonly financialYearLookup: FinancialYearLookup,
     private readonly companyLookup: CompanyLookup,
     private readonly configLookup: IncomeTaxConfigLookup,
-    private readonly journalPoster: JournalPoster,
+    private readonly postingExecutor: ProvisionalTaxPostingExecutor,
     private readonly taxComputationLookup: TaxComputationLookup,
     private readonly accounts: AccountMapper,
   ) {}
@@ -210,11 +208,25 @@ export class ProvisionalTaxService {
 
   /**
    * Pays a provisional tax slot: ONE balanced journal entry — DR Income Tax
-   * Payable (acc_2300) / CR Cash and Bank (acc_1000) for `amountPaid` — see
-   * class doc comment for why no new GL account exists for this. Rejects an
-   * already-paid slot (idempotency guard, same class as
-   * PurchaseOrderService.recordReceipt()'s already-received guard) and a
-   * non-positive amount.
+   * Payable (acc_2300) / CR Provisional Tax Payment Clearing (acc_2270)
+   * for `amountPaid`. NEVER credits Cash and Bank directly (migration
+   * 0107, migration-review addendum §3): the real SARS EFT is recorded
+   * exactly once, later, through the existing Banking module (a Direct
+   * Payment, or an allocated imported statement line) against this same
+   * clearing account — the identical pattern Payroll/Leases already use
+   * (see accountMappingService.ts's NET_PAY_PAYABLE/LEASE_PAYMENT_CLEARING
+   * doc comments). Rejects an already-paid slot and a non-positive amount.
+   *
+   * Posts through `postingExecutor` — one atomic RPC call
+   * (`pay_provisional_tax`, migration 0101, Tax & Compliance integrity
+   * audit continuation 2026-09-12) that posts the journal AND updates the
+   * slot in the SAME database transaction. Before this, the two writes
+   * were separate and independently-committing — a failure between them
+   * could leave a posted GL payment with the slot still unpaid, and a
+   * retry would post a SECOND payment for the same slot. Idempotency is
+   * keyed on (period id, slot) — NOT the period alone, since first/second/
+   * topUp are three independent, legitimate payment events that must be
+   * free to coexist. See provisionalTaxPostingExecutor.ts's doc comment.
    */
   async payProvisionalTax(
     periodId: ID,
@@ -237,16 +249,19 @@ export class ProvisionalTaxService {
     const paidDate = date ?? new Date().toISOString().slice(0, 10);
     const memo = `${slotLabel(slot)} - ${period.financialYearLabel}`;
 
-    const [incomeTaxPayableId, cashAndBankId] = await Promise.all([
+    const [incomeTaxPayableId, provisionalTaxPaymentClearingId] = await Promise.all([
       this.accounts.getAccountId('INCOME_TAX_PAYABLE'),
-      this.accounts.getAccountId('CASH_AND_BANK'),
+      this.accounts.getAccountId('PROVISIONAL_TAX_PAYMENT_CLEARING'),
     ]);
     const lines: NewJournalLineInput[] = [
       { accountId: incomeTaxPayableId, description: memo, debit: round2(amountPaid), credit: 0 },
-      { accountId: cashAndBankId, description: memo, debit: 0, credit: round2(amountPaid) },
+      { accountId: provisionalTaxPaymentClearingId, description: memo, debit: 0, credit: round2(amountPaid) },
     ];
 
-    const entry = await this.journalPoster.postJournalEntry({
+    const result = await this.postingExecutor.payProvisionalTax({
+      periodId,
+      slot,
+      amountPaid: round2(amountPaid),
       date: paidDate,
       memo,
       source: 'provisional_tax',
@@ -254,15 +269,7 @@ export class ProvisionalTaxService {
       postedByUserId,
     });
 
-    const updatedSlot: ProvisionalPaymentSlot = {
-      ...period[slot],
-      amountPaid: round2(amountPaid),
-      paidDate,
-      journalEntryId: entry.id,
-    };
-    const patch = { [slot]: updatedSlot } as Partial<ProvisionalTaxPeriod>;
-
-    return this.repository.update(periodId, patch);
+    return result.period;
   }
 
   /**

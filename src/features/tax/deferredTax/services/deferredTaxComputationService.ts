@@ -1,8 +1,9 @@
-import type { Company, DeferredTaxComputation, DeferredTaxTemporaryDifference, FinancialYear, ID, JournalEntry } from '@/types';
+import type { Company, DeferredTaxComputation, DeferredTaxTemporaryDifference, FinancialYear, ID } from '@/types';
 import type { IDeferredTaxComputationRepository } from '../repositories/IDeferredTaxComputationRepository';
 import type { IncomeTaxConfigService } from '@/features/tax/incomeTax/services/incomeTaxConfigService';
 import type { TaxRegisterRow } from '@/features/assets/services/taxRegisterService';
 import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
+import type { DeferredTaxPostingExecutor } from './deferredTaxPostingExecutor';
 import {
   calculateDeferredTaxTotals,
   EPSILON,
@@ -11,11 +12,6 @@ import {
   round2,
   suggestFixedAssetTemporaryDifferences,
 } from './deferredTaxCalculations';
-
-/** Fixed GL account ids (src/mock-data/accounts.ts), added for Phase 12. */
-export interface JournalPoster {
-  postJournalEntry(input: { date: string; memo?: string; source: string; lines: NewJournalLineInput[]; postedByUserId?: ID }): Promise<JournalEntry>;
-}
 
 /** Narrow surface each dependency needs — same "narrow interface, real singleton injected in services/index.ts" pattern every other module in this codebase uses. */
 export interface FinancialYearLookup {
@@ -76,7 +72,7 @@ export class DeferredTaxComputationService {
     private readonly companyLookup: CompanyLookup,
     private readonly taxRegisterLookup: TaxRegisterLookup,
     private readonly configService: Pick<IncomeTaxConfigService, 'getConfigForDate' | 'getById'>,
-    private readonly journalPoster: JournalPoster,
+    private readonly postingExecutor: DeferredTaxPostingExecutor,
     private readonly accounts: AccountMapper,
   ) {}
 
@@ -227,6 +223,18 @@ export class DeferredTaxComputationService {
    * class as PurchaseOrderService.recordReceipt()'s already-received
    * guard).
    */
+  /**
+   * Posts through `postingExecutor` — one atomic RPC call
+   * (`post_deferred_tax_computation`, migration 0103, Tax & Compliance
+   * integrity audit continuation 2026-09-12) that posts the movement
+   * journal AND flips the computation to 'posted' in the SAME database
+   * transaction. Before this, the two writes were separate and
+   * independently-committing — a failure between them could leave a
+   * posted GL movement with the computation still showing 'draft', and a
+   * retry would post a SECOND movement journal, double-counting the
+   * period's Deferred Tax Expense/DTA/DTL change. See
+   * deferredTaxPostingExecutor.ts's doc comment.
+   */
   async postComputation(id: ID, postedByUserId?: ID): Promise<DeferredTaxComputation> {
     const computation = await this.repository.getById(id);
     if (!computation) {
@@ -245,8 +253,6 @@ export class DeferredTaxComputationService {
     const deltaDTA = round2(computation.totalDeferredTaxAsset - priorDTA);
     const movementAmount = round2(deltaDTL - deltaDTA);
 
-    const now = new Date().toISOString();
-
     const [deferredTaxLiabilityId, deferredTaxAssetId, deferredTaxExpenseId] = await Promise.all([
       this.accounts.getAccountId('DEFERRED_TAX_LIABILITY'),
       this.accounts.getAccountId('DEFERRED_TAX_ASSET'),
@@ -259,39 +265,28 @@ export class DeferredTaxComputationService {
     if (Math.abs(deltaDTA) > EPSILON) vectors.set(deferredTaxAssetId, deltaDTA);
     if (Math.abs(movementAmount) > EPSILON) vectors.set(deferredTaxExpenseId, movementAmount);
 
-    if (vectors.size < 2) {
-      return this.repository.update(id, {
-        status: 'posted',
-        priorNetDeferredTaxLiability: prior?.netDeferredTaxLiability,
-        movementAmount: 0,
-        postedAt: now,
-        postedByUserId,
-      });
-    }
-
     const memo = `Deferred tax movement - ${computation.financialYearLabel} (${computation.taxConfigTaxYearLabel})`;
-    const lines: NewJournalLineInput[] = [...vectors].map(([accountId, vector]) => ({
-      accountId,
-      description: memo,
-      debit: vector > 0 ? round2(vector) : 0,
-      credit: vector < 0 ? round2(-vector) : 0,
-    }));
+    const lines: NewJournalLineInput[] =
+      vectors.size < 2
+        ? []
+        : [...vectors].map(([accountId, vector]) => ({
+            accountId,
+            description: memo,
+            debit: vector > 0 ? round2(vector) : 0,
+            credit: vector < 0 ? round2(-vector) : 0,
+          }));
 
-    const entry = await this.journalPoster.postJournalEntry({
+    const result = await this.postingExecutor.postComputation({
+      deferredTaxComputationId: id,
       date: computation.asOfDate,
       memo,
       source: 'deferred_tax',
       lines,
+      movementAmount: lines.length === 0 ? 0 : movementAmount,
+      priorNetDeferredTaxLiability: prior?.netDeferredTaxLiability,
       postedByUserId,
     });
 
-    return this.repository.update(id, {
-      status: 'posted',
-      journalEntryId: entry.id,
-      priorNetDeferredTaxLiability: prior?.netDeferredTaxLiability,
-      movementAmount,
-      postedAt: now,
-      postedByUserId,
-    });
+    return result.computation;
   }
 }

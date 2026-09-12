@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaxRatesPage } from './TaxRatesPage';
 import { taxRateService } from '../services';
 import type { TaxRate } from '@/types';
+import { useAuthStore } from '@/stores/authStore';
 
 vi.mock('../services', () => ({
   taxRateService: {
@@ -43,6 +44,10 @@ function makeRate(overrides: Partial<TaxRate> = {}): TaxRate {
 describe('TaxRatesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // admin bypasses useCanAccess() unconditionally (see docs/PERMISSIONS.md).
+    useAuthStore.setState({
+      profile: { id: 'u1', role: 'admin', companyId: 'comp_001', isActive: true, createdAt: '', updatedAt: '' },
+    });
   });
 
   it('shows an empty state when there are no tax codes', async () => {

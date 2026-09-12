@@ -11,6 +11,8 @@ export interface TaxRateTableProps {
   taxRates: TaxRate[];
   onSupersede: (rate: TaxRate) => void;
   onDeactivate: (rate: TaxRate) => void;
+  /** Hides Supersede/Deactivate for a caller without `tax:update` — same "hide, don't just disable" convention as every other action-level gate in this app (see docs/PERMISSIONS.md). Defaults to true so existing callers/tests are unaffected. */
+  canUpdate?: boolean;
 }
 
 function isCurrentlyOpen(rate: TaxRate): boolean {
@@ -29,7 +31,7 @@ function isCurrentlyOpen(rate: TaxRate): boolean {
  * history. Re-skinned onto shadcn Table/Badge/Empty (M7); grouping and
  * supersede/deactivate logic unchanged.
  */
-export function TaxRateTable({ taxRates, onSupersede, onDeactivate }: TaxRateTableProps) {
+export function TaxRateTable({ taxRates, onSupersede, onDeactivate, canUpdate = true }: TaxRateTableProps) {
   const codes = [...new Set(taxRates.map((r) => r.code))].sort();
 
   if (codes.length === 0) {
@@ -86,7 +88,7 @@ export function TaxRateTable({ taxRates, onSupersede, onDeactivate }: TaxRateTab
                       )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-2.5">
-                      {rate.id === current?.id && rate.isActive && (
+                      {canUpdate && rate.id === current?.id && rate.isActive && (
                         <div className="flex justify-end gap-1">
                           <Button variant="ghost" size="sm" onClick={() => onSupersede(rate)}>
                             Supersede

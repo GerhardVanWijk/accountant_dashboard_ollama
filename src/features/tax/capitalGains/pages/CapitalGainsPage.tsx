@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { formatCurrency } from '@/lib/app/format';
 import { useCompany } from '@/features/admin/hooks/useCompany';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useCapitalGainsReport } from '../hooks/useCapitalGainsReport';
 import { CapitalGainsTable } from '../components/CapitalGainsTable';
 import type { CgtEntityTypeBucket } from '@/types';
@@ -61,6 +62,7 @@ export function CapitalGainsPage() {
   const periodEnd = useMemo(() => endOfDay(endInput), [endInput]);
 
   const { report, loading, error, refetch, setSellingCosts } = useCapitalGainsReport(periodStart, periodEnd, company?.legalEntityType);
+  const canUpdate = useCanAccess('tax', 'update');
 
   const resetToCurrentTaxYear = () => {
     setStartInput(dateInputValue(defaultStart));
@@ -153,7 +155,7 @@ export function CapitalGainsPage() {
                 <EmptyDescription>Choose a different period, or dispose of a fixed asset to see it reconciled here.</EmptyDescription>
               </Empty>
             ) : (
-              <CapitalGainsTable disposals={report.disposals} onSellingCostsChange={(disposalId, sellingCosts) => setSellingCosts(disposalId, sellingCosts)} />
+              <CapitalGainsTable disposals={report.disposals} onSellingCostsChange={(disposalId, sellingCosts) => setSellingCosts(disposalId, sellingCosts)} canUpdate={canUpdate} />
             )}
           </SectionCard>
 

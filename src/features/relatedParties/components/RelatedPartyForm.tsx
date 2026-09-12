@@ -15,12 +15,19 @@ import type { CreateRelatedPartyDTO, UpdateRelatedPartyDTO } from '../services';
 
 const RELATIONSHIP_TYPE_OPTIONS = Object.entries(RELATIONSHIP_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 
-const relatedPartySchema = z.object({
-  name: z.string().trim().min(1, 'Name is required'),
-  relationshipType: z.enum(['director', 'shareholder', 'subsidiary', 'associate', 'key_management', 'other_related_entity']),
-  relationshipDetail: z.string().trim().optional(),
-  isActive: z.boolean(),
-});
+const relatedPartySchema = z
+  .object({
+    name: z.string().trim().min(1, 'Name is required'),
+    relationshipType: z.enum(['director', 'shareholder', 'subsidiary', 'associate', 'key_management', 'other_related_entity']),
+    relationshipDetail: z.string().trim().optional(),
+    isActive: z.boolean(),
+    effectiveFrom: z.string().min(1, 'Effective-from date is required'),
+    effectiveTo: z.string().optional(),
+  })
+  .refine((data) => !data.effectiveTo || data.effectiveTo >= data.effectiveFrom, {
+    message: 'Effective-to date cannot be before the effective-from date.',
+    path: ['effectiveTo'],
+  });
 
 export type RelatedPartyFormValues = z.infer<typeof relatedPartySchema>;
 
@@ -31,12 +38,18 @@ export interface RelatedPartyFormProps {
   onDirtyChange?: (dirty: boolean) => void;
 }
 
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function toDefaultValues(relatedParty?: RelatedParty): RelatedPartyFormValues {
   return {
     name: relatedParty?.name ?? '',
     relationshipType: relatedParty?.relationshipType ?? 'director',
     relationshipDetail: relatedParty?.relationshipDetail ?? '',
     isActive: relatedParty?.isActive ?? true,
+    effectiveFrom: relatedParty?.effectiveFrom?.slice(0, 10) ?? today(),
+    effectiveTo: relatedParty?.effectiveTo?.slice(0, 10) ?? '',
   };
 }
 
@@ -60,11 +73,19 @@ export function RelatedPartyForm({ relatedParty, onSubmit, onCancel, onDirtyChan
   useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   const submit = handleSubmit(async (data) => {
+    // Deactivating (Active -> unchecked) closes the relationship period —
+    // auto-fill today's date if the preparer didn't set one explicitly,
+    // same "deactivation closes the period, never just a silent flag"
+    // rule TaxRateService.supersede() already established for tax rates.
+    const wasActive = relatedParty?.isActive ?? true;
+    const effectiveTo = data.effectiveTo || (wasActive && !data.isActive ? today() : undefined);
     await onSubmit({
       name: data.name,
       relationshipType: data.relationshipType,
       relationshipDetail: data.relationshipDetail || undefined,
       isActive: data.isActive,
+      effectiveFrom: data.effectiveFrom,
+      effectiveTo,
     });
   });
 
@@ -98,6 +119,18 @@ export function RelatedPartyForm({ relatedParty, onSubmit, onCancel, onDirtyChan
       <Field>
         <FieldLabel htmlFor="relationshipDetail">Relationship Detail</FieldLabel>
         <Textarea id="relationshipDetail" rows={3} placeholder='e.g. "Holds 30% of issued shares", "CFO", "Wholly-owned subsidiary incorporated in..."' {...register('relationshipDetail')} />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="effectiveFrom">Effective From</FieldLabel>
+        <Input id="effectiveFrom" type="date" {...register('effectiveFrom')} />
+        <FieldError errors={[errors.effectiveFrom]} />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="effectiveTo">Effective To (leave blank if ongoing)</FieldLabel>
+        <Input id="effectiveTo" type="date" {...register('effectiveTo')} />
+        <FieldError errors={[errors.effectiveTo]} />
       </Field>
 
       <Controller

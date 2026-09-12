@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { AccountingPeriod, AssetDisposal, Company, FinancialYear, FixedAsset } from '@/types';
 import { TaxComputationService } from './taxComputationService';
+import { FakeTaxComputationPostingExecutor } from './taxComputationPostingExecutor';
 import { IncomeTaxConfigService } from './incomeTaxConfigService';
 import { MockIncomeTaxConfigRepository } from '../repositories/MockIncomeTaxConfigRepository';
 import { MockTaxComputationRepository } from '../repositories/MockTaxComputationRepository';
@@ -104,7 +105,7 @@ describe('TaxComputationService', () => {
       { getFixedAssets: async () => fixedAssets },
       { getDisposals: async () => disposals },
       incomeTaxConfigService,
-      journalEntryService,
+      new FakeTaxComputationPostingExecutor({ journal: journalEntryService, computations: taxComputationRepository }),
       accountMapper,
     );
   });
@@ -159,7 +160,7 @@ describe('TaxComputationService', () => {
       { getFixedAssets: async () => fixedAssets },
       { getDisposals: async () => disposals },
       incomeTaxConfigService,
-      journalEntryService,
+      new FakeTaxComputationPostingExecutor({ journal: journalEntryService, computations: taxComputationRepository }),
       accountMapper,
       {
         getPeriodReport: async () => ({ taxableCapitalGain: 12345, netCapitalLossForPeriod: 0 }),

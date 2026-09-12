@@ -22,6 +22,32 @@ function StatusPill({ ok, okLabel, badLabel }: { ok: boolean; okLabel: string; b
 }
 
 /**
+ * Prepared / Posted / Reconciled / Variance / Attention Required — the
+ * Tax & Compliance integrity audit (2026-09-12, §8) explicitly requires
+ * the dashboard distinguish these, never collapse a draft schedule and a
+ * posted-and-reconciled one into the same decorative green badge. Neutral
+ * (not green) for "Prepared" — a draft is real work in progress, not yet
+ * a compliance fact; green only once independently reconciled.
+ */
+function LifecyclePill({ state }: { state: 'prepared' | 'posted' | 'reconciled' | 'variance' | 'not_started' }) {
+  const label: Record<typeof state, string> = {
+    not_started: 'Not started',
+    prepared: 'Prepared (draft)',
+    posted: 'Posted',
+    reconciled: 'Reconciled',
+    variance: 'Attention required',
+  } as const;
+  const className: Record<typeof state, string> = {
+    not_started: 'bg-muted text-muted-foreground',
+    prepared: 'bg-muted text-muted-foreground',
+    posted: 'bg-status-info-muted text-status-info',
+    reconciled: 'bg-status-positive-muted text-status-positive',
+    variance: 'bg-status-warning-muted text-status-warning',
+  } as const;
+  return <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', className[state])}>{label[state]}</span>;
+}
+
+/**
  * Compliance Dashboard — route `/compliance/dashboard`. Aggregates real
  * status from every module already built (VAT, Income Tax/Provisional
  * Tax, Payroll, the Fixed Asset register, AR/AP subledger reconciliation,
@@ -133,7 +159,7 @@ export function ComplianceDashboardPage() {
                 <dd className="mt-1">
                   {data.provisionalTaxPeriod ? (
                     <Link to="/tax/provisional-tax" className="text-brand hover:underline">
-                      In progress
+                      {[data.provisionalTaxPeriod.first, data.provisionalTaxPeriod.second, data.provisionalTaxPeriod.topUp].filter((s) => s.paidDate).length} of 3 slots paid
                     </Link>
                   ) : (
                     'Not yet started'
@@ -146,9 +172,71 @@ export function ComplianceDashboardPage() {
               </div>
               <div>
                 <dt className="text-xs tracking-wide text-muted-foreground uppercase">Status</dt>
-                <dd className="mt-1">{data.latestTaxComputation?.status ?? '—'}</dd>
+                <dd className="mt-1">
+                  {data.latestTaxComputation ? <LifecyclePill state={data.latestTaxComputation.status === 'posted' ? 'posted' : 'prepared'} /> : <LifecyclePill state="not_started" />}
+                </dd>
               </div>
             </dl>
+          </SectionCard>
+
+          <SectionCard title="Dividends Tax" actions={<Link to="/tax/dividends" className="text-xs font-medium text-brand hover:underline">Dividends Tax →</Link>}>
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-muted-foreground">This month's Register ↔ GL reconciliation — see the Dividends Tax page for the full declare/pay/remit lifecycle per declaration.</p>
+              {data.dividendsTaxReconciliation ? (
+                <div className="flex flex-wrap gap-2">
+                  <StatusPill ok={data.dividendsTaxReconciliation.dividendsPayable.isReconciled} okLabel="Dividends Payable reconciled" badLabel="Dividends Payable variance" />
+                  <StatusPill ok={data.dividendsTaxReconciliation.dividendsTaxPayable.isReconciled} okLabel="Dividends Tax Payable reconciled" badLabel="Dividends Tax Payable variance" />
+                </div>
+              ) : (
+                <LifecyclePill state="not_started" />
+              )}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Deferred Tax" actions={<Link to="/tax/deferred-tax" className="text-xs font-medium text-brand hover:underline">Deferred Tax →</Link>}>
+            <div className="flex flex-col gap-3">
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Net Position</dt>
+                  <dd className="figure mt-1 tabular-nums">{data.latestDeferredTaxComputation ? formatCurrency(data.latestDeferredTaxComputation.netDeferredTaxLiability) : 'Not yet computed'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Status</dt>
+                  <dd className="mt-1">
+                    {!data.latestDeferredTaxComputation && <LifecyclePill state="not_started" />}
+                    {data.latestDeferredTaxComputation?.status === 'draft' && <LifecyclePill state="prepared" />}
+                    {data.latestDeferredTaxComputation?.status === 'posted' &&
+                      (data.deferredTaxReconciliation
+                        ? (data.deferredTaxReconciliation.deferredTaxLiability.isReconciled && data.deferredTaxReconciliation.deferredTaxAsset.isReconciled
+                            ? <LifecyclePill state="reconciled" />
+                            : <LifecyclePill state="variance" />)
+                        : <LifecyclePill state="posted" />)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Expected Credit Losses" actions={<Link to="/tax/expected-credit-losses" className="text-xs font-medium text-brand hover:underline">ECL →</Link>}>
+            <div className="flex flex-col gap-3">
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Allowance</dt>
+                  <dd className="figure mt-1 tabular-nums">{data.latestEclComputation ? formatCurrency(data.latestEclComputation.totalExpectedCreditLoss) : 'Not yet computed'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs tracking-wide text-muted-foreground uppercase">Status</dt>
+                  <dd className="mt-1">
+                    {!data.latestEclComputation && <LifecyclePill state="not_started" />}
+                    {data.latestEclComputation?.status === 'draft' && <LifecyclePill state="prepared" />}
+                    {data.latestEclComputation?.status === 'posted' &&
+                      (data.eclReconciliation
+                        ? (data.eclReconciliation.allowance.isReconciled ? <LifecyclePill state="reconciled" /> : <LifecyclePill state="variance" />)
+                        : <LifecyclePill state="posted" />)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
           </SectionCard>
 
           <SectionCard title="Payroll" actions={<Link to="/payroll/emp201" className="text-xs font-medium text-brand hover:underline">EMP201 →</Link>}>

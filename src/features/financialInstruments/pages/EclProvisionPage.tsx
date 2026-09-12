@@ -11,9 +11,39 @@ import { Field, FieldLabel } from '@/components/ui/shadcn/field';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { EnumSelect } from '@/components/app/combobox';
 import { formatCurrency, formatDate } from '@/lib/app/format';
+import { cn } from '@/lib/utils';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useEcl } from '../hooks/useEcl';
+import { useEclReconciliation } from '../hooks/useEclReconciliation';
 import { EclBucketTable } from '../components/EclBucketTable';
 import { findMostRecentPostedEclBefore } from '../services/eclCalculations';
+
+function ReconciliationRow({ label, expected, gl, variance, isReconciled }: { label: string; expected: number; gl: number; variance: number; isReconciled: boolean }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border border-border p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</span>
+        <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', isReconciled ? 'bg-status-positive-muted text-status-positive' : 'bg-status-warning-muted text-status-warning')}>
+          {isReconciled ? 'Reconciled' : 'Variance'}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-sm">
+        <div>
+          <div className="text-[10px] text-muted-foreground uppercase">Schedule</div>
+          <div className="figure tabular-nums">{formatCurrency(expected)}</div>
+        </div>
+        <div>
+          <div className="text-[10px] text-muted-foreground uppercase">GL</div>
+          <div className="figure tabular-nums">{formatCurrency(gl)}</div>
+        </div>
+        <div>
+          <div className="text-[10px] text-muted-foreground uppercase">Variance</div>
+          <div className={cn('figure tabular-nums', !isReconciled && 'text-status-warning')}>{formatCurrency(variance)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Expected Credit Losses — route `/tax/expected-credit-losses`. Real
@@ -28,6 +58,9 @@ import { findMostRecentPostedEclBefore } from '../services/eclCalculations';
 export function EclProvisionPage() {
   const { financialYears, company, computations, loading, error, refetch, createComputation, updateBuckets, deleteComputation, postComputation } = useEcl();
   const navigate = useNavigate();
+  const canCreate = useCanAccess('tax', 'create');
+  const canUpdate = useCanAccess('tax', 'update');
+  const canPost = useCanAccess('tax', 'post');
 
   const [selectedFinancialYearId, setSelectedFinancialYearId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -42,6 +75,7 @@ export function EclProvisionPage() {
 
   const priorComputation = selectedComputation && company ? findMostRecentPostedEclBefore(computations, company.id, selectedComputation.asOfDate, selectedComputation.id) : undefined;
   const previewMovement = selectedComputation ? selectedComputation.totalExpectedCreditLoss - (priorComputation?.totalExpectedCreditLoss ?? 0) : 0;
+  const { reconciliation, loading: reconciliationLoading } = useEclReconciliation(selectedComputation);
 
   const runAction = async (action: () => Promise<void>, successMessage?: string) => {
     setActionError(null);
@@ -124,19 +158,21 @@ export function EclProvisionPage() {
             <EmptyTitle>No expected credit loss computation yet for {selectedFinancialYear.name}</EmptyTitle>
             <EmptyDescription>Create one to pull in real receivable balances by aging bucket from the Customer Aging Report.</EmptyDescription>
           </Empty>
-          <div className="flex justify-center pb-5">
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                runAction(async () => {
-                  await createComputation(selectedFinancialYear.id);
-                }, `Created a draft expected credit loss computation for ${selectedFinancialYear.name}.`)
-              }
-            >
-              Create Computation
-            </Button>
-          </div>
+          {canCreate && (
+            <div className="flex justify-center pb-5">
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  runAction(async () => {
+                    await createComputation(selectedFinancialYear.id);
+                  }, `Created a draft expected credit loss computation for ${selectedFinancialYear.name}.`)
+                }
+              >
+                Create Computation
+              </Button>
+            </div>
+          )}
         </SectionCard>
       )}
 
@@ -161,7 +197,7 @@ export function EclProvisionPage() {
             <EclBucketTable
               key={selectedComputation.id}
               buckets={selectedComputation.buckets}
-              editable={selectedComputation.status === 'draft'}
+              editable={selectedComputation.status === 'draft' && canUpdate}
               onSave={async (buckets) => {
                 await updateBuckets(selectedComputation.id, buckets);
                 setStatusMessage('Loss rates saved and the provision recomputed.');
@@ -171,29 +207,33 @@ export function EclProvisionPage() {
 
           {selectedComputation.status === 'draft' ? (
             <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={busy}
-                onClick={() =>
-                  runAction(async () => {
-                    await deleteComputation(selectedComputation.id);
-                  }, 'Draft expected credit loss computation deleted.')
-                }
-              >
-                Delete Draft
-              </Button>
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  runAction(async () => {
-                    await postComputation(selectedComputation.id);
-                  }, `Posted the expected credit loss movement for ${selectedComputation.financialYearLabel}.`)
-                }
-              >
-                Post Movement
-              </Button>
+              {canUpdate && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={busy}
+                  onClick={() =>
+                    runAction(async () => {
+                      await deleteComputation(selectedComputation.id);
+                    }, 'Draft expected credit loss computation deleted.')
+                  }
+                >
+                  Delete Draft
+                </Button>
+              )}
+              {canPost && (
+                <Button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    runAction(async () => {
+                      await postComputation(selectedComputation.id);
+                    }, `Posted the expected credit loss movement for ${selectedComputation.financialYearLabel}.`)
+                  }
+                >
+                  Post Movement
+                </Button>
+              )}
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
@@ -211,6 +251,24 @@ export function EclProvisionPage() {
               )}{' '}
               A posted computation is immutable; there is no reversal path yet.
             </p>
+          )}
+
+          {selectedComputation.status === 'posted' && (
+            <SectionCard
+              title="Allowance ↔ GL Reconciliation"
+              description={`As of ${formatDate(selectedComputation.asOfDate)} — independently compares this posted schedule's own allowance total against the real GL balance of the Allowance for Doubtful Debts account on that date. Posting successfully does not by itself mean reconciled.`}
+            >
+              {reconciliationLoading && <p className="text-sm text-muted-foreground">Reconciling…</p>}
+              {!reconciliationLoading && reconciliation && (
+                <ReconciliationRow
+                  label="Allowance for Doubtful Debts"
+                  expected={reconciliation.allowance.expectedAllowance}
+                  gl={reconciliation.allowance.glAllowance}
+                  variance={reconciliation.allowance.variance}
+                  isReconciled={reconciliation.allowance.isReconciled}
+                />
+              )}
+            </SectionCard>
           )}
         </>
       )}

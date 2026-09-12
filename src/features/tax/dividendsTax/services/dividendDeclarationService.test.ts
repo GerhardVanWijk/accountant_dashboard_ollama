@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { DividendDeclarationService } from './dividendDeclarationService';
+import { FakeDividendDeclarationPostingExecutor } from './dividendDeclarationPostingExecutor';
 import { DividendsWithholdingTaxConfigService } from './dividendsWithholdingTaxConfigService';
 import { MockDividendDeclarationRepository } from '../repositories/MockDividendDeclarationRepository';
 import { MockDividendsWithholdingTaxConfigRepository } from '../repositories/MockDividendsWithholdingTaxConfigRepository';
@@ -53,7 +54,7 @@ describe('DividendDeclarationService', () => {
     rateService = new DividendsWithholdingTaxConfigService(rateRepository);
     declarationService = new DividendDeclarationService(
       declarationRepository,
-      journalEntryService,
+      new FakeDividendDeclarationPostingExecutor({ journal: journalEntryService, declarations: declarationRepository }),
       rateService,
       new AccountMappingService(new AccountService(accountRepository, journalRepository)),
     );
@@ -129,7 +130,7 @@ describe('DividendDeclarationService', () => {
       expect(entry!.lines.find((l) => l.accountId === 'acc_2500')?.credit).toBeCloseTo(50000, 2);
     });
 
-    it('pay() posts one balanced entry DR Dividends Payable / CR Cash and Bank + CR Dividends Tax Payable', async () => {
+    it('pay() posts one balanced entry DR Dividends Payable / CR Dividends Payment Clearing + CR Dividends Tax Payable (never Cash and Bank directly)', async () => {
       const declaration = await declarationService.createDeclaration({ declarationDate: '2026-03-01', totalAmount: 50000 });
       await declarationService.declare(declaration.id);
       const paid = await declarationService.pay(declaration.id, '2026-03-15');
@@ -139,11 +140,13 @@ describe('DividendDeclarationService', () => {
       const entry = await journalEntryService.getEntry(paid.paymentJournalEntryId!);
       expect(sumDebits(entry!.lines)).toBeCloseTo(sumCredits(entry!.lines), 2);
       expect(entry!.lines.find((l) => l.accountId === 'acc_2500')?.debit).toBeCloseTo(50000, 2);
-      expect(entry!.lines.find((l) => l.accountId === 'acc_1000')?.credit).toBeCloseTo(40000, 2);
+      // Migration-review addendum §3: never Cash and Bank (acc_1000) directly — CR the Dividends Payment Clearing account (acc_2520) instead.
+      expect(entry!.lines.some((l) => l.accountId === 'acc_1000')).toBe(false);
+      expect(entry!.lines.find((l) => l.accountId === 'acc_2520')?.credit).toBeCloseTo(40000, 2);
       expect(entry!.lines.find((l) => l.accountId === 'acc_2510')?.credit).toBeCloseTo(10000, 2);
     });
 
-    it('remitToSars() posts a balanced entry DR Dividends Tax Payable / CR Cash and Bank for the withheld amount', async () => {
+    it('remitToSars() posts a balanced entry DR Dividends Tax Payable / CR Dividends Payment Clearing for the withheld amount (never Cash and Bank directly)', async () => {
       const declaration = await declarationService.createDeclaration({ declarationDate: '2026-03-01', totalAmount: 50000 });
       await declarationService.declare(declaration.id);
       await declarationService.pay(declaration.id, '2026-03-15');
@@ -153,7 +156,9 @@ describe('DividendDeclarationService', () => {
       const entry = await journalEntryService.getEntry(remitted.remittanceJournalEntryId!);
       expect(sumDebits(entry!.lines)).toBeCloseTo(sumCredits(entry!.lines), 2);
       expect(entry!.lines.find((l) => l.accountId === 'acc_2510')?.debit).toBeCloseTo(10000, 2);
-      expect(entry!.lines.find((l) => l.accountId === 'acc_1000')?.credit).toBeCloseTo(10000, 2);
+      // Migration-review addendum §3: never Cash and Bank (acc_1000) directly — CR the Dividends Payment Clearing account (acc_2520) instead.
+      expect(entry!.lines.some((l) => l.accountId === 'acc_1000')).toBe(false);
+      expect(entry!.lines.find((l) => l.accountId === 'acc_2520')?.credit).toBeCloseTo(10000, 2);
     });
 
     it('full lifecycle: declare -> pay -> remit each post exactly one journal entry (three total)', async () => {

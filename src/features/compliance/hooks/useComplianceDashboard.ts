@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AccountingPeriod, Company, FixedAsset, ProvisionalTaxPeriod, PublicInterestScore, TaxComputation } from '@/types';
+import type { AccountingPeriod, Company, DeferredTaxComputation, EclComputation, FixedAsset, ProvisionalTaxPeriod, PublicInterestScore, TaxComputation } from '@/types';
 import type { Emp201Report, PayrollReconciliation } from '@/features/employees/services';
 import type { VatReconciliation, VatReport } from '@/features/tax/services/vatReportService';
 import type { SubledgerReconciliation } from '@/features/accounting/services/subledgerReconciliation';
+import type { DividendsTaxReconciliation } from '@/features/tax/dividendsTax/services';
+import type { DeferredTaxReconciliation } from '@/features/tax/deferredTax/services';
+import type { EclReconciliation } from '@/features/financialInstruments/services';
 import { companyService } from '@/features/admin/services';
 import { publicInterestScoreService } from '../services';
 import { financialYearService, accountingPeriodService, journalEntryService, accountMappingService } from '@/features/accounting/services';
@@ -16,6 +19,9 @@ import { employeeService, payrollRunService, computeEmp201Report, reconcilePayro
 import { provisionalTaxService } from '@/features/tax/provisionalTax/services';
 import { taxComputationService } from '@/features/tax/incomeTax/services';
 import { fixedAssetService } from '@/features/assets/services';
+import { dividendDeclarationService, reconcileDividendsTaxControlAccounts } from '@/features/tax/dividendsTax/services';
+import { deferredTaxComputationService, reconcileDeferredTaxToGl } from '@/features/tax/deferredTax/services';
+import { eclComputationService, reconcileEclToGl } from '@/features/financialInstruments/services';
 
 function startOfMonth(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -39,6 +45,15 @@ export interface ComplianceDashboardData {
   apReconciliation: SubledgerReconciliation | null;
   accountingPeriods: AccountingPeriod[];
   fixedAssets: FixedAsset[];
+  /** This-month Dividends Tax register <-> GL reconciliation (Tax & Compliance integrity audit continuation, 2026-09-12, §3/§8). Independent of financial year — dividends are declared whenever a real declaration happens. */
+  dividendsTaxReconciliation: DividendsTaxReconciliation | null;
+  /** The open financial year's DeferredTaxComputation, whatever its status — the dashboard must distinguish Prepared (draft) from Posted from Reconciled, never collapse them into one green badge. */
+  latestDeferredTaxComputation: DeferredTaxComputation | undefined;
+  /** Only computed when latestDeferredTaxComputation is posted — an unposted schedule has nothing on the GL to compare (§5/§8). */
+  deferredTaxReconciliation: DeferredTaxReconciliation | null;
+  latestEclComputation: EclComputation | undefined;
+  /** Only computed when latestEclComputation is posted (§7/§8). */
+  eclReconciliation: EclReconciliation | null;
 }
 
 /**
@@ -85,6 +100,9 @@ export function useComplianceDashboard() {
         payrollRuns,
         provisionalTaxPeriod,
         latestTaxComputation,
+        dividendDeclarations,
+        latestDeferredTaxComputation,
+        latestEclComputation,
       ] = await Promise.all([
         company ? publicInterestScoreService.getLatestScore(company.id) : Promise.resolve(undefined),
         Promise.all([
@@ -98,6 +116,9 @@ export function useComplianceDashboard() {
         payrollRunService.getPayrollRuns(),
         openFinancialYear ? provisionalTaxService.getPeriodForFinancialYear(openFinancialYear.id) : Promise.resolve(undefined),
         openFinancialYear ? taxComputationService.getComputationForFinancialYear(openFinancialYear.id) : Promise.resolve(undefined),
+        dividendDeclarationService.getDeclarations(),
+        openFinancialYear ? deferredTaxComputationService.getComputationForFinancialYear(openFinancialYear.id) : Promise.resolve(undefined),
+        openFinancialYear ? eclComputationService.getComputationForFinancialYear(openFinancialYear.id) : Promise.resolve(undefined),
       ]);
 
       const vatReport = computeVatReport(periodStart, periodEnd, invoices, creditNotes, bills, taxRates);
@@ -106,9 +127,20 @@ export function useComplianceDashboard() {
       const emp201 = computeEmp201Report(periodStart, periodEnd, payrollRuns);
       const emp201Reconciliation = await reconcilePayrollLiabilities(journalEntryService, accountMappingService, periodStart, periodEnd, emp201);
 
-      const [arReconciliation, apReconciliation] = await Promise.all([
+      const [arReconciliation, apReconciliation, dividendsTaxReconciliation] = await Promise.all([
         reconcileAccountsReceivable(journalEntryService, accountMappingService, invoices, creditNotes, customerReceipts),
         reconcileAccountsPayable(journalEntryService, accountMappingService, bills, supplierPayments),
+        reconcileDividendsTaxControlAccounts(journalEntryService, accountMappingService, periodStart, periodEnd, dividendDeclarations),
+      ]);
+
+      // Deferred Tax / ECL reconciliation only exists for a POSTED schedule — an
+      // unposted draft has nothing on the GL to genuinely compare (§5/§7/§8: never
+      // falsely mark a computation reconciled just because a row exists).
+      const [deferredTaxReconciliation, eclReconciliation] = await Promise.all([
+        latestDeferredTaxComputation?.status === 'posted'
+          ? reconcileDeferredTaxToGl(journalEntryService, accountMappingService, latestDeferredTaxComputation)
+          : Promise.resolve(null),
+        latestEclComputation?.status === 'posted' ? reconcileEclToGl(journalEntryService, accountMappingService, latestEclComputation) : Promise.resolve(null),
       ]);
 
       if (cancelled) return;
@@ -127,6 +159,11 @@ export function useComplianceDashboard() {
         apReconciliation,
         accountingPeriods,
         fixedAssets,
+        dividendsTaxReconciliation,
+        latestDeferredTaxComputation,
+        deferredTaxReconciliation,
+        latestEclComputation,
+        eclReconciliation,
       });
     })()
       .catch((err: unknown) => {

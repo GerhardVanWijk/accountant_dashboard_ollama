@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { FormShell, FormHeader } from '@/components/app/form';
 import { Empty, EmptyDescription, EmptyTitle } from '@/components/ui/shadcn/empty';
 import { formatCurrency } from '@/lib/app/format';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { usePublicInterestScore } from '../hooks/usePublicInterestScore';
 import { CalculateScoreForm } from '../components/CalculateScoreForm';
 import { ReportingFrameworkOverrideForm } from '../components/ReportingFrameworkOverrideForm';
@@ -38,6 +39,7 @@ const FRAMEWORK_LABELS: Record<ReportingFramework, string> = {
  */
 export function PublicInterestScorePage() {
   const { company, financialYears, history, latest, loading, error, refetch, calculateScore, applyReportingFramework } = usePublicInterestScore();
+  const canUpdate = useCanAccess('compliance', 'update');
   const [calculateOpen, setCalculateOpen] = useState(false);
   const [frameworkFormOpen, setFrameworkFormOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -74,9 +76,11 @@ export function PublicInterestScorePage() {
         title="Public Interest Score"
         description="Companies Regulations 2011 reg 26(2) score, and audit/reporting-framework suggestions."
         actions={
-          <Button onClick={() => setCalculateOpen(true)} disabled={loading || financialYears.length === 0}>
-            Calculate New Score
-          </Button>
+          canUpdate ? (
+            <Button onClick={() => setCalculateOpen(true)} disabled={loading || financialYears.length === 0}>
+              Calculate New Score
+            </Button>
+          ) : undefined
         }
       />
 
@@ -145,9 +149,11 @@ export function PublicInterestScorePage() {
                     The suggested reporting framework ({FRAMEWORK_LABELS[latest.suggestedReportingFramework]}) differs from the company&apos;s current framework (
                     {company ? FRAMEWORK_LABELS[company.reportingFramework] : '—'}). This is a warning only — nothing changes automatically.
                   </p>
-                  <Button variant="outline" onClick={() => setFrameworkFormOpen(true)}>
-                    Review &amp; Change Framework
-                  </Button>
+                  {canUpdate && (
+                    <Button variant="outline" onClick={() => setFrameworkFormOpen(true)}>
+                      Review &amp; Change Framework
+                    </Button>
+                  )}
                 </div>
               )}
 

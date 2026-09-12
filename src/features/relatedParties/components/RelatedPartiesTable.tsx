@@ -4,6 +4,7 @@ import { DataTable, type DataTableColumn } from '@/components/app/data-table';
 import { RecordLink } from '@/components/app/record-link';
 import { StatusBadge } from '@/components/app/status-badge';
 import { Button } from '@/components/ui/shadcn/button';
+import { formatDate } from '@/lib/app/format';
 import { RELATIONSHIP_TYPE_LABELS } from '../constants';
 
 export interface RelatedPartiesTableProps {
@@ -11,10 +12,12 @@ export interface RelatedPartiesTableProps {
   transactionCountByPartyId: Map<string, number>;
   onEdit: (relatedParty: RelatedParty) => void;
   onDelete: (relatedParty: RelatedParty) => void;
+  /** Hides Edit/Delete for a caller without `compliance:update`. Defaults to true so existing callers/tests are unaffected. */
+  canUpdate?: boolean;
 }
 
 /** Related Party Register, re-skinned onto v0's DataTable (M13) — mirrors AssetsTable.tsx's shape. */
-export function RelatedPartiesTable({ relatedParties, transactionCountByPartyId, onEdit, onDelete }: RelatedPartiesTableProps) {
+export function RelatedPartiesTable({ relatedParties, transactionCountByPartyId, onEdit, onDelete, canUpdate = true }: RelatedPartiesTableProps) {
   const navigate = useNavigate();
 
   const columns: DataTableColumn<RelatedParty>[] = [
@@ -37,11 +40,23 @@ export function RelatedPartiesTable({ relatedParties, transactionCountByPartyId,
         );
       },
     },
+    {
+      key: 'effective',
+      header: 'Effective',
+      hideBelowMd: true,
+      sortValue: (p) => p.effectiveFrom,
+      cell: (p) => (
+        <span className="text-xs text-muted-foreground">
+          {formatDate(p.effectiveFrom)} – {p.effectiveTo ? formatDate(p.effectiveTo) : 'present'}
+        </span>
+      ),
+    },
     { key: 'status', header: 'Status', sortValue: (p) => (p.isActive ? 'active' : 'inactive'), cell: (p) => <StatusBadge status={p.isActive ? 'active' : 'inactive'} /> },
     {
       key: 'actions',
       header: '',
       cell: (p) => {
+        if (!canUpdate) return null;
         const transactionCount = transactionCountByPartyId.get(p.id) ?? 0;
         return (
           <div className="flex justify-end gap-1">

@@ -1,10 +1,12 @@
 import { IncomeTaxConfigService } from './incomeTaxConfigService';
 import { TaxComputationService } from './taxComputationService';
+import { RealTaxComputationPostingExecutor } from './taxComputationPostingExecutor';
 import { incomeTaxConfigRepository, taxComputationRepository } from '../repositories/instances';
 import { journalEntryService, accountService, financialYearService, accountMappingService } from '@/features/accounting/services';
 import { companyService } from '@/features/admin/services';
 import { fixedAssetService, assetDisposalService } from '@/features/assets/services';
 import { capitalGainsService } from '@/features/tax/capitalGains/services';
+import { supabase } from '@/config/supabase';
 
 export type { CreateIncomeTaxYearConfigDTO } from './incomeTaxConfigService';
 export { IncomeTaxConfigService } from './incomeTaxConfigService';
@@ -15,10 +17,10 @@ export type {
   FinancialYearLookup,
   FixedAssetLookup,
   JournalEntryLookup,
-  JournalPoster,
   PreparedTaxComputation,
 } from './taxComputationService';
 export { TaxComputationService } from './taxComputationService';
+export type { TaxComputationPostingExecutor } from './taxComputationPostingExecutor';
 export {
   calculateAccountingProfit,
   calculateDepreciationAddback,
@@ -58,7 +60,7 @@ export const taxComputationService = new TaxComputationService(
   fixedAssetService,
   assetDisposalService,
   incomeTaxConfigService,
-  journalEntryService,
+  new RealTaxComputationPostingExecutor(supabase),
   accountMappingService,
   capitalGainsService,
 );

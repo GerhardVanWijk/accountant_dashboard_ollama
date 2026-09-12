@@ -6,6 +6,8 @@ import { Amount } from '@/components/app/figure';
 export interface CapitalGainsTableProps {
   disposals: CgtDisposalComputation[];
   onSellingCostsChange: (disposalId: string, sellingCosts: number) => void | Promise<void>;
+  /** Renders the Selling Costs cell read-only for a caller without `tax:update`. Defaults to true so existing callers/tests are unaffected. */
+  canUpdate?: boolean;
 }
 
 /** One row's editable selling-costs cell — local input state so typing doesn't refetch on every keystroke. */
@@ -33,7 +35,7 @@ function SellingCostsCell({ disposal, onSellingCostsChange }: { disposal: CgtDis
  * from taxable capital gain. Re-skinned onto shadcn table styling (M7);
  * logic unchanged.
  */
-export function CapitalGainsTable({ disposals, onSellingCostsChange }: CapitalGainsTableProps) {
+export function CapitalGainsTable({ disposals, onSellingCostsChange, canUpdate = true }: CapitalGainsTableProps) {
   const sorted = [...disposals].sort((a, b) => b.disposalDate.localeCompare(a.disposalDate));
 
   return (
@@ -71,7 +73,7 @@ export function CapitalGainsTable({ disposals, onSellingCostsChange }: CapitalGa
                 <Amount value={disposal.baseCost} plain />
               </td>
               <td className="whitespace-nowrap px-4 py-2.5 text-right">
-                <SellingCostsCell disposal={disposal} onSellingCostsChange={onSellingCostsChange} />
+                {canUpdate ? <SellingCostsCell disposal={disposal} onSellingCostsChange={onSellingCostsChange} /> : <Amount value={disposal.sellingCosts} plain />}
               </td>
               <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold">
                 <Amount value={disposal.capitalGainLoss} className="font-semibold" />

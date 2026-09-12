@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { AccountingPeriod, Company, FinancialYear } from '@/types';
 import type { TaxRegisterRow } from '@/features/assets/services/taxRegisterService';
 import { DeferredTaxComputationService } from './deferredTaxComputationService';
+import { FakeDeferredTaxPostingExecutor } from './deferredTaxPostingExecutor';
 import { MockDeferredTaxComputationRepository } from '../repositories/MockDeferredTaxComputationRepository';
 import { IncomeTaxConfigService } from '@/features/tax/incomeTax/services/incomeTaxConfigService';
 import { MockIncomeTaxConfigRepository } from '@/features/tax/incomeTax/repositories/MockIncomeTaxConfigRepository';
@@ -128,7 +129,7 @@ describe('DeferredTaxComputationService', () => {
       { getCompanies: async () => [company] },
       { getTaxRegister: async () => taxRegisterRows },
       incomeTaxConfigService,
-      journalEntryService,
+      new FakeDeferredTaxPostingExecutor({ journal: journalEntryService, computations: repository }),
       new AccountMappingService(new AccountService(accountRepository, journalRepository)),
     );
   });

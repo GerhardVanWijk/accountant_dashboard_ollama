@@ -17,6 +17,10 @@ export interface PaymentSlotCardProps {
   busy: boolean;
   onSaveEstimate: (estimatedTaxableIncome: number) => void | Promise<void>;
   onPay: (amountPaid: number, date: string) => void | Promise<void>;
+  /** Hides the estimate form for a caller without `tax:update`. Defaults to true so existing callers/tests are unaffected. */
+  canUpdate?: boolean;
+  /** Hides the payment form for a caller without `tax:post`. Defaults to true. */
+  canPost?: boolean;
 }
 
 /**
@@ -25,7 +29,7 @@ export interface PaymentSlotCardProps {
  * the slot has actually been paid. Re-skinned onto v0's SectionCard/Field
  * (M7); estimate/payment logic unchanged.
  */
-export function PaymentSlotCard({ title, description, slot, busy, onSaveEstimate, onPay }: PaymentSlotCardProps) {
+export function PaymentSlotCard({ title, description, slot, busy, onSaveEstimate, onPay, canUpdate = true, canPost = true }: PaymentSlotCardProps) {
   const navigate = useNavigate();
   const [estimateInput, setEstimateInput] = useState(String(slot.estimatedTaxableIncome ?? ''));
   const [payAmount, setPayAmount] = useState(slot.estimatedTaxLiability !== undefined ? String(slot.estimatedTaxLiability) : '');
@@ -42,7 +46,7 @@ export function PaymentSlotCard({ title, description, slot, busy, onSaveEstimate
           <FigureBlock label="Estimated Tax Liability" value={formatCurrency(slot.estimatedTaxLiability ?? 0)} className="text-base" tone="warning" />
         </div>
 
-        {!isPaid && (
+        {!isPaid && canUpdate && (
           <form
             className="flex flex-col gap-2 border-t border-border pt-3"
             onSubmit={(e) => {
@@ -64,7 +68,7 @@ export function PaymentSlotCard({ title, description, slot, busy, onSaveEstimate
           </form>
         )}
 
-        {!isPaid ? (
+        {!isPaid && canPost && (
           <form
             className="flex flex-col gap-2 border-t border-border pt-3"
             onSubmit={(e) => {
@@ -100,7 +104,8 @@ export function PaymentSlotCard({ title, description, slot, busy, onSaveEstimate
             </Field>
             {slot.estimatedTaxLiability === undefined && <p className="text-xs text-muted-foreground">Save an estimate first to record a payment.</p>}
           </form>
-        ) : (
+        )}
+        {isPaid && (
           <p className="border-t border-border pt-3 text-xs text-muted-foreground">
             Paid {formatCurrency(slot.amountPaid ?? 0)} on {formatDate(slot.paidDate as string)}
             {slot.journalEntryId && (

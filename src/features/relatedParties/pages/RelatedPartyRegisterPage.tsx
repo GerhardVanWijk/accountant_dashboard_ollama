@@ -4,6 +4,7 @@ import type { RelatedParty } from '@/types/relatedParty';
 import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { FormShell, FormHeader } from '@/components/app/form';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useRelatedParties } from '../hooks/useRelatedParties';
 import { useRelatedPartyTransactions } from '../hooks/useRelatedPartyTransactions';
 import { RelatedPartyForm } from '../components/RelatedPartyForm';
@@ -24,6 +25,7 @@ type DialogState = { mode: 'create' } | { mode: 'edit'; relatedParty: RelatedPar
  */
 export function RelatedPartyRegisterPage() {
   const { relatedParties, loading, error, refetch, createRelatedParty, updateRelatedParty, deleteRelatedParty } = useRelatedParties();
+  const canUpdate = useCanAccess('compliance', 'update');
   const { transactions, loading: transactionsLoading } = useRelatedPartyTransactions();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [dirty, setDirty] = useState(false);
@@ -70,10 +72,12 @@ export function RelatedPartyRegisterPage() {
         title="Related party register"
         description="Directors, shareholders, subsidiaries, associates, key management, and other related entities, kept for financial statement disclosure."
         actions={
-          <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
-            <Plus data-icon="inline-start" />
-            New related party
-          </Button>
+          canUpdate ? (
+            <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+              <Plus data-icon="inline-start" />
+              New related party
+            </Button>
+          ) : undefined
         }
       />
 
@@ -104,6 +108,7 @@ export function RelatedPartyRegisterPage() {
           transactionCountByPartyId={transactionCountByPartyId}
           onEdit={(relatedParty) => setDialog({ mode: 'edit', relatedParty })}
           onDelete={(relatedParty) => void handleDelete(relatedParty)}
+          canUpdate={canUpdate}
         />
       )}
 

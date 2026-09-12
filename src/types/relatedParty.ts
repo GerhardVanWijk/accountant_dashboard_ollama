@@ -29,7 +29,37 @@ export interface RelatedParty extends BaseEntity {
    */
   relationshipDetail?: string;
   isActive: boolean;
+  /**
+   * When this relationship began (Tax & Compliance integrity audit
+   * continuation, 2026-09-12, §9). Required — every relationship has a
+   * real start, even if entered retroactively; defaults to today for a
+   * newly-added party. Historical relationships are never deleted merely
+   * because they end — `effectiveTo` (below) closes the period instead,
+   * same "supersede/close, never destroy" discipline as
+   * `TaxRateService.supersede()`.
+   */
+  effectiveFrom: ISODateString;
+  /**
+   * When this relationship ended, if it has. Deactivating a related party
+   * (isActive -> false) closes the period by setting this — the party
+   * record itself is preserved for historical disclosure, never deleted.
+   * Must be on/after `effectiveFrom` (enforced by a DB CHECK constraint,
+   * not just this type).
+   */
+  effectiveTo?: ISODateString;
 }
+
+/**
+ * Real, existing accounting-record tables a related-party transaction can
+ * genuinely link to (Tax & Compliance integrity audit continuation,
+ * 2026-09-12, §10). Deliberately NOT a generic/open-ended polymorphic
+ * type — each value here corresponds to a table this codebase actually
+ * has and can validate against (see migration 0106's trigger). `undefined`
+ * (no source type set at all) is the honest "Manual / Other" route for a
+ * disclosure that genuinely has no matching accounting record — never
+ * forced into a fake link.
+ */
+export type RelatedPartySourceDocumentType = 'invoice' | 'bill' | 'journal_entry' | 'customer_receipt' | 'payment';
 
 export interface RelatedPartyTransaction extends BaseEntity {
   relatedPartyId: ID;
@@ -42,14 +72,30 @@ export interface RelatedPartyTransaction extends BaseEntity {
    * actual disclosure standards would violate §110.
    */
   natureOfTransaction: string;
+  /**
+   * When `sourceDocumentType`/`sourceDocumentId` are set, this is DERIVED
+   * from the source record at create/link time, never independently
+   * retyped — see relatedPartyTransactionService.ts's `resolveSource()`.
+   * Only genuinely manually-entered when this transaction has no linked
+   * source (the honest Manual/Other route).
+   */
   amount: number;
   description?: string;
   /**
-   * Optional, purely informational pointer to an existing document this
-   * transaction relates to (e.g. an Invoice or Bill id) — NOT a real
-   * foreign-key relationship enforced anywhere, just a free-text
-   * reference an accountant can use to cross-check. No cross-module
-   * coupling is added by this field.
+   * Which real accounting-record table `sourceDocumentId` points into.
+   * `undefined` (with `sourceDocumentId` also undefined) means this
+   * transaction is Manual/Other — a legitimate disclosure with no
+   * matching accounting record, not a data-entry gap.
+   */
+  sourceDocumentType?: RelatedPartySourceDocumentType;
+  /** The real record's id in the table named by `sourceDocumentType` — validated to exist (and belong to the same company) at write time by the service/DB, never trusted as free text. */
+  sourceDocumentId?: ID;
+  /**
+   * Free-text supplementary note — e.g. "per loan agreement dated...",
+   * or, for a Manual/Other transaction, why no accounting record exists.
+   * NOT a substitute for `sourceDocumentType`/`sourceDocumentId`: this
+   * field alone was the pre-2026-09-12 "linkage" and is not validated
+   * against anything (see docs on the audit finding this closes).
    */
   sourceReference?: string;
 }

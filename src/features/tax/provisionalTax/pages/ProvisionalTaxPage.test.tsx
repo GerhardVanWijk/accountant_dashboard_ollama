@@ -5,6 +5,7 @@ import type { FinancialYear } from '@/types';
 import type { ProvisionalTaxPeriod } from '@/types/provisionalTax';
 import { ProvisionalTaxPage } from './ProvisionalTaxPage';
 import { useProvisionalTax } from '../hooks/useProvisionalTax';
+import { useAuthStore } from '@/stores/authStore';
 
 function renderPage() {
   return render(
@@ -68,6 +69,9 @@ function baseHookValue(overrides: Partial<ReturnType<typeof useProvisionalTax>> 
 describe('ProvisionalTaxPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useAuthStore.setState({
+      profile: { id: 'u1', role: 'admin', companyId: 'comp_001', isActive: true, createdAt: '', updatedAt: '' },
+    });
   });
 
   it('shows a loading state', () => {
@@ -105,6 +109,17 @@ describe('ProvisionalTaxPage', () => {
     expect(screen.getByText('First Payment')).toBeInTheDocument();
     expect(screen.getByText('Second Payment')).toBeInTheDocument();
     expect(screen.getByText('Top-up Payment')).toBeInTheDocument();
+  });
+
+  it('a viewer (tax:read only) sees no Save Estimate/Record Payment/Create Period controls — RBAC action-level gating (Tax & Compliance audit continuation, 2026-09-12)', () => {
+    useAuthStore.setState({
+      profile: { id: 'u2', role: 'viewer', companyId: 'comp_001', isActive: true, createdAt: '', updatedAt: '' },
+    });
+    mockedUseProvisionalTax.mockReturnValue(baseHookValue({ periods: [makePeriod()] }));
+    renderPage();
+
+    expect(screen.queryByRole('button', { name: /save estimate/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /record payment/i })).not.toBeInTheDocument();
   });
 
   it('calls recordEstimate when an estimate is saved for a slot', async () => {

@@ -4,10 +4,41 @@ import type { DividendDeclaration } from '@/types';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { FormShell, FormHeader } from '@/components/app/form';
+import { formatCurrency, formatDate } from '@/lib/app/format';
+import { cn } from '@/lib/utils';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useDividendDeclarations } from '../hooks/useDividendDeclarations';
+import { useDividendsTaxReconciliation } from '../hooks/useDividendsTaxReconciliation';
 import { DividendDeclarationForm } from '../components/DividendDeclarationForm';
 import { DividendDeclarationsTable } from '../components/DividendDeclarationsTable';
 import type { CreateDividendDeclarationInput } from '../services';
+
+function ReconciliationRow({ label, expected, gl, variance, isReconciled }: { label: string; expected: number; gl: number; variance: number; isReconciled: boolean }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border border-border p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</span>
+        <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', isReconciled ? 'bg-status-positive-muted text-status-positive' : 'bg-status-warning-muted text-status-warning')}>
+          {isReconciled ? 'Reconciled' : 'Variance'}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-sm">
+        <div>
+          <div className="text-[10px] text-muted-foreground uppercase">Register</div>
+          <div className="figure tabular-nums">{formatCurrency(expected)}</div>
+        </div>
+        <div>
+          <div className="text-[10px] text-muted-foreground uppercase">GL</div>
+          <div className="figure tabular-nums">{formatCurrency(gl)}</div>
+        </div>
+        <div>
+          <div className="text-[10px] text-muted-foreground uppercase">Variance</div>
+          <div className={cn('figure tabular-nums', !isReconciled && 'text-status-warning')}>{formatCurrency(variance)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Dividends Tax — route `/tax/dividends`. Gross, company-wide
@@ -18,6 +49,10 @@ import type { CreateDividendDeclarationInput } from '../services';
  */
 export function DividendsTaxPage() {
   const { declarations, loading, error, refetch, createDeclaration, declare, pay, remitToSars, deleteDraft } = useDividendDeclarations();
+  const { reconciliation, loading: reconciliationLoading, periodStart, periodEnd } = useDividendsTaxReconciliation();
+  const canCreate = useCanAccess('tax', 'create');
+  const canUpdate = useCanAccess('tax', 'update');
+  const canPost = useCanAccess('tax', 'post');
   const [showCreate, setShowCreate] = useState(false);
   const [dirty, setDirty] = useState(false);
   const closeDialog = () => { setShowCreate(false); setDirty(false); };
@@ -78,7 +113,7 @@ export function DividendsTaxPage() {
       <PageHeader
         title="Dividends Tax"
         description="Dividend declarations, payments, and Dividends Withholding Tax."
-        actions={<Button onClick={() => setShowCreate(true)}>New Declaration</Button>}
+        actions={canCreate ? <Button onClick={() => setShowCreate(true)}>New Declaration</Button> : undefined}
       />
 
       <p className="rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-xs text-muted-foreground">
@@ -92,6 +127,31 @@ export function DividendsTaxPage() {
           {actionError}
         </p>
       )}
+
+      <SectionCard
+        title="Register ↔ GL Reconciliation"
+        description={`${formatDate(periodStart.toISOString())} – ${formatDate(periodEnd.toISOString())} — independently compares the declaration register against real ledger movement. Never derived from the same source on both sides.`}
+      >
+        {reconciliationLoading && <p className="text-sm text-muted-foreground">Reconciling…</p>}
+        {!reconciliationLoading && reconciliation && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <ReconciliationRow
+              label="Dividends Payable"
+              expected={reconciliation.dividendsPayable.expectedMovement}
+              gl={reconciliation.dividendsPayable.glMovement}
+              variance={reconciliation.dividendsPayable.variance}
+              isReconciled={reconciliation.dividendsPayable.isReconciled}
+            />
+            <ReconciliationRow
+              label="Dividends Tax Payable"
+              expected={reconciliation.dividendsTaxPayable.expectedMovement}
+              gl={reconciliation.dividendsTaxPayable.glMovement}
+              variance={reconciliation.dividendsTaxPayable.variance}
+              isReconciled={reconciliation.dividendsTaxPayable.isReconciled}
+            />
+          </div>
+        )}
+      </SectionCard>
 
       {loading && (
         <div role="status" className="flex min-h-[30vh] items-center justify-center gap-2 text-muted-foreground">
@@ -110,7 +170,7 @@ export function DividendsTaxPage() {
         </SectionCard>
       )}
       {!loading && !error && (
-        <DividendDeclarationsTable declarations={declarations} onDeclare={handleDeclare} onPay={handlePay} onRemit={handleRemit} onDelete={handleDelete} />
+        <DividendDeclarationsTable declarations={declarations} onDeclare={handleDeclare} onPay={handlePay} onRemit={handleRemit} onDelete={handleDelete} canUpdate={canUpdate} canPost={canPost} />
       )}
 
       {showCreate && (

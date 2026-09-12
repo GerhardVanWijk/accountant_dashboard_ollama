@@ -12,6 +12,8 @@ interface RelatedPartyTransactionRow {
   amount: number;
   description: string | null;
   source_reference: string | null;
+  source_document_type: string | null;
+  source_document_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -27,6 +29,8 @@ function rowToRelatedPartyTransaction(row: RelatedPartyTransactionRow): RelatedP
     amount: Number(row.amount),
     description: row.description ?? undefined,
     sourceReference: row.source_reference ?? undefined,
+    sourceDocumentType: (row.source_document_type as RelatedPartyTransaction['sourceDocumentType']) ?? undefined,
+    sourceDocumentId: row.source_document_id ?? undefined,
   };
 }
 
@@ -38,6 +42,8 @@ function relatedPartyTransactionToRow(entity: Partial<RelatedPartyTransaction>):
   if (entity.amount !== undefined) row.amount = entity.amount;
   if (entity.description !== undefined) row.description = entity.description;
   if (entity.sourceReference !== undefined) row.source_reference = entity.sourceReference;
+  if (entity.sourceDocumentType !== undefined) row.source_document_type = entity.sourceDocumentType;
+  if (entity.sourceDocumentId !== undefined) row.source_document_id = entity.sourceDocumentId;
   return row;
 }
 

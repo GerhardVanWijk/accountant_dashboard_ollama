@@ -66,6 +66,19 @@ export interface DividendDeclaration extends BaseEntity {
   taxableAmount: number;
   /** The Dividends Withholding Tax rate (%) resolved as of `declarationDate` and applied to `taxableAmount`. */
   ratePercentApplied: number;
+  /**
+   * The exact `DividendsWithholdingTaxRateConfig` row that produced
+   * `ratePercentApplied` — a statutory-config traceability snapshot (Tax &
+   * Compliance integrity audit continuation, 2026-09-12, §13). Recorded
+   * once at draft-creation/edit time and never changed afterward, same
+   * "snapshot the exact version used" precedent as
+   * `vat_source_entries.tax_rate_id` (migration 0080). Answers "which
+   * exact statutory configuration version produced this number?" without
+   * relying on re-resolving `getRateForDate(declarationDate)` against
+   * whatever configs happen to exist later. Optional because rows created
+   * before this field existed have no snapshot on file.
+   */
+  withholdingTaxConfigId?: ID;
   /** taxableAmount * ratePercentApplied / 100, rounded to cents. */
   dividendsTaxWithheld: number;
   /** totalAmount - dividendsTaxWithheld — what shareholders actually receive in cash. */

@@ -13,6 +13,7 @@ interface DividendDeclarationRow {
   status: string;
   taxable_amount: number;
   rate_percent_applied: number;
+  withholding_tax_config_id: string | null;
   dividends_tax_withheld: number;
   net_payable_to_shareholders: number;
   declaration_journal_entry_id: string | null;
@@ -37,6 +38,7 @@ function rowToDividendDeclaration(row: DividendDeclarationRow): DividendDeclarat
     status: row.status as DividendDeclaration['status'],
     taxableAmount: Number(row.taxable_amount),
     ratePercentApplied: Number(row.rate_percent_applied),
+    withholdingTaxConfigId: row.withholding_tax_config_id ?? undefined,
     dividendsTaxWithheld: Number(row.dividends_tax_withheld),
     netPayableToShareholders: Number(row.net_payable_to_shareholders),
     declarationJournalEntryId: row.declaration_journal_entry_id ?? undefined,
@@ -57,6 +59,7 @@ function dividendDeclarationToRow(entity: Partial<DividendDeclaration>): Record<
   if (entity.status !== undefined) row.status = entity.status;
   if (entity.taxableAmount !== undefined) row.taxable_amount = entity.taxableAmount;
   if (entity.ratePercentApplied !== undefined) row.rate_percent_applied = entity.ratePercentApplied;
+  if (entity.withholdingTaxConfigId !== undefined) row.withholding_tax_config_id = entity.withholdingTaxConfigId;
   if (entity.dividendsTaxWithheld !== undefined) row.dividends_tax_withheld = entity.dividendsTaxWithheld;
   if (entity.netPayableToShareholders !== undefined) row.net_payable_to_shareholders = entity.netPayableToShareholders;
   if (entity.declarationJournalEntryId !== undefined) row.declaration_journal_entry_id = entity.declarationJournalEntryId;

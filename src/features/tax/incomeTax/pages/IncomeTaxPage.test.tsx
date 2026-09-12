@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { Company, FinancialYear, TaxComputation } from '@/types';
+import { useAuthStore } from '@/stores/authStore';
 import { IncomeTaxPage } from './IncomeTaxPage';
 import { useIncomeTax } from '../hooks/useIncomeTax';
 
@@ -95,6 +96,13 @@ function baseHookValue(overrides: Partial<ReturnType<typeof useIncomeTax>> = {})
 describe('IncomeTaxPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // admin bypasses useCanAccess() unconditionally (see docs/PERMISSIONS.md)
+    // — the default state for these tests, same convention as
+    // FinancialPeriodsPage.test.tsx. Action-level gating (tax:create/
+    // update/post) is covered separately in the RBAC-focused test below.
+    useAuthStore.setState({
+      profile: { id: 'u1', role: 'admin', companyId: 'comp_001', isActive: true, createdAt: '', updatedAt: '' },
+    });
   });
 
   it('shows a loading state', () => {
@@ -165,5 +173,17 @@ describe('IncomeTaxPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /post tax computation/i }));
     await waitFor(() => expect(postComputation).toHaveBeenCalledWith('txc_1'));
+  });
+
+  it('a viewer (tax:read only) sees no Create/Post/Delete/SBC mutation controls — RBAC action-level gating (Tax & Compliance audit, 2026-09-12)', () => {
+    useAuthStore.setState({
+      profile: { id: 'u2', role: 'viewer', companyId: 'comp_001', isActive: true, createdAt: '', updatedAt: '' },
+    });
+    mockedUseIncomeTax.mockReturnValue(baseHookValue({ computations: [makeComputation()] }));
+    renderPage();
+
+    expect(screen.queryByRole('button', { name: /post tax computation/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /delete draft/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /flag as sbc-eligible/i })).not.toBeInTheDocument();
   });
 });

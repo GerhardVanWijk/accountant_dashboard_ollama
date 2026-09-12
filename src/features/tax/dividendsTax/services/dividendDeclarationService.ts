@@ -1,32 +1,19 @@
-import type { DividendDeclaration, ID, JournalEntry } from '@/types';
+import type { DividendDeclaration, ID } from '@/types';
 import type { IDividendDeclarationRepository } from '../repositories/IDividendDeclarationRepository';
 import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
+import type { DividendDeclarationPostingExecutor } from './dividendDeclarationPostingExecutor';
 
 /** Half a cent — same rounding tolerance as journalEntryService.ts. */
 const EPSILON = 0.005;
 
 /**
- * Minimal surface of JournalEntryService this service depends on — an
- * interface, not the concrete class, mirrors AssetDisposalService's
- * JournalPoster/BillService's JournalPoster exactly.
- */
-export interface JournalPoster {
-  postJournalEntry(input: {
-    date: string;
-    memo?: string;
-    source: string;
-    lines: NewJournalLineInput[];
-    postedByUserId?: ID;
-  }): Promise<JournalEntry>;
-}
-
-/**
  * Minimal surface of DividendsWithholdingTaxConfigService this service
- * depends on — resolving the rate effective on a given date is all
- * this service needs.
+ * depends on — resolving the rate effective on a given date, AND which
+ * exact config row that rate came from (§13 statutory-config traceability,
+ * see DividendDeclaration.withholdingTaxConfigId's doc comment).
  */
 export interface DividendsRateResolver {
-  getRateForDate(date: string): Promise<{ ratePercent: number } | undefined>;
+  getRateForDate(date: string): Promise<{ id: ID; ratePercent: number } | undefined>;
 }
 
 export interface CreateDividendDeclarationInput {
@@ -76,7 +63,7 @@ function endOfFollowingMonth(dateIso: string): string {
 export class DividendDeclarationService {
   constructor(
     private readonly repository: IDividendDeclarationRepository,
-    private readonly journalPoster: JournalPoster,
+    private readonly postingExecutor: DividendDeclarationPostingExecutor,
     private readonly rateResolver: DividendsRateResolver,
     private readonly accounts: AccountMapper,
   ) {}
@@ -101,7 +88,9 @@ export class DividendDeclarationService {
     totalAmount: number;
     exemptPortion: number;
     exemptionReason?: string;
-  }): Promise<Pick<DividendDeclaration, 'taxableAmount' | 'ratePercentApplied' | 'dividendsTaxWithheld' | 'netPayableToShareholders'>> {
+  }): Promise<
+    Pick<DividendDeclaration, 'taxableAmount' | 'ratePercentApplied' | 'withholdingTaxConfigId' | 'dividendsTaxWithheld' | 'netPayableToShareholders'>
+  > {
     if (input.totalAmount <= 0) {
       throw new Error('Dividend total amount must be greater than 0.');
     }
@@ -127,6 +116,7 @@ export class DividendDeclarationService {
     return {
       taxableAmount,
       ratePercentApplied: rateConfig.ratePercent,
+      withholdingTaxConfigId: rateConfig.id,
       dividendsTaxWithheld,
       netPayableToShareholders,
     };
@@ -199,9 +189,14 @@ export class DividendDeclarationService {
    * Declares the dividend: DR Retained Earnings / CR Dividends Payable
    * for the full gross `totalAmount` — declaring a dividend reduces
    * distributable equity immediately, regardless of withholding (which
-   * only happens at payment). Rejects a non-draft record (idempotency
-   * guard, same class as PurchaseOrderService.recordReceipt()'s
-   * already-received guard).
+   * only happens at payment). Rejects a non-draft record.
+   *
+   * Posts through `postingExecutor` — one atomic RPC call
+   * (`declare_dividend`, migration 0102, Tax & Compliance integrity audit
+   * continuation 2026-09-12) that posts the journal AND flips the
+   * declaration to 'declared' in the SAME database transaction, keyed for
+   * idempotency on (declaration id, transition='declare') — see
+   * dividendDeclarationPostingExecutor.ts's doc comment.
    */
   async declare(id: ID, postedByUserId?: ID): Promise<DividendDeclaration> {
     const declaration = await this.repository.getById(id);
@@ -231,7 +226,8 @@ export class DividendDeclarationService {
       },
     ];
 
-    const entry = await this.journalPoster.postJournalEntry({
+    const result = await this.postingExecutor.declareDividend({
+      dividendDeclarationId: id,
       date: declaration.declarationDate,
       memo: `Dividend declaration - ${declaration.declarationDate}`,
       source: 'dividend_declaration',
@@ -239,14 +235,25 @@ export class DividendDeclarationService {
       postedByUserId,
     });
 
-    return this.repository.update(id, { status: 'declared', declarationJournalEntryId: entry.id });
+    return result.declaration;
   }
 
   /**
    * Pays the declared dividend: ONE balanced entry — DR Dividends
-   * Payable (full gross `totalAmount`) / CR Cash and Bank
+   * Payable (full gross `totalAmount`) / CR Dividends Payment Clearing
    * (`netPayableToShareholders`) / CR Dividends Tax Payable
    * (`dividendsTaxWithheld`). Rejects a non-declared record.
+   *
+   * The Dividends Payment Clearing leg (acc_2520, migration 0107) is
+   * deliberate — NEVER Cash and Bank directly (migration-review addendum
+   * §3): the real EFT to shareholders is recorded exactly once, later,
+   * through the existing Banking module against this same clearing
+   * account, the identical fix Payroll/Leases already have.
+   *
+   * Posts through `postingExecutor` (`pay_dividend`, migration 0102),
+   * keyed for idempotency on (declaration id, transition='pay') — declare/
+   * pay/remit share one idempotency ledger but are distinct transitions,
+   * so paying does not consume/interfere with the declare or remit slot.
    */
   async pay(id: ID, paidDate?: string, postedByUserId?: ID): Promise<DividendDeclaration> {
     const declaration = await this.repository.getById(id);
@@ -259,9 +266,9 @@ export class DividendDeclarationService {
 
     const date = paidDate ?? new Date().toISOString().slice(0, 10);
 
-    const [dividendsPayableId, cashAndBankId, dividendsTaxPayableId] = await Promise.all([
+    const [dividendsPayableId, dividendsPaymentClearingId, dividendsTaxPayableId] = await Promise.all([
       this.accounts.getAccountId('DIVIDENDS_PAYABLE'),
-      this.accounts.getAccountId('CASH_AND_BANK'),
+      this.accounts.getAccountId('DIVIDENDS_PAYMENT_CLEARING'),
       this.accounts.getAccountId('DIVIDENDS_TAX_PAYABLE'),
     ]);
     const lines: NewJournalLineInput[] = [
@@ -272,7 +279,7 @@ export class DividendDeclarationService {
         credit: 0,
       },
       {
-        accountId: cashAndBankId,
+        accountId: dividendsPaymentClearingId,
         description: `Dividend paid - ${date} - net to shareholders`,
         debit: 0,
         credit: declaration.netPayableToShareholders,
@@ -285,7 +292,8 @@ export class DividendDeclarationService {
       },
     ].filter((line) => line.debit > EPSILON || line.credit > EPSILON);
 
-    const entry = await this.journalPoster.postJournalEntry({
+    const result = await this.postingExecutor.payDividend({
+      dividendDeclarationId: id,
       date,
       memo: `Dividend payment - ${date}`,
       source: 'dividend_payment',
@@ -293,18 +301,27 @@ export class DividendDeclarationService {
       postedByUserId,
     });
 
-    return this.repository.update(id, { status: 'paid', paymentJournalEntryId: entry.id, paidDate: date });
+    return result.declaration;
   }
 
   /**
    * Remits the withheld Dividends Tax to SARS: DR Dividends Tax Payable
-   * / CR Cash and Bank for `dividendsTaxWithheld`. Models the
-   * employer's actual remittance, real-world due by the end of the
-   * month following the month the dividend was paid (see
-   * `getRemittanceDueDateHint()`) — shown as an informational hint
-   * only, never hard-blocked here, since this app has no real
-   * date-of-submission enforcement elsewhere either. Rejects a
+   * / CR Dividends Payment Clearing (acc_2520, migration 0107) for
+   * `dividendsTaxWithheld` — never Cash and Bank directly
+   * (migration-review addendum §3): the real EFT to SARS is recorded
+   * exactly once, later, through the existing Banking module against
+   * this same clearing account. Models the employer's actual remittance,
+   * real-world due by the end of the month following the month the
+   * dividend was paid (see `getRemittanceDueDateHint()`) — shown as an
+   * informational hint only, never hard-blocked here, since this app has
+   * no real date-of-submission enforcement elsewhere either. Rejects a
    * non-paid record.
+   *
+   * Posts through `postingExecutor` (`remit_dividend_to_sars`, migration
+   * 0102), keyed for idempotency on (declaration id, transition='remit').
+   * A fully-exempt declaration (nothing withheld) skips the journal
+   * entirely, same "no degenerate zero-value entry" convention every
+   * other posting flow in this codebase already follows.
    */
   async remitToSars(id: ID, remittedDate?: string, postedByUserId?: ID): Promise<DividendDeclaration> {
     const declaration = await this.repository.getById(id);
@@ -317,32 +334,30 @@ export class DividendDeclarationService {
 
     const date = remittedDate ?? new Date().toISOString().slice(0, 10);
 
-    if (declaration.dividendsTaxWithheld <= EPSILON) {
-      // Nothing was withheld (e.g. fully exempt) - nothing to remit; just
-      // flip status without posting a zero-value/degenerate journal entry.
-      return this.repository.update(id, { status: 'remitted', remittedDate: date });
+    let lines: NewJournalLineInput[] = [];
+    if (declaration.dividendsTaxWithheld > EPSILON) {
+      const [dividendsTaxPayableId, dividendsPaymentClearingId] = await Promise.all([
+        this.accounts.getAccountId('DIVIDENDS_TAX_PAYABLE'),
+        this.accounts.getAccountId('DIVIDENDS_PAYMENT_CLEARING'),
+      ]);
+      lines = [
+        {
+          accountId: dividendsTaxPayableId,
+          description: `Dividends Tax remitted to SARS - ${date}`,
+          debit: declaration.dividendsTaxWithheld,
+          credit: 0,
+        },
+        {
+          accountId: dividendsPaymentClearingId,
+          description: `Dividends Tax remitted to SARS - ${date}`,
+          debit: 0,
+          credit: declaration.dividendsTaxWithheld,
+        },
+      ];
     }
 
-    const [dividendsTaxPayableId, cashAndBankId] = await Promise.all([
-      this.accounts.getAccountId('DIVIDENDS_TAX_PAYABLE'),
-      this.accounts.getAccountId('CASH_AND_BANK'),
-    ]);
-    const lines: NewJournalLineInput[] = [
-      {
-        accountId: dividendsTaxPayableId,
-        description: `Dividends Tax remitted to SARS - ${date}`,
-        debit: declaration.dividendsTaxWithheld,
-        credit: 0,
-      },
-      {
-        accountId: cashAndBankId,
-        description: `Dividends Tax remitted to SARS - ${date}`,
-        debit: 0,
-        credit: declaration.dividendsTaxWithheld,
-      },
-    ];
-
-    const entry = await this.journalPoster.postJournalEntry({
+    const result = await this.postingExecutor.remitDividendToSars({
+      dividendDeclarationId: id,
       date,
       memo: `Dividends Tax remittance - ${date}`,
       source: 'dividend_tax_remittance',
@@ -350,7 +365,7 @@ export class DividendDeclarationService {
       postedByUserId,
     });
 
-    return this.repository.update(id, { status: 'remitted', remittanceJournalEntryId: entry.id, remittedDate: date });
+    return result.declaration;
   }
 }
 

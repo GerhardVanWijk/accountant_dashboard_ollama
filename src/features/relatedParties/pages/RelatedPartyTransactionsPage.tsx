@@ -4,8 +4,11 @@ import type { RelatedPartyTransaction } from '@/types/relatedParty';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { FormShell, FormHeader } from '@/components/app/form';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useRelatedParties } from '../hooks/useRelatedParties';
 import { useRelatedPartyTransactions } from '../hooks/useRelatedPartyTransactions';
+import { useRelatedPartyDisclosureReconciliation } from '../hooks/useRelatedPartyDisclosureReconciliation';
+import { formatCurrency } from '@/lib/app/format';
 import { RelatedPartyTransactionForm } from '../components/RelatedPartyTransactionForm';
 import { RelatedPartyTransactionsTable } from '../components/RelatedPartyTransactionsTable';
 import { DisclosureSummaryTable } from '../components/DisclosureSummaryTable';
@@ -25,6 +28,7 @@ type DialogState = { mode: 'create' } | { mode: 'edit'; transaction: RelatedPart
 export function RelatedPartyTransactionsPage() {
   const { relatedParties, loading: relatedPartiesLoading } = useRelatedParties();
   const { transactions, loading, error, refetch, createTransaction, updateTransaction, deleteTransaction } = useRelatedPartyTransactions();
+  const canUpdate = useCanAccess('compliance', 'update');
   const [dialog, setDialog] = useState<DialogState>(null);
   const [dirty, setDirty] = useState(false);
   const closeDialog = () => { setDialog(null); setDirty(false); };
@@ -32,6 +36,7 @@ export function RelatedPartyTransactionsPage() {
 
   const relatedPartiesById = useMemo(() => new Map(relatedParties.map((p) => [p.id, p])), [relatedParties]);
   const disclosureSummary = useMemo(() => buildRelatedPartyDisclosureSummary(relatedParties, transactions), [relatedParties, transactions]);
+  const { mismatches } = useRelatedPartyDisclosureReconciliation(transactions);
 
   const handleFormSubmit = async (data: CreateRelatedPartyTransactionDTO | UpdateRelatedPartyTransactionDTO) => {
     setActionError(null);
@@ -65,10 +70,12 @@ export function RelatedPartyTransactionsPage() {
         title="Related party transactions"
         description="Transactions with directors, shareholders, subsidiaries, associates, and other related entities, kept for disclosure only — nothing here posts to the GL."
         actions={
-          <Button size="sm" disabled={relatedParties.length === 0} onClick={() => setDialog({ mode: 'create' })}>
-            <Plus data-icon="inline-start" />
-            New transaction
-          </Button>
+          canUpdate ? (
+            <Button size="sm" disabled={relatedParties.length === 0} onClick={() => setDialog({ mode: 'create' })}>
+              <Plus data-icon="inline-start" />
+              New transaction
+            </Button>
+          ) : undefined
         }
       />
 
@@ -82,6 +89,22 @@ export function RelatedPartyTransactionsPage() {
         <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {actionError}
         </p>
+      )}
+
+      {mismatches.length > 0 && (
+        <div role="alert" className="rounded-lg border border-status-warning-outline bg-status-warning-surface px-4 py-3 text-sm text-status-warning">
+          <p className="font-medium">
+            {mismatches.length} linked disclosure{mismatches.length === 1 ? '' : 's'} no longer match{mismatches.length === 1 ? 'es' : ''} its source record.
+          </p>
+          <ul className="mt-1.5 flex flex-col gap-1 text-xs">
+            {mismatches.map((m) => (
+              <li key={m.transactionId}>
+                Recorded {formatCurrency(m.recordedAmount)}, source now shows {m.currentSourceAmount !== undefined ? formatCurrency(m.currentSourceAmount) : 'no matching record'} — the source
+                may have changed since this disclosure was linked. Edit the transaction to re-link it.
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {busy && (
@@ -101,7 +124,13 @@ export function RelatedPartyTransactionsPage() {
 
       {!busy && !error && (
         <>
-          <RelatedPartyTransactionsTable transactions={transactions} relatedPartiesById={relatedPartiesById} onEdit={(transaction) => setDialog({ mode: 'edit', transaction })} onDelete={(transaction) => void handleDelete(transaction)} />
+          <RelatedPartyTransactionsTable
+            transactions={transactions}
+            relatedPartiesById={relatedPartiesById}
+            onEdit={(transaction) => setDialog({ mode: 'edit', transaction })}
+            onDelete={(transaction) => void handleDelete(transaction)}
+            canUpdate={canUpdate}
+          />
 
           <SectionCard title="Disclosure summary">
             <DisclosureSummaryTable rows={disclosureSummary} />

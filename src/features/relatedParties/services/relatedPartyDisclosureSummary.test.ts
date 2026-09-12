@@ -8,6 +8,7 @@ function party(overrides: Partial<RelatedParty> = {}): RelatedParty {
     name: 'Jane Director',
     relationshipType: 'director',
     isActive: true,
+    effectiveFrom: '2026-01-01',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,

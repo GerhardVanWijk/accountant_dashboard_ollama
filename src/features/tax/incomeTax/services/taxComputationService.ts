@@ -12,6 +12,7 @@ import type {
 import type { ITaxComputationRepository } from '../repositories/ITaxComputationRepository';
 import type { IncomeTaxConfigService } from './incomeTaxConfigService';
 import type { AccountMapper, NewJournalLineInput } from '@/features/accounting/services';
+import type { TaxComputationPostingExecutor } from './taxComputationPostingExecutor';
 import {
   calculateAccountingProfit,
   calculateDepreciationAddback,
@@ -27,16 +28,6 @@ const EPSILON = 0.005;
 /** Fixed GL account ids (src/mock-data/accounts.ts). This computation posts CURRENT tax only — the Deferred Tax accounts (acc_1600/acc_2400/acc_5600, added for Phase 12) are posted separately by deferredTaxComputationService, never here. */
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-export interface JournalPoster {
-  postJournalEntry(input: {
-    date: string;
-    memo?: string;
-    source: string;
-    lines: NewJournalLineInput[];
-    postedByUserId?: ID;
-  }): Promise<JournalEntry>;
 }
 
 /** Minimal surface each dependency needs — same "narrow interface, real singleton injected in services/index.ts" pattern every other module in this codebase uses. */
@@ -123,7 +114,7 @@ export class TaxComputationService {
     private readonly fixedAssetLookup: FixedAssetLookup,
     private readonly disposalLookup: AssetDisposalLookup,
     private readonly configService: Pick<IncomeTaxConfigService, 'getConfigForDate' | 'getById'>,
-    private readonly journalPoster: JournalPoster,
+    private readonly postingExecutor: TaxComputationPostingExecutor,
     private readonly accounts: AccountMapper,
     private readonly capitalGainsLookup?: CapitalGainsLookup,
   ) {}
@@ -343,6 +334,16 @@ export class TaxComputationService {
    * PurchaseOrderService.recordReceipt()'s already-received guard) —
    * combined with createComputation()'s per-financial-year guard, a
    * financial year can never end up with two posted tax computations.
+   *
+   * Posts through `postingExecutor` — one atomic RPC call
+   * (`post_income_tax_computation`, migration 0100, Tax & Compliance
+   * integrity audit 2026-09-12) that posts the journal AND flips the
+   * computation to 'posted' in the SAME database transaction. Before this,
+   * the two writes were separate and independently-committing — a failure
+   * between them could leave a posted GL journal with the computation
+   * still showing 'draft', and a retry would post a SECOND journal,
+   * doubling Income Tax Expense/Payable for the year. See
+   * taxComputationPostingExecutor.ts's doc comment.
    */
   async postComputation(id: ID, postedByUserId?: ID): Promise<TaxComputation> {
     const computation = await this.repository.getById(id);
@@ -353,29 +354,33 @@ export class TaxComputationService {
       throw new Error(`Tax computation for "${computation.financialYearLabel}" has already been posted.`);
     }
 
-    const now = new Date().toISOString();
-
-    if (computation.taxLiability <= EPSILON) {
-      return this.repository.update(id, { status: 'posted', postedAt: now, postedByUserId });
-    }
-
     // Posted AT the financial year end — tax is accrued/recognized at
     // year-close, same rationale as depreciationService posting at
-    // periodEnd rather than "today". postedAt (above/below) still records
-    // the real wall-clock time the posting action happened.
+    // periodEnd rather than "today".
     const financialYear = await this.resolveFinancialYear(computation.financialYearId);
-
     const memo = `Corporate income tax - ${computation.financialYearLabel} (${computation.taxConfigTaxYearLabel})`;
-    const [incomeTaxExpenseId, incomeTaxPayableId] = await Promise.all([
-      this.accounts.getAccountId('INCOME_TAX_EXPENSE'),
-      this.accounts.getAccountId('INCOME_TAX_PAYABLE'),
-    ]);
-    const lines: NewJournalLineInput[] = [
-      { accountId: incomeTaxExpenseId, description: memo, debit: round2(computation.taxLiability), credit: 0 },
-      { accountId: incomeTaxPayableId, description: memo, debit: 0, credit: round2(computation.taxLiability) },
-    ];
 
-    const entry = await this.journalPoster.postJournalEntry({
+    // A zero-liability computation (a loss year, or an SBC-eligible
+    // company whose taxable income sits entirely inside the 0% band)
+    // still moves to 'posted' — there is nothing to post to the GL for a
+    // nil liability — but journalEntryId stays undefined, mirroring
+    // DepreciationRunResult's "undefined means nothing was posted"
+    // convention. Empty `lines` tells the executor/RPC to skip the journal
+    // and just flip status.
+    let lines: NewJournalLineInput[] = [];
+    if (computation.taxLiability > EPSILON) {
+      const [incomeTaxExpenseId, incomeTaxPayableId] = await Promise.all([
+        this.accounts.getAccountId('INCOME_TAX_EXPENSE'),
+        this.accounts.getAccountId('INCOME_TAX_PAYABLE'),
+      ]);
+      lines = [
+        { accountId: incomeTaxExpenseId, description: memo, debit: round2(computation.taxLiability), credit: 0 },
+        { accountId: incomeTaxPayableId, description: memo, debit: 0, credit: round2(computation.taxLiability) },
+      ];
+    }
+
+    const result = await this.postingExecutor.postComputation({
+      taxComputationId: id,
       date: financialYear.endDate,
       memo,
       source: 'income_tax',
@@ -383,11 +388,6 @@ export class TaxComputationService {
       postedByUserId,
     });
 
-    return this.repository.update(id, {
-      status: 'posted',
-      journalEntryId: entry.id,
-      postedAt: now,
-      postedByUserId,
-    });
+    return result.computation;
   }
 }

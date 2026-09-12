@@ -12,10 +12,14 @@ export interface DividendDeclarationsTableProps {
   onPay: (declaration: DividendDeclaration) => void;
   onRemit: (declaration: DividendDeclaration) => void;
   onDelete: (declaration: DividendDeclaration) => void;
+  /** Hides Declare/Delete for a caller without `tax:update`. Defaults to true so existing callers/tests are unaffected. */
+  canUpdate?: boolean;
+  /** Hides Pay/Remit for a caller without `tax:post`. Defaults to true. */
+  canPost?: boolean;
 }
 
 /** Dividend declarations list, re-skinned onto v0's DataTable (M7). Same declare/pay/remit/delete lifecycle actions, same real DividendDeclarationStatus. */
-export function DividendDeclarationsTable({ declarations, onDeclare, onPay, onRemit, onDelete }: DividendDeclarationsTableProps) {
+export function DividendDeclarationsTable({ declarations, onDeclare, onPay, onRemit, onDelete, canUpdate = true, canPost = true }: DividendDeclarationsTableProps) {
   const columns: DataTableColumn<DividendDeclaration>[] = [
     {
       key: 'date',
@@ -35,7 +39,7 @@ export function DividendDeclarationsTable({ declarations, onDeclare, onPay, onRe
       align: 'right',
       cell: (d) => (
         <div className="flex flex-wrap items-center justify-end gap-1">
-          {d.status === 'draft' && (
+          {d.status === 'draft' && canUpdate && (
             <>
               <Button variant="ghost" size="sm" onClick={() => onDeclare(d)}>
                 Declare
@@ -45,16 +49,18 @@ export function DividendDeclarationsTable({ declarations, onDeclare, onPay, onRe
               </Button>
             </>
           )}
-          {d.status === 'declared' && (
+          {d.status === 'declared' && canPost && (
             <Button variant="ghost" size="sm" onClick={() => onPay(d)}>
               Pay
             </Button>
           )}
           {d.status === 'paid' && (
             <div className="flex flex-col items-end gap-0.5">
-              <Button variant="ghost" size="sm" onClick={() => onRemit(d)}>
-                Remit to SARS
-              </Button>
+              {canPost && (
+                <Button variant="ghost" size="sm" onClick={() => onRemit(d)}>
+                  Remit to SARS
+                </Button>
+              )}
               {d.paidDate && <span className="text-xs text-muted-foreground">Due by {getRemittanceDueDateHint(d.paidDate)}</span>}
             </div>
           )}

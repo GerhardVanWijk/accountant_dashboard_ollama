@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/app/page-header';
 import { Button } from '@/components/ui/shadcn/button';
 import { FormShell, FormHeader } from '@/components/app/form';
 import type { TaxRate } from '@/types';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { useTaxRateManagement } from '../hooks/useTaxRateManagement';
 import { TaxRateTable } from '../components/TaxRateTable';
 import { TaxRateForm } from '../components/TaxRateForm';
@@ -20,6 +21,8 @@ type DialogState = { mode: 'create' } | { mode: 'supersede'; rate: TaxRate } | n
  */
 export function TaxRatesPage() {
   const { taxRates, loading, error, createTaxRate, supersede, deactivate } = useTaxRateManagement();
+  const canCreate = useCanAccess('tax', 'create');
+  const canUpdate = useCanAccess('tax', 'update');
   const [dialog, setDialog] = useState<DialogState>(null);
   const [dirty, setDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -72,10 +75,12 @@ export function TaxRatesPage() {
         title="Tax Rates"
         description="VAT tax codes used across Sales, Purchases, and Banking. Every rate is effective-dated — changing one creates a new version rather than editing history."
         actions={
-          <Button onClick={() => setDialog({ mode: 'create' })}>
-            <Plus />
-            New Tax Code
-          </Button>
+          canCreate ? (
+            <Button onClick={() => setDialog({ mode: 'create' })}>
+              <Plus />
+              New Tax Code
+            </Button>
+          ) : undefined
         }
       />
 
@@ -97,7 +102,12 @@ export function TaxRatesPage() {
         </p>
       )}
       {!loading && !error && (
-        <TaxRateTable taxRates={taxRates} onSupersede={(rate) => setDialog({ mode: 'supersede', rate })} onDeactivate={(rate) => void handleDeactivate(rate)} />
+        <TaxRateTable
+          taxRates={taxRates}
+          onSupersede={(rate) => setDialog({ mode: 'supersede', rate })}
+          onDeactivate={(rate) => void handleDeactivate(rate)}
+          canUpdate={canUpdate}
+        />
       )}
 
       {dialog?.mode === 'create' && (

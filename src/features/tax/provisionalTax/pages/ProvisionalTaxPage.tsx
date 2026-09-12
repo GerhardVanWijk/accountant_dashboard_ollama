@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { Loader2, CalendarClock } from 'lucide-react';
 import { useLogSensitiveAccess } from '@/features/auth/hooks/useLogSensitiveAccess';
+import { useCanAccess } from '@/features/auth/hooks/useCanAccess';
 import { PageHeader, SectionCard } from '@/components/app/page-header';
 import { ArrowLeftRightIcon, BanknoteIcon, LandmarkIcon } from 'lucide-react';
 import { StatTileGrid } from '@/components/app/stat-tile';
@@ -16,6 +17,9 @@ import { PaymentSlotCard } from '../components/PaymentSlotCard';
 export function ProvisionalTaxPage() {
   useLogSensitiveAccess('Provisional tax');
   const { financialYears, periods, loading, error, refetch, getOrCreatePeriod, recordEstimate, payProvisionalTax, getReconciliation } = useProvisionalTax();
+  const canCreate = useCanAccess('tax', 'create');
+  const canUpdate = useCanAccess('tax', 'update');
+  const canPost = useCanAccess('tax', 'post');
 
   const [selectedFinancialYearId, setSelectedFinancialYearId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -126,16 +130,18 @@ export function ProvisionalTaxPage() {
               <EmptyTitle>No provisional tax period yet for {selectedFinancialYear.name}</EmptyTitle>
               <EmptyDescription>Create one to see the first, second, and top-up due dates for this financial year.</EmptyDescription>
             </EmptyHeader>
-            <Button
-              disabled={busy}
-              onClick={() =>
-                runAction(async () => {
-                  await getOrCreatePeriod(selectedFinancialYear.id);
-                }, `Created a provisional tax period for ${selectedFinancialYear.name}.`)
-              }
-            >
-              Create Provisional Tax Period
-            </Button>
+            {canCreate && (
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  runAction(async () => {
+                    await getOrCreatePeriod(selectedFinancialYear.id);
+                  }, `Created a provisional tax period for ${selectedFinancialYear.name}.`)
+                }
+              >
+                Create Provisional Tax Period
+              </Button>
+            )}
           </Empty>
         </SectionCard>
       )}
@@ -148,6 +154,8 @@ export function ProvisionalTaxPage() {
               description="Due 6 months after the financial year start."
               slot={period.first}
               busy={busy}
+              canUpdate={canUpdate}
+              canPost={canPost}
               onSaveEstimate={(income) =>
                 runAction(async () => {
                   await recordEstimate(period.id, 'first', income);
@@ -164,6 +172,8 @@ export function ProvisionalTaxPage() {
               description="Due on the financial year end date."
               slot={period.second}
               busy={busy}
+              canUpdate={canUpdate}
+              canPost={canPost}
               onSaveEstimate={(income) =>
                 runAction(async () => {
                   await recordEstimate(period.id, 'second', income);
@@ -180,6 +190,8 @@ export function ProvisionalTaxPage() {
               description="Voluntary, due 6 months after the financial year end."
               slot={period.topUp}
               busy={busy}
+              canUpdate={canUpdate}
+              canPost={canPost}
               onSaveEstimate={(income) =>
                 runAction(async () => {
                   await recordEstimate(period.id, 'topUp', income);

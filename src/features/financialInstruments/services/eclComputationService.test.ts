@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { AccountingPeriod, Company, FinancialYear } from '@/types';
 import type { AgingReportRow } from '@/features/reports/aging/types';
 import { EclComputationService } from './eclComputationService';
+import { FakeEclPostingExecutor } from './eclPostingExecutor';
 import { MockEclComputationRepository } from '../repositories/MockEclComputationRepository';
 import { JournalEntryService } from '@/features/accounting/services/journalEntryService';
 import { AccountService } from '@/features/accounting/services/accountService';
@@ -97,7 +98,7 @@ describe('EclComputationService', () => {
       { getFinancialYears: async () => [financialYear2026, financialYear2027] },
       { getCompanies: async () => [company] },
       { getCustomerAgingReport: async () => agingRows },
-      journalEntryService,
+      new FakeEclPostingExecutor({ journal: journalEntryService, computations: repository }),
       new AccountMappingService(new AccountService(accountRepository, journalRepository)),
     );
   });

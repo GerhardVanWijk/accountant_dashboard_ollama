@@ -64,12 +64,14 @@ export type AccountMappingKey =
   | 'INTEREST_EXPENSE_LEASE'
   | 'INCOME_TAX_PAYABLE'
   | 'INCOME_TAX_EXPENSE'
+  | 'PROVISIONAL_TAX_PAYMENT_CLEARING' // 2270 — clearing account for a paid provisional tax slot pending EFT to SARS, settled through Banking (never Cash and Bank directly). See migration 0107.
   | 'DEFERRED_TAX_ASSET'
   | 'DEFERRED_TAX_LIABILITY'
   | 'DEFERRED_TAX_EXPENSE'
   | 'RETAINED_EARNINGS'
   | 'DIVIDENDS_PAYABLE'
   | 'DIVIDENDS_TAX_PAYABLE'
+  | 'DIVIDENDS_PAYMENT_CLEARING' // 2520 — clearing account for the dividend payment (net-to-shareholders) and Dividends Tax remittance (to SARS) legs, settled through Banking (never Cash and Bank directly). See migration 0107.
   | 'OWNERS_EQUITY';
 
 /**
@@ -124,12 +126,14 @@ export const ACCOUNT_CODE_BY_KEY: Record<AccountMappingKey, string> = {
   INTEREST_EXPENSE_LEASE: '5810',
   INCOME_TAX_PAYABLE: '2300',
   INCOME_TAX_EXPENSE: '5500',
+  PROVISIONAL_TAX_PAYMENT_CLEARING: '2270',
   DEFERRED_TAX_ASSET: '1600',
   DEFERRED_TAX_LIABILITY: '2400',
   DEFERRED_TAX_EXPENSE: '5600',
   RETAINED_EARNINGS: '3900',
   DIVIDENDS_PAYABLE: '2500',
   DIVIDENDS_TAX_PAYABLE: '2510',
+  DIVIDENDS_PAYMENT_CLEARING: '2520',
   OWNERS_EQUITY: '3000',
 };
 

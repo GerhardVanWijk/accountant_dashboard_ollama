@@ -1,17 +1,19 @@
 import { ProvisionalTaxService } from './provisionalTaxService';
+import { RealProvisionalTaxPostingExecutor } from './provisionalTaxPostingExecutor';
 import { provisionalTaxPeriodRepository } from '../repositories/instances';
-import { financialYearService, journalEntryService, accountMappingService } from '@/features/accounting/services';
+import { financialYearService, accountMappingService } from '@/features/accounting/services';
 import { companyService } from '@/features/admin/services';
 import { incomeTaxConfigService, taxComputationService } from '@/features/tax/incomeTax/services';
+import { supabase } from '@/config/supabase';
 
 export type {
   CompanyLookup,
   FinancialYearLookup,
   IncomeTaxConfigLookup,
-  JournalPoster,
   TaxComputationLookup,
 } from './provisionalTaxService';
 export { ProvisionalTaxService } from './provisionalTaxService';
+export type { ProvisionalTaxPostingExecutor } from './provisionalTaxPostingExecutor';
 
 /**
  * Wires the Provisional Tax feature's service to its shared mock
@@ -26,7 +28,7 @@ export const provisionalTaxService = new ProvisionalTaxService(
   financialYearService,
   companyService,
   incomeTaxConfigService,
-  journalEntryService,
+  new RealProvisionalTaxPostingExecutor(supabase),
   taxComputationService,
   accountMappingService,
 );

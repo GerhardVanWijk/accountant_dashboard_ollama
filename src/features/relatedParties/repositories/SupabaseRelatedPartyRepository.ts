@@ -10,6 +10,8 @@ interface RelatedPartyRow {
   relationship_type: string;
   relationship_detail: string | null;
   is_active: boolean;
+  effective_from: string;
+  effective_to: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +25,8 @@ function rowToRelatedParty(row: RelatedPartyRow): RelatedParty {
     relationshipType: row.relationship_type as RelatedParty['relationshipType'],
     relationshipDetail: row.relationship_detail ?? undefined,
     isActive: row.is_active,
+    effectiveFrom: row.effective_from,
+    effectiveTo: row.effective_to ?? undefined,
   };
 }
 
@@ -32,6 +36,8 @@ function relatedPartyToRow(entity: Partial<RelatedParty>): Record<string, unknow
   if (entity.relationshipType !== undefined) row.relationship_type = entity.relationshipType;
   if (entity.relationshipDetail !== undefined) row.relationship_detail = entity.relationshipDetail;
   if (entity.isActive !== undefined) row.is_active = entity.isActive;
+  if (entity.effectiveFrom !== undefined) row.effective_from = entity.effectiveFrom;
+  if (entity.effectiveTo !== undefined) row.effective_to = entity.effectiveTo;
   return row;
 }
 
